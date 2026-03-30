@@ -134,6 +134,11 @@ function buildControlSnapshotRecord(options = {}) {
       statusHistogram: operationSummary.statusHistogram,
       rows: operationRows,
     },
+    ...(options.controlPlaneDiagnostics &&
+      typeof options.controlPlaneDiagnostics === 'object' &&
+      !Array.isArray(options.controlPlaneDiagnostics) ?
+      {controlPlaneDiagnostics: options.controlPlaneDiagnostics} :
+      {}),
   };
 }
 
@@ -801,6 +806,216 @@ test('waitForConvergence — uses control snapshot path only',
     assert.ok(result.settledAfterMs >= 0);
   });
 
+test('waitForConvergence — falls back to SQL when control snapshot lanes time out',
+  async () => {
+    let sqlQueryCount = 0;
+    const node = {
+      id: 'mock-control-snapshot-timeout-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => {
+        throw new Error('Admin API query timed out on lane snapshot');
+      },
+      query: async (sql) => {
+        sqlQueryCount += 1;
+        if (sql.includes('FROM partitions')) {
+          return {rows: [{partition_id: 'p1'}]};
+        }
+        if (sql.includes('FROM services')) {
+          return {
+            rows: [
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'leader',
+                address: 'node-a/p1/r0',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-b/p1/r1',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-c/p1/r2',
+                partition_id: 'p1',
+              },
+            ],
+          };
+        }
+        throw new Error('Unexpected SQL query: ' + sql);
+      },
+    };
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+    assert.ok(
+      sqlQueryCount >= 2,
+      'SQL fallback should query partitions and services when control snapshots time out',
+    );
+  });
+
+test('waitForConvergence — SQL fallback derives leaders from partitions metadata',
+  async () => {
+    let sqlQueryCount = 0;
+    const node = {
+      id: 'mock-sql-fallback-partition-leader-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => {
+        throw new Error('Admin API query timed out on lane snapshot');
+      },
+      query: async (sql) => {
+        sqlQueryCount += 1;
+        if (sql.includes('FROM partitions')) {
+          return {
+            rows: [{
+              partition_id: 'p1',
+              leader_node_id: 'node-a',
+            }],
+          };
+        }
+        if (sql.includes('FROM services')) {
+          return {
+            rows: [
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-a/p1/r0',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-b/p1/r1',
+                partition_id: 'p1',
+              },
+              {
+                service_type: 'partition',
+                status: 'ACTIVE',
+                raft_role: 'follower',
+                address: 'node-c/p1/r2',
+                partition_id: 'p1',
+              },
+            ],
+          };
+        }
+        throw new Error('Unexpected SQL query: ' + sql);
+      },
+    };
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+    assert.ok(
+      sqlQueryCount >= 2,
+      'SQL fallback should query partitions and services when control snapshots time out',
+    );
+  });
+
+test('waitForConvergence — can ignore stale over-target caused by stale in-flight operations',
+  async () => {
+    const node = {
+      id: 'mock-stale-inflight-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId: 'mock-stale-inflight-node',
+          partitionIds: ['p1'],
+          servicesRows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address: 'mock-stale-inflight-node/p1/r0',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-b/p1/r1',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-c/p1/r2',
+              partition_id: 'p1',
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address: 'node-d/p1/r3',
+              partition_id: 'p1',
+            },
+          ],
+          operationRows: [
+            {
+              operation_id: 'op-stale-removing',
+              type: 'REPLACE',
+              partition_id: 'p1',
+              source_node_id: 'node-a',
+              target_node_id: 'node-b',
+              replica_id: 'p1-r3',
+              status: 'removing',
+              workflow_step: 'STOPPING',
+              updated_at: Date.now() - 120000,
+            },
+          ],
+          controlPlaneDiagnostics: {
+            replicaOperations: {
+              staleInFlightCount: 1,
+            },
+          },
+        })],
+      }),
+    };
+
+    await assert.rejects(
+      waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      }),
+      /Convergence timeout/,
+      'stale over-target should still gate convergence by default',
+    );
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
 test('waitForConvergence — requires leader coverage for all partitions',
   async () => {
     const snapshot = buildControlSnapshotRecord({
@@ -1123,6 +1338,117 @@ test('waitForConvergence — timeout diagnostics include in-flight operation cou
       );
     }
   });
+
+test('waitForConvergence — timeout diagnostics include control-plane context',
+  async () => {
+    const partitionId = 'p1';
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'seed-1', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'joiner-1', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'joiner-2', 'follower'),
+    ];
+    const node = {
+      id: 'seed-1',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId: 'seed-1',
+          partitionIds: [partitionId],
+          servicesRows: stableRows,
+          operationRows: [{operation_id: 'op-1', status: 'creating'}],
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 8,
+              publicationStatus: 'ack_pending',
+              pendingAckNodeIds: ['joiner-1'],
+              publishedActiveNodeIds: ['seed-1', 'joiner-2'],
+            },
+            readinessByNodeId: {
+              'joiner-1': {
+                nodeId: 'joiner-1',
+                serveEligible: false,
+                repairEligible: true,
+                reasons: [{code: 'control_plane_publication_pending'}],
+              },
+            },
+            publicationMode: {
+              currentMode: 'recovering',
+            },
+          },
+        })],
+      }),
+    };
+
+    try {
+      await waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 100,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      });
+      assert.fail('Expected convergence timeout with in-flight operations');
+    } catch (err) {
+      assert.ok(err.diagnostics, 'should include timeout diagnostics');
+      assert.ok(
+        err.diagnostics.controlPlaneDiagnostics,
+        'should include control-plane diagnostics',
+      );
+      assert.strictEqual(
+        err.diagnostics.controlPlaneDiagnostics.publicationConvergence.publicationEpoch,
+        8,
+      );
+      assert.deepStrictEqual(
+        err.diagnostics.controlPlaneDiagnostics.publicationConvergence.pendingAckNodeIds,
+        ['joiner-1'],
+      );
+      assert.deepStrictEqual(
+        err.diagnostics.controlPlaneDiagnostics.readinessByNodeId['joiner-1'].reasons,
+        [{code: 'control_plane_publication_pending'}],
+      );
+    }
+  });
+
+test('waitForConvergence — escalates to forceRepair snapshots after threshold', async () => {
+  const calls = [];
+  const node = {
+    id: 'mock-force-repair-convergence-node',
+    isReachable: async () => true,
+    getControlSnapshot: async (options = {}) => {
+      calls.push(options);
+      const snapshot = buildControlSnapshotRecord({
+        nodeId: 'mock-force-repair-convergence-node',
+        partitionIds: ['p1'],
+        servicesRows: [
+          buildPartitionReplicaRow('p1', 'a', 'leader'),
+          buildPartitionReplicaRow('p1', 'b', 'follower'),
+          buildPartitionReplicaRow('p1', 'c', 'follower'),
+        ],
+        operationRows: options.forceRepair === true ? [] : [{
+          operation_id: 'op-1',
+          status: 'creating',
+        }],
+      });
+      return {rows: [snapshot]};
+    },
+  };
+
+  const result = await waitForConvergence([node], {
+    settleTimeoutMs: 120,
+    quietWindowMs: 0,
+    maxSustainedOverTargetMs: 100,
+    sampleIntervalMs: 10,
+    targetVoterCount: 3,
+    forceRepairAfterMs: 0,
+  });
+
+  assert.strictEqual(typeof result.settledAfterMs, 'number');
+  assert.strictEqual(calls[0].forceRepair, true);
+  assert.strictEqual(calls[0].lane, 'snapshot');
+  assert.ok(
+    Number.isInteger(calls[0].timeoutMs) && calls[0].timeoutMs > 0,
+  );
+});
 
 // --- hasConflictingLeaders tests ---
 

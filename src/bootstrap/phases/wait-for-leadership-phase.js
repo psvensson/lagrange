@@ -7,9 +7,6 @@
  */
 
 import {
-  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
-} from '../message-group-assignment.js';
-import {
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
 import {
@@ -170,16 +167,7 @@ class WaitForLeadershipPhase {
    * @return {Array<string>} Required system table names.
    */
   getRequiredSystemWriteTables() {
-    const requiredTables = [...JOINING_REQUIRED_WRITE_TABLES];
-    const strategy =
-      this.delegates.getBootstrapResponse()
-        ?.messageGroupAssignment?.strategy;
-
-    if (strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
-      requiredTables.push(TABLES.MESSAGE_GROUPS);
-    }
-
-    return requiredTables;
+    return [...JOINING_REQUIRED_WRITE_TABLES];
   }
 
   /**

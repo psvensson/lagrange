@@ -14,6 +14,15 @@ import {
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
 } from '../bootstrap-api-constants.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+
+const RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS = Object.freeze([
+  'ControlPlaneSystemTableGateway requires cdcIntegrationService',
+  'ControlPlaneSystemTableGateway requires sqlQueryEngine',
+]);
 
 class BootstrapRequestOwner {
   constructor(options = {}) {
@@ -87,12 +96,15 @@ class BootstrapRequestOwner {
     };
   }
 
-  async waitForServiceLeaders() {
-    return this.delegates.waitForServiceLeaders?.() || {ready: false};
+  async waitForServiceLeaders(options = {}) {
+    return this.delegates.waitForServiceLeaders?.(options) || {ready: false};
   }
 
-  async determineAndReserveMessageGroupAssignment(nodeId) {
-    return this.delegates.determineAndReserveMessageGroupAssignment?.(nodeId);
+  async determineAndReserveMessageGroupAssignment(nodeId, options = {}) {
+    return this.delegates.determineAndReserveMessageGroupAssignment?.(
+      nodeId,
+      options,
+    );
   }
 
   getCurrentEpoch() {
@@ -110,8 +122,8 @@ class BootstrapRequestOwner {
     return this.delegates.getClusterConfiguration?.() || {};
   }
 
-  getReadyNodes() {
-    return this.delegates.getReadyNodes?.() || [];
+  getReadyNodes(options = {}) {
+    return this.delegates.getReadyNodes?.(options) || [];
   }
 
   getTablePolicies() {
@@ -120,6 +132,36 @@ class BootstrapRequestOwner {
 
   getLatencyTopologyHints(nodeId) {
     return this.delegates.getLatencyTopologyHints?.(nodeId) || null;
+  }
+
+  isRetryableBootstrapDependencyError(error) {
+    const message = typeof error?.message === 'string' ? error.message : '';
+    return RETRYABLE_BOOTSTRAP_DEPENDENCY_ERROR_FRAGMENTS.some((fragment) =>
+      message.includes(fragment),
+    );
+  }
+
+  isRetryableBootstrapRequestError(error) {
+    if (!error) {
+      return false;
+    }
+    if (Number.isFinite(error?.statusCode) &&
+        Math.floor(error.statusCode) === HTTP_STATUS.SERVICE_UNAVAILABLE) {
+      return true;
+    }
+    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+      return true;
+    }
+    return isRetryableControlPlaneError(error) ||
+      this.isRetryableBootstrapDependencyError(error);
+  }
+
+  resolveBootstrapRequestRetryAfterMs(error) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(error);
+    if (retryAfterMs > NUM.ZERO) {
+      return retryAfterMs;
+    }
+    return Math.max(NUM.ZERO, this.getBootstrapAdmissionRetryAfterMs());
   }
 
   async handleBootstrapRequest(request, reply) {
@@ -222,7 +264,9 @@ class BootstrapRequestOwner {
       this.getInFlightBootstrapRequestCount() + NUM.ONE,
     );
     try {
-      const leaderStatus = await this.waitForServiceLeaders();
+      const leaderStatus = await this.waitForServiceLeaders({
+        startupMode: request.body?.startupMode || null,
+      });
       if (!leaderStatus.ready) {
         this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
           nodeId,
@@ -242,7 +286,9 @@ class BootstrapRequestOwner {
       }
 
       const assignment =
-        await this.determineAndReserveMessageGroupAssignment(nodeId);
+        await this.determineAndReserveMessageGroupAssignment(nodeId, {
+          startupMode: request.body?.startupMode || null,
+        });
       const currentEpoch = this.getCurrentEpoch();
       const {
         systemTableSnapshots,
@@ -251,7 +297,9 @@ class BootstrapRequestOwner {
         currentEpoch,
       });
       const clusterConfig = this.getClusterConfiguration();
-      const readyNodes = this.getReadyNodes();
+      const readyNodes = this.getReadyNodes({
+        requirePublishedMembership: true,
+      });
 
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.READY_NODES_FOR_BOOTSTRAP, {
         nodeId,
@@ -307,6 +355,27 @@ class BootstrapRequestOwner {
 
       return response;
     } catch (error) {
+      if (this.isRetryableBootstrapRequestError(error)) {
+        const retryAfterMs = this.resolveBootstrapRequestRetryAfterMs(error);
+        this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
+          nodeId,
+          nodeAddress,
+          error: error.message,
+          code: error?.errorCode || error?.code || null,
+          retryAfterMs,
+        });
+        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+        return this.buildBootstrapNotReadyResponse({
+          error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+          code:
+            typeof error?.errorCode === 'string' && error.errorCode.length > 0 ?
+              error.errorCode :
+              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+          reasonCode:
+            BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+          retryAfterMs,
+        });
+      }
       this.getLogger().error(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
         nodeId,
         nodeAddress,

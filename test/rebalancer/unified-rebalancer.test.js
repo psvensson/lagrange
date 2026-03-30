@@ -251,6 +251,23 @@ function createMockReadinessService(mockCache) {
   };
 }
 
+function createMockMembershipPublicationService(
+  publishedActiveNodeIds = [],
+  publicationEpoch = 1,
+  options = {},
+) {
+  return {
+    getLatestClusterPublicationSync() {
+      return {
+        status: 'PUBLISHED',
+        publicationEpoch,
+        publishedActiveNodeIds,
+        ...(options && typeof options === 'object' ? options : {}),
+      };
+    },
+  };
+}
+
 // Create a fully configured rebalancer for testing
 function createTestRebalancer(options = {}) {
   const {
@@ -268,6 +285,7 @@ function createTestRebalancer(options = {}) {
     sqlQueryEngine = null,
     controlPlaneSystemTableGateway = null,
     messageRouter = null,
+    rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
     bootstrapReadinessState = null,
   } = options;
@@ -287,7 +305,7 @@ function createTestRebalancer(options = {}) {
   );
   const mockMessageRouter = messageRouter ||
     createMockMessageRouter(connectionState);
-  const mockCoordinator = createMockCoordinator();
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
@@ -330,6 +348,41 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
     t.equal(rebalancer.isLeader, false);
     t.equal(rebalancer.initialized, false);
   });
+
+  await t.test('classifies split child system partitions using canonical table ownership',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations_p_deadbeef_left',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'replica_operations_p_deadbeef_left',
+            table_id: 'replica_operations',
+            replica_count: 3,
+          },
+        ],
+      });
+
+      t.equal(
+        rebalancer.isSystemPartitionEntity(),
+        true,
+        'split child partitions of system tables should remain system entities',
+      );
+      t.equal(
+        rebalancer.isCriticalSystemPartition(),
+        true,
+        'critical classification should follow the partition owner row table id',
+      );
+      t.equal(
+        rebalancer.isControlPlanePriorityPartition(),
+        true,
+        'priority classification should include split descendants of priority tables',
+      );
+    });
 
   await t.test('initializes rebalancer', async (t) => {
     const rebalancer = createTestRebalancer({
@@ -575,6 +628,54 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 
       rebalancer.shutdown();
     });
+
+  await t.test('binds coordinator move creation to the published membership epoch',
+    async (t) => {
+      const mockCache = createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
+      ]);
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-0',
+        systemTableCache: mockCache,
+        cdcIntegrationService: createMockCdcService(),
+        tablePolicyService: createMockPolicyService(),
+        messageRouter: createMockMessageRouter(),
+        controlPlaneReadinessService: {
+          getMembershipPublicationDiagnosticsSync() {
+            return {
+              publicationEpoch: 11,
+              status: 'PUBLISHED',
+            };
+          },
+        },
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async createOperation(move) {
+            t.equal(
+              move.membershipPublicationEpoch,
+              11,
+              'rebalancer should bind created moves to the published membership epoch',
+            );
+            return {
+              operationId: 'op-epoch-bound',
+              replicaId: move.replicaId,
+            };
+          },
+        },
+      });
+
+      const result = await rebalancer.executeMoveViaCoordinator({
+        type: MoveType.ADD,
+        nodeId: 'node-1',
+        replicaId: 'partition-1-r4',
+      });
+
+      t.equal(result.success, true, 'epoch-bound move should still execute');
+
+      rebalancer.shutdown();
+    });
 });
 
 test('UnifiedRebalancer defers background planning when local control-plane mutation readiness is unhealthy',
@@ -674,8 +775,8 @@ test('UnifiedRebalancer budget queries use injected control-plane ' +
       },
     },
     controlPlaneSystemTableGateway: {
-      async executeQuery(sql, params) {
-        gatewayCalls.push({sql, params});
+      async executeQuery(sql, params, queryOptions) {
+        gatewayCalls.push({sql, params, queryOptions});
         if (sql.includes('SELECT config_value FROM config')) {
           return {success: true, rows: [{config_value: '7'}]};
         }
@@ -690,6 +791,154 @@ test('UnifiedRebalancer budget queries use injected control-plane ' +
   t.equal(configuredBudget, 7, 'gateway should provide config-backed budget');
   t.equal(inFlightCount, 2, 'gateway should provide in-flight count');
   t.equal(gatewayCalls.length, 2, 'gateway should own both budget reads');
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.workClass,
+    'background',
+    'ordinary rebalancers should continue using background pressure class for budget reads',
+  );
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.deliveryPriority,
+    'background',
+    'ordinary rebalancers should continue using background delivery for budget reads',
+  );
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.allowPressureDefer,
+    true,
+    'ordinary rebalancers should remain deferrable under pressure',
+  );
+});
+
+test('UnifiedRebalancer budget queries stay critical for priority control-plane partitions', async (t) => {
+  initializeTestEnvironment();
+
+  const gatewayCalls = [];
+  const rebalancer = createTestRebalancer({
+    entityId: 'replica_operations-p1',
+    entityType: EntityType.PARTITION,
+    controlPlaneSystemTableGateway: {
+      async executeQuery(sql, params, queryOptions) {
+        gatewayCalls.push({sql, params, queryOptions});
+        if (sql.includes('SELECT config_value FROM config')) {
+          return {success: true, rows: [{config_value: '5'}]};
+        }
+        return {success: true, rows: [{total_count: 1}]};
+      },
+    },
+  });
+
+  const configuredBudget = await rebalancer.getConfiguredRebalanceBudget();
+  const inFlightCount = await rebalancer.getGlobalInFlightOperationCount();
+
+  t.equal(configuredBudget, 5, 'gateway should provide config-backed budget');
+  t.equal(inFlightCount, 1, 'gateway should provide in-flight count');
+  t.equal(gatewayCalls.length, 2, 'gateway should own both budget reads');
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.workClass,
+    'critical',
+    'priority control-plane partitions should bypass background pressure gating for budget reads',
+  );
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.deliveryPriority,
+    'critical',
+    'priority control-plane partitions should route budget reads at critical delivery priority',
+  );
+  t.equal(
+    gatewayCalls[0]?.queryOptions?.allowPressureDefer,
+    false,
+    'priority control-plane partitions should not defer budget reads under pressure',
+  );
+  t.equal(
+    gatewayCalls[1]?.queryOptions?.workClass,
+    'critical',
+    'priority control-plane partitions should keep in-flight reads on the critical path',
+  );
+  t.equal(
+    gatewayCalls[1]?.queryOptions?.deliveryPriority,
+    'critical',
+    'priority control-plane partitions should route in-flight reads at critical delivery priority',
+  );
+  t.equal(
+    gatewayCalls[1]?.queryOptions?.allowPressureDefer,
+    false,
+    'priority control-plane partitions should not defer in-flight reads under pressure',
+  );
+});
+
+test('UnifiedRebalancer allows priority spread scheduling when global budget is ' +
+  'saturated by non-priority work', async (t) => {
+  initializeTestEnvironment();
+
+  const rebalancer = createTestRebalancer({
+    entityId: 'control_plane_publications-p1',
+    entityType: EntityType.PARTITION,
+    nodeId: 'node-1',
+    nodes: [
+      {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      {node_id: 'node-2', status: NodeStatus.ACTIVE},
+    ],
+  });
+
+  const priorityBudgetLaneChecks = [];
+  rebalancer.rebalanceCoordinator.canStartPriorityAddOperation = async (options) => {
+    priorityBudgetLaneChecks.push(options || null);
+    return true;
+  };
+
+  rebalancer.setLeader(true);
+  rebalancer.getCurrentReplicas = () => [];
+  rebalancer.getAvailableNodes = () => ([
+    {node_id: 'node-1'},
+    {node_id: 'node-2'},
+  ]);
+  rebalancer.movePlanner.calculateTargetState = async () => ({
+    targetReplicaCount: 2,
+  });
+  rebalancer.movePlanner.calculateMoves = () => ([
+    {
+      type: MoveType.ADD,
+      nodeId: 'node-2',
+      replicaId: 'control-plane-publications-r2',
+    },
+  ]);
+  rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+  rebalancer.movePlanner.isCriticalState = () => true;
+  rebalancer.getConfiguredRebalanceBudget = async () => 1;
+  rebalancer.getGlobalInFlightOperationCount = async () => 2;
+  rebalancer.executeRebalancingMoves = async (moves) => moves.map((move) => ({
+    success: true,
+    skipped: false,
+    operation: move.type,
+    nodeId: move.nodeId,
+    replicaId: move.replicaId,
+  }));
+
+  const result = await rebalancer.rebalance(
+    TriggerType.PERIODIC,
+    {targetReplicaCount: 2, placementConstraints: {}},
+  );
+
+  t.equal(result.success, true, 'priority partition should still schedule recovery work');
+  t.equal(result.moves.length, 1, 'priority partition should schedule one move');
+  t.equal(
+    result.moves[0]?.operation,
+    MoveType.ADD,
+    'scheduled move should remain an add-like spread operation',
+  );
+  t.equal(
+    priorityBudgetLaneChecks.length,
+    1,
+    'rebalancer should consult coordinator priority add lane before bypassing global budget',
+  );
+  t.same(
+    priorityBudgetLaneChecks[0],
+    {
+      preferAuthoritativeCount: true,
+      bypassEmptyQueryDelay: true,
+    },
+    'priority bypass should use authoritative coordinator lane checks',
+  );
+
+  rebalancer.shutdown();
 });
 
 
@@ -821,6 +1070,166 @@ test('UnifiedRebalancer - Node Management', async (t) => {
     t.ok(nodes.some((n) => n.node_id === 'node-2'));
     t.notOk(nodes.some((n) => n.node_id === 'node-3'));
   });
+
+  await t.test('uses published membership as steady-state topology truth',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService([
+          'node-1',
+          'node-3',
+        ]),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const nodes = rebalancer.getAvailableNodes();
+
+      t.same(
+        nodes.map((node) => node.node_id).sort(),
+        ['node-1', 'node-3'],
+        'only published active nodes should be available for steady-state placement',
+      );
+    });
+
+  await t.test(
+    'allows priority control-plane recovery to use recovery-eligible nodes before publication spread converges',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService(
+          ['node-1', 'node-2'],
+          3,
+          {
+            priorityPartitionSummary: {
+              satisfied: false,
+            },
+          },
+        ),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_write_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'sql_write_operations-p1',
+            table_id: 'sql_write_operations',
+            replica_count: 3,
+          },
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const nodes = rebalancer.getAvailableNodes();
+
+      t.same(
+        nodes.map((node) => node.node_id).sort(),
+        ['node-1', 'node-2', 'node-3'],
+        'priority recovery should not deadlock by filtering candidates to only published active nodes',
+      );
+    },
+  );
+
+  await t.test(
+    'retains the latest published membership when a newer publication is still open',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {
+              status: 'OPEN',
+              publicationEpoch: 8,
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3', 'node-4'],
+            };
+          },
+          getLatestPublishedClusterPublicationSync() {
+            return {
+              status: 'PUBLISHED',
+              publicationEpoch: 7,
+              publishedActiveNodeIds: ['node-1', 'node-3'],
+            };
+          },
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const nodes = rebalancer.getAvailableNodes();
+
+      t.same(
+        nodes.map((node) => node.node_id).sort(),
+        ['node-1', 'node-3'],
+        'steady-state availability should keep the last published membership while a newer publication remains open',
+      );
+    });
+
+  await t.test('requires canonical readiness for steady-state availability',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: {
+          getNodeReadinessSync() {
+            return null;
+          },
+        },
+      });
+
+      const nodes = rebalancer.getAvailableNodes();
+
+      t.same(
+        nodes,
+        [],
+        'steady-state placement must not fall back to cache rows when canonical readiness is unavailable',
+      );
+    });
 
   await t.test('sorts nodes by load', async (t) => {
     const rebalancer = createTestRebalancer({
@@ -1198,7 +1607,7 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     'does not emit degraded ADDs for critical partitions already at replica target',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -1647,6 +2056,152 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
     t.equal(completeEvents[0].entityId, 'partition-1');
     t.ok(result.moves.some((move) => move.operation === MoveType.ADD));
   });
+
+  await t.test(
+    'rebalance uses coordinator createOperation for published priority ' +
+    'spread repair with no in-flight entity operations',
+    async (t) => {
+      const createOperationCalls = [];
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'control_plane_publications-p1',
+            table_id: 'control_plane_publications',
+            replica_count: 3,
+          },
+        ],
+        services: [
+          {
+            service_id: 'cpub-r1',
+            partition_id: 'control_plane_publications-p1',
+            node_id: 'node-1',
+            service_type: EntityType.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+            address: 'node-1/partition/control_plane_publications-p1-r1',
+          },
+          {
+            service_id: 'cpub-r2',
+            partition_id: 'control_plane_publications-p1',
+            node_id: 'node-1',
+            service_type: EntityType.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-1/partition/control_plane_publications-p1-r2',
+          },
+          {
+            service_id: 'cpub-r3',
+            partition_id: 'control_plane_publications-p1',
+            node_id: 'node-2',
+            service_type: EntityType.PARTITION,
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-2/partition/control_plane_publications-p1-r3',
+          },
+        ],
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          },
+          getMembershipPublicationDiagnosticsSync() {
+            return {
+              publicationEpoch: 2,
+              status: 'PUBLISHED',
+            };
+          },
+        },
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async createOperation(move) {
+            createOperationCalls.push(move);
+            return {
+              operationId: 'op-priority-spread-repair',
+              replicaId: move.replicaId || 'cpub-r2',
+            };
+          },
+        },
+      });
+
+      t.teardown(() => rebalancer.shutdown());
+
+      rebalancer.initialize();
+      rebalancer.setLeader(true);
+      rebalancer.getConfiguredRebalanceBudget = async () => 4;
+      rebalancer.getGlobalInFlightOperationCount = async () => 0;
+
+      const result = await rebalancer.rebalance(
+        TriggerType.PERIODIC,
+        {
+          replicaCount: 3,
+          minReplicaCount: 3,
+          maxReplicaCount: 7,
+          placementConstraints: {spreadAcrossNodes: true},
+        },
+      );
+
+      t.equal(result.success, true, 'published priority repair should rebalance');
+      t.equal(
+        createOperationCalls.length,
+        1,
+        'priority spread repair should create one coordinator-owned operation',
+      );
+      t.equal(
+        createOperationCalls[0]?.type,
+        'REPLACE',
+        'repair should replace an overrepresented replica instead of growing count',
+      );
+      t.equal(
+        createOperationCalls[0]?.nodeId,
+        'node-3',
+        'repair should target the unused ready node',
+      );
+      t.equal(
+        createOperationCalls[0]?.sourceNodeId,
+        'node-1',
+        'repair should remove from the overrepresented node',
+      );
+      t.equal(
+        createOperationCalls[0]?.membershipPublicationEpoch,
+        2,
+        'repair should bind the created operation to the published membership epoch',
+      );
+      t.equal(
+        result.moves.length,
+        1,
+        'rebalance should schedule one spread repair move',
+      );
+      t.equal(
+        result.moves[0]?.operation,
+        MoveType.REPLACE,
+        'scheduled result should reflect the replacement repair move',
+      );
+    },
+  );
 });
 
 test('UnifiedRebalancer - Statistics', async (t) => {
@@ -1877,6 +2432,69 @@ test('UnifiedRebalancer - Policy-Driven Rebalancing', async (t) => {
     t.equal(decision.needsRebalancing, true);
     t.equal(decision.reason, 'replicas_not_spread');
   });
+
+  await t.test(
+    'critical control-plane partitions treat spreadable replica concentration as urgent',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [
+          {
+            service_id: 's1',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-1',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+            address: 'node-1/partition/replica_operations-p1-r1',
+          },
+          {
+            service_id: 's2',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-1',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-1/partition/replica_operations-p1-r2',
+          },
+          {
+            service_id: 's3',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-2',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-2/partition/replica_operations-p1-r3',
+          },
+        ],
+      });
+
+      const policy = {
+        replicaCount: 3,
+        minReplicaCount: 3,
+        maxReplicaCount: 7,
+        placementConstraints: {spreadAcrossNodes: true},
+      };
+      const availableNodes = rebalancer.getAvailableNodes();
+      const replicas = rebalancer.getCurrentReplicas();
+
+      t.equal(
+        rebalancer.isCriticalState(replicas, policy, availableNodes),
+        true,
+      );
+      t.match(
+        rebalancer.getCriticalReason(replicas, policy, availableNodes),
+        /control_plane_replicas_not_spread/i,
+      );
+    },
+  );
 });
 
 
@@ -1905,6 +2523,36 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     rebalancer.shutdown();
     t.equal(rebalancer.scheduledCheck, null);
   });
+
+  await t.test(
+    'schedules fast-start checks for priority control-plane partitions',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      rebalancer.setLeader(true);
+
+      t.equal(typeof scheduledDelayMs, 'number');
+      t.ok(
+        scheduledDelayMs >= 1 &&
+        scheduledDelayMs <= rebalancer.criticalCheckDelayMs,
+        'priority control-plane partitions should schedule within the short critical retry window',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
 
   await t.test('cancels scheduled checks when losing leadership', async (t) => {
     const rebalancer = createTestRebalancer({
@@ -2100,6 +2748,252 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     );
   });
 
+  await t.test(
+    'checkRebalance revalidates topology in-flight blockers with authoritative entity operations',
+    async (t) => {
+      let authoritativeEntityReadCalls = 0;
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'control_plane_publications-p1',
+            table_id: 'control_plane_publications',
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        replicaOperations: [
+          {
+            operation_id: 'op-cache-stale-topology',
+            type: 'ADD',
+            partition_id: 'control_plane_publications-p1',
+            entity_type: EntityType.PARTITION,
+            entity_id: 'control_plane_publications-p1',
+            source_node_id: 'node-1',
+            target_node_id: 'node-2',
+            status: ReplicaStatus.CREATING,
+            workflow_step: WORKFLOW_STEP.CREATING,
+          },
+        ],
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async getOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [];
+          },
+        },
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        authoritativeEntityReadCalls,
+        1,
+        'in-flight topology blockers should be revalidated against authoritative entity operations',
+      );
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'stale cache-only topology blockers should not prevent progress',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance ignores stale authoritative topology operations during blocker revalidation',
+    async (t) => {
+      let authoritativeEntityReadCalls = 0;
+      const nowMs = Date.now();
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'control_plane_publications-p1',
+            table_id: 'control_plane_publications',
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        replicaOperations: [
+          {
+            operation_id: 'op-cache-topology',
+            type: 'ADD',
+            partition_id: 'control_plane_publications-p1',
+            entity_type: EntityType.PARTITION,
+            entity_id: 'control_plane_publications-p1',
+            source_node_id: 'node-1',
+            target_node_id: 'node-2',
+            status: ReplicaStatus.CREATING,
+            workflow_step: WORKFLOW_STEP.CREATING,
+          },
+        ],
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async getOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [{
+              operation_id: 'op-authoritative-stale',
+              type: 'ADD',
+              partition_id: 'control_plane_publications-p1',
+              entity_type: EntityType.PARTITION,
+              entity_id: 'control_plane_publications-p1',
+              source_node_id: 'node-1',
+              target_node_id: 'node-2',
+              status: ReplicaStatus.CREATING,
+              workflow_step: WORKFLOW_STEP.CREATING,
+              created_at: nowMs - 120000,
+              updated_at: nowMs - 120000,
+            }];
+          },
+        },
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        authoritativeEntityReadCalls,
+        1,
+        'topology blocker revalidation should still read authoritative entity operations',
+      );
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'stale authoritative in-flight topology operations should not keep topology-settling closed',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions on short retry cadence ' +
+      'when no actionable moves execute',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_transactions-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.evaluateState = async () => true;
+      rebalancer.rebalance = async () => ({
+        success: true,
+        moves: [
+          {success: false, skipped: true, reason: 'budget_exceeded'},
+        ],
+      });
+      const scheduledDelays = [];
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelays.push(overrideDelayMs);
+      };
+
+      rebalancer.currentInterval = rebalancer.periodicCheckIntervalMs;
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        scheduledDelays[0],
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority partitions should schedule the next check on the short retry cadence',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions on short retry cadence ' +
+      'when state is currently stable',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_transactions-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.getCriticalSystemTopologySettlingBlocker = () => null;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.evaluateState = async () => false;
+      rebalancer.scheduleNextCheck = () => {};
+
+      rebalancer.currentInterval = rebalancer.maxInterval;
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        rebalancer.currentInterval,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority partitions should keep the short retry cadence while waiting for the next convergence change',
+      );
+    },
+  );
+
   await t.test('checkRebalance resets interval when actionable moves are executed', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
@@ -2160,7 +3054,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         return false;
       };
 
-      let scheduledDelayMs = null;
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
         scheduledDelayMs = overrideDelayMs;
       };
@@ -2185,7 +3080,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     async (t) => {
       const explicitDelayMs = 600000;
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+      entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
       });
@@ -2204,7 +3099,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         return true;
       };
 
-      let scheduledDelayMs = null;
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
         scheduledDelayMs = overrideDelayMs;
       };
@@ -2263,7 +3159,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         return false;
       };
 
-      let scheduledDelayMs = null;
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
         scheduledDelayMs = overrideDelayMs;
       };
@@ -2320,7 +3217,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions while cluster membership is transitional',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -2356,6 +3253,11 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         typeof scheduledDelayMs,
         'number',
         'topology-settling gate should schedule a delayed retry',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'priority control-plane partitions should retry topology-settling checks on the short critical cadence',
       );
     });
 
@@ -2408,6 +3310,263 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance does not defer critical system partitions for a ' +
+    'transport-connected ACTIVE node when canonical readiness keeps ' +
+    'cluster membership healthy despite a stale lease',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: Date.now() - 1000,
+          },
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should follow canonical readiness rather than raw stale ready-lease rows',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'topology-settling gate should stay open when canonical readiness already recovered cluster membership',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions open when readiness quorum is healthy',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          const healthy = nodeId !== 'node-5';
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                healthy,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: healthy,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: healthy,
+            },
+            reasons: healthy ? [] : [{code: 'cluster_member_unhealthy'}],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+          {node_id: 'node-5', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+          createNodeEndpoint('node-4'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+          createPostgresWireEndpoint('node-4'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane partitions should continue planning when healthy-node quorum is satisfied',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'topology-settling gate should remain open when priority quorum is healthy',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions open when ' +
+    'quorum is recovery-eligible during ACK_PENDING convergence',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          const recoveryEligibleNodeIds = new Set([
+            'node-1',
+            'node-2',
+            'node-3',
+          ]);
+          const recoveryEligible = recoveryEligibleNodeIds.has(nodeId);
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                nodeId === 'node-1',
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+                nodeId === 'node-1',
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+                recoveryEligible,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+                nodeId === 'node-1',
+            },
+            reasons: recoveryEligible ? [] : [{code: 'cluster_member_unhealthy'}],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+          {node_id: 'node-5', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane recovery should continue once quorum is control-plane-recovery-eligible even when cluster-member health is still converging',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'topology-settling gate should remain open when recovery-eligible quorum is present',
+      );
+    });
+
+  await t.test(
     'checkRebalance does not defer critical system partitions when a node is failed',
     async (t) => {
       const rebalancer = createTestRebalancer({
@@ -2453,7 +3612,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions while connected membership exceeds nodes cache',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -2502,7 +3661,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     'checkRebalance defers critical system partitions while active node endpoint visibility is incomplete',
     async (t) => {
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -2550,7 +3709,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers critical system partitions while active-node replica operations are in flight',
+    'checkRebalance does not defer critical system partitions for unrelated active-node replica operations in flight',
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
@@ -2591,6 +3750,68 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         return false;
       };
 
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should continue evaluating when only unrelated topology operations are in flight',
+      );
+      t.equal(
+        scheduledDelayMs !== UNSCHEDULED,
+        true,
+        'evaluation should still schedule the next check',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while same-entity active-node replica operations are in flight',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'replace',
+          partition_group_id: 'nodes-p1',
+          target_node_id: 'node-2',
+          status: 'running',
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
       let scheduledDelayMs = null;
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
         scheduledDelayMs = overrideDelayMs;
@@ -2601,12 +3822,12 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         0,
-        'critical system partitions should not evaluate while topology operations are still converging on active nodes',
+        'critical system partitions should still defer when the same entity already has an in-flight topology operation',
       );
       t.equal(
         typeof scheduledDelayMs,
         'number',
-        'in-flight topology operations should schedule a delayed retry',
+        'entity-scoped in-flight topology operations should schedule a delayed retry',
       );
     });
 
@@ -2627,7 +3848,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }),
       };
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -2665,10 +3886,15 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'number',
         'local serve-readiness gate should schedule a delayed retry',
       );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'priority control-plane partitions should retry serve-readiness checks on the short critical cadence',
+      );
     });
 
   await t.test(
-    'checkRebalance defers critical system partitions until bootstrap lifecycle reaches traffic-ready',
+    'checkRebalance allows priority control-plane partitions once bootstrap lifecycle opens metadata publication',
     async (t) => {
       const bootstrapReadinessState = {
         evaluate: () => ({
@@ -2680,7 +3906,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         }),
       };
       const rebalancer = createTestRebalancer({
-        entityId: 'nodes-p1',
+        entityId: 'replica_operations-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
         nodes: [
@@ -2720,13 +3946,362 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        0,
-        'critical system partitions should not evaluate before bootstrap lifecycle is traffic-ready',
+        1,
+        'priority control-plane partitions should evaluate once lifecycle opens metadata publication',
       );
       t.equal(
-        typeof scheduledDelayMs,
-        'number',
-        'traffic-readiness gate should schedule a delayed retry',
+        scheduledDelayMs,
+        null,
+        'priority control-plane partitions should not remain blocked on the traffic-ready stable window',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows priority control-plane partitions to recover ' +
+    'while the local seed still has an explicit self ready-lease clear ' +
+    'once bootstrap lifecycle opens metadata publication',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId !== 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {
+            node_id: 'node-1',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane recovery must not self-deadlock behind the restarting seed ready-lease quarantine once metadata publication is open',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'priority control-plane recovery should not remain parked on local self readiness after metadata publication opens',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions blocked on remote stale ready leases until peers become cluster-member healthy',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId === 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const staleLease = Date.now() - 1000;
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: staleLease,
+          },
+          {
+            node_id: 'node-3',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: staleLease,
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'priority control-plane recovery should not fan out onto remote stale ready leases while peers are still non-terminal',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority control-plane recovery should retry on the short priority cadence while remote ready-lease refresh catches up',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions blocked on ' +
+    'remote explicit ready-lease clears until peers republish readiness',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId === 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+          {
+            node_id: 'node-3',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'priority control-plane recovery must not override a remote owner-authored ready-lease clear',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority control-plane recovery should retry on the short priority cadence while remote readiness republishes',
       );
     });
 
@@ -2785,12 +4360,82 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance still defers non-priority critical system partitions until bootstrap lifecycle reaches traffic-ready',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'non-priority critical system partitions should not evaluate before bootstrap lifecycle is traffic-ready',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'traffic-readiness gate should schedule a delayed retry for non-priority system partitions',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.currentInterval,
+        'non-priority system partitions should keep the ordinary backoff cadence while waiting for full traffic readiness',
+      );
+    });
+
+  await t.test(
     'checkRebalance allows critical system partitions once local serve readiness is true',
     async (t) => {
       const readinessService = {
-        getNodeReadinessSync: () => ({
-          nodeId: 'node-1',
+        getNodeReadinessSync: (nodeId) => ({
+          nodeId,
           dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CLUSTER_MEMBER_HEALTHY]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
@@ -2841,6 +4486,99 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         'critical system partitions should evaluate once the local leader is serve-eligible',
       );
     });
+
+  await t.test(
+    'checkRebalance defers non-system entities while priority control-plane partitions remain concentrated',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService(
+          ['node-1', 'node-2', 'node-3'],
+          6,
+          {
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: ['replica_operations-p1'],
+            },
+          },
+        ),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'benchmark_events-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [
+          {
+            service_id: 'replica-ops-r1',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-1',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'leader',
+            address: 'node-1/partition/replica_operations-p1-r1',
+          },
+          {
+            service_id: 'replica-ops-r2',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-1',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-1/partition/replica_operations-p1-r2',
+          },
+          {
+            service_id: 'replica-ops-r3',
+            partition_id: 'replica_operations-p1',
+            node_id: 'node-1',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+            raft_role: 'follower',
+            address: 'node-1/partition/replica_operations-p1-r3',
+          },
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'non-system rebalancing should yield while priority control-plane partitions are still concentrated on one node',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'non-system work should retry on the short control-plane-priority cadence',
+      );
+    },
+  );
 });
 
 
@@ -2919,6 +4657,293 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
     t.equal(healthy.length, 1, 'only routable non-learner replicas on ready nodes should count');
     t.equal(healthy[0].replica_id, 'r1', 'leader on ready node should remain healthy');
   });
+
+  await t.test('surfaces priority spread as an explicit planner invariant',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+      });
+
+      const replicas = [
+        {
+          replica_id: 'r1',
+          node_id: 'node-1',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'leader',
+          address: 'node-1/partition/nodes-p1-r1',
+        },
+        {
+          replica_id: 'r2',
+          node_id: 'node-1',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+          address: 'node-1/partition/nodes-p1-r2',
+        },
+      ];
+      const policy = {
+        replicaCount: 3,
+        minReplicaCount: 3,
+        maxReplicaCount: 7,
+        placementConstraints: {spreadAcrossNodes: true},
+      };
+
+      const prioritySpread = rebalancer.movePlanner.analyzePrioritySpread(
+        replicas,
+        policy,
+        rebalancer.getAvailableNodes(),
+      );
+
+      t.equal(prioritySpread.requiresSpread, true);
+      t.equal(prioritySpread.satisfied, false);
+      t.equal(prioritySpread.requiredDistinctNodeCount, 3);
+      t.equal(prioritySpread.actualDistinctNodeCount, 1);
+      t.equal(prioritySpread.hasUnusedReadyNodes, true);
+    });
+
+  await t.test('derives priority spread blocker from published membership summary',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService(
+          ['node-1', 'node-2', 'node-3'],
+          4,
+          {
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: ['replica_operations-p1'],
+            },
+          },
+        ),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'user-partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      t.same(
+        rebalancer.getControlPlanePrioritySpreadBlocker(),
+        {
+          requiredDistinctNodeCount: 3,
+          blockedPartitions: [{
+            partitionId: 'replica_operations-p1',
+            readyReplicaCount: null,
+            readyDistinctNodeCount: null,
+            spreadGap: null,
+          }],
+        },
+        'priority gating should be driven by the published membership summary',
+      );
+    });
+
+  await t.test('ignores legacy service-row priority reconstruction once publication is satisfied',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService(
+          ['node-1', 'node-2', 'node-3'],
+          5,
+          {
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+            },
+          },
+        ),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'user-partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [
+          {
+            service_id: 'priority-r1',
+            partition_id: 'replica_operations-p1',
+            service_type: EntityType.PARTITION,
+            node_id: 'node-1',
+            status: 'active',
+            raft_role: 'leader',
+            address: 'node-1/partition/replica_operations-p1-r1',
+          },
+          {
+            service_id: 'priority-r2',
+            partition_id: 'replica_operations-p1',
+            service_type: EntityType.PARTITION,
+            node_id: 'node-1',
+            status: 'active',
+            raft_role: 'follower',
+            address: 'node-1/partition/replica_operations-p1-r2',
+          },
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      t.equal(
+        rebalancer.getControlPlanePrioritySpreadBlocker(),
+        null,
+        'published priority spread satisfaction should short-circuit legacy service-row gating',
+      );
+    });
+
+  await t.test('treats priority spread repair moves as critical', async (t) => {
+    const rebalancer = createTestRebalancer({
+      entityId: 'replica_operations-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+    });
+
+    t.equal(
+      rebalancer.movePlanner.classifyMoveCriticality({
+        type: MoveType.REMOVE,
+        reason: 'spread_replicas',
+      }),
+      'critical',
+      'priority spread removals should bypass reduced-priority pressure gating',
+    );
+    t.equal(
+      rebalancer.movePlanner.classifyMoveCriticality({
+        type: MoveType.REPLACE,
+        reason: 'replace_replica',
+      }),
+      'critical',
+      'priority spread replacements should remain on the critical path',
+    );
+  });
+
+  await t.test(
+    'defers standalone removes that would break priority spread during recovery',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_write_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: 'sql_write_operations-p1',
+            table_id: 'sql_write_operations',
+            replica_count: 3,
+          },
+        ],
+      });
+
+      const currentReplicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r2', node_id: 'node-2', status: ReplicaStatus.ACTIVE},
+        {replica_id: 'r3', node_id: 'node-3', status: ReplicaStatus.ACTIVE},
+      ];
+
+      const moves = rebalancer.calculateMoves(currentReplicas, {
+        targetReplicaCount: 2,
+        targetNodes: ['node-1', 'node-2'],
+        degraded: false,
+        availableNodeCount: 3,
+      });
+
+      t.same(
+        moves,
+        [],
+        'planner should not evict a priority recovery replica when removal would drop spread below the required distinct-node count',
+      );
+    },
+  );
+
+  await t.test('critical healthy replicas honor published membership boundary',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService([
+          'node-1',
+          'node-2',
+        ], 3),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      const replicas = [
+        {
+          replica_id: 'r1',
+          node_id: 'node-1',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'leader',
+          address: 'node-1/partition/nodes-p1-r1',
+        },
+        {
+          replica_id: 'r2',
+          node_id: 'node-2',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+          address: 'node-2/partition/nodes-p1-r2',
+        },
+        {
+          replica_id: 'r3',
+          node_id: 'node-3',
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+          address: 'node-3/partition/nodes-p1-r3',
+        },
+      ];
+
+      const healthy = rebalancer.getHealthyReplicas(replicas);
+
+      t.same(
+        healthy.map((replica) => replica.replica_id).sort(),
+        ['r1', 'r2'],
+        'critical partition health should ignore replicas on nodes outside published membership',
+      );
+    });
 
   await t.test('generates remove moves for failed replicas', async (t) => {
     const rebalancer = createTestRebalancer({

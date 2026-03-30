@@ -14,6 +14,10 @@ import {NODE_STATE} from '../../constants/node-state.js';
 import {RAFT_ROLE} from '../../raft/constants.js';
 import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+  resolveMembershipJoinIntentType,
+} from '../../control-plane/membership-lifecycle-controller.js';
 import {MessageGroupAssignment} from '../message-group-assignment.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
@@ -288,6 +292,9 @@ class BootstrapJoinAdmissionOwner {
       newNodeId,
       messageGroups,
       {
+        allowRejoinSingleOwnedGroup:
+          resolveMembershipJoinIntentType(options.startupMode) ===
+            MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
         excludedReplicaIds: options.excludedReplicaIds,
         excludedSourceNodeIds,
       },
@@ -311,7 +318,7 @@ class BootstrapJoinAdmissionOwner {
     }
   }
 
-  async determineAndReserveMessageGroupAssignment(newNodeId) {
+  async determineAndReserveMessageGroupAssignment(newNodeId, options = {}) {
     return this.withMoveReplicaAssignmentReservationLock(async () => {
       await this.expireMoveReplicaAssignmentReservations();
       const activeReservations =
@@ -321,6 +328,7 @@ class BootstrapJoinAdmissionOwner {
       );
       const assignment = this.determineMessageGroupAssignment(newNodeId, {
         excludedReplicaIds,
+        startupMode: options.startupMode,
       });
 
       if (assignment.strategy !== BootstrapStrategy.MOVE_REPLICA) {
@@ -362,6 +370,25 @@ class BootstrapJoinAdmissionOwner {
       return {
         ...assignment,
         peerAddresses,
+      };
+    }
+
+    if (assignment.reuseExistingGroup === true) {
+      const group = messageGroups.find(
+        (candidate) => candidate.group_id === assignment.groupId,
+      );
+      const replicas = group?.replicas || [];
+      return {
+        ...assignment,
+        existingPeerIds: replicas.map((replica) => replica.replica_id),
+        replicaAddresses: replicas.map((replica) => replica.address),
+        peerAddresses: replicas.map((replica) =>
+          `${replica.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
+          `${ADDRESS.SEPARATOR}${replica.replica_id}`,
+        ),
+        replicaNodeMap: Object.fromEntries(
+          replicas.map((replica) => [replica.replica_id, replica.node_id]),
+        ),
       };
     }
 

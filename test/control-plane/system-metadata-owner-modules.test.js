@@ -71,12 +71,20 @@ test('System metadata owners route typed read and mutation methods through the g
   async (t) => {
     const gatewayCalls = [];
     const gateway = {
-      async readRows(tableName, sql, params, options) {
+      async readAuthoritativeRows(tableName, sql, params, options) {
         gatewayCalls.push({
-          method: 'readRows',
+          method: 'readAuthoritativeRows',
           tableName,
           sql,
           params,
+          options,
+        });
+        return {success: true, rows: []};
+      },
+      async readProjectionRows(tableName, options) {
+        gatewayCalls.push({
+          method: 'readProjectionRows',
+          tableName,
           options,
         });
         return {success: true, rows: []};
@@ -234,7 +242,7 @@ test('System metadata owners route typed read and mutation methods through the g
 
       t.equal(
         gatewayCalls[0].method,
-        'readRows',
+        'readAuthoritativeRows',
         `${ownerSpec.readMethod} should route through gateway reads`,
       );
       t.equal(
@@ -244,7 +252,7 @@ test('System metadata owners route typed read and mutation methods through the g
       );
       t.equal(
         gatewayCalls[1].method,
-        'readRows',
+        'readAuthoritativeRows',
         `${ownerSpec.listMethod} should route through gateway reads`,
       );
       t.equal(

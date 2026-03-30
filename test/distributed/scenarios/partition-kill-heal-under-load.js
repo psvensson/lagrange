@@ -39,6 +39,18 @@ function splitNodeGroups(nodes) {
 }
 
 /**
+ * Replace the load-node set in place.
+ * @param {Set<string>} availableLoadNodeIds
+ * @param {Iterable<string>} nodeIds
+ */
+function setAvailableLoadNodeIds(availableLoadNodeIds, nodeIds) {
+  availableLoadNodeIds.clear();
+  for (const nodeId of nodeIds) {
+    availableLoadNodeIds.add(String(nodeId));
+  }
+}
+
+/**
  * Run the partition-kill-heal-under-load scenario.
  *
  * @param {Object} cluster
@@ -66,17 +78,34 @@ async function run(cluster, options = {}) {
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
   assert.ok(seedNode, 'Seed node should be available');
 
+  const loadNodesById = new Map(
+    nodes.map((node) => [String(node.id), node]),
+  );
+  const availableLoadNodeIds = new Set(
+    nodes.map((node) => String(node.id)),
+  );
+  const resolveLoadNodes = () =>
+    Array.from(availableLoadNodeIds)
+      .map((nodeId) => loadNodesById.get(nodeId))
+      .filter((node) => node && typeof node.query === 'function');
+
   const {groupA, groupB} = splitNodeGroups(nodes);
   assert.ok(groupA.length > ZERO, 'groupA must be non-empty');
   assert.ok(groupB.length > ZERO, 'groupB must be non-empty');
+  const seedPartitionGroup = groupA.includes(seedNode.id) ?
+    groupA :
+    groupB;
 
   const loadRun = cluster.startLoad({
+    nodes: resolveLoadNodes(),
+    nodeResolver: resolveLoadNodes,
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
   });
 
   await sleep(preFaultDelayMs);
   await cluster.partitionNetwork(groupA, groupB);
+  setAvailableLoadNodeIds(availableLoadNodeIds, seedPartitionGroup);
   await sleep(partitionHoldMs);
 
   const victimId = groupA.find((nodeId) => nodeId !== seedNode.id) ||
@@ -84,6 +113,7 @@ async function run(cluster, options = {}) {
   assert.ok(victimId, 'Could not identify non-seed victim node');
 
   await cluster.killNode(victimId);
+  availableLoadNodeIds.delete(String(victimId));
   await sleep(postKillDelayMs);
   await cluster.healPartition();
 
@@ -96,6 +126,13 @@ async function run(cluster, options = {}) {
     convergence.settledAfterMs <= convergenceTimeoutMs,
     'Cluster did not converge after compound fault: ' +
     convergence.settledAfterMs + 'ms',
+  );
+
+  setAvailableLoadNodeIds(
+    availableLoadNodeIds,
+    nodes
+      .map((node) => String(node.id))
+      .filter((nodeId) => nodeId !== String(victimId)),
   );
 
   const metrics = await loadRun.waitComplete();

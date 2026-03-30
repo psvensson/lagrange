@@ -14,7 +14,6 @@ import {RPCClient} from '../../transport/rpc-client.js';
 import {TablePolicyService} from '../../policy/table-policy-service.js';
 import {assertCritical} from '../../utils/assert.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
-import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
 import {
   buildMessageGroupOwnerNotReadyError,
 } from '../shared/message-group-selection.js';
@@ -23,14 +22,10 @@ import {
   waitForStartupConvergence,
 } from '../shared/startup-convergence-gate.js';
 import {
-  CDCPipelineReadinessGate,
-} from '../../cdc/cdc-pipeline-readiness-gate.js';
-import {
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../../constants/cdc-lifecycle-constants.js';
 import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
-import {isNodeRecordReady} from '../../node/node-readiness-policy.js';
 import {
   CACHE_HYDRATION_TABLES,
   CDC_PROPAGATED_TABLES,
@@ -46,7 +41,6 @@ import {
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
 } from '../system-table-schemas-constants.js';
-import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {
   COLUMN,
   NUM,
@@ -56,6 +50,9 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../control-plane/control-plane-readiness-constants.js';
+import {
+  SeedRuntimeBridgeOwner,
+} from '../owners/seed-runtime-bridge-owner.js';
 
 const LOG_HYDRATION_STEP_COMPLETE = 'Cache hydration step complete';
 const HYDRATION_STEP = Object.freeze({
@@ -80,7 +77,6 @@ const LOG_CDC_INITIALIZED = 'CDC integration initialized by owner';
 const LOG_CDC_UPGRADED = 'CDC integration upgraded by owner';
 const CDC_INTEGRATION_OWNER = 'CDCIntegrationSetup';
 const CDC_INTEGRATION_MODE_NORMAL = 'normal';
-const CDC_INTEGRATION_MODE_BOOTSTRAP = 'bootstrap';
 
 const HYDRATION_ERROR_MSG = Object.freeze({
   NO_PARTITION_ID_PREFIX: 'No partition ID for table: ',
@@ -104,8 +100,6 @@ const LOG_REPAIRED =
 const LOG_REPAIR_ERROR_PREFIX =
   'Failed to repair propagated cache tables from ' +
   'local partitions';
-const LATENCY_TOPOLOGY_OWNER = 'LatencyTopologySetup';
-
 /**
  * Handles the cache-hydration phase of seed bootstrap.
  */
@@ -117,6 +111,12 @@ class SeedCacheHydrationPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.runtimeBridgeOwner =
+      options.runtimeBridgeOwner ||
+      new SeedRuntimeBridgeOwner({
+        delegates: this.delegates,
+        compatibilityPhase: this,
+      });
   }
 
   /**
@@ -136,7 +136,10 @@ class SeedCacheHydrationPhase {
     });
 
     const systemTableCache = d.getSystemTableCache();
-    const leaderMessageGroup = d.getLeaderMessageGroupService();
+    const leaderMessageGroup =
+      d.getLeaderMessageGroupService() ||
+      d.getBootstrapMessageGroupService?.() ||
+      null;
 
     if (!leaderMessageGroup) {
       throw new Error(BOOTSTRAP_ERROR.CDC_HYDRATION_MISSING);
@@ -216,7 +219,7 @@ class SeedCacheHydrationPhase {
       controlPlaneReadinessService:
         d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
       defaultRoutingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       migrationAutoWire: false,
     });
     wireMigrationWorkflowOwners({
@@ -676,30 +679,7 @@ class SeedCacheHydrationPhase {
    * Apply authoritative epoch from the current cache snapshot.
    */
   applyCurrentEpochFromCache() {
-    const d = this.delegates;
-    const cdcIntegrationService = d.getCdcIntegrationService();
-    const epochManager = d.getEpochManager();
-    if (!cdcIntegrationService || !epochManager) {
-      return;
-    }
-
-    const systemTableCache = d.getSystemTableCache();
-    const epochRow = systemTableCache?.get(
-      TABLES.CONFIG, EPOCH_CONFIG_KEY,
-    );
-    if (!epochRow) {
-      return;
-    }
-
-    cdcIntegrationService.handleEpochChangeCDC({
-      tableName: TABLES.CONFIG,
-      operation: CDC_OPERATION.UPSERT,
-      data: {
-        ...epochRow,
-        [COLUMN.CONFIG_KEY]:
-          epochRow[COLUMN.CONFIG_KEY] || EPOCH_CONFIG_KEY,
-      },
-    });
+    return this.runtimeBridgeOwner.applyCurrentEpochFromCache();
   }
 
   /**
@@ -746,76 +726,6 @@ class SeedCacheHydrationPhase {
         return error;
       },
     });
-  }
-
-  /**
-   * Wait for a node to appear as ready in the system table cache.
-   * @param {string} nodeId
-   * @return {Promise<void>}
-   */
-  async waitForReadyNodeInCache(nodeId) {
-    const d = this.delegates;
-    const logger = d.getLogger();
-    const config = d.getConfig();
-    const cache = d.getSystemTableCache();
-    const timeoutMs = config.leadershipWaitTimeoutMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
-    const pollIntervalMs = config.leadershipWaitInitialDelayMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitInitialDelayMs;
-    try {
-      await waitForStartupConvergence({
-        timeoutMs,
-        pollIntervalMs,
-        subscriptions: [
-          (notify) => subscribeToSystemTableCacheChanges(cache, notify, {
-            tableNames: [TABLES.NODES],
-          }),
-        ],
-        evaluate: () => {
-          const now = Date.now();
-          const node = cache.get(TABLES.NODES, nodeId);
-          return {
-            ready: isNodeRecordReady(node, {now}),
-            node,
-          };
-        },
-        createTimeoutError: (_result, context) => {
-          const error = new Error(
-            BOOTSTRAP_ERROR.seedReadyTimeout(nodeId, timeoutMs),
-          );
-          error.timeoutMs = timeoutMs;
-          error.timeoutKind = context.timeoutKind;
-          return error;
-        },
-      });
-      return;
-    } catch (_timeoutError) {
-      // Fall through to one explicit authoritative repair attempt.
-    }
-
-    try {
-      await this.repairPropagatedCacheTablesFromLocalPartitions({
-        reason: 'ready_node_timeout',
-        targetNodeId: nodeId,
-      });
-      const repairedNode = cache.get(TABLES.NODES, nodeId);
-      if (isNodeRecordReady(repairedNode, {now: Date.now()})) {
-        return;
-      }
-    } catch (error) {
-      logger.error(
-        LOG_REPAIR_FAILED,
-        {
-          nodeId: d.getNodeId(),
-          targetNodeId: nodeId,
-          error: error?.message || String(error),
-        },
-      );
-    }
-
-    throw new Error(
-      BOOTSTRAP_ERROR.seedReadyTimeout(nodeId, timeoutMs),
-    );
   }
 
   /**
@@ -867,26 +777,7 @@ class SeedCacheHydrationPhase {
    * @return {Object}
    */
   ensureBootstrapCdcIntegrationService() {
-    const d = this.delegates;
-    const logger = d.getLogger();
-    let cdcIntegrationService = d.getCdcIntegrationService();
-    if (cdcIntegrationService) {
-      return cdcIntegrationService;
-    }
-
-    cdcIntegrationService = CDCIntegrationSetup.createForBootstrap({
-      nodeId: d.getNodeId(),
-      messageRouter: d.getMessageRouter(),
-    });
-    d.setCdcIntegrationService(cdcIntegrationService);
-
-    logger.debug(LOG_CDC_INITIALIZED, {
-      nodeId: d.getNodeId(),
-      owner: CDC_INTEGRATION_OWNER,
-      mode: CDC_INTEGRATION_MODE_BOOTSTRAP,
-    });
-
-    return cdcIntegrationService;
+    return this.runtimeBridgeOwner.ensureBootstrapCdcIntegrationService();
   }
 
   /**
@@ -894,48 +785,14 @@ class SeedCacheHydrationPhase {
    * @return {Object}
    */
   ensureLatencyTopologyOwners() {
-    const d = this.delegates;
-    const logger = d.getLogger();
-
-    let latencyTopology = d.getLatencyTopology();
-    if (latencyTopology) {
-      return latencyTopology;
-    }
-
-    latencyTopology = LatencyTopologySetup.create({
-      nodeId: d.getNodeId(),
-      systemTableCache: d.getSystemTableCache(),
-      cdcIntegrationService: d.getCdcIntegrationService(),
-      messageRouter: d.getMessageRouter(),
-    });
-    latencyTopology.latencyTreeService.start({
-      recomputeImmediately: true,
-    });
-    latencyTopology.cdcGroupPropagationService.start();
-    d.setLatencyTopology(latencyTopology);
-
-    logger.info(BOOTSTRAP_LOG_MSG.LATENCY_TOPOLOGY_READY, {
-      nodeId: d.getNodeId(),
-      owner: LATENCY_TOPOLOGY_OWNER,
-    });
-    return latencyTopology;
+    return this.runtimeBridgeOwner.ensureLatencyTopologyOwners();
   }
 
   /**
    * Start latency topology lifecycle owners.
    */
   startLatencyTopologyLifecycle() {
-    const d = this.delegates;
-    const logger = d.getLogger();
-    const topologyOwners = assertCritical(
-      d.getLatencyTopology(),
-      BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
-    );
-    LatencyTopologySetup.start(topologyOwners);
-    logger.info(BOOTSTRAP_LOG_MSG.LATENCY_TOPOLOGY_STARTED, {
-      nodeId: d.getNodeId(),
-      owner: LATENCY_TOPOLOGY_OWNER,
-    });
+    return this.runtimeBridgeOwner.startLatencyTopologyLifecycle();
   }
 
   /**
@@ -947,18 +804,10 @@ class SeedCacheHydrationPhase {
   async propagatePartitionCDCEvent(
     messageGroupService, cdcEvent,
   ) {
-    const d = this.delegates;
-    const topologyOwners = assertCritical(
-      d.getLatencyTopology(),
-      BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
+    return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
+      messageGroupService,
+      cdcEvent,
     );
-    return topologyOwners.cdcGroupPropagationService
-      .propagateCDCEvent({
-        tableName: cdcEvent.tableName,
-        operation: cdcEvent.operation,
-        data: cdcEvent.data,
-        sourceMessageGroupService: messageGroupService,
-      });
   }
 
   /**
@@ -983,13 +832,9 @@ class SeedCacheHydrationPhase {
    * @return {CDCPipelineReadinessGate}
    */
   createCdcPipelineReadinessGate(systemTableCache) {
-    const d = this.delegates;
-    return new CDCPipelineReadinessGate({
+    return this.runtimeBridgeOwner.createCdcPipelineReadinessGate(
       systemTableCache,
-      cdcPropagatedTables: CDC_PROPAGATED_TABLES,
-      now: () => Date.now(),
-      sleep: (delayMs) => d.sleep(delayMs),
-    });
+    );
   }
 }
 

@@ -14,12 +14,13 @@ import {
   METRICS_LOG_TAG,
   TABLES,
 } from '../../src/constants/index.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   PressureGovernor,
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 
-test('ControlPlaneSystemTableGateway readRows uses authoritative repair-' +
+test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   'eligible defaults', async (t) => {
   const calls = [];
   const gateway = new ControlPlaneSystemTableGateway({
@@ -65,8 +66,71 @@ test('ControlPlaneSystemTableGateway readRows uses authoritative repair-' +
   );
   t.equal(
     calls[0].options.queryOptions.routingReadinessDimension,
-    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-    'gateway should route internal reads through repairEligible',
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'gateway should route internal reads through control-plane recovery',
+  );
+});
+
+test('ControlPlaneSystemTableGateway readAuthoritativeRows forwards strict ' +
+  'owner-RPC publication read policy options',
+async (t) => {
+  const calls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{
+            publication_id: 'pub-1',
+            publication_kind: 'cluster_membership',
+            publication_epoch: 1,
+            status: 'PUBLISHED',
+          }],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.readAuthoritativeRows(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    'SELECT * FROM control_plane_publications',
+    [],
+    {
+      localReadConsistency: 'local_leader',
+      replicaFallbackConsistency: 'local_leader',
+      preferOwnerRpcRead: true,
+      requireOwnerRpcRead: true,
+    },
+  );
+
+  t.equal(result.success, true, 'authoritative read should succeed');
+  t.equal(calls.length, 1, 'gateway should execute one authoritative read');
+  t.equal(
+    calls[0]?.options?.preferOwnerRpcRead,
+    true,
+    'gateway should pass owner-RPC preference through to authoritative reads',
+  );
+  t.equal(
+    calls[0]?.options?.requireOwnerRpcRead,
+    true,
+    'gateway should pass strict owner-RPC requirement through to authoritative reads',
+  );
+  t.equal(
+    calls[0]?.options?.localReadConsistency,
+    'local_leader',
+    'gateway should preserve explicit local-read consistency',
+  );
+  t.equal(
+    calls[0]?.options?.replicaFallbackConsistency,
+    'local_leader',
+    'gateway should preserve explicit replica-fallback consistency',
   );
 });
 
@@ -102,6 +166,54 @@ test('ControlPlaneSystemTableGateway readRows returns a typed failure when ' +
     'owner_not_ready',
     'gateway should return a typed owner result instead of falling back',
   );
+});
+
+test('ControlPlaneSystemTableGateway records enriched read operation ' +
+  'diagnostics', async (t) => {
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          success: true,
+          rows: [{node_id: 'node-a'}],
+          source: 'local_partition_replica',
+          localReadHit: true,
+          localReplicaFallbackHit: true,
+          queryTimeoutMs: 987,
+          systemTableDiagnostics: {
+            partitionId: 'nodes-p1',
+            leaderNodeId: 'node-a',
+            serviceRowCount: 3,
+            routableServiceCount: 2,
+            routedToNode: null,
+            deniedByReadiness: false,
+          },
+        };
+      },
+    },
+  });
+
+  await gateway.readRows(
+    TABLES.NODES,
+    'SELECT * FROM nodes WHERE node_id = ?',
+    ['node-a'],
+    {queryTimeoutMs: 987},
+  );
+  const entries = gateway.getControlPlaneOperationLedgerEntries();
+  const latestEntry = entries[entries.length - 1] || null;
+
+  t.match(latestEntry, {
+    operationClass: 'read',
+    tableName: TABLES.NODES,
+    localReadHit: true,
+    localReplicaFallbackHit: true,
+    partitionId: 'nodes-p1',
+    leaderNodeId: 'node-a',
+    serviceRowCount: 3,
+    routableServiceCount: 2,
+    queryTimeoutMs: 987,
+  });
 });
 
 test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
@@ -142,6 +254,228 @@ test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
     true,
     'gateway should pass explicit routed-authoritative opt-in to the owner',
   );
+});
+
+test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows skips ' +
+  'blank primary keys for control_plane_publications', async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache,
+  });
+
+  const result = await gateway.reconcileAuthoritativeCacheRows(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    [
+      {
+        publication_id: '',
+        publication_kind: 'cluster_membership',
+        status: 'OPEN',
+      },
+      {
+        publication_id: 'publication-1',
+        publication_kind: 'cluster_membership',
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-a'],
+        updated_at: 55,
+      },
+    ],
+    {
+      cacheMutationTarget: systemTableCache,
+      systemTableCache,
+    },
+  );
+
+  t.equal(result.success, true, 'reconciliation should still succeed');
+  t.equal(result.mutationCount, 1, 'only valid keyed rows should be applied');
+  t.same(
+    systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS),
+    [{
+      publication_id: 'publication-1',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 1,
+      publisher_node_id: '',
+      source_topology_epoch: null,
+      source_snapshot_version: null,
+      status: 'PUBLISHED',
+      published_active_node_ids: ['node-a'],
+      required_ack_node_ids: [],
+      acknowledged_node_ids: [],
+      priority_partition_summary: null,
+      membership_lifecycle_summary: null,
+      reason_code: '',
+      created_at: null,
+      updated_at: 55,
+      published_at: null,
+      closed_at: null,
+      transition_history: [],
+    }],
+    'blank-key publication rows should be skipped before cache upsert',
+  );
+});
+
+test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows ' +
+  'canonicalizes control_plane_publications before cache upsert',
+async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache,
+  });
+
+  const result = await gateway.reconcileAuthoritativeCacheRows(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    [{
+      publicationId: 'publication-2',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 7,
+      publisherNodeId: 'node-a',
+      publishedActiveNodeIds: ['node-b', 'node-a'],
+      requiredAckNodeIds: ['node-a'],
+      acknowledgedNodeIds: ['node-a'],
+      status: 'published',
+      updatedAt: 123,
+    }],
+    {
+      cacheMutationTarget: systemTableCache,
+      systemTableCache,
+    },
+  );
+
+  t.equal(result.success, true, 'reconciliation should succeed');
+  t.equal(result.mutationCount, 1, 'canonical publication row should be applied');
+  t.same(
+    systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS),
+    [{
+      publication_id: 'publication-2',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 7,
+      publisher_node_id: 'node-a',
+      source_topology_epoch: null,
+      source_snapshot_version: null,
+      published_active_node_ids: ['node-b', 'node-a'],
+      required_ack_node_ids: ['node-a'],
+      acknowledged_node_ids: ['node-a'],
+      priority_partition_summary: null,
+      membership_lifecycle_summary: null,
+      status: 'PUBLISHED',
+      reason_code: '',
+      created_at: null,
+      updated_at: 123,
+      published_at: null,
+      closed_at: null,
+      transition_history: [],
+    }],
+    'publication rows should be serialized into the persisted cache shape',
+  );
+});
+
+test('ControlPlaneSystemTableGateway readAuthoritativeRows bypasses legacy ' +
+  'strategy inference', async (t) => {
+  const calls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{node_id: 'node-a'}],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.readAuthoritativeRows(
+    TABLES.NODES,
+    'SELECT * FROM nodes WHERE node_id = ?',
+    ['node-a'],
+    {
+      requireAuthoritative: true,
+      allowSqlFallback: true,
+    },
+  );
+
+  t.equal(result.success, true, 'authoritative helper should succeed');
+  t.equal(calls.length, 1, 'authoritative helper should route one owner read');
+  t.equal(
+    calls[0].options.allowSqlFallback,
+    true,
+    'authoritative helper should preserve authoritative read options',
+  );
+});
+
+test('ControlPlaneSystemTableGateway readProjectionRows routes cache reads ' +
+  'explicitly', async (t) => {
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache: {
+      getAll(tableName) {
+        if (tableName !== TABLES.NODES) {
+          return [];
+        }
+        return [{node_id: 'node-a'}];
+      },
+    },
+  });
+
+  const result = await gateway.readProjectionRows(TABLES.NODES);
+
+  t.equal(result.success, true, 'projection helper should succeed');
+  t.equal(result.outcome, 'cache_hit', 'projection helper should use cache');
+  t.same(result.rows, [{node_id: 'node-a'}],
+    'projection helper should return cached rows');
+});
+
+test('ControlPlaneSystemTableGateway records enriched mutation routing ' +
+  'diagnostics', async (t) => {
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async insertSystemTableRow() {
+        return {
+          success: true,
+          affectedRows: 1,
+          systemTableDiagnostics: {
+            partitionId: 'services-p1',
+            leaderNodeId: 'seed-node',
+            serviceRowCount: 2,
+            routableServiceCount: 1,
+            routedToNode: 'seed-node',
+            deniedByReadiness: false,
+          },
+        };
+      },
+    },
+  });
+
+  await gateway.insertSystemTableRow(TABLES.SERVICES, {
+    service_id: 'svc-1',
+    service_type: 'message_group',
+    node_id: 'seed-node',
+    status: 'active',
+  }, {
+    queryTimeoutMs: 4321,
+  });
+  const entries = gateway.getControlPlaneOperationLedgerEntries();
+  const latestEntry = entries[entries.length - 1] || null;
+
+  t.match(latestEntry, {
+    operationClass: 'mutation',
+    tableName: TABLES.SERVICES,
+    partitionId: 'services-p1',
+    leaderNodeId: 'seed-node',
+    routedToNode: 'seed-node',
+    serviceRowCount: 2,
+    routableServiceCount: 1,
+    queryTimeoutMs: 4321,
+  });
+  t.equal(latestEntry.localReadHit, false, 'mutations should not log local reads');
 });
 
 test('ControlPlaneSystemTableGateway executeRead routes owner-local reads ' +
@@ -217,8 +551,8 @@ test('ControlPlaneSystemTableGateway executeRead routes owner-local reads ' +
   );
   t.equal(
     authoritativeCalls[0].options.queryOptions.routingReadinessDimension,
-    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-    'owner-local reads should preserve repairEligible routing diagnostics',
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'owner-local reads should preserve control-plane recovery routing diagnostics',
   );
 });
 
@@ -271,6 +605,65 @@ test('ControlPlaneSystemTableGateway owner-local reads fail closed when the ' +
   );
   t.equal(sqlQueryCalls, 0,
     'gateway should not silently route through the query engine');
+});
+
+test('ControlPlaneSystemTableGateway owner-local reads honor explicit routed ' +
+  'authoritative fallback opt-in', async (t) => {
+  const authoritativeCalls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        authoritativeCalls.push({tableName, sql, params, options});
+        if (options.allowSqlFallback !== true) {
+          return {
+            success: false,
+            error: 'authoritative_row_source_unavailable',
+            rows: [],
+          };
+        }
+        return {
+          success: true,
+          rows: [{operation_id: 'op-sql'}],
+          source: 'sql_query_engine',
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error(
+          'gateway should keep routed authoritative fallback inside the CDC owner path',
+        );
+      },
+    },
+  });
+
+  const result = await gateway.executeRead({
+    owner: 'replica-operation-repository',
+    tableName: TABLES.REPLICA_OPERATIONS,
+    sql: 'SELECT * FROM replica_operations WHERE 1 = 0',
+    params: [],
+    strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+  }, {
+    allowSqlFallback: true,
+  });
+
+  t.equal(result.success, true, 'owner-local read should succeed via routed authoritative fallback');
+  t.equal(
+    result.rows[0]?.operation_id,
+    'op-sql',
+    'gateway should surface the routed authoritative result',
+  );
+  t.equal(
+    authoritativeCalls[0]?.options?.allowSqlFallback,
+    true,
+    'owner-local reads should pass the explicit routed-authoritative opt-in to the owner',
+  );
 });
 
 test('ControlPlaneSystemTableGateway emits read telemetry with owner and ' +
@@ -367,8 +760,8 @@ test('ControlPlaneSystemTableGateway updateSystemTableRow routes writes ' +
   t.equal(updateCalls.length, 1, 'write should be delegated once');
   t.equal(
     updateCalls[0].options.routingReadinessDimension,
-    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-    'control-plane writes should use repairEligible',
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'control-plane writes should use control-plane recovery routing',
   );
 });
 
@@ -588,6 +981,133 @@ test('ControlPlaneSystemTableGateway submitMutation centralizes write ingress',
       'central mutation ingress should preserve gateway write options',
     );
   });
+
+test('ControlPlaneSystemTableGateway submitMutation canonicalizes ' +
+  'control_plane_publications upserts before delegating to CDC',
+async (t) => {
+  const upsertCalls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async upsertSystemTableRow(tableName, row) {
+        upsertCalls.push({tableName, row});
+        return {success: true};
+      },
+    },
+  });
+
+  await gateway.submitMutation({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+    tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
+    row: {
+      publicationId: 'pub-1',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 7,
+      publisherNodeId: 'node-a',
+      publishedActiveNodeIds: ['node-a'],
+      requiredAckNodeIds: ['node-a'],
+      acknowledgedNodeIds: [],
+      status: 'OPEN',
+    },
+  });
+
+  t.equal(upsertCalls.length, 1, 'gateway should delegate one upsert');
+  t.equal(
+    upsertCalls[0].tableName,
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    'gateway should preserve the publication table name',
+  );
+  t.equal(
+    upsertCalls[0].row.publication_id,
+    'pub-1',
+    'gateway should canonicalize the publication primary key',
+  );
+  t.same(
+    upsertCalls[0].row.published_active_node_ids,
+    ['node-a'],
+    'gateway should canonicalize publication array fields',
+  );
+  t.equal(
+    upsertCalls[0].row.status,
+    'OPEN',
+    'gateway should preserve publication status',
+  );
+});
+
+test('ControlPlaneSystemTableGateway submitMutation falls back to SQL during ' +
+  'bootstrap-scoped skip-cache-wait writes when CDC mutation helpers are unavailable',
+async (t) => {
+  const sqlCalls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    sqlQueryEngine: {
+      async executeQuery(sql, params, options) {
+        sqlCalls.push({sql, params, options});
+        return {success: true, affectedRows: 1};
+      },
+    },
+  });
+
+  const result = await gateway.submitMutation({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+    tableName: TABLES.SERVICES,
+    row: {
+      service_id: 'svc-1',
+      service_type: 'message_group',
+      node_id: 'node-a',
+      status: 'stopped',
+    },
+  }, {
+    skipCacheWait: true,
+    phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
+    workClass: PRESSURE_WORK_CLASS.CRITICAL,
+    deliveryPriority: 'critical',
+  });
+
+  t.equal(result.success, true, 'bootstrap fallback mutation should succeed');
+  t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+    'fallback mutation should still normalize as an applied write');
+  t.equal(sqlCalls.length, 1, 'fallback should route through SQL once');
+  t.match(
+    sqlCalls[0].sql,
+    /^INSERT OR REPLACE INTO services \(/,
+    'fallback should emit an upsert statement for the system table',
+  );
+  t.same(
+    sqlCalls[0].params,
+    ['svc-1', 'message_group', 'node-a', 'stopped'],
+    'fallback should preserve row values in statement order',
+  );
+  t.equal(
+    sqlCalls[0].options.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'fallback should keep control-plane recovery routing semantics',
+  );
+});
+
+test('ControlPlaneSystemTableGateway submitMutation still fails closed ' +
+  'without CDC mutation helpers outside the explicit startup fallback',
+async (t) => {
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, affectedRows: 1};
+      },
+    },
+  });
+
+  await t.rejects(
+    gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {service_id: 'svc-1'},
+      data: {status: 'active'},
+    }),
+    /requires cdcIntegrationService/,
+    'steady-state writes should not silently bypass the CDC mutation owner',
+  );
+});
 
 test('ControlPlaneSystemTableGateway supportsReadRows only when a readable ' +
   'backend is configured', async (t) => {

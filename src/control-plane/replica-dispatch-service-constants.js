@@ -33,6 +33,10 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Deferred node-state update while control-plane path recovers',
   NODE_STATE_UPDATE_DEFERRED_RETRY:
     'Re-enqueued deferred node-state update',
+  MEMBERSHIP_PUBLICATION_REFRESH_FAILED:
+    'Membership publication refresh failed for ready node-state',
+  MEMBERSHIP_PUBLICATION_ACK_FAILED:
+    'Membership publication acknowledgement failed for ready node-state',
   ENQUEUE_OPERATION_DISPATCH:
     'Enqueued operation for dispatch reconcile',
   ENQUEUE_NODE_STATE_UPDATE:

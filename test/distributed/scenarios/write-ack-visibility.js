@@ -13,6 +13,7 @@ import {
 
 const LOG_LEVEL = 'info';
 const LOG_TABLE = 'logs';
+const CONVERGENCE_SETTLE_TIMEOUT_MS = 120000;
 const ZERO = 0;
 const SAMPLE_LIMIT = 10;
 
@@ -161,11 +162,19 @@ async function run(cluster, options = {}) {
     pollIntervalMs,
   } = resolveWriteAckVisibilityScenarioConfig(options);
 
-  const convergence = await cluster.waitForConvergence({
-    settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
-    quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-    targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
-  });
+  let convergence = null;
+  if (typeof cluster.waitForAllActive === 'function') {
+    await cluster.waitForAllActive({
+      mode: 'load',
+      timeoutMs: CONVERGENCE_SETTLE_TIMEOUT_MS,
+    });
+  } else {
+    convergence = await cluster.waitForConvergence({
+      settleTimeoutMs: CONVERGENCE_SETTLE_TIMEOUT_MS,
+      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+      targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    });
+  }
 
   const nodes = cluster.getNodes();
   assert.ok(nodes.length > ZERO, 'Scenario requires at least one node');

@@ -62,6 +62,9 @@ import {
   DISPATCH_SUBSYSTEM,
 } from './replica-dispatch-service-constants.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from './control-plane-publication-merge.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
@@ -569,6 +572,7 @@ class ReplicaDispatchService extends EventEmitter {
           RECONCILE_REASON.NODE_STATE_UPDATE_READY,
           {nodeRow: existing},
         );
+        await this.acknowledgeMembershipPublicationForNode(nodeId);
       }
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
         nodeId,
@@ -652,6 +656,7 @@ class ReplicaDispatchService extends EventEmitter {
           },
         },
       );
+      await this.acknowledgeMembershipPublicationForNode(nodeId);
       return;
     }
 
@@ -752,19 +757,6 @@ class ReplicaDispatchService extends EventEmitter {
       targetNodeId,
     );
     if (!dispatchReadiness.ready) {
-      return;
-    }
-
-    const entityType =
-      row[COLUMN.ENTITY_TYPE] || SERVICE_TYPE.PARTITION;
-    if (row.type !== OperationType.ADD &&
-        row.type !== OperationType.REPLACE &&
-        !await this.hasHandlerOnTarget(targetNodeId, entityType)) {
-      this.logger.warn(DISPATCH_LOG_MSG.NO_HANDLER_ON_TARGET, {
-        operationId: row.operation_id,
-        targetNodeId,
-        entityType,
-      });
       return;
     }
 
@@ -1287,6 +1279,169 @@ class ReplicaDispatchService extends EventEmitter {
     };
   }
 
+  resolveMembershipPublicationService() {
+    const readinessService = this.controlPlaneReadinessService;
+    if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const membershipPublicationService =
+      readinessService.membershipPublicationService;
+    return membershipPublicationService &&
+      typeof membershipPublicationService === TYPEOF.OBJECT ?
+      membershipPublicationService :
+      null;
+  }
+
+  resolvePublicationNodeIds(publicationRow, camelKey, snakeKey) {
+    if (Array.isArray(publicationRow?.[camelKey])) {
+      return publicationRow[camelKey];
+    }
+    if (Array.isArray(publicationRow?.[snakeKey])) {
+      return publicationRow[snakeKey];
+    }
+    return [];
+  }
+
+  isTerminalPublicationStatus(publicationStatus) {
+    return publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
+      publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
+      publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
+  }
+
+  async refreshLatestPublicationForNode(membershipPublicationService, nodeId) {
+    if (typeof membershipPublicationService.getLatestPublicationForNode !==
+      TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    try {
+      const publicationRow =
+        await membershipPublicationService.getLatestPublicationForNode(
+          nodeId,
+          {
+            preferAuthoritativeRead: true,
+          },
+        );
+      return publicationRow && typeof publicationRow === TYPEOF.OBJECT ?
+        publicationRow :
+        null;
+    } catch (error) {
+      this.logger.warn(
+        DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_REFRESH_FAILED,
+        {
+          nodeId,
+          error: error?.message || String(error),
+        },
+      );
+      return null;
+    }
+  }
+
+  async acknowledgeMembershipPublicationForNode(nodeId) {
+    const membershipPublicationService =
+      this.resolveMembershipPublicationService();
+    if (!membershipPublicationService ||
+        typeof membershipPublicationService.acknowledgePublication !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    let publicationRow = null;
+    if (typeof membershipPublicationService.getLatestPublicationForNodeSync ===
+      TYPEOF.FUNCTION) {
+      publicationRow =
+        membershipPublicationService.getLatestPublicationForNodeSync(nodeId);
+    }
+    if (!publicationRow &&
+        typeof membershipPublicationService.getLatestPublicationForNode ===
+          TYPEOF.FUNCTION) {
+      publicationRow =
+        await membershipPublicationService.getLatestPublicationForNode(nodeId);
+    }
+    if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    let publicationStatus =
+      typeof publicationRow.status === TYPEOF.STRING ?
+        publicationRow.status.toUpperCase() :
+        null;
+    if (this.isTerminalPublicationStatus(publicationStatus)) {
+      return publicationRow;
+    }
+
+    let publicationId = publicationRow.publication_id ||
+      publicationRow.publicationId ||
+      null;
+    if (!publicationId) {
+      return publicationRow;
+    }
+    let requiredAckNodeIds = this.resolvePublicationNodeIds(
+      publicationRow,
+      'requiredAckNodeIds',
+      'required_ack_node_ids',
+    );
+    if (!requiredAckNodeIds.includes(nodeId)) {
+      const refreshedPublicationRow = await this.refreshLatestPublicationForNode(
+        membershipPublicationService,
+        nodeId,
+      );
+      if (!refreshedPublicationRow) {
+        return publicationRow;
+      }
+      publicationRow = refreshedPublicationRow;
+      publicationStatus =
+        typeof publicationRow.status === TYPEOF.STRING ?
+          publicationRow.status.toUpperCase() :
+          null;
+      if (this.isTerminalPublicationStatus(publicationStatus)) {
+        return publicationRow;
+      }
+      publicationId = publicationRow.publication_id ||
+        publicationRow.publicationId ||
+        null;
+      if (!publicationId) {
+        return publicationRow;
+      }
+      requiredAckNodeIds = this.resolvePublicationNodeIds(
+        publicationRow,
+        'requiredAckNodeIds',
+        'required_ack_node_ids',
+      );
+      if (!requiredAckNodeIds.includes(nodeId)) {
+        return publicationRow;
+      }
+    }
+    const acknowledgedNodeIds = this.resolvePublicationNodeIds(
+      publicationRow,
+      'acknowledgedNodeIds',
+      'acknowledged_node_ids',
+    );
+    if (acknowledgedNodeIds.includes(nodeId)) {
+      return publicationRow;
+    }
+
+    try {
+      const acknowledgedPublication =
+        await membershipPublicationService.acknowledgePublication(
+          publicationId,
+          nodeId,
+          {publicationRow},
+        );
+      return acknowledgedPublication || publicationRow;
+    } catch (error) {
+      this.logger.warn(
+        DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_FAILED,
+        {
+          nodeId,
+          publicationId,
+          error: error?.message || String(error),
+        },
+      );
+      return publicationRow;
+    }
+  }
+
   /**
    * Determine whether one node-state write failure should be retried through
    * the owner queue instead of surfacing as a terminal reconcile error.
@@ -1560,6 +1715,51 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Dispatch is internal control-plane progression, so readiness gating uses
+   * recovery eligibility to avoid deadlocking on publication convergence.
+   *
+   * @return {string}
+   * @private
+   */
+  resolveDispatchReadinessDecisionDimension() {
+    return CONTROL_PLANE_READINESS_DIMENSION
+      .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  }
+
+  /**
+   * Check readiness eligibility for one decision dimension.
+   * Falls back to repairEligible only when legacy snapshots do not expose
+   * controlPlaneRecoveryEligible explicitly.
+   *
+   * @param {Object|null} readiness
+   * @param {string} decisionDimension
+   * @return {boolean}
+   * @private
+   */
+  isReadinessDimensionSatisfied(readiness, decisionDimension) {
+    const dimensions = readiness?.dimensions &&
+      typeof readiness.dimensions === TYPEOF.OBJECT ?
+      readiness.dimensions :
+      null;
+    if (!dimensions) {
+      return false;
+    }
+    if (dimensions[decisionDimension] === true) {
+      return true;
+    }
+    if (decisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE) {
+      return false;
+    }
+    if (Object.hasOwn(dimensions, decisionDimension)) {
+      return false;
+    }
+    return dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] ===
+      true;
+  }
+
+  /**
    * Check whether a node is ready for internal topology dispatch work.
    * Dispatch is an internal topology consumer and gates on repairEligible
    * only (Req 4.2). Serve-only dimensions do not block dispatch.
@@ -1575,15 +1775,17 @@ class ReplicaDispatchService extends EventEmitter {
       return false;
     }
 
+    const decisionDimension =
+      this.resolveDispatchReadinessDecisionDimension();
     const readiness =
-      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
-    if (!readiness || !readiness.dimensions) {
-      return false;
-    }
-
-    return readiness.dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-    ] === true;
+      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
+        decisionDimension:
+          decisionDimension,
+      });
+    return this.isReadinessDimensionSatisfied(
+      readiness,
+      decisionDimension,
+    );
   }
 
   /**
@@ -1602,12 +1804,17 @@ class ReplicaDispatchService extends EventEmitter {
           TYPEOF.FUNCTION) {
       return {ready, snapshot: null};
     }
+    const decisionDimension =
+      this.resolveDispatchReadinessDecisionDimension();
     const readiness =
-      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
+      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
+        decisionDimension:
+          decisionDimension,
+      });
     const snapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         readiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        decisionDimension,
       );
     return {ready, snapshot};
   }

@@ -1,4 +1,5 @@
 export {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+export {ControlPlanePublicationsOwner} from './control-plane-publications-owner.js';
 export {NodesOwner} from './nodes-owner.js';
 export {ServicesOwner} from './services-owner.js';
 export {PartitionsOwner} from './partitions-owner.js';

@@ -1,6 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
@@ -39,6 +42,53 @@ test('AdminServiceDiscovery routes authoritative cache repair through the ' +
     'service discovery should preserve the repair cause',
   );
 });
+
+test('AdminServiceDiscovery authoritative cache repair reads use control-plane recovery semantics',
+  async (t) => {
+    const readCalls = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent, options) {
+          readCalls.push({
+            tableName: readIntent?.tableName,
+            routingReadinessDimension: options?.routingReadinessDimension,
+          });
+          return {
+            success: true,
+            tableName: readIntent?.tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 0};
+        },
+      },
+    });
+
+    await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'unit-test-recovery-routing',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.equal(readCalls.length > 0, true);
+    t.equal(
+      readCalls.every((call) =>
+        call.routingReadinessDimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      ),
+      true,
+      'authoritative discovery repair should route gateway reads as control-plane recovery work',
+    );
+  });
 
 test(
   'AdminServiceDiscovery does not report applied repair when any authoritative read fails',

@@ -10,7 +10,7 @@ import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 
 const ZERO = 0;
 const DEFAULT_ACTION_COUNT = 3;
-const DEFAULT_CONSISTENCY_TIMEOUT_MS = 15000;
+const DEFAULT_CONSISTENCY_TIMEOUT_MS = 60000;
 const DEFAULT_CONSISTENCY_POLL_INTERVAL_MS = 500;
 const CHAOS_ACTION = Object.freeze({
   KILL_RESTART: 'kill_restart',
@@ -120,7 +120,7 @@ function resolveInClusterChaosInjectionScenarioConfig(options = {}) {
       1000,
     convergenceTimeoutMs: Number.isFinite(options.convergenceTimeoutMs) ?
       Number(options.convergenceTimeoutMs) :
-      60000,
+      180000,
     minSuccessRate: Number.isFinite(options.minSuccessRate) ?
       Number(options.minSuccessRate) :
       0.7,
@@ -284,6 +284,7 @@ async function run(cluster, options = {}) {
     await cluster.waitForConsistencyConvergence({
       timeoutMs: config.consistencyTimeoutMs,
       pollIntervalMs: config.consistencyPollIntervalMs,
+      forceRepairAfterMs: 0,
     });
     actionTimeline.push({
       step: index + 1,

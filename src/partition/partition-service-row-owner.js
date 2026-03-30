@@ -24,6 +24,17 @@ const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   skipCacheWait: true,
   workClass: 'background',
 });
+const CRITICAL_SERVICE_ROW_UPDATE_OPTION = Object.freeze({
+  allowCoalescing: true,
+  allowPressureDefer: false,
+  deliveryPriority: 'critical',
+  pressureRetryAfterMs: 250,
+  skipCacheWait: true,
+  workClass: 'critical',
+});
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
+);
 
 function assertRequiredString(value, errorMessage) {
   if (typeof value !== TYPEOF.STRING || value.length === 0) {
@@ -100,9 +111,16 @@ class PartitionServiceRowOwner {
     };
   }
 
-  buildDeferredUpdateOptions(serviceId) {
+  isCriticalSystemPartition(partitionId) {
+    return typeof partitionId === TYPEOF.STRING &&
+      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+  }
+
+  buildDeferredUpdateOptions(serviceId, partitionId = null) {
     return {
-      ...SERVICE_ROW_UPDATE_OPTION,
+      ...(this.isCriticalSystemPartition(partitionId) ?
+        CRITICAL_SERVICE_ROW_UPDATE_OPTION :
+        SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `services:${serviceId}`,
     };
   }
@@ -125,6 +143,7 @@ class PartitionServiceRowOwner {
     await this.systemTableWriter.upsertSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
       row,
+      this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
     );
 
     return row;
@@ -155,7 +174,7 @@ class PartitionServiceRowOwner {
       await this.systemTableWriter.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.SERVICES,
         row,
-        this.buildDeferredUpdateOptions(row.service_id),
+        this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
       );
       return row;
     }
@@ -171,7 +190,7 @@ class PartitionServiceRowOwner {
         service_type: row.service_type,
       },
       updates,
-      this.buildDeferredUpdateOptions(row.service_id),
+      this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
     );
     return row;
   }

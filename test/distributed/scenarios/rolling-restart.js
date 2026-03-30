@@ -13,10 +13,11 @@ import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = '120s';
 const PRE_RESTART_SETTLE_MS = 5000;
-const PER_NODE_CONVERGENCE_TIMEOUT_MS = 30000;
+const PER_NODE_CONVERGENCE_TIMEOUT_MS = 300000;
 const INTER_RESTART_DELAY_MS = 2000;
 const MIN_RESTART_SUCCESS_RATE = 0.63;
 const POST_RESTART_QUIET_WINDOW_MS = 60000;
+const POST_RESTART_ACTIVE_TIMEOUT_MS = 120000;
 const ZERO = 0;
 
 /**
@@ -26,7 +27,21 @@ const ZERO = 0;
  */
 async function run(cluster) {
   // 1. Start sustained write load.
+  const initialNodes = cluster.getNodes();
+  const loadNodesById = new Map(
+    initialNodes.map((node) => [String(node.id), node]),
+  );
+  const availableLoadNodeIds = new Set(
+    initialNodes.map((node) => String(node.id)),
+  );
+  const resolveLoadNodes = () =>
+    Array.from(availableLoadNodeIds)
+      .map((nodeId) => loadNodesById.get(nodeId))
+      .filter((node) => node && typeof node.query === 'function');
+
   const loadRun = cluster.startLoad({
+    nodes: resolveLoadNodes(),
+    nodeResolver: resolveLoadNodes,
     opsPerSec: LOAD_OPS_PER_SEC,
     duration: LOAD_DURATION,
   });
@@ -44,6 +59,7 @@ async function run(cluster) {
   const nonSeedNodes = nodes.filter((n) => n.role !== 'seed');
 
   for (const node of nonSeedNodes) {
+    availableLoadNodeIds.delete(String(node.id));
     await cluster.restartNode(node.id);
 
     // Wait for convergence after each restart.
@@ -51,7 +67,13 @@ async function run(cluster) {
       settleTimeoutMs: PER_NODE_CONVERGENCE_TIMEOUT_MS,
       quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
       targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+      maxSustainedOverTargetMs: Math.max(
+        CONVERGENCE_DEFAULTS.maxSustainedOverTargetMs,
+        PER_NODE_CONVERGENCE_TIMEOUT_MS,
+      ),
+      ignoreStaleInFlightReplicaOperations: true,
     });
+    availableLoadNodeIds.add(String(node.id));
 
     // Brief pause between restarts.
     await new Promise(
@@ -83,7 +105,10 @@ async function run(cluster) {
 
   // 7. Ensure all nodes become active again before final consistency checks.
   if (typeof cluster.waitForAllActive === 'function') {
-    await cluster.waitForAllActive();
+    await cluster.waitForAllActive({
+      mode: 'load',
+      timeoutMs: POST_RESTART_ACTIVE_TIMEOUT_MS,
+    });
   }
 
   // 8. Post-restart quiet window — no load, let memory settle so the

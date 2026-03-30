@@ -33,6 +33,10 @@ function createPolicy(options = {}) {
           return 64;
         },
       },
+    isCriticalSystemPartition:
+      typeof options.isCriticalSystemPartition === 'function' ?
+        options.isCriticalSystemPartition :
+        () => false,
   };
 
   const policy = new ProvisioningAdmissionPolicy({
@@ -48,6 +52,8 @@ function createPolicy(options = {}) {
         state.storageAdmissionService,
       getStorageAccountingService: () =>
         state.storageAccountingService,
+      isCriticalSystemPartition: (partitionId) =>
+        state.isCriticalSystemPartition(partitionId),
       normalizeMoveType: (moveType) => {
         if (typeof moveType !== 'string') {
           return null;
@@ -139,16 +145,16 @@ test('ensureProvisioningAdmissionAllowed throws typed admission error', async (t
   });
 
   const error = await policy.ensureProvisioningAdmissionAllowed({
-      move: {
-        type: 'ADD',
-        partitionId: 'partition-1',
-        nodeId: 'node-remote',
-      },
+    move: {
+      type: 'ADD',
       partitionId: 'partition-1',
-      entityType: 'partition',
-      entityId: 'partition-1',
-      sourceNodeId: 'node-local',
-    }).catch((caught) => caught);
+      nodeId: 'node-remote',
+    },
+    partitionId: 'partition-1',
+    entityType: 'partition',
+    entityId: 'partition-1',
+    sourceNodeId: 'node-local',
+  }).catch((caught) => caught);
 
   t.ok(error, 'should throw typed admission error');
   t.ok(
@@ -158,44 +164,122 @@ test('ensureProvisioningAdmissionAllowed throws typed admission error', async (t
   t.match(error?.message || '', /capacity_exhausted/);
 });
 
-test('assertLocalControlPlaneMutationReady defers background mutation on readiness blocker', async (t) => {
-  const {policy} = createPolicy({
-    controlPlaneReadinessService: {
-      getNodeReadinessSync() {
-        return {
-          dimensions: {
-            controlPlaneWritable: false,
-            metadataPublicationHealthy: false,
-          },
-          reasons: [
-            {code: 'control_plane_write_unhealthy'},
-          ],
-          lifecycleState: 'joining',
-          nodeEvidence: {
-            connectionState: 'connected',
-            lastHeartbeat: Date.now(),
-            readyLeaseExpiresAt: Date.now() + 1000,
-          },
-          capacity: {
-            storageBudgetBytes: 1024,
-          },
-        };
+test('evaluateProvisioningAdmission forwards critical partition context',
+  async (t) => {
+    const calls = [];
+    const {policy} = createPolicy({
+      isCriticalSystemPartition: (partitionId) =>
+        partitionId === 'control_plane_publications-p1',
+      storageAdmissionService: {
+        async checkAdd(options = {}) {
+          calls.push({
+            method: 'checkAdd',
+            options: {...options},
+          });
+          return {
+            allowed: true,
+            decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          };
+        },
+        async checkReplace(options = {}) {
+          calls.push({
+            method: 'checkReplace',
+            options: {...options},
+          });
+          return {
+            allowed: true,
+            decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          };
+        },
       },
-    },
+    });
+
+    await policy.evaluateProvisioningAdmission({
+      move: {
+        type: 'ADD',
+        partitionId: 'control_plane_publications-p1',
+        nodeId: 'node-remote',
+      },
+      entityType: 'partition',
+      entityId: 'control_plane_publications-p1',
+      partitionId: 'control_plane_publications-p1',
+      sourceNodeId: 'node-local',
+    });
+    await policy.evaluateProvisioningAdmission({
+      move: {
+        type: 'REPLACE',
+        partitionId: 'control_plane_publications-p1',
+        nodeId: 'node-remote',
+        sourceNodeId: 'node-local',
+      },
+      entityType: 'partition',
+      entityId: 'control_plane_publications-p1',
+      partitionId: 'control_plane_publications-p1',
+      sourceNodeId: 'node-local',
+    });
+
+    t.equal(calls.length, 2, 'expected both ADD and REPLACE admission checks');
+    t.equal(
+      calls[0]?.method,
+      'checkAdd',
+      'first call should probe ADD admission',
+    );
+    t.equal(
+      calls[0]?.options?.isCritical,
+      true,
+      'critical ADD should propagate critical mode',
+    );
+    t.equal(
+      calls[1]?.method,
+      'checkReplace',
+      'second call should probe REPLACE admission',
+    );
+    t.equal(
+      calls[1]?.options?.isCritical,
+      true,
+      'critical REPLACE should propagate critical mode',
+    );
   });
 
-  const error = await Promise.resolve().then(() => {
-    policy.assertLocalControlPlaneMutationReady({
-      type: 'ADD',
-      partitionId: 'partition-1',
-      nodeId: 'node-remote',
-      controlPlaneMutationWorkClass: 'background',
+test('assertLocalControlPlaneMutationReady defers background mutation on readiness blocker',
+  async (t) => {
+    const {policy} = createPolicy({
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            dimensions: {
+              controlPlaneWritable: false,
+              metadataPublicationHealthy: false,
+            },
+            reasons: [
+              {code: 'control_plane_write_unhealthy'},
+            ],
+            lifecycleState: 'joining',
+            nodeEvidence: {
+              connectionState: 'connected',
+              lastHeartbeat: Date.now(),
+              readyLeaseExpiresAt: Date.now() + 1000,
+            },
+            capacity: {
+              storageBudgetBytes: 1024,
+            },
+          };
+        },
+      },
     });
-  }).catch((caught) => caught);
 
-  t.equal(
-    error?.rebalanceSkipReason,
-    REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY,
-    'background mutations should defer when local control-plane readiness is degraded',
-  );
-});
+    const error = await Promise.resolve().then(() => {
+      policy.assertLocalControlPlaneMutationReady({
+        type: 'ADD',
+        partitionId: 'partition-1',
+        nodeId: 'node-remote',
+        controlPlaneMutationWorkClass: 'background',
+      });
+    }).catch((caught) => caught);
+
+    t.equal(
+      error?.rebalanceSkipReason,
+      REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY,
+      'background mutations should defer when local control-plane readiness is degraded',
+    );
+  });

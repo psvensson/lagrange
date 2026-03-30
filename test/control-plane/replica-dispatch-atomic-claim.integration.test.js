@@ -1795,27 +1795,13 @@ test(
       await service.dispatchOperationRow(operationRow);
       t.equal(
         executeCount,
-        0,
-        'should not dispatch remove before handler exists',
-      );
-
-      serviceRows = [{
-        [COLUMN.NODE_ID]: 'node-2',
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      }];
-      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.SERVICES, serviceRows[0]);
-      await waitForRetryDrain(service);
-
-      t.equal(
-        executeCount,
         1,
-        'should retry and dispatch when handler becomes active',
+        'should dispatch remove through replica-handler owner path',
       );
       t.equal(
         operationRow.workflow_step,
         WORKFLOW_STEP.SENDING,
-        'operation should be claimed after handler activation retry',
+        'operation should be claimed immediately for remove dispatch',
       );
     } finally {
       service.stop();

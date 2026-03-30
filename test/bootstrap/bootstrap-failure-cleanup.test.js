@@ -249,6 +249,8 @@ test('cleanupFailedBootstrap - REGISTRATION cleans up control plane and writer',
   let endpointStopped = false;
   let dispatchStopped = false;
   let rpcShutdown = false;
+  let runtimeHandlerShutdown = false;
+  let runtimeHandlerUnregistered = false;
   let replicaHandlerShutdown = false;
   let replicaHandlerUnregistered = false;
   let writerDisabled = false;
@@ -282,6 +284,14 @@ test('cleanupFailedBootstrap - REGISTRATION cleans up control plane and writer',
     rpcClient: {
       shutdown: async () => {
         rpcShutdown = true;
+      },
+    },
+    runtimeServiceHandler: {
+      unregisterFromRouter: () => {
+        runtimeHandlerUnregistered = true;
+      },
+      shutdown: async () => {
+        runtimeHandlerShutdown = true;
       },
     },
     replicaHandler: {
@@ -324,6 +334,10 @@ test('cleanupFailedBootstrap - REGISTRATION cleans up control plane and writer',
   t.ok(leaseStopped, 'should stop lease service');
   t.ok(endpointStopped, 'should stop endpoint service');
   t.ok(dispatchStopped, 'should stop dispatch service');
+  t.ok(runtimeHandlerShutdown,
+    'should shutdown runtime service handler');
+  t.ok(runtimeHandlerUnregistered,
+    'should unregister runtime service handler');
   t.ok(rpcShutdown, 'should shutdown RPC client');
   t.ok(replicaHandlerShutdown, 'should shutdown replica handler');
   t.ok(replicaHandlerUnregistered, 'should unregister replica handler');
@@ -333,6 +347,8 @@ test('cleanupFailedBootstrap - REGISTRATION cleans up control plane and writer',
   t.equal(service.leaseService, null, 'should null lease svc');
   t.equal(service.endpointService, null, 'should null endpoint svc');
   t.equal(service.dispatchService, null, 'should null dispatch svc');
+  t.equal(service.runtimeServiceHandler, null,
+    'should null runtime service handler');
   t.equal(service.rpcClient, null, 'should null RPC client');
   t.equal(service.replicaHandler, null, 'should null replica handler');
   t.equal(service.systemTableWriter, null, 'should null writer');

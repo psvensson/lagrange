@@ -6,6 +6,9 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+import {STARTUP_JOIN_MODE} from
+  '../../src/bootstrap/rejoin-hints-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   ENDPOINT_STATUS,
   SERVICE_STATUS,
@@ -13,6 +16,8 @@ import {
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
+import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
+import {NodeService} from '../../src/node/node-service.js';
 
 test('registerNodeInCluster() - should create the canonical nodes row and upsert endpoints',
   async (t) => {
@@ -292,9 +297,9 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
       'registration should create the canonical node row directly',
     );
     t.equal(
-      service.joinMembershipPublished,
-      true,
-      'successful registration should mark join membership as published',
+      service.getRegisteredJoinNodeId(),
+      'test-node-owner-path',
+      'successful registration should expose join membership from the canonical nodes cache row',
     );
   });
 
@@ -352,22 +357,19 @@ test('registerNodeInCluster() - should retry transient participant failures duri
       'join admission should retry the canonical nodes write once after a retryable failure',
     );
     t.equal(
-      service.joinMembershipPublished,
-      true,
-      'membership should be marked published after the retried admission succeeds',
+      service.getRegisteredJoinNodeId(),
+      'test-node-admission-retry',
+      'membership should be visible from the canonical nodes cache row after the retried admission succeeds',
     );
-    t.equal(
-      service.messageGroupServiceEndpointsPublished,
-      true,
-      'endpoint publication should still complete after the retried admission succeeds',
-    );
+    t.equal(service.hasPublishedLocalServiceEndpoints(), true,
+      'endpoint publication should still complete after the retried admission succeeds');
     t.ok(
       upsertCalls.some((call) => call.tableName === TABLES.NODE_ENDPOINTS),
       'endpoint publication should continue after the nodes write retry succeeds',
     );
   });
 
-test('registerNodeInCluster() - should retry admission at phase scope when the first routed write exhausts the owner retry window',
+test('registerNodeInCluster() - should retry admission at phase scope when the first routed attempt exhausts the inner retry budget',
   async (t) => {
     const participantFailure = new Error(
       'Distributed operation failed due to participant failures',
@@ -425,15 +427,12 @@ test('registerNodeInCluster() - should retry admission at phase scope when the f
       'phase-scoped join admission should rerun node registration after the first routed attempt ages out the inner retry budget',
     );
     t.equal(
-      service.joinMembershipPublished,
-      true,
-      'phase-scoped retry should still complete membership publication',
+      service.getRegisteredJoinNodeId(),
+      'test-node-phase-admission-retry',
+      'phase-scoped retry should still complete canonical membership registration',
     );
-    t.equal(
-      service.messageGroupServiceEndpointsPublished,
-      true,
-      'phase-scoped retry should still complete endpoint publication',
-    );
+    t.equal(service.hasPublishedLocalServiceEndpoints(), true,
+      'phase-scoped retry should still complete endpoint publication');
   });
 
 test('registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication',
@@ -499,18 +498,287 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       'join registration should retain the original owner-path failure as cause',
     );
     t.equal(
-      service.joinMembershipPublished,
-      false,
-      'membership should not be marked published when admission fails',
+      service.getRegisteredJoinNodeId(),
+      null,
+      'membership should not appear in cache when admission fails',
     );
-    t.equal(
-      service.messageGroupServiceEndpointsPublished,
-      false,
-      'endpoint publication should not be marked complete when admission fails',
-    );
+    t.equal(service.hasPublishedLocalServiceEndpoints(), false,
+      'endpoint publication should not appear in cache when admission fails');
     t.equal(
       upsertCalls.length,
       0,
       'join registration should stop before endpoint upserts when admission fails',
+    );
+  });
+
+test('registerNodeInCluster() - should reuse canonical membership during durable rejoin while refreshing the canonical nodes row',
+  async (t) => {
+    NodeService.resetInstance();
+    t.after(() => NodeService.resetInstance());
+
+    const upsertCalls = [];
+    const nodeId = 'test-node-durable-rejoin';
+    const nodeAddress = 'joiner-host:8080';
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      node_id: nodeId,
+      node_address: nodeAddress,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.DISCONNECTED,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `ep-${nodeId}-ws`,
+      node_id: nodeId,
+      transport_type: TRANSPORT_TYPE.WEBSOCKET,
+      address: 'ws://joiner-host:8082',
+      priority: 0,
+      metadata: '{}',
+      status: ENDPOINT_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+      service_id: META_SERVICE_ID.POSTGRES_WIRE,
+      node_id: nodeId,
+      protocol: 'tcp',
+      address: 'joiner-host',
+      port: 5432,
+      metadata: '{}',
+    });
+    NodeService.getInstance().setSystemCacheProxy(cache);
+
+    const service = new NodeJoiningService({
+      nodeId,
+      nodeAddress,
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 8082,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      executeAuthoritativeSystemTableRead: async (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              node_id: nodeId,
+              node_address: nodeAddress,
+              status: SERVICE_STATUS.ACTIVE,
+              connection_state: STATE.DISCONNECTED,
+            }],
+          };
+        }
+        if (tableName === TABLES.NODE_ENDPOINTS) {
+          return {
+            success: true,
+            rows: [{
+              endpoint_id: `ep-${nodeId}-ws`,
+              node_id: nodeId,
+              transport_type: TRANSPORT_TYPE.WEBSOCKET,
+              address: 'ws://joiner-host:8082',
+              priority: 0,
+              metadata: '{}',
+              status: ENDPOINT_STATUS.ACTIVE,
+            }],
+          };
+        }
+        if (tableName === TABLES.SERVICE_ENDPOINTS) {
+          return {
+            success: true,
+            rows: [{
+              endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+              service_id: META_SERVICE_ID.POSTGRES_WIRE,
+              node_id: nodeId,
+              protocol: 'tcp',
+              address: 'joiner-host',
+              port: 5432,
+              metadata: '{}',
+            }],
+          };
+        }
+        return {success: true, rows: []};
+      },
+      upsertSystemTableRow: async (tableName, rowData) => {
+        upsertCalls.push({tableName, rowData});
+        return {success: true};
+      },
+    };
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+
+    const result = await service.registerNodeInCluster();
+
+    t.equal(
+      upsertCalls.length,
+      1,
+      'durable rejoin should refresh the canonical nodes row so peers learn the node is connected but not yet ready',
+    );
+    t.equal(
+      upsertCalls[0]?.tableName,
+      TABLES.NODES,
+      'durable rejoin should only refresh the canonical nodes row when endpoint metadata is already reusable',
+    );
+    t.equal(
+      upsertCalls[0]?.rowData?.connection_state,
+      STATE.CONNECTED,
+      'durable rejoin refresh should preserve CONNECTED admission state',
+    );
+    t.notOk(
+      Number.isFinite(upsertCalls[0]?.rowData?.ready_lease_expires_at),
+      'durable rejoin refresh should explicitly clear the ready lease until READY signaling completes',
+    );
+    t.equal(
+      result?.reusedExistingMembership,
+      true,
+      'durable rejoin should report that it reused canonical membership',
+    );
+    t.equal(
+      result?.resolution?.source,
+      'durable_rejoin_existing_membership',
+      'durable rejoin should explain why fresh admission writes were skipped',
+    );
+    t.equal(
+      service.getRegisteredJoinNodeId(),
+      nodeId,
+      'durable rejoin should satisfy join membership from canonical cache evidence',
+    );
+    t.equal(service.hasPublishedLocalServiceEndpoints(), true,
+      'durable rejoin should satisfy endpoint publication from canonical cache evidence');
+
+    const nodeRows = cache.getAll(TABLES.NODES);
+    const reusedNodeRow = nodeRows.find((row) => row.node_id === nodeId);
+    t.equal(
+      reusedNodeRow?.connection_state,
+      STATE.CONNECTED,
+      'durable rejoin should locally project the cached node row back to CONNECTED',
+    );
+  });
+
+test('registerNodeInCluster() - should not treat cache-only durable rejoin metadata as canonical proof',
+  async (t) => {
+    NodeService.resetInstance();
+    t.after(() => NodeService.resetInstance());
+
+    const upsertCalls = [];
+    const nodeId = 'test-node-durable-rejoin-cache-only';
+    const nodeAddress = 'joiner-cache-only:8080';
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      node_id: nodeId,
+      node_address: nodeAddress,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.DISCONNECTED,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `ep-${nodeId}-ws`,
+      node_id: nodeId,
+      transport_type: TRANSPORT_TYPE.WEBSOCKET,
+      address: 'ws://joiner-cache-only:8082',
+      priority: 0,
+      metadata: '{}',
+      status: ENDPOINT_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+      service_id: META_SERVICE_ID.POSTGRES_WIRE,
+      node_id: nodeId,
+      protocol: 'tcp',
+      address: 'joiner-cache-only',
+      port: 5432,
+      metadata: '{}',
+    });
+    NodeService.getInstance().setSystemCacheProxy(cache);
+
+    const service = new NodeJoiningService({
+      nodeId,
+      nodeAddress,
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 8082,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      executeAuthoritativeSystemTableRead: async () => {
+        return {success: true, rows: []};
+      },
+      upsertSystemTableRow: async (tableName, rowData) => {
+        upsertCalls.push({tableName, rowData});
+        return {success: true};
+      },
+    };
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+
+    const result = await service.registerNodeInCluster();
+
+    t.equal(
+      result?.reusedExistingMembership,
+      undefined,
+      'cache-only metadata must not be treated as canonical durable rejoin proof',
+    );
+    t.ok(
+      upsertCalls.some((call) => call.tableName === TABLES.NODE_ENDPOINTS),
+      'registration should fall back to fresh admission writes when authoritative rejoin rows are absent',
+    );
+  });
+
+test('registerNodeInCluster() - should fall back to fresh admission writes when durable rejoin node metadata drifted',
+  async (t) => {
+    NodeService.resetInstance();
+    t.after(() => NodeService.resetInstance());
+
+    const upsertCalls = [];
+    const nodeId = 'test-node-durable-rejoin-drift';
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      node_id: nodeId,
+      node_address: 'old-host:8080',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.DISCONNECTED,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `ep-${nodeId}-ws`,
+      node_id: nodeId,
+      transport_type: TRANSPORT_TYPE.WEBSOCKET,
+      address: 'ws://old-host:8082',
+      priority: 0,
+      metadata: '{}',
+      status: ENDPOINT_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      endpoint_id: `${META_SERVICE_ID.POSTGRES_WIRE}-ep-${nodeId}`,
+      service_id: META_SERVICE_ID.POSTGRES_WIRE,
+      node_id: nodeId,
+      protocol: 'tcp',
+      address: 'old-host',
+      port: 5432,
+      metadata: '{}',
+    });
+    NodeService.getInstance().setSystemCacheProxy(cache);
+
+    const service = new NodeJoiningService({
+      nodeId,
+      nodeAddress: 'new-host:8080',
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 8082,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName, rowData) => {
+        upsertCalls.push({tableName, rowData});
+        return {success: true};
+      },
+    };
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+
+    await service.registerNodeInCluster();
+
+    t.ok(
+      upsertCalls.some((call) => call.tableName === TABLES.NODES),
+      'durable rejoin should perform fresh admission writes when node address metadata drifted',
     );
   });

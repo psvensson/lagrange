@@ -16,6 +16,17 @@ REPORT_DIR="test-output/reports"
 RUNNER="node test/distributed/run.js"
 EXTRA_ARGS=("$@")
 
+sanitize_report_component() {
+  local value="${1:-unknown}"
+  value="${value//[^A-Za-z0-9._-]/-}"
+  value="${value#-}"
+  value="${value%-}"
+  if [ -z "$value" ]; then
+    value="unknown"
+  fi
+  printf '%s' "$value"
+}
+
 # Scenario entries: config|scenario
 # 3-node scenarios
 declare -a SCENARIOS_3N=(
@@ -73,7 +84,9 @@ for entry in "${ALL_SCENARIOS[@]}"; do
   IDX=$((IDX + 1))
   IFS='|' read -r config scenario <<< "$entry"
   config_path="test/distributed/config/${config}"
-  output="${REPORT_DIR}/${scenario}-${TS}.report.json"
+  config_tag="$(sanitize_report_component "${config%.json}")"
+  scenario_tag="$(sanitize_report_component "${scenario}")"
+  output="${REPORT_DIR}/${scenario_tag}-${config_tag}-${TS}.report.json"
 
   echo "[${IDX}/${TOTAL}] ${scenario} (config: ${config})"
 
@@ -86,7 +99,7 @@ for entry in "${ALL_SCENARIOS[@]}"; do
     echo "  -> PASS"
   else
     FAILED=$((FAILED + 1))
-    FAILED_NAMES+=("$scenario")
+    FAILED_NAMES+=("${scenario} (${config_tag})")
     echo "  -> FAIL"
   fi
   echo ""

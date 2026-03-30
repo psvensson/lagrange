@@ -8,23 +8,41 @@ import {
   resolvePartitionGrowthAndSpreadScenarioConfig,
   resolveTableDistributionQueryConfig,
 } from '../harness/scenario-config.js';
+import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../../src/control-plane/control-plane-error-classification.js';
 
 const TABLE_NAME_LOGS = 'logs';
 const TABLE_NAME_BENCHMARK_EVENTS = 'benchmark_events';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const ZERO = 0;
+const ONE = 1;
 const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TABLE_ID_VISIBILITY_TIMEOUT_MS = 10000;
+const TABLE_BOOTSTRAP_TIMEOUT_MS = 30000;
 const TABLE_ID_VISIBILITY_POLL_INTERVAL_MS = 100;
 const CONTROL_QUERY_TIMEOUT_MS = 30000;
 const POLICY_APPLY_TIMEOUT_MS = 60000;
 const POLICY_APPLY_ATTEMPT_TIMEOUT_MS = 15000;
 const POLICY_VISIBILITY_POLL_INTERVAL_MS = 250;
 const POLICY_APPLY_RETRY_DELAY_MS = 250;
-const CONTROL_QUERY_LANE_DEFAULT = 'default';
+const CONTROL_QUERY_LANE_CONTROL = 'control';
+const CONTROL_QUERY_LANE_SNAPSHOT = 'snapshot';
 const TABLE_POLICY_PRECONDITION_SCENARIO_DEFAULT = 'unknown-scenario';
+const DEFAULT_BENCHMARK_READY_NODE_COUNT = 3;
+const PARTITIONING_LOAD_HEADROOM_RATIO = 0.5;
+const PARTITIONING_ADAPTIVE_DISPATCH_GUARDRAIL = Object.freeze({
+  enabled: true,
+  pressureSignalThreshold: 2,
+  queueDepthThreshold: 4,
+  reductionStepRatio: 0.25,
+  minMaxInFlight: 2,
+  recoveryQuietTicks: 8,
+});
 
 const DEFAULT_TABLE_SPLIT_POLICIES = Object.freeze({
   splitStorageThreshold: 16384,
@@ -84,6 +102,26 @@ function isTimeoutShapedError(error) {
   return TIMEOUT_ERROR_PATTERN.test(message);
 }
 
+function isRetryableControlPlaneProgressError(error) {
+  if (getControlPlaneRetryAfterMs(error) > ZERO) {
+    return true;
+  }
+  if (isRetryableControlPlaneError(error)) {
+    return true;
+  }
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('participant failures') ||
+    message.includes('query_admission_deferred') ||
+    message.includes('query_admission_rejected');
+}
+
+function resolveControlPlaneRetryDelayMs(error, fallbackMs) {
+  return Math.max(
+    fallbackMs,
+    getControlPlaneRetryAfterMs(error),
+  );
+}
+
 /**
  * Run one control-plane query with timeout-aware lane routing.
  * @param {Object} node
@@ -92,6 +130,52 @@ function isTimeoutShapedError(error) {
  * @return {Promise<Object>}
  */
 async function queryControl(node, sql, params = [], options = {}) {
+  const queryNodes = resolveControlQueryNodes(node, options);
+  let lastError = null;
+  for (const candidateNode of queryNodes) {
+    try {
+      return await queryControlSingle(candidateNode, sql, params, options);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('no_control_query_nodes_available');
+}
+
+function resolveControlQueryNodes(primaryNode, options = {}) {
+  const candidates = [];
+  if (primaryNode && typeof primaryNode === 'object') {
+    candidates.push(primaryNode);
+  }
+  const extraNodes = Array.isArray(options.queryNodes) ?
+    options.queryNodes :
+    Array.isArray(options.fallbackNodes) ?
+      options.fallbackNodes :
+      [];
+  for (const node of extraNodes) {
+    if (node && typeof node === 'object') {
+      candidates.push(node);
+    }
+  }
+  const uniqueCandidates = [];
+  const seenNodeIds = new Set();
+  for (const node of candidates) {
+    const nodeId = String(node?.id || '').trim();
+    const dedupeKey = nodeId.length > ZERO ?
+      nodeId :
+      null;
+    if (dedupeKey && seenNodeIds.has(dedupeKey)) {
+      continue;
+    }
+    if (dedupeKey) {
+      seenNodeIds.add(dedupeKey);
+    }
+    uniqueCandidates.push(node);
+  }
+  return uniqueCandidates;
+}
+
+async function queryControlSingle(node, sql, params = [], options = {}) {
   const timeoutMs = Number.isFinite(options.timeoutMs) &&
     options.timeoutMs > ZERO ?
     Math.floor(options.timeoutMs) :
@@ -99,7 +183,7 @@ async function queryControl(node, sql, params = [], options = {}) {
   const lane = typeof options.lane === 'string' &&
     options.lane.length > ZERO ?
     options.lane :
-    CONTROL_QUERY_LANE_DEFAULT;
+    CONTROL_QUERY_LANE_CONTROL;
   if (node && typeof node.queryWithTimeout === 'function') {
     return node.queryWithTimeout(sql, params, {
       timeoutMs,
@@ -172,6 +256,506 @@ function resolvePartitioningLoadTableName(
     return TABLE_NAME_BENCHMARK_EVENTS;
   }
   return resolved;
+}
+
+function resolveClusterNodes(cluster) {
+  if (typeof cluster?.getNodes === 'function') {
+    return cluster.getNodes();
+  }
+  if (typeof cluster?.nodes === 'function') {
+    return cluster.nodes();
+  }
+  return [];
+}
+
+function resolveBenchmarkAdmissionRequiredNodeCount(cluster, options = {}) {
+  const clusterNodeCount = Math.max(
+    1,
+    resolveClusterNodes(cluster).length,
+  );
+  if (Number.isInteger(options.requiredNodeCount) &&
+      options.requiredNodeCount > ZERO) {
+    return Math.min(clusterNodeCount, options.requiredNodeCount);
+  }
+  const replicationFactor = Number.isInteger(
+    cluster?._config?.benchmark?.replicationFactor,
+  ) && cluster._config.benchmark.replicationFactor > ZERO ?
+    cluster._config.benchmark.replicationFactor :
+    BENCHMARK_DEFAULTS.replicationFactor;
+  return Math.max(
+    1,
+    Math.min(
+      clusterNodeCount,
+      replicationFactor,
+      DEFAULT_BENCHMARK_READY_NODE_COUNT,
+    ),
+  );
+}
+
+function resolveBenchmarkBootstrapRequiredNodeCount(
+  cluster,
+  options = {},
+) {
+  const clusterNodeCount = Math.max(
+    1,
+    resolveClusterNodes(cluster).length,
+  );
+  const targetNodeCount = resolveBenchmarkAdmissionRequiredNodeCount(
+    cluster,
+    options,
+  );
+  if (Number.isInteger(options.bootstrapRequiredNodeCount) &&
+      options.bootstrapRequiredNodeCount > ZERO) {
+    return Math.max(
+      1,
+      Math.min(
+        clusterNodeCount,
+        targetNodeCount,
+        options.bootstrapRequiredNodeCount,
+      ),
+    );
+  }
+  const replicationFactor = Number.isInteger(
+    cluster?._config?.benchmark?.replicationFactor,
+  ) && cluster._config.benchmark.replicationFactor > ZERO ?
+    cluster._config.benchmark.replicationFactor :
+    BENCHMARK_DEFAULTS.replicationFactor;
+  return Math.max(
+    1,
+    Math.min(
+      clusterNodeCount,
+      targetNodeCount,
+      replicationFactor,
+    ),
+  );
+}
+
+function resolveBenchmarkAdmissionTimeoutMs(cluster, options = {}) {
+  if (Number.isFinite(options.timeoutMs) && options.timeoutMs > ZERO) {
+    return Math.floor(options.timeoutMs);
+  }
+  const configuredTimeoutMs = cluster?._config?.benchmark?.readyTimeoutMs;
+  if (Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > ZERO) {
+    return Math.floor(configuredTimeoutMs);
+  }
+  return BENCHMARK_DEFAULTS.readyTimeoutMs;
+}
+
+function resolveBenchmarkAdmissionStableWindowMs(cluster, options = {}) {
+  if (Number.isFinite(options.stableWindowMs) &&
+      options.stableWindowMs >= ZERO) {
+    return Math.floor(options.stableWindowMs);
+  }
+  const preloadStableWindowMs =
+    cluster?._config?.benchmark?.preloadRequiredStableMs;
+  if (Number.isFinite(preloadStableWindowMs) &&
+      preloadStableWindowMs >= ZERO) {
+    return Math.floor(preloadStableWindowMs);
+  }
+  const quiescentStableWindowMs =
+    cluster?._config?.benchmark?.quiescentStableWindowMs;
+  if (Number.isFinite(quiescentStableWindowMs) &&
+      quiescentStableWindowMs >= ZERO) {
+    return Math.floor(quiescentStableWindowMs);
+  }
+  return BENCHMARK_DEFAULTS.quiescentStableWindowMs;
+}
+
+function resolveBenchmarkAdmissionPollIntervalMs(cluster, options = {}) {
+  if (Number.isFinite(options.pollIntervalMs) &&
+      options.pollIntervalMs > ZERO) {
+    return Math.floor(options.pollIntervalMs);
+  }
+  const configuredPollIntervalMs =
+    cluster?._config?.benchmark?.readyPollIntervalMs;
+  if (Number.isFinite(configuredPollIntervalMs) &&
+      configuredPollIntervalMs > ZERO) {
+    return Math.floor(configuredPollIntervalMs);
+  }
+  return BENCHMARK_DEFAULTS.readyPollIntervalMs;
+}
+
+function preserveNodeOrder(currentNodes, nextNodes, limit = Number.POSITIVE_INFINITY) {
+  const normalizedLimit = Number.isInteger(limit) && limit > ZERO ?
+    limit :
+    nextNodes.length;
+  const nextNodeById = new Map();
+  const anonymousNodes = [];
+  for (const node of nextNodes) {
+    const nodeId = String(node?.id || '');
+    if (nodeId.length > ZERO) {
+      nextNodeById.set(nodeId, node);
+      continue;
+    }
+    anonymousNodes.push(node);
+  }
+  const orderedNodes = [];
+  const seenNodeIds = new Set();
+  for (const node of currentNodes) {
+    const nodeId = String(node?.id || '');
+    if (nodeId.length === ZERO) {
+      continue;
+    }
+    const nextNode = nextNodeById.get(nodeId);
+    if (!nextNode || seenNodeIds.has(nodeId)) {
+      continue;
+    }
+    orderedNodes.push(nextNode);
+    seenNodeIds.add(nodeId);
+    if (orderedNodes.length >= normalizedLimit) {
+      return orderedNodes;
+    }
+  }
+  for (const node of nextNodes) {
+    const nodeId = String(node?.id || '');
+    if (nodeId.length > ZERO) {
+      if (seenNodeIds.has(nodeId)) {
+        continue;
+      }
+      orderedNodes.push(node);
+      seenNodeIds.add(nodeId);
+    } else if (anonymousNodes.length > ZERO) {
+      orderedNodes.push(anonymousNodes.shift());
+    } else {
+      orderedNodes.push(node);
+    }
+    if (orderedNodes.length >= normalizedLimit) {
+      break;
+    }
+  }
+  return orderedNodes;
+}
+
+function resolvePartitioningDispatchNodes(
+  supportsBenchmarkAdmission,
+  selected,
+  currentNodes = [],
+  targetNodeCount = ZERO,
+) {
+  const nextNodes = supportsBenchmarkAdmission ?
+    selected.readyReplicaNodes :
+    selected.selectedNodes;
+  if (!Array.isArray(nextNodes) || nextNodes.length === ZERO) {
+    return [];
+  }
+  return preserveNodeOrder(
+    currentNodes,
+    nextNodes,
+    targetNodeCount,
+  );
+}
+
+/**
+ * Admit benchmark load nodes using table-aware discovery instead of requiring
+ * global load readiness across the whole cluster.
+ * @param {Object} cluster
+ * @param {Object} [options]
+ * @param {string} [options.tableName]
+ * @param {string} [options.tableId]
+ * @param {number} [options.requiredNodeCount]
+ * @param {number} [options.timeoutMs]
+ * @param {number} [options.stableWindowMs]
+ * @param {number} [options.pollIntervalMs]
+ * @param {number} [options.queryTimeoutMs]
+ * @return {Promise<Array<Object>>}
+ */
+async function admitBenchmarkLoadNodes(cluster, options = {}) {
+  const clusterNodes = resolveClusterNodes(cluster);
+  if (clusterNodes.length === ZERO) {
+    return [];
+  }
+  const requiredNodeCount = resolveBenchmarkAdmissionRequiredNodeCount(
+    cluster,
+    options,
+  );
+
+  if (typeof cluster?.waitForBenchmarkReadyLoadNodes === 'function') {
+    return cluster.waitForBenchmarkReadyLoadNodes({
+      tableName: options.tableName,
+      tableId: options.tableId,
+      minNodeCount: requiredNodeCount,
+      timeoutMs: resolveBenchmarkAdmissionTimeoutMs(cluster, options),
+      stableWindowMs:
+        resolveBenchmarkAdmissionStableWindowMs(cluster, options),
+      pollIntervalMs:
+        resolveBenchmarkAdmissionPollIntervalMs(cluster, options),
+      queryTimeoutMs: options.queryTimeoutMs,
+    });
+  }
+
+  if (typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function') {
+    const readyNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+      tableName: options.tableName,
+      tableId: options.tableId,
+      timeoutMs: options.queryTimeoutMs,
+    });
+    assert.ok(
+      readyNodes.length >= requiredNodeCount,
+      'Expected at least ' + requiredNodeCount +
+      ' benchmark-ready load nodes before starting load' +
+      (typeof options.tableName === 'string' && options.tableName.length > ZERO ?
+        ' for table "' + options.tableName + '"' :
+        '') +
+      ', got ' + readyNodes.length,
+    );
+    return readyNodes;
+  }
+
+  if (typeof cluster?.waitForLoadReadinessStability === 'function') {
+    await cluster.waitForLoadReadinessStability({
+      timeoutMs: resolveBenchmarkAdmissionTimeoutMs(cluster, options),
+      stableWindowMs:
+        resolveBenchmarkAdmissionStableWindowMs(cluster, options),
+    });
+  }
+  return clusterNodes;
+}
+
+/**
+ * Build a partitioning-load node plan that avoids a bootstrap deadlock:
+ * start on the current table replica quorum, then expand the runnable node
+ * set as additional replica-bearing nodes appear.
+ * @param {Object} seedNode
+ * @param {Object} cluster
+ * @param {Object} [options]
+ * @param {string} [options.tableName]
+ * @param {string} [options.tableId]
+ * @param {number} [options.requiredNodeCount]
+ * @param {number} [options.bootstrapRequiredNodeCount]
+ * @param {number} [options.timeoutMs]
+ * @param {number} [options.stableWindowMs]
+ * @param {number} [options.pollIntervalMs]
+ * @param {number} [options.queryTimeoutMs]
+ * @param {Array<Object>} [options.queryNodes]
+ * @param {Array<Object>} [options.fallbackNodes]
+ * @return {Promise<Object>}
+ */
+async function createPartitioningBenchmarkLoadNodePlan(
+  seedNode,
+  cluster,
+  options = {},
+) {
+  const clusterNodes = resolveClusterNodes(cluster);
+  if (clusterNodes.length === ZERO) {
+    return {
+      initialNodes: [],
+      nodeResolver: () => [],
+      stop: () => {},
+      bootstrapRequiredNodeCount: ZERO,
+      targetNodeCount: ZERO,
+    };
+  }
+  const supportsBenchmarkAdmission =
+    typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function';
+
+  const selectLoadNodes = async () => {
+    const distribution = await queryTableDistribution(seedNode, {
+      tableName: options.tableName,
+      queryNodes: options.queryNodes,
+      fallbackNodes: options.fallbackNodes,
+    });
+    let readyNodeIds = null;
+    if (supportsBenchmarkAdmission) {
+      try {
+        readyNodeIds = new Set(
+          (await cluster.resolveBenchmarkReadyLoadNodes({
+            tableName: options.tableName,
+            tableId: options.tableId,
+            timeoutMs: options.queryTimeoutMs,
+          }))
+            .map((node) => String(node?.id || ''))
+            .filter((nodeId) => nodeId.length > ZERO),
+        );
+      } catch (_error) {
+        readyNodeIds = null;
+      }
+    }
+    const preferredNodes = [];
+    const fallbackNodes = [];
+    for (const node of clusterNodes) {
+      const nodeId = String(node?.id || '');
+      if (!distribution.replicaNodeIds.has(nodeId)) {
+        continue;
+      }
+      if (readyNodeIds instanceof Set && readyNodeIds.has(nodeId)) {
+        preferredNodes.push(node);
+        continue;
+      }
+      fallbackNodes.push(node);
+    }
+    return {
+      distribution,
+      selectedNodes: preferredNodes.concat(fallbackNodes),
+      readyReplicaNodes: preferredNodes,
+    };
+  };
+
+  const targetNodeCount = resolveBenchmarkAdmissionRequiredNodeCount(
+    cluster,
+    options,
+  );
+  const bootstrapRequiredNodeCount =
+    resolveBenchmarkBootstrapRequiredNodeCount(
+      cluster,
+      options,
+    );
+  const timeoutMs = resolveBenchmarkAdmissionTimeoutMs(cluster, options);
+  const stableWindowMs = resolveBenchmarkAdmissionStableWindowMs(
+    cluster,
+    options,
+  );
+  const pollIntervalMs = resolveBenchmarkAdmissionPollIntervalMs(
+    cluster,
+    options,
+  );
+  const deadlineAtMs = Date.now() + timeoutMs;
+  let readySinceMs = null;
+  let lastDistribution = null;
+  let lastSelectedNodes = [];
+  let lastReadyReplicaNodes = [];
+
+  while (true) {
+    try {
+      const selected = await selectLoadNodes();
+      lastDistribution = selected.distribution;
+      lastSelectedNodes = selected.selectedNodes;
+      lastReadyReplicaNodes = selected.readyReplicaNodes;
+    } catch (_error) {
+      lastDistribution = null;
+      lastSelectedNodes = [];
+      lastReadyReplicaNodes = [];
+    }
+
+    const replicaBootstrapReady =
+      lastSelectedNodes.length >= bootstrapRequiredNodeCount;
+    const admissionBootstrapReady =
+      supportsBenchmarkAdmission !== true ||
+      lastReadyReplicaNodes.length >= ONE;
+    if (replicaBootstrapReady && admissionBootstrapReady) {
+      const nowMs = Date.now();
+      if (stableWindowMs <= ZERO) {
+        break;
+      }
+      if (readySinceMs === null) {
+        readySinceMs = nowMs;
+      }
+      if (nowMs - readySinceMs >= stableWindowMs) {
+        break;
+      }
+    } else {
+      readySinceMs = null;
+    }
+
+    if (Date.now() > deadlineAtMs && readySinceMs === null) {
+      throw new Error(
+        'Timed out after ' + timeoutMs +
+        'ms waiting for partitioning bootstrap quorum and benchmark-ready ' +
+        'table-local load admission for table ' +
+        String(options.tableName || 'unknown') +
+        '; lastReadyReplicaCount=' + lastReadyReplicaNodes.length +
+        '; lastReplicaBearingCount=' + lastSelectedNodes.length +
+        '; lastReplicaSpread=' +
+        String(lastDistribution?.replicaNodeCount || ZERO),
+      );
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  const initialNodes = resolvePartitioningDispatchNodes(
+    supportsBenchmarkAdmission,
+    {
+      selectedNodes: lastSelectedNodes,
+      readyReplicaNodes: lastReadyReplicaNodes,
+    },
+    [],
+    targetNodeCount,
+  );
+  let currentNodes = initialNodes;
+  let stopped = false;
+  let refreshTimer = null;
+
+  const refreshNodes = async () => {
+    if (stopped) {
+      return;
+    }
+    try {
+      const selected = await selectLoadNodes();
+      currentNodes = resolvePartitioningDispatchNodes(
+        supportsBenchmarkAdmission,
+        selected,
+        currentNodes,
+        targetNodeCount,
+      );
+    } catch (_error) {
+      return;
+    }
+  };
+
+  if (supportsBenchmarkAdmission || currentNodes.length < targetNodeCount) {
+    refreshTimer = setInterval(() => {
+      void refreshNodes();
+    }, pollIntervalMs);
+    if (typeof refreshTimer.unref === 'function') {
+      refreshTimer.unref();
+    }
+    void refreshNodes();
+  }
+
+  return {
+    initialNodes: currentNodes,
+    nodeResolver: () => currentNodes,
+    stop: () => {
+      stopped = true;
+      if (refreshTimer !== null) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+    },
+    bootstrapRequiredNodeCount,
+    targetNodeCount,
+  };
+}
+
+/**
+ * Scale partitioning load to the admitted node set so benchmark traffic leaves
+ * room for control-plane split and rebalance writes.
+ * @param {number} requestedOpsPerSec
+ * @param {number} admittedNodeCount
+ * @param {number} clusterNodeCount
+ * @return {number}
+ */
+function resolvePartitioningBenchmarkLoadOpsPerSec(
+  requestedOpsPerSec,
+  admittedNodeCount,
+  clusterNodeCount,
+) {
+  const normalizedRequestedOpsPerSec = Number.isFinite(requestedOpsPerSec) &&
+    requestedOpsPerSec > ZERO ?
+    Number(requestedOpsPerSec) :
+    BENCHMARK_DEFAULTS.loadOpsPerSec;
+  const normalizedAdmittedNodeCount = Number.isInteger(admittedNodeCount) &&
+    admittedNodeCount > ZERO ?
+    admittedNodeCount :
+    ONE;
+  const normalizedClusterNodeCount = Number.isInteger(clusterNodeCount) &&
+    clusterNodeCount > ZERO ?
+    clusterNodeCount :
+    normalizedAdmittedNodeCount;
+  return Math.max(
+    1,
+    Math.round(
+      normalizedRequestedOpsPerSec *
+      (normalizedAdmittedNodeCount / normalizedClusterNodeCount) *
+      PARTITIONING_LOAD_HEADROOM_RATIO,
+    ),
+  );
+}
+
+function createPartitioningAdaptiveDispatchGuardrail() {
+  return {
+    ...PARTITIONING_ADAPTIVE_DISPATCH_GUARDRAIL,
+  };
 }
 
 /**
@@ -304,14 +888,69 @@ function policyContainsExpected(expected, observed) {
  * @param {string} tableName
  * @return {Promise<string|null>}
  */
-async function queryTableId(seedNode, tableName) {
+async function queryTableId(seedNode, tableName, options = {}) {
   const sql = SQL_SELECT_TABLE_ID_PREFIX +
     escapeSql(tableName) +
     SQL_SELECT_TABLE_ID_SUFFIX;
-  const result = await queryControl(seedNode, sql, [], {
-    lane: CONTROL_QUERY_LANE_DEFAULT,
-  });
-  return firstTableId(rowsFromResult(result));
+  const queryNodes = resolveControlQueryNodes(seedNode, options);
+  let lastError = null;
+  let successfulQueryObserved = false;
+  for (const candidateNode of queryNodes) {
+    try {
+      const result = await queryControlSingle(candidateNode, sql, [], {
+        lane: CONTROL_QUERY_LANE_SNAPSHOT,
+      });
+      successfulQueryObserved = true;
+      const tableId = firstTableId(rowsFromResult(result));
+      if (tableId) {
+        return tableId;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!successfulQueryObserved && lastError) {
+    throw lastError;
+  }
+  return null;
+}
+
+/**
+ * Query partition IDs for one table ID.
+ * @param {Object} seedNode
+ * @param {string} tableId
+ * @param {Object} [options]
+ * @return {Promise<Array<string>>}
+ */
+async function queryPartitionIdsByTableId(seedNode, tableId, options = {}) {
+  const sql = SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX +
+    escapeSql(tableId) +
+    SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX;
+  const queryNodes = resolveControlQueryNodes(seedNode, options);
+  let lastError = null;
+  let successfulQueryObserved = false;
+  for (const candidateNode of queryNodes) {
+    try {
+      const result = await queryControlSingle(candidateNode, sql, [], {
+        lane: CONTROL_QUERY_LANE_SNAPSHOT,
+      });
+      successfulQueryObserved = true;
+      const partitionIds = rowsFromResult(result)
+        .map((row) => String(row?.partition_id || row?.partitionId || ''))
+        .filter((partitionId) => partitionId.length > ZERO);
+      if (partitionIds.length > ZERO) {
+        return partitionIds;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!successfulQueryObserved && lastError) {
+    throw lastError;
+  }
+  return [];
 }
 
 /**
@@ -340,7 +979,9 @@ async function queryTablePolicies(seedNode, tableId, options = {}) {
   );
   for (const sql of lookupSql) {
     const result = await queryControl(seedNode, sql, [], {
-      lane: CONTROL_QUERY_LANE_DEFAULT,
+      lane: CONTROL_QUERY_LANE_SNAPSHOT,
+      queryNodes: options.queryNodes,
+      fallbackNodes: options.fallbackNodes,
     });
     const policies = firstTablePolicies(rowsFromResult(result));
     if (policies !== null) {
@@ -356,13 +997,13 @@ async function queryTablePolicies(seedNode, tableId, options = {}) {
  * @param {string} tableName
  * @return {Promise<string>}
  */
-async function waitForTableId(seedNode, tableName) {
+async function waitForTableId(seedNode, tableName, options = {}) {
   const deadline = Date.now() + TABLE_ID_VISIBILITY_TIMEOUT_MS;
   let tableId = null;
   let lastQueryError = null;
   while (!tableId && Date.now() < deadline) {
     try {
-      tableId = await queryTableId(seedNode, tableName);
+      tableId = await queryTableId(seedNode, tableName, options);
       lastQueryError = null;
     } catch (error) {
       lastQueryError = String(error?.message || error);
@@ -389,35 +1030,104 @@ async function waitForTableId(seedNode, tableName) {
  */
 async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
   assert.ok(
-    seedNode && typeof seedNode.query === 'function',
-    'ensureBenchmarkPartitioningTable requires seed node query(sql)',
+    seedNode &&
+      (typeof seedNode.query === 'function' ||
+        typeof seedNode.queryWithTimeout === 'function'),
+    'ensureBenchmarkPartitioningTable requires seed node query capability',
   );
   const resolvedTableName = resolveBenchmarkTableName(options.tableName);
   assert.ok(
     IDENTIFIER_PATTERN.test(resolvedTableName),
     'Invalid benchmark table identifier: ' + resolvedTableName,
   );
+  const requirePartitionVisibility =
+    options.requirePartitionVisibility === true;
   const createSql = SQL_CREATE_TABLE_PREFIX +
     resolvedTableName +
     SQL_CREATE_TABLE_SUFFIX;
+  const deadline = Date.now() +
+    (requirePartitionVisibility ?
+      TABLE_BOOTSTRAP_TIMEOUT_MS :
+      TABLE_ID_VISIBILITY_TIMEOUT_MS);
   let createTimeoutError = null;
-  try {
-    await queryControl(seedNode, createSql, [], {
-      timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-      lane: CONTROL_QUERY_LANE_DEFAULT,
-    });
-  } catch (error) {
-    if (!isTimeoutShapedError(error)) {
-      throw error;
+  let lastCreateError = null;
+  let lastCreateErrorObject = null;
+  let lastVisibilityError = null;
+  let lastPartitionVisibilityError = null;
+  while (Date.now() <= deadline) {
+    try {
+      await queryControl(seedNode, createSql, [], {
+        timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+        lane: CONTROL_QUERY_LANE_CONTROL,
+        queryNodes: options.queryNodes,
+        fallbackNodes: options.fallbackNodes,
+      });
+      lastCreateError = null;
+      lastCreateErrorObject = null;
+    } catch (error) {
+      if (!isTimeoutShapedError(error) &&
+          !isRetryableControlPlaneProgressError(error)) {
+        throw error;
+      }
+      if (isTimeoutShapedError(error)) {
+        createTimeoutError = String(error?.message || error);
+      }
+      lastCreateError = String(error?.message || error);
+      lastCreateErrorObject = error;
     }
-    createTimeoutError = String(error?.message || error);
+
+    try {
+      const tableId = await queryTableId(seedNode, resolvedTableName, options);
+      if (tableId) {
+        if (!requirePartitionVisibility) {
+          return {
+            tableName: resolvedTableName,
+            tableId,
+            createTimeoutError,
+          };
+        }
+        try {
+          const partitionIds = await queryPartitionIdsByTableId(
+            seedNode,
+            tableId,
+            options,
+          );
+          if (partitionIds.length > ZERO) {
+            return {
+              tableName: resolvedTableName,
+              tableId,
+              createTimeoutError,
+            };
+          }
+          lastPartitionVisibilityError =
+            'table_id_visible_without_partitions';
+        } catch (error) {
+          lastPartitionVisibilityError = String(error?.message || error);
+        }
+      }
+      lastVisibilityError = null;
+    } catch (error) {
+      lastVisibilityError = String(error?.message || error);
+    }
+
+    if (Date.now() >= deadline) {
+      break;
+    }
+    await sleep(
+      resolveControlPlaneRetryDelayMs(
+        lastCreateErrorObject,
+        TABLE_ID_VISIBILITY_POLL_INTERVAL_MS,
+      ),
+    );
   }
-  const tableId = await waitForTableId(seedNode, resolvedTableName);
-  return {
-    tableName: resolvedTableName,
-    tableId,
-    createTimeoutError,
-  };
+
+  assert.fail(
+    'Timed out waiting for table_id visibility for "' + resolvedTableName +
+    '" (lastCreateError=' + String(lastCreateError || 'none') +
+    ', lastVisibilityError=' + String(lastVisibilityError || 'none') +
+    ', lastPartitionVisibilityError=' +
+    String(lastPartitionVisibilityError || 'none') + ')',
+  );
 }
 
 /**
@@ -431,6 +1141,8 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
 async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
   const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
     tableName: options.tableName,
+    queryNodes: options.queryNodes,
+    fallbackNodes: options.fallbackNodes,
   });
   const tablePolicies = options.tablePolicies &&
     typeof options.tablePolicies === 'object' ?
@@ -466,7 +1178,9 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       applyAttemptCount += 1;
       const applyResult = await queryControl(seedNode, policySql, [], {
         timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-        lane: CONTROL_QUERY_LANE_DEFAULT,
+        lane: CONTROL_QUERY_LANE_CONTROL,
+        queryNodes: options.queryNodes,
+        fallbackNodes: options.fallbackNodes,
       });
       lastPolicyApplySummary = summarizeMutationResult(applyResult);
       let affectedRows = affectedRowCountFromResult(applyResult);
@@ -477,7 +1191,9 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
           [],
           {
             timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-            lane: CONTROL_QUERY_LANE_DEFAULT,
+            lane: CONTROL_QUERY_LANE_CONTROL,
+            queryNodes: options.queryNodes,
+            fallbackNodes: options.fallbackNodes,
           },
         );
         lastPolicyApplySummary = summarizeMutationResult(fallbackApplyResult);
@@ -513,6 +1229,8 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
         ensured.tableId,
         {
           tableName: ensured.tableName,
+          queryNodes: options.queryNodes,
+          fallbackNodes: options.fallbackNodes,
         },
       );
       lastPolicyVisibilityError = null;
@@ -621,11 +1339,26 @@ function assertSplitPolicyPrecondition(tablePreparation, options = {}) {
  */
 async function queryTableDistribution(seedNode, options = {}) {
   assert.ok(
-    seedNode && typeof seedNode.query === 'function',
-    'queryTableDistribution requires a seed node with query(sql)',
+    seedNode &&
+      (typeof seedNode.query === 'function' ||
+        typeof seedNode.queryWithTimeout === 'function'),
+    'queryTableDistribution requires a seed node with query capability',
   );
 
   const {tableName} = resolveTableDistributionQueryConfig(options);
+  const queryNodes = resolveControlQueryNodes(seedNode, options);
+  let lastError = null;
+  for (const queryNode of queryNodes) {
+    try {
+      return await queryTableDistributionFromNode(queryNode, tableName);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('no_table_distribution_query_nodes_available');
+}
+
+async function queryTableDistributionFromNode(node, tableName) {
   const partitionSql = SQL_SELECT_TABLE_PARTITIONS_PREFIX +
     escapeSql(tableName) +
     SQL_SELECT_TABLE_PARTITIONS_SUFFIX;
@@ -634,14 +1367,14 @@ async function queryTableDistribution(seedNode, options = {}) {
     SQL_SELECT_TABLE_ID_SUFFIX;
 
   const [partitionResult, tableResult, servicesResult] = await Promise.all([
-    queryControl(seedNode, partitionSql, [], {
-      lane: CONTROL_QUERY_LANE_DEFAULT,
+    queryControlSingle(node, partitionSql, [], {
+      lane: CONTROL_QUERY_LANE_SNAPSHOT,
     }),
-    queryControl(seedNode, tableIdSql, [], {
-      lane: CONTROL_QUERY_LANE_DEFAULT,
+    queryControlSingle(node, tableIdSql, [], {
+      lane: CONTROL_QUERY_LANE_SNAPSHOT,
     }),
-    queryControl(seedNode, SQL_SELECT_ACTIVE_PARTITION_SERVICES, [], {
-      lane: CONTROL_QUERY_LANE_DEFAULT,
+    queryControlSingle(node, SQL_SELECT_ACTIVE_PARTITION_SERVICES, [], {
+      lane: CONTROL_QUERY_LANE_SNAPSHOT,
     }),
   ]);
 
@@ -653,12 +1386,12 @@ async function queryTableDistribution(seedNode, options = {}) {
       const partitionByIdSql = SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX +
         escapeSql(tableId) +
         SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX;
-      const partitionByIdResult = await queryControl(
-        seedNode,
+      const partitionByIdResult = await queryControlSingle(
+        node,
         partitionByIdSql,
         [],
         {
-          lane: CONTROL_QUERY_LANE_DEFAULT,
+          lane: CONTROL_QUERY_LANE_SNAPSHOT,
         },
       );
       partitionRows = rowsFromResult(partitionByIdResult);
@@ -730,7 +1463,11 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
   let lastQueryError = null;
   while (!baseline && Date.now() <= deadline) {
     try {
-      baseline = await queryTableDistribution(seedNode, {tableName});
+      baseline = await queryTableDistribution(seedNode, {
+        tableName,
+        queryNodes: options.queryNodes,
+        fallbackNodes: options.fallbackNodes,
+      });
       lastQueryError = null;
     } catch (error) {
       transientQueryErrors += 1;
@@ -760,7 +1497,11 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
 
   while (Date.now() <= deadline) {
     try {
-      latest = await queryTableDistribution(seedNode, {tableName});
+      latest = await queryTableDistribution(seedNode, {
+        tableName,
+        queryNodes: options.queryNodes,
+        fallbackNodes: options.fallbackNodes,
+      });
       sampleCount += 1;
       lastQueryError = null;
     } catch (error) {
@@ -816,13 +1557,17 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
 }
 
 export {
+  admitBenchmarkLoadNodes,
   BENCHMARK_WORKLOAD_PROFILE,
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
+  createPartitioningAdaptiveDispatchGuardrail,
+  createPartitioningBenchmarkLoadNodePlan,
   escapeSql,
   sleep,
   rowsFromResult,
   resolveBenchmarkTableName,
+  resolvePartitioningBenchmarkLoadOpsPerSec,
   resolvePartitioningLoadTableName,
   ensureBenchmarkPartitioningTable,
   prepareBenchmarkPartitioningTable,

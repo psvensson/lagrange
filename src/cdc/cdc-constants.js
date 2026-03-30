@@ -10,6 +10,7 @@ const CDC_EVENT = Object.freeze({
   DELETE: 'delete',
   UPSERT: 'upsert',
   ERROR: 'error',
+  READ_MODEL_DIVERGENCE: 'readModelDivergence',
   EPOCH_CHANGE: 'epochChange',
   NODE_STATE_CHANGE: 'nodeStateChange',
   NODE_JOINED: 'nodeJoined',

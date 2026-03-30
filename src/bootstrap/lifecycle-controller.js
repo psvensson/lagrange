@@ -4,6 +4,7 @@ import {
   LIFECYCLE_DEFAULT,
   LIFECYCLE_DEPENDENCY,
   LIFECYCLE_DEPENDENCY_CLASS,
+  LIFECYCLE_DEPENDENCY_DEMOTION_POLICY,
   LIFECYCLE_EVENT,
   LIFECYCLE_LEGACY_STATE,
   LIFECYCLE_PHASE,
@@ -13,6 +14,10 @@ import {
 
 const HARD_CLASS = LIFECYCLE_DEPENDENCY_CLASS.HARD;
 const SOFT_CLASS = LIFECYCLE_DEPENDENCY_CLASS.SOFT;
+const THRESHOLD_DEMOTION_POLICY =
+  LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.THRESHOLD;
+const IMMEDIATE_DEMOTION_POLICY =
+  LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.IMMEDIATE;
 const EMPTY_REASONS = Object.freeze([]);
 const LIFECYCLE_PHASE_RANK = Object.freeze({
   [LIFECYCLE_PHASE.INIT]: 0,
@@ -83,10 +88,14 @@ class LifecycleController extends EventEmitter {
       options.reasonCode.length > 0 ?
       options.reasonCode :
       null;
+    const demotionPolicy = options.demotionPolicy === IMMEDIATE_DEMOTION_POLICY ?
+      IMMEDIATE_DEMOTION_POLICY :
+      THRESHOLD_DEMOTION_POLICY;
     this._dependencies.set(name, {
       ready: ready === true,
       classification,
       reasonCode,
+      demotionPolicy,
       details: options.details && typeof options.details === 'object' ?
         options.details :
         null,
@@ -107,6 +116,7 @@ class LifecycleController extends EventEmitter {
     const previousReasons = this._reasons;
     const dependencyStatus = this.collectDependencyStatus();
     const hardReasons = dependencyStatus.hardReasons;
+    const immediateHardReasons = dependencyStatus.immediateHardReasons;
     const degradedReasons = dependencyStatus.softReasons;
     const startupComplete = dependencyStatus.startupComplete;
     let nextReady = this._ready;
@@ -130,7 +140,12 @@ class LifecycleController extends EventEmitter {
       nextReasons = hardReasons;
     } else if (hardReasons.length > 0) {
       this._stableWindowStartedAt = null;
-      if (this._ready) {
+      if (immediateHardReasons.length > 0) {
+        this._consecutiveFailureCount = 0;
+        nextReady = false;
+        nextPhase = LIFECYCLE_PHASE.DEGRADED;
+        nextReasons = hardReasons;
+      } else if (this._ready) {
         this._consecutiveFailureCount += 1;
         if (this._consecutiveFailureCount >= this._demotionFailureThreshold) {
           nextReady = false;
@@ -377,6 +392,7 @@ class LifecycleController extends EventEmitter {
 
   collectDependencyStatus() {
     const hardReasons = [];
+    const immediateHardReasons = [];
     const softReasons = [];
     let startupComplete = true;
 
@@ -393,6 +409,9 @@ class LifecycleController extends EventEmitter {
       }
       if (typeof reason === 'string' && reason.length > 0) {
         hardReasons.push(reason);
+        if (dependency.demotionPolicy === IMMEDIATE_DEMOTION_POLICY) {
+          immediateHardReasons.push(reason);
+        }
       }
       if (name === LIFECYCLE_DEPENDENCY.STARTUP_COMPLETE) {
         startupComplete = false;
@@ -401,6 +420,7 @@ class LifecycleController extends EventEmitter {
 
     return {
       hardReasons: this.uniqueReasons(hardReasons),
+      immediateHardReasons: this.uniqueReasons(immediateHardReasons),
       softReasons: this.uniqueReasons(softReasons),
       startupComplete,
     };

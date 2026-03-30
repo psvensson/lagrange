@@ -210,6 +210,167 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
     service.stop();
   });
 
+test('ReplicaDispatchService acknowledges required membership publication ' +
+  'for READY node-state updates', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const acknowledgements = [];
+  const cacheNode = {
+    node_id: 'node-publication-ack',
+    node_address: 'localhost:8087',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: now - 1000,
+    ready_lease_expires_at: null,
+    created_at: now - 5000,
+  };
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({
+        success: true,
+        partitionResult: {affectedRows: 1},
+      }),
+    },
+    controlPlaneReadinessService: {
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync(nodeId) {
+          return {
+            publication_id: 'publication-1',
+            status: 'ACK_PENDING',
+            required_ack_node_ids: [nodeId],
+            acknowledged_node_ids: [],
+          };
+        },
+        async acknowledgePublication(publicationId, nodeId, options) {
+          acknowledgements.push({publicationId, nodeId, options});
+          return options?.publicationRow || null;
+        },
+      },
+    },
+  });
+
+  await service.handleNodeStateUpdate({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-publication-ack',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8087',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  });
+
+  t.equal(
+    acknowledgements.length,
+    1,
+    'ready node-state updates should acknowledge required cluster publications',
+  );
+  t.equal(
+    acknowledgements[0]?.publicationId,
+    'publication-1',
+    'acknowledgement should target the latest publication id',
+  );
+  t.equal(
+    acknowledgements[0]?.nodeId,
+    'node-publication-ack',
+    'acknowledgement should be keyed by the ready node id',
+  );
+
+  service.stop();
+});
+
+test('ReplicaDispatchService refreshes publication ownership before skipping ' +
+  'READY acknowledgement on stale cache rows', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const refreshCalls = [];
+  const acknowledgements = [];
+  const cacheNode = {
+    node_id: 'node-publication-refresh-ack',
+    node_address: 'localhost:8088',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: now - 1000,
+    ready_lease_expires_at: null,
+    created_at: now - 5000,
+  };
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({
+        success: true,
+        partitionResult: {affectedRows: 1},
+      }),
+    },
+    controlPlaneReadinessService: {
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync() {
+          return {
+            publication_id: 'publication-cache-stale',
+            status: 'ACK_PENDING',
+            required_ack_node_ids: ['node-other'],
+            acknowledged_node_ids: [],
+          };
+        },
+        async getLatestPublicationForNode(nodeId, options) {
+          refreshCalls.push({nodeId, options});
+          return {
+            publication_id: 'publication-authoritative',
+            status: 'ACK_PENDING',
+            required_ack_node_ids: [nodeId],
+            acknowledged_node_ids: [],
+          };
+        },
+        async acknowledgePublication(publicationId, nodeId, options) {
+          acknowledgements.push({publicationId, nodeId, options});
+          return options?.publicationRow || null;
+        },
+      },
+    },
+  });
+
+  await service.handleNodeStateUpdate({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-publication-refresh-ack',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8088',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  });
+
+  t.equal(
+    refreshCalls.length,
+    1,
+    'ready acknowledgement should re-read publication ownership when cache omits the node requirement',
+  );
+  t.equal(
+    refreshCalls[0]?.options?.preferAuthoritativeRead,
+    true,
+    'refresh should force authoritative publication reads through the owner path',
+  );
+  t.equal(
+    acknowledgements.length,
+    1,
+    'authoritative refresh should still acknowledge when the node is required',
+  );
+  t.equal(
+    acknowledgements[0]?.publicationId,
+    'publication-authoritative',
+    'acknowledgement should target the refreshed required publication',
+  );
+
+  service.stop();
+});
+
 test('ReplicaDispatchService keeps READY node-state publication on the ' +
   'critical lane under pressure', async (t) => {
   initEnv();

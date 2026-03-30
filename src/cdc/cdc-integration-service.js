@@ -7,7 +7,7 @@
  * - The bootstrap-direct phase enables direct writes to local partitions
  * - Required because system cache is empty during seed node bootstrap
  * - After bootstrap, the service switches to sql-routed steady state
- *
+            if (repaired) {
  * Sql-Routed Steady State:
  * - All writes route through SQL query engine
  * - SQL engine uses system cache to find partition leaders
@@ -47,6 +47,13 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
+import {
+  READ_MODEL_DIVERGENCE_TYPE,
+  SQL_RECONCILIATION_REASON,
+  buildDivergenceEvent,
+} from '../control-plane/read-model-contract.js';
+import {canonicalizeSystemTableRow} from
+  '../control-plane/system-row-normalizers.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   QUERY_ERROR_CODE,
@@ -83,8 +90,7 @@ import {
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
 } from './write-router/index.js';
-import {resolveNodeWebSocketAddress} from
-  '../transport/node-address-resolution.js';
+import {resolveNodeWebSocketAddress} from '../transport/node-address-resolution.js';
 
 /**
  * Valid system table names for CDC operations.
@@ -126,6 +132,7 @@ const AUTHORITATIVE_FALLBACK_PHASE = Object.freeze({
 });
 const AUTHORITATIVE_FALLBACK_OUTCOME = Object.freeze({
   RECOVERED: 'recovered',
+  DIAGNOSED: 'diagnosed',
   FAILED: 'failed',
 });
 const AUTHORITATIVE_FALLBACK_WINDOW_MS = TIME_MS.MINUTE;
@@ -136,6 +143,11 @@ const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
 });
 const QUERY_TRANSPORT_NOT_READY_ERROR_CODE =
   'ROUTER_QUERY_TRANSPORT_NOT_READY';
+const AUTHORITATIVE_READ_SOURCE = Object.freeze({
+  LOCAL_PARTITION_REPLICA: 'local_partition_replica',
+  QUERY_TRANSPORT_PREFLIGHT: 'query_transport_preflight',
+  OWNER_RPC_LANE: 'owner_rpc_lane',
+});
 
 function normalizeDeliveryPriority(value, fallback = null) {
   return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
@@ -216,6 +228,9 @@ function normalizeAuthoritativeFallbackPhase(value) {
 }
 
 function normalizeAuthoritativeFallbackOutcome(value) {
+  if (value === AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED) {
+    return AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED;
+  }
   return value === AUTHORITATIVE_FALLBACK_OUTCOME.FAILED ?
     AUTHORITATIVE_FALLBACK_OUTCOME.FAILED :
     AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
@@ -971,6 +986,105 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Build bounded routing diagnostics for one system-table operation.
+   * @param {string} tableName
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  buildSystemTableOperationDiagnostics(tableName, options = {}) {
+    const queryOptions =
+      options?.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+        options.queryOptions :
+        {};
+    const routingReadinessDimension =
+      queryOptions.routingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    const partitionIds = this.resolveSystemTablePartitionIds(tableName);
+    const partitionId = partitionIds[NUM.ZERO] || null;
+    let routingSnapshot = null;
+    if (partitionId &&
+        this.sqlQueryEngine?.queryExecutor &&
+        typeof this.sqlQueryEngine.queryExecutor.getPartitionRoutingSnapshot ===
+          TYPEOF.FUNCTION) {
+      try {
+        routingSnapshot = this.sqlQueryEngine.queryExecutor
+          .getPartitionRoutingSnapshot(
+            partitionId,
+            routingReadinessDimension,
+          );
+      } catch (_error) {
+        routingSnapshot = null;
+      }
+    }
+
+    let partitionRow = null;
+    let serviceRows = [];
+    if (this.systemTableCache &&
+        typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+      const partitionRows = this.systemTableCache.filter(
+        SYSTEM_TABLE_NAME.PARTITIONS,
+        (row) => {
+          const rowPartitionId =
+            row?.partition_id || row?.partitionId || row?.id || null;
+          if (partitionId && rowPartitionId === partitionId) {
+            return true;
+          }
+          return row?.table_name === tableName || row?.tableName === tableName;
+        },
+      ) || [];
+      partitionRow = partitionRows[NUM.ZERO] || null;
+      if (partitionId) {
+        serviceRows = this.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          (row) => {
+            return row?.partition_id === partitionId &&
+              row?.service_type === SERVICE_TYPE.PARTITION;
+          },
+        ) || [];
+      }
+    }
+
+    const leaderNodeId =
+      routingSnapshot?.canonicalLeaderNodeId ||
+      partitionRow?.leader_node_id ||
+      partitionRow?.leaderNodeId ||
+      null;
+    const serviceRowCount =
+      Number.isFinite(routingSnapshot?.serviceRowCount) ?
+        routingSnapshot.serviceRowCount :
+        serviceRows.length;
+    const routableServiceCount =
+      Number.isFinite(routingSnapshot?.routableServiceCount) ?
+        routingSnapshot.routableServiceCount :
+        serviceRows.filter((row) => {
+          return row?.status === SERVICE_STATUS.ACTIVE &&
+            typeof row?.address === TYPEOF.STRING &&
+            row.address.length > NUM.ZERO;
+        }).length;
+
+    return Object.freeze({
+      partitionId,
+      leaderNodeId:
+        typeof leaderNodeId === TYPEOF.STRING && leaderNodeId.length > NUM.ZERO ?
+          leaderNodeId :
+          null,
+      serviceRowCount,
+      routableServiceCount,
+      queryTimeoutMs:
+        Number.isFinite(queryOptions.timeoutMs) && queryOptions.timeoutMs > NUM.ZERO ?
+          Math.floor(queryOptions.timeoutMs) :
+          null,
+      routingReadinessDimension,
+      deniedByReadiness:
+        routingSnapshot &&
+          typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
+          Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
+          false,
+    });
+  }
+
+  /**
    * Execute an authoritative system-table read. Prefers local partition
    * replicas and falls back to the routed SQL engine when necessary.
    * @param {string} tableName
@@ -986,41 +1100,77 @@ class CDCIntegrationService extends EventEmitter {
     options = {},
   ) {
     const statement = sql || `SELECT * FROM ${tableName}`;
+    const requireOwnerRpcRead = options.requireOwnerRpcRead === true;
     const preferredConsistency =
       options.localReadConsistency ||
       LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA;
-    let localRead = await this.queryLocalAuthoritativeSystemTableRows(
+    const preferOwnerRpcRead = options.preferOwnerRpcRead === true ||
+      requireOwnerRpcRead;
+    const baseDiagnostics = this.buildSystemTableOperationDiagnostics(
       tableName,
-      statement,
-      params,
-      {
-        consistency: preferredConsistency,
-      },
+      options,
     );
-    if (!localRead.available &&
-        options.replicaFallbackConsistency &&
-        options.replicaFallbackConsistency !== preferredConsistency) {
+    let localRead = {
+      available: false,
+      rows: [],
+    };
+    let localReplicaFallbackHit = false;
+    const readLocalAuthoritativeRows = async () => {
       localRead = await this.queryLocalAuthoritativeSystemTableRows(
         tableName,
         statement,
         params,
         {
-          consistency: options.replicaFallbackConsistency,
+          consistency: preferredConsistency,
         },
       );
-    }
-    if (localRead.available) {
+      if (!localRead.available &&
+          options.replicaFallbackConsistency &&
+          options.replicaFallbackConsistency !== preferredConsistency) {
+        localRead = await this.queryLocalAuthoritativeSystemTableRows(
+          tableName,
+          statement,
+          params,
+          {
+            consistency: options.replicaFallbackConsistency,
+          },
+        );
+        localReplicaFallbackHit = localRead.available;
+      }
+    };
+    const buildLocalReadResult = () => {
       return {
         success: true,
         rows: localRead.rows,
         count: localRead.rows.length,
-        source: 'local_partition_replica',
+        rowCount: localRead.rows.length,
+        source: AUTHORITATIVE_READ_SOURCE.LOCAL_PARTITION_REPLICA,
+        localReadHit: true,
+        localReplicaFallbackHit,
+        queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+        systemTableDiagnostics: {
+          ...baseDiagnostics,
+          localReadHit: true,
+          localReplicaFallbackHit,
+          routedToNode: null,
+          deniedByReadiness: false,
+        },
       };
+    };
+
+    await readLocalAuthoritativeRows();
+    if (localRead.available &&
+        !preferOwnerRpcRead &&
+        !requireOwnerRpcRead) {
+      return buildLocalReadResult();
     }
 
     const localQueryTransportReadiness =
       this.getLocalQueryTransportReadiness();
-    if (localQueryTransportReadiness?.ready === false) {
+    const allowOwnerRpcFallback =
+      options.allowOwnerRpcFallback !== false;
+    if (localQueryTransportReadiness?.ready === false &&
+        !allowOwnerRpcFallback) {
       return {
         success: false,
         error:
@@ -1036,40 +1186,147 @@ class CDCIntegrationService extends EventEmitter {
           retryAfterMs: localQueryTransportReadiness.retryAfterMs,
         },
         rows: [],
-        source: 'query_transport_preflight',
+        source: AUTHORITATIVE_READ_SOURCE.QUERY_TRANSPORT_PREFLIGHT,
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+        systemTableDiagnostics: {
+          ...baseDiagnostics,
+          localReadHit: false,
+          localReplicaFallbackHit: false,
+          routedToNode: null,
+          deniedByReadiness: true,
+        },
       };
     }
+    if (localQueryTransportReadiness?.ready === false &&
+        preferOwnerRpcRead &&
+        localRead.available &&
+        !requireOwnerRpcRead) {
+      return buildLocalReadResult();
+    }
 
-    if (options.allowSqlFallback === false) {
+    if (!allowOwnerRpcFallback) {
+      if (preferOwnerRpcRead &&
+          localRead.available &&
+          !requireOwnerRpcRead) {
+        return buildLocalReadResult();
+      }
       return {
         success: false,
         error: 'authoritative_row_source_unavailable',
         rows: [],
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+        systemTableDiagnostics: {
+          ...baseDiagnostics,
+          localReadHit: false,
+          localReplicaFallbackHit: false,
+          routedToNode: null,
+        },
       };
     }
 
-    if (!this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
-      return {
-        success: false,
-        error: 'authoritative_row_source_unavailable',
-        rows: [],
-      };
-    }
-
-    const queryResult = await this.sqlQueryEngine.executeQuery(
+    const ownerRpcResult = await this.executeAuthoritativeOwnerRpcRead(
+      tableName,
       statement,
       params,
-      options.queryOptions,
+      options,
+      baseDiagnostics,
+      localQueryTransportReadiness,
+    );
+    if (ownerRpcResult !== null) {
+      if (ownerRpcResult.success !== true &&
+          preferOwnerRpcRead &&
+          localRead.available &&
+          !requireOwnerRpcRead) {
+        return buildLocalReadResult();
+      }
+      return ownerRpcResult;
+    }
+
+    if (preferOwnerRpcRead &&
+        localRead.available &&
+        !requireOwnerRpcRead) {
+      return buildLocalReadResult();
+    }
+
+    return {
+      success: false,
+      error: 'authoritative_row_source_unavailable',
+      rows: [],
+      localReadHit: false,
+      localReplicaFallbackHit: false,
+      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+      systemTableDiagnostics: {
+        ...baseDiagnostics,
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        routedToNode: null,
+      },
+    };
+  }
+
+  /**
+   * Execute the recovery read over the owner-partition RPC lane instead of
+   * the generic SQL query engine route.
+   * @param {string} tableName
+   * @param {string} statement
+   * @param {Array<*>} params
+   * @param {Object} options
+   * @param {Object} baseDiagnostics
+   * @param {Object|null} localQueryTransportReadiness
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async executeAuthoritativeOwnerRpcRead(
+    tableName,
+    statement,
+    params,
+    options,
+    baseDiagnostics,
+    localQueryTransportReadiness = null,
+  ) {
+    const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
+    if (!queryExecutor ||
+        typeof queryExecutor.executeOnPartition !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
+    if (!partitionId) {
+      return null;
+    }
+    const routingReadinessDimension =
+      options?.queryOptions?.routingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    const executionOptions = {
+      ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+        options.queryOptions :
+        {}),
+      routingReadinessDimension,
+    };
+    const queryResult = await queryExecutor.executeOnPartition(
+      partitionId,
+      statement,
+      params,
+      true,
+      true,
+      false,
+      executionOptions,
     );
     if (!queryResult?.success) {
       const reseedResult =
         this.maybeReseedBootstrapOverlay(tableName, queryResult);
       if (reseedResult.reseeded) {
-        const retryResult = await this.sqlQueryEngine.executeQuery(
+        const retryResult = await queryExecutor.executeOnPartition(
+          partitionId,
           statement,
           params,
-          options.queryOptions,
+          true,
+          true,
+          false,
+          executionOptions,
         );
         this.logger.info(
           CDC_LOG_MSG.OVERLAY_RESEED_RETRY_RESULT,
@@ -1082,22 +1339,135 @@ class CDCIntegrationService extends EventEmitter {
         if (retryResult?.success) {
           return {
             ...retryResult,
-            rows: Array.isArray(retryResult.rows) ?
-              retryResult.rows : [],
-            source: 'sql_query_engine',
+            rows: Array.isArray(retryResult.rows) ? retryResult.rows : [],
+            rowCount:
+              Array.isArray(retryResult.rows) ? retryResult.rows.length : NUM.ZERO,
+            source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+            localReadHit: false,
+            localReplicaFallbackHit: false,
+            queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+            localQueryTransport:
+              localQueryTransportReadiness &&
+                typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+                {
+                  state: localQueryTransportReadiness.state || null,
+                  ready: localQueryTransportReadiness.ready === true,
+                  reason: localQueryTransportReadiness.reason || null,
+                  retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+                } :
+                null,
+            systemTableDiagnostics: {
+              ...baseDiagnostics,
+              localReadHit: false,
+              localReplicaFallbackHit: false,
+              routedToNode:
+                retryResult?.participantNodeId ||
+                baseDiagnostics.leaderNodeId ||
+                null,
+              deniedByReadiness: baseDiagnostics.deniedByReadiness === true,
+            },
           };
         }
+        return {
+          ...(retryResult || queryResult || {
+            success: false,
+            error: 'authoritative_query_failed',
+            rows: [],
+          }),
+          rows: Array.isArray(retryResult?.rows) ? retryResult.rows : [],
+          source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+          localReadHit: false,
+          localReplicaFallbackHit: false,
+          queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+          localQueryTransport:
+            localQueryTransportReadiness &&
+              typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+              {
+                state: localQueryTransportReadiness.state || null,
+                ready: localQueryTransportReadiness.ready === true,
+                reason: localQueryTransportReadiness.reason || null,
+                retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+              } :
+              null,
+          systemTableDiagnostics: {
+            ...baseDiagnostics,
+            localReadHit: false,
+            localReplicaFallbackHit: false,
+            routedToNode:
+              retryResult?.participantNodeId ||
+              baseDiagnostics.leaderNodeId ||
+              null,
+            deniedByReadiness:
+              baseDiagnostics.deniedByReadiness === true ||
+              retryResult?.errorCode === QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+          },
+        };
       }
-      return queryResult || {
-        success: false,
-        error: 'authoritative_query_failed',
-        rows: [],
+    }
+    if (!queryResult?.success) {
+      return {
+        ...(queryResult || {
+          success: false,
+          error: 'authoritative_query_failed',
+          rows: [],
+        }),
+        rows: Array.isArray(queryResult?.rows) ? queryResult.rows : [],
+        source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+        localQueryTransport:
+          localQueryTransportReadiness &&
+            typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+            {
+              state: localQueryTransportReadiness.state || null,
+              ready: localQueryTransportReadiness.ready === true,
+              reason: localQueryTransportReadiness.reason || null,
+              retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+            } :
+            null,
+        systemTableDiagnostics: {
+          ...baseDiagnostics,
+          localReadHit: false,
+          localReplicaFallbackHit: false,
+          routedToNode:
+            queryResult?.participantNodeId ||
+            baseDiagnostics.leaderNodeId ||
+            null,
+          deniedByReadiness:
+            baseDiagnostics.deniedByReadiness === true ||
+            queryResult?.errorCode === QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+        },
       };
     }
     return {
       ...queryResult,
       rows: Array.isArray(queryResult.rows) ? queryResult.rows : [],
-      source: 'sql_query_engine',
+      rowCount: Array.isArray(queryResult.rows) ? queryResult.rows.length : NUM.ZERO,
+      source: AUTHORITATIVE_READ_SOURCE.OWNER_RPC_LANE,
+      localReadHit: false,
+      localReplicaFallbackHit: false,
+      queryTimeoutMs: baseDiagnostics.queryTimeoutMs,
+      localQueryTransport:
+        localQueryTransportReadiness &&
+          typeof localQueryTransportReadiness === TYPEOF.OBJECT ?
+          {
+            state: localQueryTransportReadiness.state || null,
+            ready: localQueryTransportReadiness.ready === true,
+            reason: localQueryTransportReadiness.reason || null,
+            retryAfterMs: localQueryTransportReadiness.retryAfterMs || NUM.ZERO,
+          } :
+          null,
+      systemTableDiagnostics: {
+        ...baseDiagnostics,
+        localReadHit: false,
+        localReplicaFallbackHit: false,
+        routedToNode:
+          queryResult?.participantNodeId ||
+          baseDiagnostics.leaderNodeId ||
+          null,
+        deniedByReadiness: baseDiagnostics.deniedByReadiness === true,
+      },
     };
   }
 
@@ -1524,7 +1894,7 @@ class CDCIntegrationService extends EventEmitter {
       ),
       routingReadinessDimension:
         options?.routingReadinessDimension ||
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     };
     if (Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO) {
       queryOptions.timeoutMs = Math.floor(queryTimeoutMs);
@@ -1789,7 +2159,7 @@ class CDCIntegrationService extends EventEmitter {
               minimumFields,
               {fallbackPhase},
             );
-            if (repaired && isSatisfied()) {
+            if (repaired) {
               cleanup();
               return;
             }
@@ -1912,13 +2282,14 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
-   * Perform one bounded authoritative repair for a cache visibility hole.
+   * Confirm one cache visibility gap authoritatively and emit divergence
+   * diagnostics without mutating projection state directly.
    * @param {string} tableName
    * @param {string} key
    * @param {boolean} expectPresent
    * @param {Object|null} expectedFields
    * @param {Object|null} minimumFields
-   * @return {Promise<boolean>} True when a repair was applied.
+   * @return {Promise<boolean>} True when authoritative state confirms the write.
    * @private
    */
   async repairCacheVisibilityHole(
@@ -1929,10 +2300,7 @@ class CDCIntegrationService extends EventEmitter {
     minimumFields = null,
     options = {},
   ) {
-    const cacheMutationTarget = this.cacheMutationTarget;
-    if (!this.shouldWaitForCacheUpdate(tableName) ||
-      !cacheMutationTarget ||
-      typeof cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION) {
+    if (!this.shouldWaitForCacheUpdate(tableName)) {
       return false;
     }
 
@@ -1946,61 +2314,79 @@ class CDCIntegrationService extends EventEmitter {
       return false;
     }
 
-    const causeId = `cdc-authoritative-cache-repair:${tableName}:${key}:${Date.now()}`;
     const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
+    const cachedRecord = this.getCacheRecord(tableName, key);
+    const phase = this.resolveAuthoritativeFallbackPhase(options?.fallbackPhase);
+
     if (expectPresent) {
-      if (rows.length === NUM.ZERO) {
-        return false;
-      }
-      for (const row of rows) {
-        cacheMutationTarget.applySystemTableChange(
-          tableName,
-          CDC_OPERATION.UPSERT,
+      const matchingRow = rows.find((row) => {
+        return this.doesCacheRecordMatchExpectedFields(
           row,
-          {causeId},
+          expectedFields,
+        ) && this.doesCacheRecordMeetMinimumFields(
+          row,
+          minimumFields,
         );
-      }
-    } else {
-      if (rows.length > NUM.ZERO) {
+      }) || null;
+      if (!matchingRow) {
         return false;
       }
-      const cachedRecord = this.getCacheRecord(tableName, key);
-      if (cachedRecord) {
-        cacheMutationTarget.applySystemTableChange(
+
+      if (!this.isCacheExpectationSatisfied(
+        tableName,
+        key,
+        expectPresent,
+        expectedFields,
+        minimumFields,
+      )) {
+        this.emitCacheVisibilityDivergence(
           tableName,
-          CDC_OPERATION.DELETE,
-          cachedRecord,
-          {causeId},
+          key,
+          READ_MODEL_DIVERGENCE_TYPE.CACHE_MISSING,
+          cachedRecord || null,
+          matchingRow,
+          this.buildCacheVisibilityDivergentFields(
+            primaryKeyField,
+            expectedFields,
+            minimumFields,
+          ),
+          phase,
         );
       }
+      this.recordAuthoritativeFallbackSignal({
+        tableName,
+        key,
+        expectPresent,
+        phase,
+        outcome: AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED,
+      });
+      return true;
     }
 
-    const repaired = this.isCacheExpectationSatisfied(
+    if (rows.length > NUM.ZERO) {
+      return false;
+    }
+
+    if (cachedRecord) {
+      this.emitCacheVisibilityDivergence(
+        tableName,
+        key,
+        READ_MODEL_DIVERGENCE_TYPE.AUTHORITATIVE_MISSING,
+        cachedRecord,
+        null,
+        [primaryKeyField],
+        phase,
+      );
+    }
+
+    this.recordAuthoritativeFallbackSignal({
       tableName,
       key,
       expectPresent,
-      expectedFields,
-      minimumFields,
-    );
-    if (repaired) {
-      const fallbackSignal = this.recordAuthoritativeFallbackSignal({
-        tableName,
-        key,
-        expectPresent,
-        phase: this.resolveAuthoritativeFallbackPhase(options?.fallbackPhase),
-        outcome: AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED,
-      });
-      this.logger.warn('Recovered cache visibility gap from authoritative system table read', {
-        tableName,
-        key,
-        expectPresent,
-        nodeId: this.nodeId,
-        phase: fallbackSignal.phase,
-        windowCount: fallbackSignal.windowCount,
-        windowRatePerMinute: fallbackSignal.windowRatePerMinute,
-      });
-    }
-    return repaired;
+      phase,
+      outcome: AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED,
+    });
+    return true;
   }
 
   /**
@@ -2106,6 +2492,7 @@ class CDCIntegrationService extends EventEmitter {
     };
     const outcomes = {
       [AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+      [AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
       [AUTHORITATIVE_FALLBACK_OUTCOME.FAILED]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
     };
     const byTable = {};
@@ -2312,6 +2699,66 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * @param {string} primaryKeyField
+   * @param {Object|null} expectedFields
+   * @param {Object|null} minimumFields
+   * @return {Array<string>}
+   * @private
+   */
+  buildCacheVisibilityDivergentFields(
+    primaryKeyField,
+    expectedFields,
+    minimumFields,
+  ) {
+    return Array.from(new Set([
+      primaryKeyField,
+      ...Object.keys(expectedFields || {}),
+      ...Object.keys(minimumFields || {}),
+    ]));
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {string} key
+   * @param {string} divergenceType
+   * @param {Object|null} cacheValue
+   * @param {Object|null} authoritativeValue
+   * @param {Array<string>} divergentFields
+   * @param {string} phase
+   * @private
+   */
+  emitCacheVisibilityDivergence(
+    tableName,
+    key,
+    divergenceType,
+    cacheValue,
+    authoritativeValue,
+    divergentFields,
+    phase,
+  ) {
+    const event = buildDivergenceEvent({
+      divergenceType,
+      tableName,
+      ownerComponent: 'CDCIntegrationService',
+      reconciliationReason:
+        SQL_RECONCILIATION_REASON.DIAGNOSTICS_CACHE_RECONCILE,
+      rowKey: key,
+      cacheValue,
+      authoritativeValue,
+      divergentFields,
+    });
+    this.logger.warn(
+      'Diagnosed cache visibility gap from authoritative system table read',
+      {
+        ...event,
+        nodeId: this.nodeId,
+        phase,
+      },
+    );
+    this.emit(CDC_EVENT.READ_MODEL_DIVERGENCE, event);
+  }
+
+  /**
    * Build column list and value placeholders for INSERT.
    * @param {Object} data - Row data.
    * @return {Object} {columns, placeholders, values}
@@ -2371,7 +2818,8 @@ class CDCIntegrationService extends EventEmitter {
       throw new Error(`${CDC_ERROR_MSG.SCHEMA_MISSING_PREFIX}${tableName}`);
     }
 
-    const rowData = this.filterDataForTable(tableName, {...data});
+    const canonicalData = canonicalizeSystemTableRow(tableName, data);
+    const rowData = this.filterDataForTable(tableName, {...canonicalData});
     if (Object.keys(rowData).length === NUM.ZERO) {
       throw new Error(`${CDC_ERROR_MSG.INSERT_VALID_COLUMNS_PREFIX}${tableName}`);
     }
@@ -3444,4 +3892,10 @@ class CDCIntegrationService extends EventEmitter {
   }
 }
 
-export {CDCIntegrationService, CDCOperationType, VALID_SYSTEM_TABLES, EPOCH_CONFIG_KEY};
+export {
+  CDCIntegrationService,
+  CDCOperationType,
+  EPOCH_CONFIG_KEY,
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+  VALID_SYSTEM_TABLES,
+};

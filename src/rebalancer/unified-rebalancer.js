@@ -8,7 +8,18 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  getPartitionRowFromCache,
+  isPriorityControlPlanePartition,
+  isSystemTablePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
+  isBackgroundWorkReadySnapshot as isBackgroundWorkLifecycleReadySnapshot,
+} from '../bootstrap/traffic-readiness-utils.js';
+import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {MovePlanner} from './move-planner.js';
 import {StoragePressureBehavior} from './storage-pressure-behavior.js';
 import {
@@ -32,6 +43,7 @@ import {
 import {
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
+  isNodeReadyLeaseExplicitlyCleared,
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
@@ -42,6 +54,9 @@ import {
 import {
   getLocalControlPlaneMutationReadinessBlocker,
 } from '../control-plane/control-plane-mutation-readiness.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../control-plane/control-plane-publication-merge.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   LIFECYCLE_PHASE,
@@ -94,6 +109,11 @@ import {
   getPreviousOddCount,
   isOddReplicaCount,
 } from './odd-replica-count.js';
+import {
+  isReplicaOperationInFlight,
+  isReplicaOperationStale,
+  normalizeReplicaOperationRecord,
+} from './replica-operation-liveness.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 
@@ -116,9 +136,31 @@ const SQL_BUDGET = Object.freeze({
      AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
 });
 
-const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
-);
+const PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS = Object.freeze({
+  preferAuthoritativeCount: true,
+  bypassEmptyQueryDelay: true,
+});
+
+const PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT = 3;
+
+const PRIORITY_PARTITION_SUMMARY_FIELDS = Object.freeze({
+  CAMEL: 'priorityPartitionSummary',
+  SNAKE: 'priority_partition_summary',
+});
+
+const CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON = Object.freeze({
+  NODE_READY_LEASE_INCOMPLETE: 'node_ready_lease_incomplete',
+  TRANSITIONAL_NODE_MEMBERSHIP: 'transitional_node_membership',
+  TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE:
+    'transport_membership_exceeds_nodes_cache',
+  ENDPOINT_VISIBILITY_INCOMPLETE: 'endpoint_visibility_incomplete',
+  TOPOLOGY_OPERATIONS_IN_FLIGHT: 'topology_operations_in_flight',
+});
+
+const TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE = Object.freeze({
+  CACHE: 'cache',
+  AUTHORITATIVE: 'authoritative',
+});
 
 /**
  * UnifiedRebalancer manages replica placement for both partitions and message groups.
@@ -305,6 +347,12 @@ class UnifiedRebalancer extends EventEmitter {
       options.bootstrapReadinessState ||
       this.rebalanceCoordinator?.bootstrapReadinessState ||
       null;
+    this.startupRecoveryCoordinator =
+      options.startupRecoveryCoordinator ||
+      this.rebalanceCoordinator?.startupRecoveryCoordinator ||
+      new StartupRecoveryCoordinator({
+        readinessState: this.bootstrapReadinessState,
+      });
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
       new ControlPlaneReadinessService({
@@ -402,6 +450,20 @@ class UnifiedRebalancer extends EventEmitter {
     if (Object.hasOwn(options, 'sqlQueryEngine')) {
       this.sqlQueryEngine = options.sqlQueryEngine || null;
     }
+    if (Object.hasOwn(options, 'bootstrapReadinessState')) {
+      this.bootstrapReadinessState = options.bootstrapReadinessState || null;
+      if (this.startupRecoveryCoordinator &&
+          typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
+            TYPEOF.FUNCTION) {
+        this.startupRecoveryCoordinator.syncOwnerDependencies({
+          readinessState: this.bootstrapReadinessState,
+        });
+      }
+    }
+    if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
+      this.startupRecoveryCoordinator =
+        options.startupRecoveryCoordinator || null;
+    }
 
     if (this.controlPlaneReadinessService &&
         typeof this.controlPlaneReadinessService
@@ -443,6 +505,15 @@ class UnifiedRebalancer extends EventEmitter {
     if (coordinator.bootstrapReadinessState) {
       this.bootstrapReadinessState = coordinator.bootstrapReadinessState;
     }
+    if (coordinator.startupRecoveryCoordinator) {
+      this.startupRecoveryCoordinator = coordinator.startupRecoveryCoordinator;
+    } else if (this.startupRecoveryCoordinator &&
+        typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
+          TYPEOF.FUNCTION) {
+      this.startupRecoveryCoordinator.syncOwnerDependencies({
+        readinessState: this.bootstrapReadinessState,
+      });
+    }
     if (coordinator.controlPlaneReadinessService) {
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
@@ -478,12 +549,7 @@ class UnifiedRebalancer extends EventEmitter {
         entityId: this.entityId,
         entityType: this.entityType,
       });
-      // Stagger initial check with per-entity random offset to avoid
-      // thundering herd when many partitions become leaders at once
-      // (e.g. during bootstrap or rolling restarts).
-      const initialJitter =
-        Math.floor(Math.random() * this.periodicCheckIntervalMs);
-      this.scheduleNextCheck(this.periodicCheckIntervalMs + initialJitter);
+      this.scheduleNextCheck(this.getLeadershipStartDelayMs());
     } else if (!isLeader && wasLeader) {
       this.logger.info(REBALANCER_LOG_MSG.LEADER_STOP, {
         entityId: this.entityId,
@@ -564,8 +630,189 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {boolean}
    */
   isSystemPartitionEntity() {
-    return this.entityType === EntityType.PARTITION &&
-      CRITICAL_SYSTEM_PARTITION_IDS.has(this.entityId);
+    if (this.entityType !== EntityType.PARTITION) {
+      return false;
+    }
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      this.entityId,
+    );
+    return isSystemTablePartition({
+      partitionId: this.entityId,
+      partitionRow,
+    });
+  }
+
+  /**
+   * Resolve the readiness decision dimension for node-level rebalancer gates.
+   * Critical system partitions must continue converging while publication
+   * membership is still closing ACK_PENDING; ordinary entities remain strict.
+   *
+   * @return {string}
+   * @private
+   */
+  resolveNodeReadinessDecisionDimension() {
+    if (this.isSystemPartitionEntity()) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  /**
+   * Evaluate readiness eligibility for one decision dimension.
+   * Falls back to repairEligible only when older snapshots do not yet expose
+   * controlPlaneRecoveryEligible explicitly.
+   *
+   * @param {Object|null} readiness
+   * @param {string} decisionDimension
+   * @return {boolean}
+   * @private
+   */
+  isReadinessDimensionSatisfied(readiness, decisionDimension) {
+    const dimensions = readiness?.dimensions &&
+      typeof readiness.dimensions === TYPEOF.OBJECT ?
+      readiness.dimensions :
+      null;
+    if (!dimensions) {
+      return false;
+    }
+    if (dimensions[decisionDimension] === true) {
+      return true;
+    }
+    if (decisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE) {
+      return false;
+    }
+    if (Object.hasOwn(dimensions, decisionDimension)) {
+      return false;
+    }
+    return dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] ===
+      true;
+  }
+
+  /**
+   * Whether this entity is one of the startup-critical control-plane
+   * partitions that should converge ahead of ordinary workload rebalancing.
+   * @return {boolean}
+   */
+  isControlPlanePriorityPartition() {
+    if (this.entityType !== EntityType.PARTITION) {
+      return false;
+    }
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      this.entityId,
+    );
+    return isPriorityControlPlanePartition({
+      partitionId: this.entityId,
+      partitionRow,
+    });
+  }
+
+  /**
+   * Resolve the minimum number of ACTIVE nodes that must satisfy readiness
+   * before this entity may continue critical topology spread.
+   *
+   * Priority control-plane partitions converge against a quorum target during
+   * startup so one flapping joiner does not stall every other priority table.
+   *
+   * @param {number} activeNodeCount
+   * @return {number}
+   * @private
+   */
+  resolveCriticalSystemRequiredHealthyNodeCount(activeNodeCount) {
+    const normalizedActiveNodeCount =
+      Number.isInteger(activeNodeCount) && activeNodeCount > NUM.ZERO ?
+        activeNodeCount :
+        NUM.ZERO;
+    if (normalizedActiveNodeCount === NUM.ZERO) {
+      return NUM.ZERO;
+    }
+    if (!this.isControlPlanePriorityPartition()) {
+      return normalizedActiveNodeCount;
+    }
+    const targetReplicaCount =
+      this.getPriorityControlPlaneTargetReplicaCount();
+    const quorumTarget = Math.max(
+      NUM.ONE,
+      Math.floor(targetReplicaCount / NUM.TWO) + NUM.ONE,
+    );
+    return Math.min(quorumTarget, normalizedActiveNodeCount);
+  }
+
+  /**
+   * Resolve the configured voter target for this priority control-plane
+   * partition from the canonical partitions owner row.
+   *
+   * @return {number}
+   * @private
+   */
+  getPriorityControlPlaneTargetReplicaCount() {
+    if (!this.isControlPlanePriorityPartition()) {
+      return PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT;
+    }
+    const partitionRow = getPartitionRowFromCache(
+      this.systemTableCache,
+      this.entityId,
+    );
+    const configuredReplicaCount = Number(
+      partitionRow?.replica_count ?? partitionRow?.replicaCount,
+    );
+    if (Number.isFinite(configuredReplicaCount) &&
+        configuredReplicaCount > NUM.ZERO) {
+      return Math.floor(configuredReplicaCount);
+    }
+    return PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT;
+  }
+
+  /**
+   * Resolve the short retry cadence used while startup-critical control-plane
+   * partitions wait on gating conditions.
+   * @return {number}
+   */
+  getPriorityRetryDelayMs() {
+    const configuredDelayMs =
+      Number.isFinite(this.criticalCheckDelayMs) &&
+        this.criticalCheckDelayMs > NUM.ZERO ?
+        Math.floor(this.criticalCheckDelayMs) :
+        REBALANCER_DEFAULT.UNIFIED.CRITICAL_CHECK_DELAY_MS;
+    return Math.max(1000, configuredDelayMs);
+  }
+
+  /**
+   * Resolve the first scheduler delay after leadership activation.
+   * Priority control-plane partitions should begin checking quickly instead
+   * of inheriting the ordinary 60s+ periodic cadence.
+   * @return {number}
+   */
+  getLeadershipStartDelayMs() {
+    if (this.isControlPlanePriorityPartition()) {
+      return Math.max(
+        1,
+        Math.floor(Math.random() * this.getPriorityRetryDelayMs()),
+      );
+    }
+    // Stagger initial check with per-entity random offset to avoid
+    // thundering herd when many partitions become leaders at once
+    // (e.g. during bootstrap or rolling restarts).
+    const initialJitter =
+      Math.floor(Math.random() * this.periodicCheckIntervalMs);
+    return this.periodicCheckIntervalMs + initialJitter;
+  }
+
+  /**
+   * Schedule a follow-up check using the priority control-plane cadence when
+   * this entity owns startup-critical control-plane work.
+   * @param {number|null} [delayMs]
+   */
+  schedulePriorityAwareCheck(delayMs = null) {
+    if (this.isControlPlanePriorityPartition()) {
+      this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+      return;
+    }
+    this.scheduleNextCheck(delayMs);
   }
 
   /**
@@ -712,6 +959,136 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * Resolve the latest membership publication row, regardless of status.
+   * @return {Object|null}
+   * @private
+   */
+  getLatestMembershipPublicationRow() {
+    const readinessService = this.controlPlaneReadinessService;
+    const publicationService = readinessService?.membershipPublicationService;
+    let publicationRow = null;
+    if (publicationService &&
+        typeof publicationService.getLatestClusterPublicationSync ===
+          TYPEOF.FUNCTION) {
+      publicationRow = publicationService.getLatestClusterPublicationSync();
+    } else if (publicationService &&
+        typeof publicationService.getLatestPublicationRowSync ===
+          TYPEOF.FUNCTION) {
+      publicationRow = publicationService.getLatestPublicationRowSync();
+    }
+    return publicationRow &&
+      typeof publicationRow === TYPEOF.OBJECT ?
+      publicationRow :
+      null;
+  }
+
+  /**
+   * Resolve the latest published membership row when available.
+   * @return {Object|null}
+   * @private
+   */
+  getLatestPublishedMembershipRow() {
+    const readinessService = this.controlPlaneReadinessService;
+    const publicationService = readinessService?.membershipPublicationService;
+    let publicationRow = this.getLatestMembershipPublicationRow();
+
+    if (String(publicationRow?.status || '').toUpperCase() !==
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
+      if (publicationService &&
+          typeof publicationService.getLatestPublishedClusterPublicationSync ===
+            TYPEOF.FUNCTION) {
+        publicationRow =
+          publicationService.getLatestPublishedClusterPublicationSync();
+      } else if (publicationService &&
+          typeof publicationService.getLatestPublishedPublicationRowSync ===
+            TYPEOF.FUNCTION) {
+        publicationRow =
+          publicationService.getLatestPublishedPublicationRowSync();
+      }
+    }
+
+    return String(publicationRow?.status || '').toUpperCase() ===
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
+      publicationRow :
+      null;
+  }
+
+  /**
+   * Resolve the normalized priority-partition summary payload from a
+   * publication row.
+   * @param {Object|null} publicationRow
+   * @return {Object|null}
+   * @private
+   */
+  getPriorityPartitionSummary(publicationRow = null) {
+    if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const summary =
+      publicationRow[PRIORITY_PARTITION_SUMMARY_FIELDS.CAMEL] ??
+      publicationRow[PRIORITY_PARTITION_SUMMARY_FIELDS.SNAKE] ??
+      null;
+    return summary && typeof summary === TYPEOF.OBJECT ?
+      summary :
+      null;
+  }
+
+  /**
+   * Priority control-plane recovery remains active while the latest
+   * publication row still reports spread unsatisfied.
+   * @return {boolean}
+   * @private
+   */
+  isPriorityControlPlaneRecoveryActive() {
+    if (!this.isControlPlanePriorityPartition()) {
+      return false;
+    }
+    const publicationRow = this.getLatestMembershipPublicationRow();
+    const priorityPartitionSummary =
+      this.getPriorityPartitionSummary(publicationRow);
+    if (!priorityPartitionSummary) {
+      return false;
+    }
+    return priorityPartitionSummary.satisfied === false;
+  }
+
+  /**
+   * During active priority control-plane recovery we must not deadlock by
+   * filtering candidate nodes to the last published active membership set.
+   * All other placement continues to use published membership as steady-state
+   * topology truth.
+   * @return {boolean}
+   * @private
+   */
+  shouldConstrainAvailableNodesToPublishedMembership() {
+    if (!this.isControlPlanePriorityPartition()) {
+      return true;
+    }
+    return !this.isPriorityControlPlaneRecoveryActive();
+  }
+
+  /**
+   * Resolve the steady-state published active-node set when available.
+   * @return {Set<string>|null}
+   * @private
+   */
+  getPublishedActiveNodeIdSet() {
+    const publicationRow = this.getLatestPublishedMembershipRow();
+    if (!publicationRow) {
+      return null;
+    }
+
+    const nodeIds = Array.isArray(publicationRow.publishedActiveNodeIds) ?
+      publicationRow.publishedActiveNodeIds :
+      Array.isArray(publicationRow.published_active_node_ids) ?
+        publicationRow.published_active_node_ids :
+        [];
+    return new Set(nodeIds.filter((nodeId) =>
+      typeof nodeId === TYPEOF.STRING && nodeId.length > 0,
+    ));
+  }
+
+  /**
    * Apply policy to determine if rebalancing is needed.
    * @param {Object} policy - Policy to apply.
    * @return {Object} Rebalancing decision with reason.
@@ -727,6 +1104,12 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Array<Object>} Array of active nodes.
    */
   getAvailableNodes() {
+    const publishedActiveNodeIds =
+      this.shouldConstrainAvailableNodesToPublishedMembership() ?
+        this.getPublishedActiveNodeIdSet() :
+        null;
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
     return this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.NODES,
       (node) => {
@@ -734,14 +1117,18 @@ class UnifiedRebalancer extends EventEmitter {
         if (!nodeId) {
           return false;
         }
-        const readiness = this.controlPlaneReadinessService
-          .getNodeReadinessSync(nodeId);
-        if (!readiness || !readiness.dimensions) {
+        if (publishedActiveNodeIds && !publishedActiveNodeIds.has(nodeId)) {
           return false;
         }
-        return readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-        ] === true;
+        const readiness = this.controlPlaneReadinessService
+          .getNodeReadinessSync(nodeId, {
+            decisionDimension:
+              readinessDecisionDimension,
+          });
+        return this.isReadinessDimensionSatisfied(
+          readiness,
+          readinessDecisionDimension,
+        );
       },
     );
   }
@@ -772,6 +1159,11 @@ class UnifiedRebalancer extends EventEmitter {
 
     let hasTransitionalNode = false;
     let hasFailedNode = false;
+    const bypassPriorityStartupReadiness =
+      this.shouldBypassLocalPriorityControlPlaneStartupReadiness();
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
+    const activeMembershipNodeIds = [];
     const activeNodeIds = [];
     const unreadyNodeIds = [];
     for (const nodeRow of nodeRows) {
@@ -791,9 +1183,32 @@ class UnifiedRebalancer extends EventEmitter {
         }
         continue;
       }
-      if (!wasNodeRecordReadyWhenWritten(nodeRow, {
-        requireActiveStatus: true,
-      })) {
+      activeMembershipNodeIds.push(nodeId);
+      const readiness = this.controlPlaneReadinessService &&
+        typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
+          TYPEOF.FUNCTION ?
+        this.controlPlaneReadinessService.getNodeReadinessSync(
+          nodeId,
+          {
+            allowStaleOnCacheChange: false,
+          },
+        ) :
+        null;
+      const nodeMembershipReady = this.isReadinessDimensionSatisfied(
+        readiness,
+        readinessDecisionDimension,
+      );
+      const localPriorityStartupLeaseClear =
+        bypassPriorityStartupReadiness &&
+        nodeId === this.nodeId &&
+        isNodeReadyLeaseExplicitlyCleared(nodeRow, {
+          requireActiveStatus: true,
+        });
+      if (localPriorityStartupLeaseClear) {
+        activeNodeIds.push(nodeId);
+        continue;
+      }
+      if (!nodeMembershipReady) {
         hasTransitionalNode = true;
         unreadyNodeIds.push(nodeId);
         continue;
@@ -802,12 +1217,28 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     if (hasTransitionalNode && !hasFailedNode) {
-      return Object.freeze({
-        reason: unreadyNodeIds.length > 0 ?
-          'node_ready_lease_incomplete' :
-          'transitional_node_membership',
-        unreadyNodeIds: Object.freeze([...unreadyNodeIds]),
-      });
+      const requiredHealthyNodeCount =
+        this.resolveCriticalSystemRequiredHealthyNodeCount(
+          activeMembershipNodeIds.length,
+        );
+      const hasRequiredHealthyNodes =
+        activeNodeIds.length >= requiredHealthyNodeCount;
+      if (this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes) {
+        // Priority spread may proceed once quorum is ready; additional ACTIVE
+        // nodes can still be converging without stalling every priority table.
+      } else {
+        return Object.freeze({
+          reason: unreadyNodeIds.length > 0 ?
+            CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+              .NODE_READY_LEASE_INCOMPLETE :
+            CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+              .TRANSITIONAL_NODE_MEMBERSHIP,
+          unreadyNodeIds: Object.freeze([...unreadyNodeIds]),
+          requiredHealthyNodeCount,
+          healthyNodeCount: activeNodeIds.length,
+          activeMembershipNodeCount: activeMembershipNodeIds.length,
+        });
+      }
     }
 
     const connectedNodeIds = this.resolveConnectedClusterNodeIds();
@@ -817,7 +1248,9 @@ class UnifiedRebalancer extends EventEmitter {
           return normalizeNodeRow(nodeRow).nodeId === connectedNodeId;
         })) {
           return Object.freeze({
-            reason: 'transport_membership_exceeds_nodes_cache',
+            reason:
+              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+                .TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE,
             connectedNodeId,
           });
         }
@@ -828,18 +1261,33 @@ class UnifiedRebalancer extends EventEmitter {
       this.evaluateCriticalSystemEndpointVisibility(activeNodeIds);
     if (endpointVisibility.ready !== true) {
       return Object.freeze({
-        reason: 'endpoint_visibility_incomplete',
+        reason:
+          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+            .ENDPOINT_VISIBILITY_INCOMPLETE,
         ...endpointVisibility,
       });
     }
 
     const inFlightTopologyOperations =
-      this.collectCriticalSystemInFlightReplicaOperations(activeNodeIds);
+      this.collectCriticalSystemInFlightReplicaOperations(
+        activeNodeIds,
+        {
+          // Topology settling should only wait on in-flight operations that
+          // mutate this same entity. Unrelated critical-system operations must
+          // not serialize every other partition behind one active move.
+          scopeToEntity: true,
+        },
+      );
     if (inFlightTopologyOperations.count > NUM.ZERO) {
       return Object.freeze({
-        reason: 'topology_operations_in_flight',
+        reason:
+          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+            .TOPOLOGY_OPERATIONS_IN_FLIGHT,
+        activeNodeIds: Object.freeze([...activeNodeIds]),
         inFlightReplicaOperations: inFlightTopologyOperations.count,
         inFlightReplicaOperationDetails: inFlightTopologyOperations.details,
+        inFlightReplicaOperationsSource:
+          inFlightTopologyOperations.source || null,
       });
     }
 
@@ -855,6 +1303,163 @@ class UnifiedRebalancer extends EventEmitter {
    */
   isCriticalSystemTopologySettling() {
     return this.getCriticalSystemTopologySettlingBlocker() !== null;
+  }
+
+  /**
+   * Revalidate in-flight topology blockers with authoritative entity
+   * operations to avoid stale cache observations deadlocking planning.
+   *
+   * @param {Object|null} blocker
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async revalidateCriticalSystemTopologySettlingBlocker(blocker) {
+    if (!blocker ||
+        blocker.reason !==
+          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+            .TOPOLOGY_OPERATIONS_IN_FLIGHT) {
+      return blocker;
+    }
+    if (blocker.inFlightReplicaOperationsSource ===
+      TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.AUTHORITATIVE) {
+      return blocker;
+    }
+    if (!this.rebalanceCoordinator ||
+        typeof this.rebalanceCoordinator.getOperationsByEntity !==
+          TYPEOF.FUNCTION) {
+      return blocker;
+    }
+
+    let entityOperations = [];
+    try {
+      entityOperations = await this.rebalanceCoordinator.getOperationsByEntity(
+        this.entityType,
+        this.entityId,
+      );
+    } catch (error) {
+      this.logger.warn(
+        REBALANCER_LOG_MSG.REVALIDATE_TOPOLOGY_BLOCKER_FAILED,
+        {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          reason: blocker.reason || null,
+          error: error?.message || String(error),
+        },
+      );
+      return blocker;
+    }
+
+    const activeNodeIds = new Set(
+      (Array.isArray(blocker.activeNodeIds) ? blocker.activeNodeIds : [])
+        .filter((nodeId) =>
+          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        ),
+    );
+    const inFlightDetails = [];
+    const nowMs = Date.now();
+    for (const operation of entityOperations) {
+      if (!this.isTopologySettlingInFlightOperation(operation, {nowMs}) ||
+          !this.isOperationForEntity(operation)) {
+        continue;
+      }
+      const detail =
+        this.buildCriticalSystemInFlightReplicaOperationDetail(operation);
+      if (!detail.targetNodeId) {
+        continue;
+      }
+      if (activeNodeIds.size > NUM.ZERO &&
+          !activeNodeIds.has(detail.targetNodeId)) {
+        continue;
+      }
+      inFlightDetails.push(detail);
+    }
+
+    if (inFlightDetails.length === NUM.ZERO) {
+      return null;
+    }
+
+    return Object.freeze({
+      ...blocker,
+      inFlightReplicaOperations: inFlightDetails.length,
+      inFlightReplicaOperationDetails: Object.freeze(inFlightDetails),
+      inFlightReplicaOperationsSource:
+        TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.AUTHORITATIVE,
+    });
+  }
+
+  /**
+   * Return a blocker summary when non-system entities should yield until the
+   * startup-critical control-plane partitions are spread across ready nodes.
+   *
+   * This keeps user/data-plane rebalancing from consuming the global
+   * rebalancer budget while the seed is still the only owner of the control
+   * plane write path.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getControlPlanePrioritySpreadBlocker() {
+    if (this.isSystemPartitionEntity()) {
+      return null;
+    }
+
+    const publicationRow = this.getLatestPublishedMembershipRow();
+    const priorityPartitionSummary =
+      publicationRow?.priorityPartitionSummary ??
+      publicationRow?.priority_partition_summary ??
+      null;
+    if (!priorityPartitionSummary ||
+        typeof priorityPartitionSummary !== TYPEOF.OBJECT ||
+        priorityPartitionSummary.satisfied !== false) {
+      return null;
+    }
+
+    const readyNodes = this.getAvailableNodes();
+    const readyNodeIds = new Set(
+      readyNodes
+        .map((node) => node?.node_id || node?.nodeId || '')
+        .filter(Boolean),
+    );
+    const requiredDistinctNodeCount = Math.min(NUM.THREE, readyNodeIds.size);
+    if (requiredDistinctNodeCount <= NUM.ONE) {
+      return null;
+    }
+
+    const summaryBlockedPartitions = Array.isArray(
+      priorityPartitionSummary.blockedPartitions,
+    ) ? priorityPartitionSummary.blockedPartitions : [];
+    const summaryMissingPartitionIds = Array.isArray(
+      priorityPartitionSummary.missingPartitionIds,
+    ) ? priorityPartitionSummary.missingPartitionIds : [];
+    const blockedPartitions = summaryBlockedPartitions.length > NUM.ZERO ?
+      summaryBlockedPartitions.map((partition) => {
+        const partitionId = String(partition?.partitionId || '');
+        const readyReplicaCount = Number.isFinite(
+          partition?.readyReplicaCount,
+        ) ? partition.readyReplicaCount : null;
+        const readyDistinctNodeCount = Number.isFinite(
+          partition?.readyDistinctNodeCount,
+        ) ? partition.readyDistinctNodeCount : null;
+        const spreadGap = Number.isFinite(partition?.spreadGap) ?
+          partition.spreadGap : null;
+        return Object.freeze({
+          partitionId,
+          readyReplicaCount,
+          readyDistinctNodeCount,
+          spreadGap,
+        });
+      }).filter((partition) => partition.partitionId.length > NUM.ZERO) :
+      summaryMissingPartitionIds.map((partitionId) => Object.freeze({
+        partitionId: String(partitionId || ''),
+        readyReplicaCount: null,
+        readyDistinctNodeCount: null,
+        spreadGap: null,
+      })).filter((partition) => partition.partitionId.length > NUM.ZERO);
+
+    return Object.freeze({
+      requiredDistinctNodeCount,
+      blockedPartitions: Object.freeze(blockedPartitions),
+    });
   }
 
   /**
@@ -953,57 +1558,87 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * Normalize one in-flight replica operation for topology diagnostics.
+   * @param {Object} row
+   * @return {Object}
+   * @private
+   */
+  buildCriticalSystemInFlightReplicaOperationDetail(row) {
+    const operationId = row?.operation_id || row?.operationId || null;
+    const type = row?.type || null;
+    const partitionId =
+      row?.partition_group_id ||
+      row?.partitionGroupId ||
+      row?.partition_id ||
+      row?.partitionId ||
+      null;
+    const targetNodeId = String(
+      row?.target_node_id || row?.targetNodeId || '',
+    );
+    const status = row?.status ||
+      String(row?.status || '').toLowerCase() ||
+      null;
+    const workflowStep = row?.workflow_step || row?.workflowStep || null;
+
+    return Object.freeze({
+      operationId,
+      type,
+      partitionId,
+      targetNodeId,
+      status,
+      workflowStep,
+    });
+  }
+
+  /**
    * Return non-terminal replica operations that still indicate topology churn
    * for already-ACTIVE nodes.
    * @param {string[]} activeNodeIds
    * @return {{count:number,details:Object[]}}
    * @private
    */
-  collectCriticalSystemInFlightReplicaOperations(activeNodeIds = []) {
+  collectCriticalSystemInFlightReplicaOperations(
+    activeNodeIds = [],
+    options = {},
+  ) {
     const requiredNodeIds = new Set(
       (Array.isArray(activeNodeIds) ? activeNodeIds : []).filter((nodeId) =>
         typeof nodeId === TYPEOF.STRING && nodeId.length > 0,
       ),
     );
+    const scopeToEntity = options.scopeToEntity === true;
     if (requiredNodeIds.size === NUM.ZERO ||
         typeof this.systemTableCache?.getAll !== TYPEOF.FUNCTION) {
       return Object.freeze({
         count: NUM.ZERO,
         details: Object.freeze([]),
+        source: null,
       });
     }
 
     const rows = this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+    const nowMs = Date.now();
     const details = [];
     for (const row of rows) {
-      const status = String(row?.status || '').toLowerCase();
-      const targetNodeId = String(
-        row?.target_node_id || row?.targetNodeId || '',
-      );
+      if (!this.isTopologySettlingInFlightOperation(row, {nowMs})) {
+        continue;
+      }
+      if (scopeToEntity && !this.isOperationForEntity(row)) {
+        continue;
+      }
+      const detail =
+        this.buildCriticalSystemInFlightReplicaOperationDetail(row);
+      const {targetNodeId} = detail;
       if (!targetNodeId || !requiredNodeIds.has(targetNodeId)) {
         continue;
       }
-      if (TERMINAL_STATUSES.includes(status)) {
-        continue;
-      }
-      details.push(Object.freeze({
-        operationId: row?.operation_id || row?.operationId || null,
-        type: row?.type || null,
-        partitionId:
-          row?.partition_group_id ||
-          row?.partitionGroupId ||
-          row?.partition_id ||
-          row?.partitionId ||
-          null,
-        targetNodeId,
-        status: row?.status || null,
-        workflowStep: row?.workflow_step || row?.workflowStep || null,
-      }));
+      details.push(detail);
     }
 
     return Object.freeze({
       count: details.length,
       details: Object.freeze(details),
+      source: TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE.CACHE,
     });
   }
 
@@ -1024,6 +1659,9 @@ class UnifiedRebalancer extends EventEmitter {
         !this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
           TYPEOF.FUNCTION) {
+      return null;
+    }
+    if (this.shouldBypassLocalPriorityControlPlaneStartupReadiness()) {
       return null;
     }
     const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
@@ -1049,19 +1687,97 @@ class UnifiedRebalancer extends EventEmitter {
    * @private
    */
   getLocalControlPlaneMutationReadinessBlocker() {
+    const requiredDimensions =
+      this.shouldBypassLocalPriorityControlPlaneStartupReadiness() ?
+        [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY] :
+        null;
     return getLocalControlPlaneMutationReadinessBlocker({
       nodeId: this.nodeId,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
+      requiredDimensions,
+      requirePublishedConvergence: !this.isControlPlanePriorityPartition(),
     });
   }
 
   /**
+   * Return the latest bootstrap readiness snapshot when available.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getBootstrapReadinessSnapshot() {
+    if (this.startupRecoveryCoordinator &&
+        typeof this.startupRecoveryCoordinator.getSnapshot ===
+          TYPEOF.FUNCTION) {
+      return this.startupRecoveryCoordinator.getSnapshot();
+    }
+    if (!this.bootstrapReadinessState) {
+      return null;
+    }
+    return typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION ?
+      this.bootstrapReadinessState.evaluate() :
+      (typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION ?
+        this.bootstrapReadinessState.getSnapshot() :
+        null);
+  }
+
+  /**
+   * Check whether lifecycle has opened background work for this entity.
+   *
+   * @param {Object|null} snapshot - Bootstrap readiness snapshot.
+   * @return {boolean}
+   * @private
+   */
+  isBootstrapReadinessOpenForBackgroundWork(snapshot) {
+    if (this.startupRecoveryCoordinator &&
+        typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION) {
+      return this.startupRecoveryCoordinator.evaluate({
+        partitionId: this.entityId,
+        snapshot,
+      }).backgroundWorkReady === true;
+    }
+    return isBackgroundWorkLifecycleReadySnapshot(snapshot, {
+      partitionId: this.entityId,
+    });
+  }
+
+  /**
+   * Priority control-plane partitions may recover through the local seed's
+   * startup quarantine once lifecycle has opened metadata publication, even
+   * before the seed becomes serve-eligible again.
+   *
+   * @return {boolean}
+   * @private
+   */
+  shouldBypassLocalPriorityControlPlaneStartupReadiness() {
+    if (this.startupRecoveryCoordinator &&
+        typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION) {
+      return this.startupRecoveryCoordinator.evaluate({
+        partitionId: this.entityId,
+      }).shouldBypassLocalPriorityControlPlaneStartupReadiness === true;
+    }
+    if (!this.isControlPlanePriorityPartition()) {
+      return false;
+    }
+    const snapshot = this.getBootstrapReadinessSnapshot();
+    if (!this.isBootstrapReadinessOpenForBackgroundWork(snapshot)) {
+      return false;
+    }
+    return !(
+      snapshot?.ready === true &&
+      snapshot?.phase === LIFECYCLE_PHASE.TRAFFIC_READY
+    );
+  }
+
+  /**
    * Return one bootstrap lifecycle snapshot when critical system-partition
-   * planning should wait for the node's traffic-ready stable window.
+   * planning should wait for the lifecycle owner to open background work.
    *
    * `BootstrapReadinessState` is the canonical owner for startup/join/traffic
-   * lifecycle. Critical system redistribution should wait until that owner
-   * reports TRAFFIC_READY, rather than inferring readiness from cache health.
+   * lifecycle. Most system redistribution should wait for `TRAFFIC_READY`,
+   * but the priority control-plane partitions are allowed once metadata
+   * publication is open because they are required to complete restart/join
+   * convergence under load.
    *
    * @return {Object|null}
    * @private
@@ -1072,17 +1788,11 @@ class UnifiedRebalancer extends EventEmitter {
       return null;
     }
 
-    const snapshot =
-      typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION ?
-        this.bootstrapReadinessState.evaluate() :
-        (typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION ?
-          this.bootstrapReadinessState.getSnapshot() :
-          null);
+    const snapshot = this.getBootstrapReadinessSnapshot();
     if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
       return null;
     }
-    if (snapshot.ready === true &&
-        snapshot.phase === LIFECYCLE_PHASE.TRAFFIC_READY) {
+    if (this.isBootstrapReadinessOpenForBackgroundWork(snapshot)) {
       return null;
     }
     return snapshot;
@@ -1094,12 +1804,17 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Promise<boolean>} True if ready.
    */
   async isNodeReady(nodeId) {
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
     const readiness = this.controlPlaneReadinessService
-      .getNodeReadinessSync(nodeId);
-    if (!readiness || !readiness.dimensions ||
-        readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-        ] !== true) {
+      .getNodeReadinessSync(nodeId, {
+        decisionDimension:
+          readinessDecisionDimension,
+      });
+    if (!this.isReadinessDimensionSatisfied(
+      readiness,
+      readinessDecisionDimension,
+    )) {
       return false;
     }
 
@@ -1178,12 +1893,17 @@ class UnifiedRebalancer extends EventEmitter {
       return null;
     }
 
+    const readinessDecisionDimension =
+      this.resolveNodeReadinessDecisionDimension();
     const readiness = this.controlPlaneReadinessService
-      .getNodeReadinessSync(nodeId);
-    if (!readiness || !readiness.dimensions ||
-        readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-        ] !== true) {
+      .getNodeReadinessSync(nodeId, {
+        decisionDimension:
+          readinessDecisionDimension,
+      });
+    if (!this.isReadinessDimensionSatisfied(
+      readiness,
+      readinessDecisionDimension,
+    )) {
       // Determine whether the rejection is lease or status.
       const nodeRow = this.systemTableCache.get(
         TABLES.NODES, nodeId,
@@ -1279,6 +1999,8 @@ class UnifiedRebalancer extends EventEmitter {
     const entityId =
       operation?.entity_id ||
       operation?.entityId ||
+      operation?.partition_group_id ||
+      operation?.partitionGroupId ||
       operation?.partition_id ||
       operation?.partitionId ||
       null;
@@ -1306,6 +2028,26 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * @param {Object} operation
+   * @param {Object} options
+   * @return {boolean}
+   * @private
+   */
+  isTopologySettlingInFlightOperation(operation, options = {}) {
+    const nowMs = Number.isFinite(options.nowMs) ?
+      Math.floor(options.nowMs) :
+      Date.now();
+    const normalizedOperation = normalizeReplicaOperationRecord(
+      operation,
+      {nowMs},
+    );
+    if (!isReplicaOperationInFlight(normalizedOperation)) {
+      return false;
+    }
+    return !isReplicaOperationStale(normalizedOperation, {nowMs});
+  }
+
+  /**
    * Get in-flight replica operations for this entity.
    * @readModel REBALANCE_IN_FLIGHT_OPERATIONS —
    *   READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
@@ -1324,6 +2066,27 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * Resolve pressure and delivery options for authoritative budget reads.
+   * Startup-critical and critical system partitions must keep these reads on
+   * the critical path so transport pressure does not strand control-plane
+   * spread behind background gating queries.
+   *
+   * @return {Object} Gateway query options.
+   */
+  getBudgetQueryOptions() {
+    const criticalQuery = this.isControlPlanePriorityPartition() ||
+      this.isCriticalSystemPartition();
+    return {
+      controlPlaneOperationKind: 'read',
+      workClass: criticalQuery ?
+        PRESSURE_WORK_CLASS.CRITICAL :
+        PRESSURE_WORK_CLASS.BACKGROUND,
+      allowPressureDefer: criticalQuery !== true,
+      deliveryPriority: criticalQuery ? 'critical' : 'background',
+    };
+  }
+
+  /**
      * Query the configured rebalance budget from authoritative config.
      * Returns the constructor-provided default when the config row
      * is absent or unparseable — this is a default, not a mixed read model.
@@ -1337,10 +2100,7 @@ class UnifiedRebalancer extends EventEmitter {
         [REBALANCER_CONFIG_KEY.REBALANCE_BUDGET],
         {
           controlPlaneTableName: SYSTEM_TABLE_NAME.CONFIG,
-          controlPlaneOperationKind: 'read',
-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDefer: true,
-          deliveryPriority: 'background',
+          ...this.getBudgetQueryOptions(),
         },
       );
 
@@ -1365,10 +2125,7 @@ class UnifiedRebalancer extends EventEmitter {
         [],
         {
           controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          controlPlaneOperationKind: 'read',
-          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-          allowPressureDefer: true,
-          deliveryPriority: 'background',
+          ...this.getBudgetQueryOptions(),
         },
       );
 
@@ -1381,13 +2138,56 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
   /**
+   * Return true when one move set contains add-like work that can advance
+   * priority control-plane spread.
+   * @param {Array<Object>} moves
+   * @return {boolean}
+   * @private
+   */
+  hasPriorityBudgetBypassCandidateMove(moves = []) {
+    if (!Array.isArray(moves) || moves.length === NUM.ZERO) {
+      return false;
+    }
+    return moves.some((move) => move?.type === MoveType.ADD ||
+      move?.type === MoveType.REPLACE);
+  }
+
+  /**
+   * Priority control-plane spread must not deadlock behind unrelated in-flight
+   * operations that saturate the global move budget. Use the coordinator's
+   * dedicated priority add lane to decide whether one recovery move may still
+   * proceed.
+   *
+   * @param {Array<Object>} moves
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async canBypassGlobalBudgetForPriorityRecovery(moves = []) {
+    if (!this.isControlPlanePriorityPartition()) {
+      return false;
+    }
+    if (!this.hasPriorityBudgetBypassCandidateMove(moves)) {
+      return false;
+    }
+    if (!this.rebalanceCoordinator ||
+        typeof this.rebalanceCoordinator.canStartPriorityAddOperation !==
+          TYPEOF.FUNCTION) {
+      return false;
+    }
+    const allowed = await this.rebalanceCoordinator
+      .canStartPriorityAddOperation(
+        PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
+      );
+    return allowed === true;
+  }
+
+  /**
    * Check whether this rebalancer targets a critical system partition.
    * @return {boolean} True when entity is a critical system partition.
    * @private
    */
   isCriticalSystemPartition() {
-    return this.entityType === EntityType.PARTITION &&
-      CRITICAL_SYSTEM_PARTITION_IDS.has(this.entityId);
+    return this.isSystemPartitionEntity();
   }
 
   /**
@@ -1408,22 +2208,7 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     const readyNodeIds = new Set(
-      this.systemTableCache
-        .filter(SYSTEM_TABLE_NAME.NODES, (node) => {
-          const nodeId = node?.node_id || null;
-          if (!nodeId) {
-            return false;
-          }
-          const readiness = this.controlPlaneReadinessService
-            .getNodeReadinessSync(nodeId);
-          if (!readiness || !readiness.dimensions) {
-            return false;
-          }
-          return readiness.dimensions[
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-          ] === true;
-        })
-        .map((node) => node.node_id),
+      this.getAvailableNodes().map((node) => node.node_id),
     );
 
     return activeReplicas.filter((replica) => {
@@ -1570,7 +2355,35 @@ class UnifiedRebalancer extends EventEmitter {
         throw new Error(REBALANCER_ERROR_MSG.COORDINATOR_REQUIRED);
       }
 
-      return await this.executeMoveViaCoordinator(move);
+      const outcome = await this.executeMoveViaCoordinator(move);
+      if (outcome?.skipped === true) {
+        const admissionBlockingReasonCodes = Array.isArray(
+          outcome?.admission?.blockingReasons,
+        ) ?
+          outcome.admission.blockingReasons
+            .map((reason) => String(
+              reason?.code ||
+              reason?.reason ||
+              reason ||
+              '',
+            ).trim())
+            .filter((reason) => reason.length > NUM.ZERO) :
+          [];
+        this.logger.info(REBALANCER_LOG_MSG.MOVE_SKIPPED, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          moveType: move.type,
+          nodeId: move.nodeId,
+          replicaId: move.replicaId || null,
+          reason: outcome.reason || null,
+          error: outcome.error || null,
+          admissionDecisionType:
+            outcome?.admission?.decisionType || null,
+          admissionReason: outcome?.admission?.reason || null,
+          admissionBlockingReasonCodes,
+        });
+      }
+      return outcome;
     } catch (error) {
       this.logger.error(REBALANCER_LOG_MSG.MOVE_FAILED, {
         entityId: this.entityId,
@@ -1651,6 +2464,14 @@ class UnifiedRebalancer extends EventEmitter {
       sourceNodeId: move.sourceNodeId,
       enforceConcurrentOperationBudget: true,
     };
+    const membershipPublicationEpoch = Number.isInteger(
+      move?.membershipPublicationEpoch,
+    ) ? move.membershipPublicationEpoch :
+      this.resolvePublishedMembershipPlanningEpoch();
+    if (Number.isInteger(membershipPublicationEpoch) &&
+        membershipPublicationEpoch >= 0) {
+      operationRequest.membershipPublicationEpoch = membershipPublicationEpoch;
+    }
     if (move?.controlPlaneMutationWorkClass) {
       operationRequest.controlPlaneMutationWorkClass =
         move.controlPlaneMutationWorkClass;
@@ -1925,6 +2746,8 @@ class UnifiedRebalancer extends EventEmitter {
       currentReplicas,
       effectivePolicy,
     );
+    const planningMembershipPublicationEpoch =
+      this.resolvePublishedMembershipPlanningEpoch();
     const moves = await this.movePlanner.applyPressureGating(
       this.movePlanner.calculateMoves(currentReplicas, targetState),
     );
@@ -1951,14 +2774,20 @@ class UnifiedRebalancer extends EventEmitter {
         configuredBudget * this.criticalBudgetMultiplier :
         configuredBudget;
 
-      availableBudget = Math.max(0, effectiveBudget - inFlightCount);
+      availableBudget = Math.max(NUM.ZERO, effectiveBudget - inFlightCount);
       if (availableBudget <= 0) {
-        return {
-          success: true,
-          skipped: true,
-          reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
-          moves: [],
-        };
+        const priorityBudgetBypass =
+          await this.canBypassGlobalBudgetForPriorityRecovery(moves);
+        if (priorityBudgetBypass === true) {
+          availableBudget = NUM.ONE;
+        } else {
+          return {
+            success: true,
+            skipped: true,
+            reason: REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+            moves: [],
+          };
+        }
       }
     } catch (error) {
       this.logger.warn(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
@@ -1983,7 +2812,16 @@ class UnifiedRebalancer extends EventEmitter {
     });
 
     const moveLimit = Math.max(0, Math.min(this.maxConcurrentMoves, availableBudget));
-    const limitedMoves = moves.slice(0, moveLimit);
+    const limitedMoves = moves.slice(0, moveLimit).map((move) => {
+      if (!Number.isInteger(planningMembershipPublicationEpoch) ||
+          planningMembershipPublicationEpoch < 0) {
+        return move;
+      }
+      return {
+        ...move,
+        membershipPublicationEpoch: planningMembershipPublicationEpoch,
+      };
+    });
     const results = await this.executeRebalancingMoves(limitedMoves);
 
     this.lastRebalanceTime = Date.now();
@@ -2002,6 +2840,50 @@ class UnifiedRebalancer extends EventEmitter {
       trigger,
       timestamp: this.lastRebalanceTime,
     };
+  }
+
+  /**
+   * Resolve the published membership epoch used to bind a planning pass.
+   * @return {number|null}
+   * @private
+   */
+  resolvePublishedMembershipPlanningEpoch() {
+    const readinessService = this.controlPlaneReadinessService;
+    const diagnostics = readinessService &&
+      typeof readinessService.getMembershipPublicationDiagnosticsSync ===
+        TYPEOF.FUNCTION ?
+      readinessService.getMembershipPublicationDiagnosticsSync(
+        this.nodeId,
+        Date.now(),
+      ) :
+      null;
+    const publicationEpoch = Number(diagnostics?.publicationEpoch);
+    const publicationStatus = String(
+      diagnostics?.status ?? diagnostics?.publicationStatus ?? '',
+    ).toUpperCase();
+    if (publicationStatus === 'PUBLISHED' && Number.isInteger(publicationEpoch)) {
+      return publicationEpoch;
+    }
+
+    const publicationService = readinessService?.membershipPublicationService;
+    let publicationRow = null;
+    if (publicationService &&
+        typeof publicationService.getLatestClusterPublicationSync ===
+          TYPEOF.FUNCTION) {
+      publicationRow = publicationService.getLatestClusterPublicationSync();
+    } else if (publicationService &&
+        typeof publicationService.getLatestPublicationRowSync ===
+          TYPEOF.FUNCTION) {
+      publicationRow = publicationService.getLatestPublicationRowSync();
+    }
+
+    const fallbackEpoch = Number(
+      publicationRow?.publicationEpoch ?? publicationRow?.publication_epoch,
+    );
+    const fallbackStatus = String(publicationRow?.status || '').toUpperCase();
+    return fallbackStatus === 'PUBLISHED' && Number.isInteger(fallbackEpoch) ?
+      fallbackEpoch :
+      null;
   }
 
 
@@ -2055,6 +2937,7 @@ class UnifiedRebalancer extends EventEmitter {
       return;
     }
 
+    let forcePriorityRetry = false;
     try {
       // Cluster readiness gate — defer first planning cycle until
       // the cluster reaches a stable state (Requirements 4.1, 4.3, 4.4, 4.5)
@@ -2090,7 +2973,7 @@ class UnifiedRebalancer extends EventEmitter {
               entityId: this.entityId,
               unmetConditions: result.unmetConditions,
             });
-            this.scheduleNextCheck();
+            this.schedulePriorityAwareCheck();
             return;
           }
         }
@@ -2116,12 +2999,14 @@ class UnifiedRebalancer extends EventEmitter {
           timeUntilStabilized: this.getTimeUntilStabilized(),
         });
         // Schedule next check after stabilization completes
-        this.scheduleNextCheck();
+        this.schedulePriorityAwareCheck();
         return;
       }
 
       const topologySettlingBlocker =
-        this.getCriticalSystemTopologySettlingBlocker();
+        await this.revalidateCriticalSystemTopologySettlingBlocker(
+          this.getCriticalSystemTopologySettlingBlocker(),
+        );
       if (topologySettlingBlocker) {
         this.currentInterval = Math.min(
           this.currentInterval * 1.25,
@@ -2130,7 +3015,9 @@ class UnifiedRebalancer extends EventEmitter {
         this.logger.info(REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING, {
           entityId: this.entityId,
           entityType: this.entityType,
-          delayMs: this.currentInterval,
+          delayMs: this.isControlPlanePriorityPartition() ?
+            this.getPriorityRetryDelayMs() :
+            this.currentInterval,
           blockerReason: topologySettlingBlocker.reason || null,
           unreadyNodeIds:
             Array.isArray(topologySettlingBlocker.unreadyNodeIds) ?
@@ -2149,8 +3036,10 @@ class UnifiedRebalancer extends EventEmitter {
           ) ?
             topologySettlingBlocker.inFlightReplicaOperations :
             null,
+          inFlightReplicaOperationsSource:
+            topologySettlingBlocker.inFlightReplicaOperationsSource || null,
         });
-        this.scheduleNextCheck(this.currentInterval);
+        this.schedulePriorityAwareCheck(this.currentInterval);
         return;
       }
 
@@ -2165,7 +3054,9 @@ class UnifiedRebalancer extends EventEmitter {
           entityId: this.entityId,
           entityType: this.entityType,
           nodeId: this.nodeId,
-          delayMs: this.currentInterval,
+          delayMs: this.isControlPlanePriorityPartition() ?
+            this.getPriorityRetryDelayMs() :
+            this.currentInterval,
           readinessPhase: trafficReadinessBlocker.phase || null,
           readinessReady: trafficReadinessBlocker.ready === true,
           reasonCodes: Array.isArray(trafficReadinessBlocker.reasons) ?
@@ -2182,7 +3073,7 @@ class UnifiedRebalancer extends EventEmitter {
             trafficReadinessBlocker.stableWindowMs :
             null,
         });
-        this.scheduleNextCheck(this.currentInterval);
+        this.schedulePriorityAwareCheck(this.currentInterval);
         return;
       }
 
@@ -2197,14 +3088,16 @@ class UnifiedRebalancer extends EventEmitter {
           entityId: this.entityId,
           entityType: this.entityType,
           nodeId: this.nodeId,
-          delayMs: this.currentInterval,
+          delayMs: this.isControlPlanePriorityPartition() ?
+            this.getPriorityRetryDelayMs() :
+            this.currentInterval,
           reasonCodes: Array.isArray(localServeReadinessBlocker.reasons) ?
             localServeReadinessBlocker.reasons
               .map((reason) => String(reason?.code || ''))
               .filter(Boolean) :
             [],
         });
-        this.scheduleNextCheck(this.currentInterval);
+        this.schedulePriorityAwareCheck(this.currentInterval);
         return;
       }
 
@@ -2219,7 +3112,9 @@ class UnifiedRebalancer extends EventEmitter {
           entityId: this.entityId,
           entityType: this.entityType,
           nodeId: this.nodeId,
-          delayMs: this.currentInterval,
+          delayMs: this.isControlPlanePriorityPartition() ?
+            this.getPriorityRetryDelayMs() :
+            this.currentInterval,
           failedDimensions:
             Array.isArray(localMutationReadinessBlocker.failedDimensions) ?
               [...localMutationReadinessBlocker.failedDimensions] :
@@ -2229,25 +3124,61 @@ class UnifiedRebalancer extends EventEmitter {
               [...localMutationReadinessBlocker.reasonCodes] :
               [],
         });
-        this.scheduleNextCheck(this.currentInterval);
+        this.schedulePriorityAwareCheck(this.currentInterval);
+        return;
+      }
+
+      const controlPlanePriorityBlocker =
+        this.getControlPlanePrioritySpreadBlocker();
+      if (controlPlanePriorityBlocker) {
+        const blockedPartitions =
+          controlPlanePriorityBlocker.blockedPartitions || [];
+        const largestSpreadGap = blockedPartitions.reduce(
+          (largestGap, partition) => Math.max(
+            largestGap,
+            Number(partition?.spreadGap) || NUM.ZERO,
+          ),
+          NUM.ZERO,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          delayMs: this.getPriorityRetryDelayMs(),
+          requiredDistinctNodeCount:
+            controlPlanePriorityBlocker.requiredDistinctNodeCount,
+          blockedPartitionCount: blockedPartitions.length,
+          largestSpreadGap,
+          blockedPartitions: blockedPartitions.map((partition) => ({
+            partitionId: partition.partitionId,
+            readyReplicaCount: partition.readyReplicaCount,
+            readyDistinctNodeCount: partition.readyDistinctNodeCount,
+            spreadGap: partition.spreadGap,
+          })),
+        });
+        this.scheduleNextCheck(this.getPriorityRetryDelayMs());
         return;
       }
 
       const transportPressure = this.getTransportPressureSummary();
       if (transportPressure?.backpressured === true) {
-        this.currentInterval = Math.min(
-          this.currentInterval * 1.5,
-          this.maxInterval,
-        );
+        const isPriorityPartition = this.isControlPlanePriorityPartition();
+        if (!isPriorityPartition) {
+          this.currentInterval = Math.min(
+            this.currentInterval * 1.5,
+            this.maxInterval,
+          );
+        }
         this.logger.info(REBALANCER_LOG_MSG.WAIT_TRANSPORT_BACKPRESSURE, {
           entityId: this.entityId,
           entityType: this.entityType,
           saturatedNodeCount: transportPressure.saturatedNodeCount,
           totalPending: transportPressure.totalPending,
           maxPendingUtilization: transportPressure.maxPendingUtilization,
-          delayMs: this.currentInterval,
+          delayMs: isPriorityPartition ?
+            this.getPriorityRetryDelayMs() :
+            this.currentInterval,
         });
-        this.scheduleNextCheck(this.currentInterval);
+        this.schedulePriorityAwareCheck(this.currentInterval);
         return;
       }
 
@@ -2260,20 +3191,36 @@ class UnifiedRebalancer extends EventEmitter {
 
         if (executedMoveCount > 0) {
           // Reset interval only when work was actually scheduled/executed.
-          this.currentInterval = this.periodicCheckIntervalMs;
+          this.currentInterval = this.isControlPlanePriorityPartition() ?
+            this.getPriorityRetryDelayMs() :
+            this.periodicCheckIntervalMs;
         } else {
-          // No actionable work (all skipped/blocked); back off to reduce CPU/log churn.
+          if (this.isControlPlanePriorityPartition()) {
+            // Priority control-plane spread must retry quickly even when one
+            // execution pass only observed skipped moves.
+            this.currentInterval = this.getPriorityRetryDelayMs();
+            forcePriorityRetry = true;
+          } else {
+            // No actionable work (all skipped/blocked); back off to reduce CPU/log churn.
+            this.currentInterval = Math.min(
+              this.currentInterval * 1.5,
+              this.maxInterval,
+            );
+          }
+        }
+      } else {
+        if (this.isControlPlanePriorityPartition()) {
+          // Priority control-plane spread must keep a short cadence even
+          // when one evaluation pass is currently balanced, because published
+          // membership epochs can change while recovery is still active.
+          this.currentInterval = this.getPriorityRetryDelayMs();
+        } else {
+          // Exponential backoff if stable - check less frequently
           this.currentInterval = Math.min(
             this.currentInterval * 1.5,
             this.maxInterval,
           );
         }
-      } else {
-        // Exponential backoff if stable - check less frequently
-        this.currentInterval = Math.min(
-          this.currentInterval * 1.5,
-          this.maxInterval,
-        );
       }
     } catch (error) {
       this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
@@ -2285,7 +3232,11 @@ class UnifiedRebalancer extends EventEmitter {
 
     // Schedule next check
     if (!this.isShuttingDown) {
-      this.scheduleNextCheck();
+      if (forcePriorityRetry) {
+        this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+      } else {
+        this.scheduleNextCheck();
+      }
     }
   }
 

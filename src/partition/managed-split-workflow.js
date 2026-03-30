@@ -38,6 +38,7 @@ import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
 
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_QUORUM_REPLICA_COUNT = 1;
+const CRITICAL_SPLIT_MINIMUM_ROUTABLE_SOURCE_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 
@@ -71,6 +72,8 @@ class ManagedSplitWorkflow {
     this.getRoutablePartitionServiceNodeIds =
       options.getRoutablePartitionServiceNodeIds ||
       (() => []);
+    this.isCriticalSystemPartition = options.isCriticalSystemPartition ||
+      (() => false);
     this.captureTopologySnapshot =
       options.captureTopologySnapshot || null;
     this.calculateQuorumReplicaCount =
@@ -362,6 +365,8 @@ class ManagedSplitWorkflow {
       DEFAULT_QUORUM_REPLICA_COUNT;
     const splitBootstrapReplicaCount =
       this.calculateQuorumReplicaCount(replicaCount);
+    const criticalSystemPartition =
+      this.isCriticalSystemPartition(partitionId) === true;
     const sourceRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
       partitionId,
     );
@@ -454,6 +459,10 @@ class ManagedSplitWorkflow {
       topologySnapshot?.discoveredTargetNodeIds,
       discoveredTargetNodeIds,
     );
+    const minimumRoutableSourceCount = this.resolveSplitMinimumRoutableSourceCount({
+      requiredReplicaCount: splitBootstrapReplicaCount,
+      isCriticalSystemPartition: criticalSystemPartition,
+    });
     const persistedTopologySnapshot = {
       ...topologySnapshot,
       discoveredTargetNodeIds: snapshotDiscoveredTargetNodeIds,
@@ -473,6 +482,8 @@ class ManagedSplitWorkflow {
         primaryKeyColumn,
         targetVersion,
         requiredReplicaCount: splitBootstrapReplicaCount,
+        minimumRoutableSourceCount,
+        isCriticalSystemPartition: criticalSystemPartition,
         candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
         sourceRoutableNodeIds: snapshotSourceRoutableNodeIds,
         topologySnapshot: persistedTopologySnapshot,
@@ -488,15 +499,19 @@ class ManagedSplitWorkflow {
         candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
         estimatedBytes,
         requiredReplicaCount: splitBootstrapReplicaCount,
+        minimumRoutableSourceCount,
         sourceRoutableNodeIds: snapshotSourceRoutableNodeIds,
+        isCriticalSystemPartition: criticalSystemPartition,
       });
       const compactAdmission = this.compactAdmissionResult(
         admissionResult,
         {
           discoveredTargetNodeIds: snapshotDiscoveredTargetNodeIds,
           candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
+          minimumRoutableSourceCount,
           estimatedBytes,
           sourceRoutableNodeIds: snapshotSourceRoutableNodeIds,
+          isCriticalSystemPartition: criticalSystemPartition,
         },
       );
       if (!admissionResult.allowed) {
@@ -795,6 +810,8 @@ class ManagedSplitWorkflow {
         state: PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
         operationType: STORAGE_ADMISSION_OPERATION_TYPE.PARTITION_SPLIT,
         requiredReplicaCount: options.requiredReplicaCount,
+        minimumRoutableSourceCount: options.minimumRoutableSourceCount,
+        isCriticalSystemPartition: options.isCriticalSystemPartition === true,
         candidateTargetNodeIds: [...options.candidateTargetNodeIds],
         sourceRoutableNodeIds: [...options.sourceRoutableNodeIds],
         estimatedBytes: options.estimatedBytes,
@@ -1066,6 +1083,8 @@ class ManagedSplitWorkflow {
       reason: result.reason,
       operationType: result.operationType,
       requiredReplicaCount: result.requiredReplicaCount,
+      minimumRoutableSourceCount: context.minimumRoutableSourceCount,
+      isCriticalSystemPartition: context.isCriticalSystemPartition === true,
       discoveredTargetNodeIds: Array.isArray(context.discoveredTargetNodeIds) ?
         [...context.discoveredTargetNodeIds] :
         [],
@@ -1807,6 +1826,8 @@ class ManagedSplitWorkflow {
         null,
       targetPartitionVersion: options.targetVersion,
       requiredReplicaCount: options.requiredReplicaCount,
+      minimumRoutableSourceCount: options.minimumRoutableSourceCount,
+      isCriticalSystemPartition: options.isCriticalSystemPartition === true,
       discoveredTargetNodeIds: [...options.discoveredTargetNodeIds],
       candidateTargetNodeIds: [...options.candidateTargetNodeIds],
       sourceRoutableNodeIds: [...options.sourceRoutableNodeIds],
@@ -2049,12 +2070,25 @@ class ManagedSplitWorkflow {
    * @return {Promise<Object>}
    * @private
    */
+  resolveSplitMinimumRoutableSourceCount(options = {}) {
+    if (options.isCriticalSystemPartition === true) {
+      return CRITICAL_SPLIT_MINIMUM_ROUTABLE_SOURCE_COUNT;
+    }
+    return options.requiredReplicaCount;
+  }
+
+  /**
+   * Obtain a canonical split admission result.
+   * @param {Object} options
+   * @return {Promise<Object>}
+   * @private
+   */
   async evaluateSplitAdmission(options) {
     return this.storageAdmissionService.checkSplit({
       targetNodeIds: options.candidateTargetNodeIds,
       estimatedBytes: options.estimatedBytes,
       requiredReplicaCount: options.requiredReplicaCount,
-      minimumRoutableSourceCount: options.requiredReplicaCount,
+      minimumRoutableSourceCount: options.minimumRoutableSourceCount,
       sourceRoutableNodeIds: options.sourceRoutableNodeIds,
     });
   }

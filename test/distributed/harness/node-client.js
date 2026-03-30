@@ -52,6 +52,8 @@ const SNAPSHOT_FIELD_SCHEMA_VERSION = 'schemaVersion';
 const SNAPSHOT_FIELD_NODE_ID = 'nodeId';
 const SNAPSHOT_FIELD_CAPTURED_AT = 'capturedAt';
 const SNAPSHOT_FIELD_NODES = 'nodes';
+const SNAPSHOT_FIELD_PUBLISHED_NODES = 'publishedNodes';
+const SNAPSHOT_FIELD_PROJECTED_NODES = 'projectedNodes';
 const SNAPSHOT_FIELD_PARTITIONS = 'partitions';
 const SNAPSHOT_FIELD_LEADERS = 'leaders';
 const SNAPSHOT_FIELD_CDC_TELEMETRY = 'cdcTelemetry';
@@ -957,6 +959,20 @@ class NodeClient {
           ' for node ' + normalizeNodeId(node),
       );
     }
+    if (snapshot[SNAPSHOT_FIELD_PUBLISHED_NODES] !== undefined &&
+        !Array.isArray(snapshot[SNAPSHOT_FIELD_PUBLISHED_NODES])) {
+      throw new Error(
+        'snapshot invalid array ' + SNAPSHOT_FIELD_PUBLISHED_NODES +
+          ' for node ' + normalizeNodeId(node),
+      );
+    }
+    if (snapshot[SNAPSHOT_FIELD_PROJECTED_NODES] !== undefined &&
+        !Array.isArray(snapshot[SNAPSHOT_FIELD_PROJECTED_NODES])) {
+      throw new Error(
+        'snapshot invalid array ' + SNAPSHOT_FIELD_PROJECTED_NODES +
+          ' for node ' + normalizeNodeId(node),
+      );
+    }
     if (!Array.isArray(snapshot[SNAPSHOT_FIELD_PARTITIONS])) {
       throw new Error(
         'snapshot missing array ' + SNAPSHOT_FIELD_PARTITIONS +
@@ -1061,6 +1077,20 @@ class NodeClient {
       [SNAPSHOT_FIELD_NODE_ID]: snapshot[SNAPSHOT_FIELD_NODE_ID],
       [SNAPSHOT_FIELD_CAPTURED_AT]: snapshot[SNAPSHOT_FIELD_CAPTURED_AT],
       [SNAPSHOT_FIELD_NODES]: [...snapshot[SNAPSHOT_FIELD_NODES]],
+      ...(Array.isArray(snapshot[SNAPSHOT_FIELD_PUBLISHED_NODES]) ?
+        {
+          [SNAPSHOT_FIELD_PUBLISHED_NODES]: [
+            ...snapshot[SNAPSHOT_FIELD_PUBLISHED_NODES],
+          ],
+        } :
+        {}),
+      ...(Array.isArray(snapshot[SNAPSHOT_FIELD_PROJECTED_NODES]) ?
+        {
+          [SNAPSHOT_FIELD_PROJECTED_NODES]: [
+            ...snapshot[SNAPSHOT_FIELD_PROJECTED_NODES],
+          ],
+        } :
+        {}),
       [SNAPSHOT_FIELD_PARTITIONS]: [...snapshot[SNAPSHOT_FIELD_PARTITIONS]],
       [SNAPSHOT_FIELD_LEADERS]: {
         ...snapshot[SNAPSHOT_FIELD_LEADERS],

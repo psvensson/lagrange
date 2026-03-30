@@ -12,17 +12,22 @@ import {
 import {
   compareNodeHeartbeatWatermarks,
   isNodeRecordReady,
+  isNodeReadyLeaseExplicitlyCleared,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
 import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
 import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../cdc/cdc-integration-service.js';
+import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_PARTICIPATION_DECISION,
   CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -35,8 +40,15 @@ import {
   createEligibilitySnapshot,
   evaluateEligibilityDecision,
 } from './eligibility-snapshot.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from './control-plane-publication-merge.js';
+import {ControlPlaneDiagnosticsLedger} from
+  './control-plane-diagnostics-ledger.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
+import {AuthoritativeNodeEvidenceReconciler} from
+  './authoritative-node-evidence-reconciler.js';
 
 const PUBLICATION_REASON_CONFIG_SAFE_MODE = 'config_safe_mode';
 const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
@@ -47,6 +59,9 @@ const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
   STALE_HEARTBEAT_MAX_AGE_MS: 10000,
 });
 const READINESS_TRANSITION_HISTORY_LIMIT = 32;
+const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
+const RECOVERY_EPOCH_HISTORY_LIMIT = 8;
+const RECOVERY_EPOCH_EVENT_LIMIT = 32;
 const READINESS_ERROR_MSG = Object.freeze({
   STORAGE_ACCOUNTING_OWNER_REQUIRED:
     'ControlPlaneReadinessService requires ' +
@@ -54,6 +69,14 @@ const READINESS_ERROR_MSG = Object.freeze({
   PUBLICATION_OWNER_REQUIRED:
     'ControlPlaneReadinessService requires ' +
     'cdcGroupPropagationService for strict readiness evaluation',
+});
+const MEMBERSHIP_PUBLICATION_READ_OPTIONS = Object.freeze({
+  preferAuthoritativeRead: true,
+  preferOwnerRpcRead: true,
+  requireOwnerRpcRead: true,
+  localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+  replicaFallbackConsistency:
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
 });
 
 function buildReason(
@@ -96,6 +119,14 @@ function normalizeDiagnosticTimestampMs(value) {
   return null;
 }
 
+function normalizeNodeIdList(values = []) {
+  return [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > NUM.ZERO),
+  )];
+}
+
 function normalizeLocalQueryTransportEvidence(readiness) {
   if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
     return Object.freeze({
@@ -132,6 +163,10 @@ function normalizeControlPlaneParticipationKind(value) {
     .REPLICA_OPERATION_OWNER_READ) {
     return CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;
   }
+  if (value === CONTROL_PLANE_PARTICIPATION_KIND
+    .CONTROL_PLANE_RECOVERY) {
+    return CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY;
+  }
   return CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ;
 }
 
@@ -144,6 +179,9 @@ function resolveParticipationDecisionDimension(
     return decisionDimension;
   }
   switch (participationKind) {
+    case CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY:
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
     case CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ:
     case CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ:
     default:
@@ -185,7 +223,9 @@ function shouldAllowLocalExecutionForParticipation({
     return false;
   }
   if (participationKind !==
-      CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ) {
+      CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ &&
+      participationKind !==
+        CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY) {
     return false;
   }
   if (localQueryTransport?.ready !== false) {
@@ -213,6 +253,8 @@ class ControlPlaneReadinessService {
       null;
     this.cdcGroupPropagationService = options.cdcGroupPropagationService || null;
     this.heartbeatService = options.heartbeatService || null;
+    this.membershipPublicationService =
+      options.membershipPublicationService || null;
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
     this.clusterMemberStaleHeartbeatMaxAgeMs =
       Number.isFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
@@ -249,10 +291,18 @@ class ControlPlaneReadinessService {
           options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
         ) :
         AUTHORITATIVE_READINESS_REPAIR.STALE_HEARTBEAT_MAX_AGE_MS;
+    this.membershipPublicationDiagnosticsQueryTimeoutMs =
+      Number.isFinite(options.membershipPublicationDiagnosticsQueryTimeoutMs) &&
+        options.membershipPublicationDiagnosticsQueryTimeoutMs > NUM.ZERO ?
+        Math.floor(options.membershipPublicationDiagnosticsQueryTimeoutMs) :
+        CONTROL_PLANE_READINESS_DEFAULT
+          .MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS;
+    this.membershipPublicationReadOptions = Object.freeze({
+      ...MEMBERSHIP_PUBLICATION_READ_OPTIONS,
+      queryTimeoutMs: this.membershipPublicationDiagnosticsQueryTimeoutMs,
+    });
     this.loggedMissingStorageAccountingOwner = false;
     this.loggedMissingPublicationOwner = false;
-    this.lastAuthoritativeReadinessRepairAtMsByKey = new Map();
-    this.lastAuthoritativeReadinessRepairCooldownMsByKey = new Map();
     this.readinessTransitionHistoryLimit =
       Number.isInteger(options.readinessTransitionHistoryLimit) &&
         options.readinessTransitionHistoryLimit > NUM.ZERO ?
@@ -263,6 +313,18 @@ class ControlPlaneReadinessService {
     this.lastReadinessSnapshotByNodeId = new Map();
     this.lastReadinessSnapshotAtMsByNodeId = new Map();
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
+    this.recoveryEpochHistoryLimit =
+      Number.isInteger(options.recoveryEpochHistoryLimit) &&
+        options.recoveryEpochHistoryLimit > NUM.ZERO ?
+        Math.floor(options.recoveryEpochHistoryLimit) :
+        RECOVERY_EPOCH_HISTORY_LIMIT;
+    this.recoveryEpochEventLimit =
+      Number.isInteger(options.recoveryEpochEventLimit) &&
+        options.recoveryEpochEventLimit > NUM.ZERO ?
+        Math.floor(options.recoveryEpochEventLimit) :
+        RECOVERY_EPOCH_EVENT_LIMIT;
+    this.currentRecoveryEpochByNodeId = new Map();
+    this.recoveryEpochHistoryByNodeId = new Map();
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
@@ -279,6 +341,24 @@ class ControlPlaneReadinessService {
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
+    this.participationDecisionLedger =
+      options.participationDecisionLedger ||
+      new ControlPlaneDiagnosticsLedger({
+        maxEntries: normalizePositiveInteger(
+          options.participationDecisionLedgerMaxEntries,
+          READINESS_DIAGNOSTICS_LEDGER_LIMIT,
+        ),
+        now: this.now,
+      });
+    this.authoritativeReadinessRepairLedger =
+      options.authoritativeReadinessRepairLedger ||
+      new ControlPlaneDiagnosticsLedger({
+        maxEntries: normalizePositiveInteger(
+          options.authoritativeReadinessRepairLedgerMaxEntries,
+          READINESS_DIAGNOSTICS_LEDGER_LIMIT,
+        ),
+        now: this.now,
+      });
     this.readinessOperationWorkflowCoordinator =
       options.readinessOperationWorkflowCoordinator ||
       new DurableWorkflowCoordinator({
@@ -290,19 +370,60 @@ class ControlPlaneReadinessService {
         name: 'control-plane-readiness-evaluation',
         workflowCoordinator: this.readinessOperationWorkflowCoordinator,
       });
-    this.authoritativeReadinessRepairLane =
-      options.authoritativeReadinessRepairLane ||
-      new OperationLane({
-        name: 'control-plane-readiness-repair',
-        workflowCoordinator: this.readinessOperationWorkflowCoordinator,
-      });
     this.cacheChangeListener = null;
-    this.subscribeToCacheChanges();
-
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(CONTROL_PLANE_READINESS_SUBSYSTEM) :
       console;
+    this.authoritativeNodeEvidenceReconciler =
+      options.authoritativeNodeEvidenceReconciler ||
+      new AuthoritativeNodeEvidenceReconciler({
+        nodeId: this.nodeId,
+        now: this.now,
+        logger: this.logger,
+        cdcIntegrationService: this.cdcIntegrationService,
+        cacheMutationTarget: this.cacheMutationTarget,
+        systemTableCache: this.systemTableCache,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
+        getAuthoritativeControlPlaneView: () =>
+          this.getAuthoritativeControlPlaneView(),
+        readNodeRow: (nodeId) => this.readNodeRow(nodeId),
+        readNodeServiceRows: (nodeId) => this.readNodeServiceRows(nodeId),
+        resolveDecisionDimension: (repairOptions) =>
+          this.resolveReadinessDecisionDimension(repairOptions),
+        getNodeTransportState: (nodeId, nodeRow) =>
+          this.getNodeTransportState(nodeId, nodeRow),
+        shouldPreferLocalSelfNodeEvidence: (context) =>
+          this.shouldPreferLocalSelfNodeEvidence(context),
+        hasFreshLocalReporterSuccess: (nodeId) =>
+          this.hasFreshLocalReporterSuccess(nodeId),
+        buildNodeEvidence: (nodeId, nodeRow) =>
+          this.buildNodeEvidence(nodeId, nodeRow),
+        isClusterMemberHealthy: (nodeId, nodeRow) =>
+          this.isClusterMemberHealthy(nodeId, nodeRow),
+        hasRoutableService: (serviceRows) =>
+          this.hasRoutableService(serviceRows),
+        hasWritableControlPlaneService: (serviceRows) =>
+          this.hasWritableControlPlaneService(serviceRows),
+        workflowCoordinator: this.readinessOperationWorkflowCoordinator,
+        authoritativeReadinessRepairLedger:
+          options.authoritativeReadinessRepairLedger,
+        authoritativeReadinessRepairLedgerMaxEntries:
+          options.authoritativeReadinessRepairLedgerMaxEntries,
+        authoritativeReadinessRepairLane:
+          options.authoritativeReadinessRepairLane,
+        authoritativeReadinessRepairCooldownMs:
+          this.authoritativeReadinessRepairCooldownMs,
+        authoritativeReadinessRepairFailureCooldownMs:
+          this.authoritativeReadinessRepairFailureCooldownMs,
+        authoritativeReadinessRepairNoChangeCooldownMs:
+          this.authoritativeReadinessRepairNoChangeCooldownMs,
+        authoritativeReadinessRepairQueryTimeoutMs:
+          this.authoritativeReadinessRepairQueryTimeoutMs,
+        authoritativeReadinessRepairStaleHeartbeatMaxAgeMs:
+          this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
+      });
+    this.subscribeToCacheChanges();
   }
 
   /**
@@ -361,6 +482,10 @@ class ControlPlaneReadinessService {
     if (Object.hasOwn(options, 'cdcGroupPropagationService')) {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
+    }
+    if (Object.hasOwn(options, 'membershipPublicationService')) {
+      this.membershipPublicationService =
+        options.membershipPublicationService || null;
     }
     if (this.authoritativeControlPlaneView &&
         typeof this.authoritativeControlPlaneView
@@ -483,11 +608,16 @@ class ControlPlaneReadinessService {
   async evaluateNodeReadiness(nodeId, options = {}) {
     const observedAt = normalizeIsoTimestamp(this.now());
     const publication = this.getPublicationDiagnostics(observedAt);
+    const membershipPublication = await this.getMembershipPublicationDiagnostics(
+      nodeId,
+      observedAt,
+    );
     let nodeRow = await this.readNodeRow(nodeId, options);
     let serviceRows = await this.readNodeServiceRows(nodeId, options);
 
     if (options.allowAuthoritativeRefresh === true) {
-      const repaired = await this.maybeRepairAuthoritativeNodeEvidence(
+      const repaired = await this.authoritativeNodeEvidenceReconciler
+        .maybeRepairNodeEvidence(
         {
           nodeId,
           nodeRow,
@@ -506,6 +636,7 @@ class ControlPlaneReadinessService {
         nodeId,
         null,
         publication,
+        membershipPublication,
       );
       if (fresherStoredSnapshot) {
         return fresherStoredSnapshot;
@@ -514,14 +645,18 @@ class ControlPlaneReadinessService {
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
       );
       this.recordReadinessTransition({
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
         nodeEvidence: null,
         dimensions: missingReadiness.dimensions,
         reasons: missingReadiness.reasons,
+        priorityControlPlaneRecovery:
+          missingReadiness.priorityControlPlaneRecovery,
       });
       const snapshot = Object.freeze({
         ...missingReadiness,
@@ -542,7 +677,16 @@ class ControlPlaneReadinessService {
       serviceRows,
       capacity,
       publication,
+      membershipPublication,
     });
+    const priorityControlPlaneRecovery =
+      this.getPriorityControlPlaneRecoveryState({
+        nodeId,
+        observedAt,
+        publication,
+        membershipPublication,
+        dimensions,
+      });
     const reasons = this.buildReasons({
       nodeId,
       nodeRow,
@@ -552,6 +696,8 @@ class ControlPlaneReadinessService {
       serviceRows,
       capacity,
       publication,
+      membershipPublication,
+      priorityControlPlaneRecovery,
       observedAt,
     });
 
@@ -560,6 +706,8 @@ class ControlPlaneReadinessService {
         nodeId,
         lifecycleState,
         publication,
+        membershipPublication,
+        priorityControlPlaneRecovery,
         capacity,
         nodeEvidence,
         observedAt,
@@ -570,9 +718,11 @@ class ControlPlaneReadinessService {
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
         nodeEvidence,
         dimensions,
         reasons,
+        priorityControlPlaneRecovery,
       }),
     });
     this.storeReadinessSnapshot(nodeId, snapshot);
@@ -594,11 +744,16 @@ class ControlPlaneReadinessService {
     const observedAt = normalizeIsoTimestamp(this.now());
     const nodeRow = this.getNodeRow(nodeId);
     const publication = this.getPublicationDiagnostics(observedAt);
+    const membershipPublication = this.getMembershipPublicationDiagnosticsSync(
+      nodeId,
+      observedAt,
+    );
     const serviceRows = this.getNodeServiceRows(nodeId);
     const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
       nodeId,
       nodeRow,
       publication,
+      membershipPublication,
     );
 
     if (fresherStoredSnapshot) {
@@ -619,14 +774,18 @@ class ControlPlaneReadinessService {
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
       );
       this.recordReadinessTransition({
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
         nodeEvidence: null,
         dimensions: missingReadiness.dimensions,
         reasons: missingReadiness.reasons,
+        priorityControlPlaneRecovery:
+          missingReadiness.priorityControlPlaneRecovery,
       });
       const snapshot = Object.freeze({
         ...missingReadiness,
@@ -647,15 +806,25 @@ class ControlPlaneReadinessService {
 
     const lifecycleState = this.getLifecycleState(nodeId, nodeRow);
     const nodeEvidence = this.buildNodeEvidence(nodeId, nodeRow);
+    const capacity = this.getCapacitySnapshotSync(nodeId, nodeRow);
     const dimensions = this.buildDimensions({
       nodeId,
       nodeRow,
       nodeEvidence,
       lifecycleState,
       serviceRows,
-      capacity: null,
+      capacity,
       publication,
+      membershipPublication,
     });
+    const priorityControlPlaneRecovery =
+      this.getPriorityControlPlaneRecoveryState({
+        nodeId,
+        observedAt,
+        publication,
+        membershipPublication,
+        dimensions,
+      });
     const reasons = this.buildReasons({
       nodeId,
       nodeRow,
@@ -663,8 +832,10 @@ class ControlPlaneReadinessService {
       dimensions,
       lifecycleState,
       serviceRows,
-      capacity: null,
+      capacity,
       publication,
+      membershipPublication,
+      priorityControlPlaneRecovery,
       observedAt,
     });
 
@@ -673,7 +844,9 @@ class ControlPlaneReadinessService {
         nodeId,
         lifecycleState,
         publication,
-        capacity: null,
+        membershipPublication,
+        priorityControlPlaneRecovery,
+        capacity,
         nodeEvidence,
         observedAt,
         dimensions,
@@ -683,9 +856,11 @@ class ControlPlaneReadinessService {
         nodeId,
         observedAt,
         publication,
+        membershipPublication,
         nodeEvidence,
         dimensions,
         reasons,
+        priorityControlPlaneRecovery,
       }),
     });
     this.storeReadinessSnapshot(nodeId, snapshot);
@@ -725,6 +900,8 @@ class ControlPlaneReadinessService {
       readiness,
       participationKind,
       decisionDimension,
+      tableName: options?.tableName || null,
+      partitionId: options?.partitionId || null,
     });
   }
 
@@ -751,6 +928,8 @@ class ControlPlaneReadinessService {
       readiness,
       participationKind,
       decisionDimension,
+      tableName: options?.tableName || null,
+      partitionId: options?.partitionId || null,
     });
   }
 
@@ -782,6 +961,7 @@ class ControlPlaneReadinessService {
         reasonCodes: Object.freeze([]),
       });
     const summary = compactEligibilitySnapshot(snapshot, decisionDimension);
+    const cacheWatermark = this.buildStoredReadinessSnapshotWatermark(snapshot);
     const localQueryTransport = snapshot?.nodeEvidence ?
       Object.freeze({
         state: snapshot.nodeEvidence.localQueryTransportState || null,
@@ -798,6 +978,30 @@ class ControlPlaneReadinessService {
             null,
       }) :
       null;
+    const transportState = snapshot?.nodeEvidence ?
+      Object.freeze({
+        connected: snapshot.nodeEvidence.transportConnected === true,
+        rowState: snapshot.nodeEvidence.rowConnectionState || null,
+        routerState: snapshot.nodeEvidence.routerConnectionState || null,
+        localQueryTransportState:
+          snapshot.nodeEvidence.localQueryTransportState || null,
+        localQueryTransportReady:
+          typeof snapshot.nodeEvidence.localQueryTransportReady === 'boolean' ?
+            snapshot.nodeEvidence.localQueryTransportReady :
+            null,
+        localQueryTransportReason:
+          snapshot.nodeEvidence.localQueryTransportReason || null,
+        localQueryTransportRetryAfterMs:
+          Number.isFinite(
+            snapshot.nodeEvidence.localQueryTransportRetryAfterMs,
+          ) ?
+            snapshot.nodeEvidence.localQueryTransportRetryAfterMs :
+            null,
+      }) :
+      null;
+    const authoritativeRepair = this.getLatestAuthoritativeReadinessRepair(
+      context?.nodeId || null,
+    );
     const reasonCodes = Array.isArray(decision?.reasonCodes) ?
       decision.reasonCodes :
       Object.freeze([]);
@@ -818,6 +1022,16 @@ class ControlPlaneReadinessService {
       localQueryTransport.retryAfterMs > NUM.ZERO;
     const participation = {
       nodeId: context?.nodeId || null,
+      tableName:
+        typeof context?.tableName === TYPEOF.STRING &&
+          context.tableName.length > NUM.ZERO ?
+          context.tableName :
+          null,
+      partitionId:
+        typeof context?.partitionId === TYPEOF.STRING &&
+          context.partitionId.length > NUM.ZERO ?
+          context.partitionId :
+          null,
       participationKind: normalizeControlPlaneParticipationKind(
         context?.participationKind,
       ),
@@ -842,6 +1056,14 @@ class ControlPlaneReadinessService {
       localExecutionAllowed,
       errorCode: null,
       error: null,
+      cacheWatermark,
+      transportState,
+      lifecyclePhase:
+        typeof snapshot?.lifecycleState === TYPEOF.STRING &&
+          snapshot.lifecycleState.length > NUM.ZERO ?
+          snapshot.lifecycleState :
+          (summary?.lifecycleState || null),
+      authoritativeRepair,
       localQueryTransport,
       snapshot,
       failedDimensions: Array.isArray(decision?.failedDimensions) ?
@@ -864,7 +1086,92 @@ class ControlPlaneReadinessService {
       participation.error = buildParticipationErrorMessage(participation);
     }
 
-    return Object.freeze(participation);
+    const frozenParticipation = Object.freeze(participation);
+    this.recordParticipationDecision(frozenParticipation);
+    return frozenParticipation;
+  }
+
+  /**
+   * Persist one bounded participation-decision record for diagnostics.
+   * @param {Object|null} participation
+   * @return {void}
+   * @private
+   */
+  recordParticipationDecision(participation) {
+    if (!participation || !this.participationDecisionLedger) {
+      return;
+    }
+    this.participationDecisionLedger.append({
+      nodeId: participation.nodeId || null,
+      tableName: participation.tableName || null,
+      partitionId: participation.partitionId || null,
+      participationKind: participation.participationKind || null,
+      decisionDimension: participation.decisionDimension || null,
+      decision: participation.decision || null,
+      eligible: participation.eligible === true,
+      reasonCode: participation.reasonCode || null,
+      reasonCodes: Array.isArray(participation.reasonCodes) ?
+        [...participation.reasonCodes] :
+        [],
+      failedDimensions: Array.isArray(participation.failedDimensions) ?
+        [...participation.failedDimensions] :
+        [],
+      localExecutionAllowed: participation.localExecutionAllowed === true,
+      cacheWatermark:
+        participation.cacheWatermark &&
+          typeof participation.cacheWatermark === TYPEOF.OBJECT ?
+          {...participation.cacheWatermark} :
+          null,
+      transportState:
+        participation.transportState &&
+          typeof participation.transportState === TYPEOF.OBJECT ?
+          {...participation.transportState} :
+          null,
+      authoritativeRepair:
+        participation.authoritativeRepair &&
+          typeof participation.authoritativeRepair === TYPEOF.OBJECT ?
+          {...participation.authoritativeRepair} :
+          null,
+      lifecyclePhase: participation.lifecyclePhase || null,
+      lifecycleState: participation.summary?.lifecycleState || null,
+      observedAt: participation.summary?.observedAt || null,
+    });
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @return {Object[]}
+   */
+  getParticipationDecisionLedgerEntries(options = {}) {
+    return this.participationDecisionLedger ?
+      this.participationDecisionLedger.getEntries(options) :
+      Object.freeze([]);
+  }
+
+  /**
+   * @param {Object} entry
+   * @return {void}
+   * @private
+   */
+  recordAuthoritativeReadinessRepair(entry = {}) {
+    this.authoritativeNodeEvidenceReconciler.recordRepair(entry);
+  }
+
+  /**
+   * @param {string} nodeId
+   * @return {Object|null}
+   * @private
+   */
+  getLatestAuthoritativeReadinessRepair(nodeId) {
+    return this.authoritativeNodeEvidenceReconciler.getLatestRepair(nodeId);
+  }
+
+  /**
+   * @param {Object} [options={}]
+   * @return {Object[]}
+   */
+  getAuthoritativeReadinessRepairLedgerEntries(options = {}) {
+    return this.authoritativeNodeEvidenceReconciler.getLedgerEntries(options);
   }
 
   /**
@@ -874,10 +1181,16 @@ class ControlPlaneReadinessService {
    * @param {string} nodeId
    * @param {Object|null} nodeRow
    * @param {Object|null} publication
+   * @param {Object|null} membershipPublication
    * @return {Object|null}
    * @private
    */
-  getFresherStoredReadinessSnapshot(nodeId, nodeRow, publication) {
+  getFresherStoredReadinessSnapshot(
+    nodeId,
+    nodeRow,
+    publication,
+    membershipPublication,
+  ) {
     const storedSnapshot =
       this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
     const capturedAtMs =
@@ -906,6 +1219,10 @@ class ControlPlaneReadinessService {
       publication: publication && typeof publication === TYPEOF.OBJECT ?
         Object.freeze({...publication}) :
         null,
+      membershipPublication:
+        membershipPublication && typeof membershipPublication === TYPEOF.OBJECT ?
+          Object.freeze({...membershipPublication}) :
+          null,
       recentTransitions: this.getReadinessTransitionHistory(nodeId),
     });
   }
@@ -1067,6 +1384,180 @@ class ControlPlaneReadinessService {
     this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
     this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId.delete(nodeId);
+    this.recordRecoveryEpochObservation(nodeId, snapshot, capturedAtMs);
+  }
+
+  /**
+   * Track restart/recovery epochs as bounded per-node timelines keyed by the
+   * canonical readiness owner, so harness diagnostics can inspect progress
+   * directly instead of inferring it from raw logs.
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @param {number} observedAtMs
+   * @return {void}
+   * @private
+   */
+  recordRecoveryEpochObservation(nodeId, snapshot, observedAtMs) {
+    const summary = this.buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs);
+    const recoveryActive = summary.recoveryActive === true;
+    const currentEpoch = this.currentRecoveryEpochByNodeId.get(nodeId) || null;
+    if (!currentEpoch && !recoveryActive) {
+      return;
+    }
+
+    if (!currentEpoch && recoveryActive) {
+      const history =
+        this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
+      const epoch = {
+        epochId: `${nodeId}:${history.length + this.currentRecoveryEpochByNodeId.size + 1}`,
+        nodeId,
+        startedAt: summary.observedAt,
+        startedAtMs: observedAtMs,
+        open: true,
+        events: [summary],
+      };
+      this.currentRecoveryEpochByNodeId.set(nodeId, epoch);
+      return;
+    }
+
+    if (!currentEpoch) {
+      return;
+    }
+
+    const lastEvent = currentEpoch.events[currentEpoch.events.length - 1] || null;
+    if (!lastEvent ||
+        JSON.stringify(lastEvent) !== JSON.stringify(summary)) {
+      currentEpoch.events.push(summary);
+      if (currentEpoch.events.length > this.recoveryEpochEventLimit) {
+        currentEpoch.events.splice(
+          0,
+          currentEpoch.events.length - this.recoveryEpochEventLimit,
+        );
+      }
+    }
+
+    if (!recoveryActive) {
+      currentEpoch.open = false;
+      currentEpoch.endedAt = summary.observedAt;
+      currentEpoch.endedAtMs = observedAtMs;
+      this.currentRecoveryEpochByNodeId.delete(nodeId);
+      const history =
+        this.recoveryEpochHistoryByNodeId.get(nodeId) || [];
+      history.push(Object.freeze({
+        ...currentEpoch,
+        events: Object.freeze(currentEpoch.events.map((event) =>
+          Object.freeze({...event}),
+        )),
+      }));
+      while (history.length > this.recoveryEpochHistoryLimit) {
+        history.shift();
+      }
+      this.recoveryEpochHistoryByNodeId.set(nodeId, history);
+    }
+  }
+
+  /**
+   * @param {string} nodeId
+   * @param {Object|null} snapshot
+   * @param {number} observedAtMs
+   * @return {Object}
+   * @private
+   */
+  buildRecoveryEpochSummary(nodeId, snapshot, observedAtMs) {
+    const dimensions = snapshot?.dimensions &&
+      typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      snapshot.dimensions :
+      {};
+    const reasonCodes = Array.isArray(snapshot?.reasons) ?
+      [...new Set(snapshot.reasons
+        .map((reason) => String(reason?.code || ''))
+        .filter(Boolean))] :
+      [];
+    return Object.freeze({
+      nodeId,
+      observedAt: snapshot?.observedAt || normalizeIsoTimestamp(observedAtMs),
+      observedAtMs,
+      lifecycleState: snapshot?.lifecycleState || null,
+      processAlive:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true,
+      clusterMemberHealthy:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+        ] === true,
+      controlPlaneWritable:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+        ] === true,
+      controlPlanePublished:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
+        ] === true,
+      controlPlaneRecoveryEligible:
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE
+        ] === true,
+      repairEligible:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true,
+      serveEligible:
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] === true,
+      priorityControlPlaneRecoveryActive:
+        snapshot?.priorityControlPlaneRecovery?.active === true,
+      priorityControlPlaneRecoveryReasonCodes:
+        Array.isArray(snapshot?.priorityControlPlaneRecovery?.reasonCodes) ?
+          Object.freeze([...snapshot.priorityControlPlaneRecovery.reasonCodes]) :
+          Object.freeze([]),
+      reasonCodes: Object.freeze(reasonCodes),
+      recoveryActive: !(
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE
+        ] === true &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+        ] === true &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
+        ] === true &&
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+        ] === true &&
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] === true
+      ),
+    });
+  }
+
+  /**
+   * @return {Object}
+   */
+  getRecoveryEpochHistoryByNodeId() {
+    const entries = {};
+    for (const [nodeId, history] of this.recoveryEpochHistoryByNodeId.entries()) {
+      entries[nodeId] = Array.isArray(history) ?
+        history.map((epoch) => Object.freeze({
+          ...epoch,
+          events: Object.freeze(
+            (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
+              Object.freeze({...event}),
+            ),
+          ),
+        })) :
+        [];
+    }
+    for (const [nodeId, epoch] of this.currentRecoveryEpochByNodeId.entries()) {
+      entries[nodeId] = Object.freeze([
+        ...(Array.isArray(entries[nodeId]) ? entries[nodeId] : []),
+        Object.freeze({
+          ...epoch,
+          events: Object.freeze(
+            (Array.isArray(epoch.events) ? epoch.events : []).map((event) =>
+              Object.freeze({...event}),
+            ),
+          ),
+        }),
+      ]);
+    }
+    return Object.freeze(entries);
   }
 
   /**
@@ -1184,10 +1675,8 @@ class ControlPlaneReadinessService {
     if (!this.shouldBypassCachedSnapshot(context.snapshot, options)) {
       return;
     }
-    if (!this.shouldRepairAuthoritativeNodeEvidence(context)) {
-      return;
-    }
-    this.ensureAuthoritativeNodeEvidence(context.nodeId, options)
+    this.authoritativeNodeEvidenceReconciler
+      .maybeRepairNodeEvidence(context, options)
       .catch((_error) => null);
   }
 
@@ -1344,13 +1833,29 @@ class ControlPlaneReadinessService {
       context.nodeId,
       context.nodeRow,
     );
+    const writableControlPlaneService =
+      this.hasWritableControlPlaneService(context.serviceRows);
+    const serveEligibleControlPlaneService =
+      this.hasServeEligibleControlPlaneService(context.serviceRows);
     const routingReady =
       this.hasRoutableService(context.serviceRows) &&
       localQueryTransportRoutable;
     const loadReady = this.isLoadReady(context.nodeRow);
+    const controlPlanePublished = this.isControlPlanePublished(
+      context.membershipPublication,
+    );
+    const recoveryEligible =
+      this.isControlPlaneRecoveryEligible({
+        ...context,
+        routingReady,
+        writableControlPlaneService,
+        publicationHealthy,
+        controlPlanePublished,
+        clusterMemberHealthy,
+      });
     const controlPlaneWritable = clusterMemberHealthy &&
       routingReady &&
-      this.hasWritableControlPlaneService(context.serviceRows) &&
+      writableControlPlaneService &&
       publicationHealthy;
     const placementEligible = processAlive &&
       clusterMemberHealthy &&
@@ -1375,7 +1880,8 @@ class ControlPlaneReadinessService {
 
     const serveEligible = repairEligible &&
       loadReady &&
-      transportNotExplicitlyNegative;
+      transportNotExplicitlyNegative &&
+      serveEligibleControlPlaneService;
 
     return Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: processAlive,
@@ -1387,6 +1893,11 @@ class ControlPlaneReadinessService {
         placementEligible,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
         controlPlaneWritable,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]:
+        controlPlanePublished,
+      [CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+        recoveryEligible,
       [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
         publicationHealthy,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
@@ -1394,6 +1905,73 @@ class ControlPlaneReadinessService {
       [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
         serveEligible,
     });
+  }
+
+  /**
+   * Recovery admission is broader than ordinary routed traffic: internal
+   * control-plane repair must stay possible while cached lifecycle or lease
+   * evidence is still converging, as long as transport and service evidence
+   * show a reachable control-plane path.
+   * @param {Object} context
+   * @return {boolean}
+   * @private
+   */
+  isControlPlaneRecoveryEligible(context = {}) {
+    const priorityRecoveryActive =
+      this.isPriorityControlPlaneRecoveryActive(context.membershipPublication);
+    if (context.routingReady !== true ||
+        context.writableControlPlaneService !== true ||
+        context.publicationHealthy !== true ||
+        (context.controlPlanePublished !== true && !priorityRecoveryActive)) {
+      return false;
+    }
+    if (context.clusterMemberHealthy === true) {
+      return true;
+    }
+    return this.shouldAllowTransportBackedRecoveryGrace(context);
+  }
+
+  isPriorityControlPlaneRecoveryActive(membershipPublication = null) {
+    if (!membershipPublication ||
+        typeof membershipPublication !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const publicationPending = membershipPublication.status &&
+      String(membershipPublication.status).toUpperCase() !==
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    if (publicationPending) {
+      return true;
+    }
+    const priorityPartitionSummary =
+      membershipPublication.priorityPartitionSummary;
+    return Boolean(
+      priorityPartitionSummary &&
+      typeof priorityPartitionSummary === TYPEOF.OBJECT &&
+      priorityPartitionSummary.satisfied === false,
+    );
+  }
+
+  /**
+   * Bound recovery-only grace to nodes that still present live transport and
+   * active control-plane service evidence, even if lifecycle or lease rows lag.
+   * @param {Object} context
+   * @return {boolean}
+   * @private
+   */
+  shouldAllowTransportBackedRecoveryGrace(context = {}) {
+    const nodeEvidence = context.nodeEvidence &&
+      typeof context.nodeEvidence === TYPEOF.OBJECT ?
+      context.nodeEvidence :
+      null;
+    if (nodeEvidence?.transportConnected !== true) {
+      return false;
+    }
+    return this.hasRoutableService(
+      Array.isArray(context.serviceRows) ? context.serviceRows : [],
+    ) &&
+      this.hasWritableControlPlaneService(
+        Array.isArray(context.serviceRows) ? context.serviceRows : [],
+      );
   }
 
   /**
@@ -1415,6 +1993,14 @@ class ControlPlaneReadinessService {
       return true;
     }
     return false;
+  }
+
+  isControlPlanePublished(membershipPublication) {
+    if (!membershipPublication || typeof membershipPublication !== TYPEOF.OBJECT) {
+      return true;
+    }
+    return String(membershipPublication.status || '').toUpperCase() ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
   }
 
   /**
@@ -1505,6 +2091,15 @@ class ControlPlaneReadinessService {
         context.observedAt,
       ));
     }
+    if (!dimensions.controlPlanePublished) {
+      reasons.push(buildReason(
+        CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_PUBLICATION_PENDING,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
+        CONTROL_PLANE_READINESS_OWNER.MEMBERSHIP_PUBLICATION,
+        context.observedAt,
+        context.membershipPublication || null,
+      ));
+    }
     if (!this.isCapacityPlacementEligible(context.capacity)) {
       const code = this.getCapacityReasonCode(context.capacity);
       if (code) {
@@ -1557,7 +2152,12 @@ class ControlPlaneReadinessService {
    * @return {Object}
    * @private
    */
-  buildMissingNodeReadiness(nodeId, observedAt, publication) {
+  buildMissingNodeReadiness(
+    nodeId,
+    observedAt,
+    publication,
+    membershipPublication = null,
+  ) {
     const dimensions = Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
@@ -1565,6 +2165,8 @@ class ControlPlaneReadinessService {
       [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]:
+        this.isControlPlanePublished(membershipPublication),
       [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
         publication.currentMode === CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
@@ -1583,6 +2185,7 @@ class ControlPlaneReadinessService {
       nodeId,
       lifecycleState: null,
       publication,
+      membershipPublication,
       capacity: null,
       nodeEvidence: null,
       observedAt,
@@ -1751,6 +2354,11 @@ class ControlPlaneReadinessService {
       typeof context.publication === TYPEOF.OBJECT ?
       context.publication :
       {};
+    const priorityControlPlaneRecovery =
+      context.priorityControlPlaneRecovery &&
+      typeof context.priorityControlPlaneRecovery === TYPEOF.OBJECT ?
+        context.priorityControlPlaneRecovery :
+        {};
 
     return Object.freeze({
       observedAt,
@@ -1780,6 +2388,10 @@ class ControlPlaneReadinessService {
         controlPlaneWritable:
           dimensions[
             CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+          ] === true,
+        controlPlanePublished:
+          dimensions[
+            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
           ] === true,
         routingReady:
           dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] === true,
@@ -1817,118 +2429,230 @@ class ControlPlaneReadinessService {
           typeof publication.reasonCode === TYPEOF.STRING ?
             publication.reasonCode :
             null,
+        membershipPublicationStatus:
+          typeof context.membershipPublication?.status === TYPEOF.STRING ?
+            context.membershipPublication.status :
+            null,
+        priorityControlPlaneRecoveryActive:
+          priorityControlPlaneRecovery.active === true,
+        priorityControlPlaneRecoveryReasonCodes:
+          Array.isArray(priorityControlPlaneRecovery.reasonCodes) ?
+            Object.freeze([...priorityControlPlaneRecovery.reasonCodes]) :
+            Object.freeze([]),
       }),
     });
   }
 
-  /**
-   * Return true when authoritative node/service repair can run.
-   * @return {boolean}
-   * @private
-   */
-  canRepairAuthoritativeNodeEvidence() {
-    return Boolean(
-      this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION &&
-      this.cacheMutationTarget &&
-      typeof this.cacheMutationTarget.applySystemTableChange ===
-        TYPEOF.FUNCTION,
+  async getMembershipPublicationDiagnostics(nodeId, observedAt) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const readOptions = this.membershipPublicationReadOptions;
+    let row = null;
+    if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
+      row = await service.getLatestPublicationForNode(
+        nodeId,
+        readOptions,
+      );
+    } else if (typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
+      row = await service.getLatestClusterPublication(
+        readOptions,
+      );
+    }
+    row = await this.refreshStalePriorityPartitionSummary(
+      row,
+      readOptions,
     );
+    return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
-  /**
-   * Attempt one bounded authoritative repair when cached readiness
-   * contradicts active transport state.
-   * @param {Object} context
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async maybeRepairAuthoritativeNodeEvidence(context, options = {}) {
-    if (!this.shouldRepairAuthoritativeNodeEvidence(context)) {
-      return false;
+  getMembershipPublicationDiagnosticsSync(nodeId, observedAt) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
     }
-    return this.ensureAuthoritativeNodeEvidence(context.nodeId, options);
+    const readOptions = this.membershipPublicationReadOptions;
+    let row = null;
+    if (typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION) {
+      row = service.getLatestPublicationForNodeSync(nodeId, readOptions);
+    } else if (typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION) {
+      row = service.getLatestClusterPublicationSync(readOptions);
+    }
+    return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
-  /**
-   * Build one deduplication key for authoritative readiness repair attempts.
-   * @param {string} nodeId
-   * @param {Object} [options]
-   * @return {string}
-   * @private
-   */
-  buildAuthoritativeReadinessRepairKey(nodeId, _options = {}) {
-    return String(nodeId || '');
+  async refreshStalePriorityPartitionSummary(row, readOptions) {
+    const service = this.membershipPublicationService;
+    if (!row || typeof row !== TYPEOF.OBJECT ||
+        !service || typeof service !== TYPEOF.OBJECT ||
+        typeof service.reconcileClusterMembership !== TYPEOF.FUNCTION) {
+      return row;
+    }
+    const status = String(row.status || '').toUpperCase();
+    const priorityPartitionSummary =
+      row.priorityPartitionSummary ?? row.priority_partition_summary ?? null;
+    if (status !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
+        !priorityPartitionSummary ||
+        typeof priorityPartitionSummary !== TYPEOF.OBJECT ||
+        priorityPartitionSummary.satisfied !== false) {
+      return row;
+    }
+    const reconcileResult = await service.reconcileClusterMembership({
+      ...(readOptions || {}),
+      latestPublicationRow: row,
+      latestPublishedPublicationRow: row,
+    });
+    return reconcileResult?.publicationRow || row;
   }
 
-  /**
-   * Return true when callers should bypass authoritative-repair cooldown.
-   * Admission gates that require a fresh ineligible decision must not stay
-   * pinned behind repair backoff when topology availability may have changed.
-   * @param {Object} [options]
-   * @return {boolean}
-   * @private
-   */
-  shouldBypassAuthoritativeReadinessRepairCooldown(options = {}) {
-    if (options.allowAuthoritativeRefresh !== true ||
-        options.requireFreshOnIneligible !== true) {
-      return false;
+  buildMembershipPublicationDiagnostics(row, observedAt) {
+    if (!row || typeof row !== TYPEOF.OBJECT) {
+      return null;
     }
-    return true;
+
+    const publicationEpoch = Number(
+      row.publicationEpoch ?? row.publication_epoch,
+    );
+    const createdAt = normalizeDiagnosticTimestampMs(
+      row.createdAt ?? row.created_at ?? observedAt,
+    );
+    const updatedAt = normalizeDiagnosticTimestampMs(
+      row.updatedAt ?? row.updated_at ?? createdAt,
+    );
+    const priorityPartitionSummary =
+      row.priorityPartitionSummary ?? row.priority_partition_summary ?? null;
+    return Object.freeze({
+      publicationEpoch: Number.isFinite(publicationEpoch) ? publicationEpoch : null,
+      status: typeof row.status === TYPEOF.STRING ? row.status : null,
+      publishedActiveNodeIds: Array.isArray(
+        row.publishedActiveNodeIds ?? row.published_active_node_ids,
+      ) ?
+        Object.freeze([
+          ...(row.publishedActiveNodeIds ?? row.published_active_node_ids),
+        ]) :
+        Object.freeze([]),
+      requiredAckNodeIds: Array.isArray(
+        row.requiredAckNodeIds ?? row.required_ack_node_ids,
+      ) ?
+        Object.freeze([
+          ...(row.requiredAckNodeIds ?? row.required_ack_node_ids),
+        ]) :
+        Object.freeze([]),
+      acknowledgedNodeIds: Array.isArray(
+        row.acknowledgedNodeIds ?? row.acknowledged_node_ids,
+      ) ?
+        Object.freeze([
+          ...(row.acknowledgedNodeIds ?? row.acknowledged_node_ids),
+        ]) :
+        Object.freeze([]),
+      priorityPartitionSummary:
+        priorityPartitionSummary && typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+          Object.freeze({...priorityPartitionSummary}) :
+          null,
+      membershipLifecycleSummary:
+        row.membershipLifecycleSummary &&
+        typeof row.membershipLifecycleSummary === TYPEOF.OBJECT ?
+          Object.freeze({...row.membershipLifecycleSummary}) :
+          row.membership_lifecycle_summary &&
+          typeof row.membership_lifecycle_summary === TYPEOF.OBJECT ?
+            Object.freeze({...row.membership_lifecycle_summary}) :
+            null,
+      createdAt,
+      updatedAt,
+    });
   }
 
-  /**
-   * Decide whether cached readiness should be refreshed from authoritative
-   * node/service rows before denying internal topology work.
-   * @param {Object} context
-   * @return {boolean}
-   * @private
-   */
-  shouldRepairAuthoritativeNodeEvidence(context) {
-    if (!this.canRepairAuthoritativeNodeEvidence()) {
-      return false;
+  getCapacitySnapshotSync(nodeId, _nodeRow) {
+    if (this.storageAccountingService &&
+        typeof this.storageAccountingService.getCapacitySnapshotForNodeSync ===
+          TYPEOF.FUNCTION) {
+      return this.storageAccountingService.getCapacitySnapshotForNodeSync(nodeId);
     }
 
-    const nodeId = context?.nodeId || null;
-    const nodeRow = context?.nodeRow || null;
-    const serviceRows = Array.isArray(context?.serviceRows) ?
-      context.serviceRows :
-      [];
-    if (this.shouldPreferLocalSelfNodeEvidence({
-      nodeId,
-      nodeRow,
-      serviceRows,
-    })) {
-      return false;
+    return null;
+  }
+
+  getPriorityControlPlaneRecoveryState(context = {}) {
+    const dimensions = context.dimensions && typeof context.dimensions === TYPEOF.OBJECT ?
+      context.dimensions :
+      {};
+    const membershipPublication =
+      context.membershipPublication &&
+      typeof context.membershipPublication === TYPEOF.OBJECT ?
+        context.membershipPublication :
+        null;
+    const priorityPartitionSummary =
+      membershipPublication?.priorityPartitionSummary &&
+      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
+        membershipPublication.priorityPartitionSummary :
+        null;
+    const publicationStatus =
+      typeof membershipPublication?.status === TYPEOF.STRING ?
+        String(membershipPublication.status).toUpperCase() :
+        '';
+    const publishedActiveNodeIds = normalizeNodeIdList(
+      membershipPublication?.publishedActiveNodeIds,
+    );
+    const targetNodeId =
+      typeof context?.nodeId === TYPEOF.STRING ?
+        String(context.nodeId).trim() :
+        '';
+    const reasonCodes = [];
+
+    const publicationPending = publicationStatus.length > NUM.ZERO &&
+      publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    const publicationExcludesTargetNode = publicationStatus ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+      targetNodeId.length > NUM.ZERO &&
+      !publishedActiveNodeIds.includes(targetNodeId);
+    if (publicationPending || publicationExcludesTargetNode) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      );
     }
-    const transportState = this.getNodeTransportState(nodeId, nodeRow);
-    if (!transportState.connected) {
-      return false;
+    if (priorityPartitionSummary && priorityPartitionSummary.satisfied === false) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      );
+    }
+    if (dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
+    ] !== true) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
+      );
+    }
+    const publicationPendingReasonCodePresent = reasonCodes.includes(
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    );
+    const controlPlaneNotWritable = reasonCodes.includes(
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
+    );
+    if (dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+    ] !== true &&
+      !publicationPendingReasonCodePresent &&
+      !controlPlaneNotWritable) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.RECOVERY_ELIGIBILITY_PENDING,
+      );
     }
 
-    if (!nodeRow) {
-      return true;
-    }
+    const dedupedReasonCodes = Object.freeze([...new Set(reasonCodes)]);
+    const enteredAt = membershipPublication?.createdAt ||
+      membershipPublication?.updatedAt ||
+      normalizeDiagnosticTimestampMs(context.observedAt) ||
+      this.now();
 
-    const status = String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase();
-    if (status.length > NUM.ZERO && status !== SERVICE_STATUS.ACTIVE) {
-      return false;
-    }
-
-    const hasFreshLocalReporterSuccess =
-      this.hasFreshLocalReporterSuccess(nodeId);
-    const nodeEvidence = this.buildNodeEvidence(nodeId, nodeRow);
-    if (this.shouldRepairAuthoritativeStaleHeartbeat(nodeEvidence)) {
-      return !hasFreshLocalReporterSuccess;
-    }
-
-    if (!this.isClusterMemberHealthy(nodeId, nodeRow)) {
-      return !hasFreshLocalReporterSuccess;
-    }
-
-    return !this.hasRoutableService(serviceRows) ||
-      !this.hasWritableControlPlaneService(serviceRows);
+    return Object.freeze({
+      active: dedupedReasonCodes.length > NUM.ZERO,
+      reasonCodes: dedupedReasonCodes,
+      publicationEpoch: membershipPublication?.publicationEpoch ?? null,
+      publicationStatus: membershipPublication?.status || null,
+      priorityPartitionSummary,
+      enteredAt,
+    });
   }
 
   /**
@@ -1970,163 +2694,6 @@ class ControlPlaneReadinessService {
       this.hasWritableControlPlaneService(serviceRows);
   }
 
-  /**
-   * Refresh connected node evidence when cached heartbeats are older than the
-   * tighter freshness budget used by control-plane diagnostics.
-   * @param {Object|null} nodeEvidence
-   * @return {boolean}
-   * @private
-   */
-  shouldRepairAuthoritativeStaleHeartbeat(nodeEvidence) {
-    const heartbeatAgeMs = Number(nodeEvidence?.heartbeatAgeMs);
-    return Number.isFinite(heartbeatAgeMs) &&
-      heartbeatAgeMs >
-        this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs;
-  }
-
-  /**
-   * Run one authoritative node/service repair with per-node deduplication
-   * and cooldown so repeated cache contradictions do not fan out work.
-   * @param {string} nodeId
-   * @return {Promise<boolean>}
-   * @private
-   */
-  async ensureAuthoritativeNodeEvidence(nodeId, options = {}) {
-    if (!nodeId || !this.canRepairAuthoritativeNodeEvidence()) {
-      return false;
-    }
-    const repairKey =
-      this.buildAuthoritativeReadinessRepairKey(nodeId, options);
-    return this.authoritativeReadinessRepairLane.run(
-      {ownerKey: repairKey},
-      async () => {
-        const now = this.now();
-        const lastRepairAt =
-          this.lastAuthoritativeReadinessRepairAtMsByKey.get(repairKey) ||
-          NUM.ZERO;
-        const cooldownMs =
-          this.lastAuthoritativeReadinessRepairCooldownMsByKey.get(repairKey) ||
-          this.authoritativeReadinessRepairCooldownMs;
-        const bypassRepairCooldown =
-          this.shouldBypassAuthoritativeReadinessRepairCooldown(options);
-        if (!bypassRepairCooldown && (now - lastRepairAt) < cooldownMs) {
-          return false;
-        }
-
-        try {
-          const repairResult =
-            await this.repairAuthoritativeNodeEvidence(nodeId, options);
-          const normalizedRepairResult =
-            this.normalizeAuthoritativeReadinessRepairResult(repairResult);
-          this.lastAuthoritativeReadinessRepairCooldownMsByKey.set(
-            repairKey,
-            this.resolveAuthoritativeReadinessRepairCooldownMs(
-              normalizedRepairResult,
-            ),
-          );
-          return normalizedRepairResult.repaired === true;
-        } catch (error) {
-          this.lastAuthoritativeReadinessRepairCooldownMsByKey.set(
-            repairKey,
-            this.authoritativeReadinessRepairFailureCooldownMs,
-          );
-          this.logger.warn(
-            'Authoritative readiness repair failed',
-            {
-              nodeId,
-              error: error?.message || String(error),
-            },
-          );
-          return false;
-        } finally {
-          this.lastAuthoritativeReadinessRepairAtMsByKey.set(
-            repairKey,
-            this.now(),
-          );
-        }
-      },
-    );
-  }
-
-  /**
-   * Reconcile cached node/service rows for one node from authoritative local
-   * system-table reads.
-   * @param {string} nodeId
-   * @return {Promise<Object|boolean>}
-   * @private
-   */
-  async repairAuthoritativeNodeEvidence(nodeId, _options = {}) {
-    const causeId = `readiness-authoritative-cache-repair:${nodeId}:${Date.now()}`;
-    const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
-    if (!authoritativeControlPlaneView) {
-      return {
-        repaired: false,
-        outcome: 'failed',
-      };
-    }
-    const snapshot = await authoritativeControlPlaneView.readNodeSnapshot(
-      nodeId,
-      {
-        queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
-      },
-    );
-    const nodeRows = snapshot.tables.nodes.success ?
-      snapshot.nodeRows :
-      null;
-    const serviceRows = snapshot.tables.services.success ?
-      snapshot.serviceRows :
-      null;
-
-    if (!nodeRows && !serviceRows) {
-      return {
-        repaired: false,
-        outcome: 'failed',
-      };
-    }
-
-    let repairedRowCount = NUM.ZERO;
-    const cachedNodeRow = await this.readNodeRow(nodeId);
-    const cachedServiceRows = await this.readNodeServiceRows(nodeId);
-    if (nodeRows) {
-      repairedRowCount += await this.applyAuthoritativeRows(
-        TABLES.NODES,
-        nodeRows,
-        cachedNodeRow ? [cachedNodeRow] : [],
-        causeId,
-      );
-    }
-    if (serviceRows) {
-      repairedRowCount += await this.applyAuthoritativeRows(
-        TABLES.SERVICES,
-        serviceRows,
-        cachedServiceRows,
-        causeId,
-      );
-    }
-
-    if (repairedRowCount > NUM.ZERO) {
-      this.logger.warn(
-        'Repaired readiness cache from authoritative node/service rows',
-        {
-          nodeId,
-          repairedRowCount,
-          repairedNodeRowCount: Array.isArray(nodeRows) ? nodeRows.length : 0,
-          repairedServiceRowCount:
-            Array.isArray(serviceRows) ? serviceRows.length : 0,
-        },
-      );
-      return {
-        repaired: true,
-        outcome: 'repaired',
-      };
-    }
-
-    return {
-      repaired: false,
-      outcome: 'unchanged',
-    };
-  }
-
   async readNodeRow(nodeId, options = {}) {
     if (this.nodesOwner &&
         typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
@@ -2156,80 +2723,6 @@ class ControlPlaneReadinessService {
       return Array.isArray(result?.rows) ? result.rows : [];
     }
     return this.getNodeServiceRows(nodeId);
-  }
-
-  /**
-   * Normalize one authoritative repair outcome into a stable shape.
-   * @param {Object|boolean|null} repairResult
-   * @return {{repaired:boolean,outcome:string}}
-   * @private
-   */
-  normalizeAuthoritativeReadinessRepairResult(repairResult) {
-    if (repairResult && typeof repairResult === TYPEOF.OBJECT) {
-      return {
-        repaired: repairResult.repaired === true,
-        outcome: String(repairResult.outcome || 'unchanged'),
-      };
-    }
-    return {
-      repaired: repairResult === true,
-      outcome: repairResult === true ? 'repaired' : 'unchanged',
-    };
-  }
-
-  /**
-   * Resolve the next repair cooldown from the previous repair outcome.
-   * @param {{repaired:boolean,outcome:string}} repairResult
-   * @return {number}
-   * @private
-   */
-  resolveAuthoritativeReadinessRepairCooldownMs(repairResult) {
-    if (repairResult?.repaired === true ||
-        repairResult?.outcome === 'repaired') {
-      return this.authoritativeReadinessRepairCooldownMs;
-    }
-    if (repairResult?.outcome === 'failed') {
-      return this.authoritativeReadinessRepairFailureCooldownMs;
-    }
-    return this.authoritativeReadinessRepairNoChangeCooldownMs;
-  }
-
-  /**
-   * Apply one authoritative row set to the writable cache target.
-   * Rows present authoritatively are upserted; missing cached rows are deleted.
-   * @param {string} tableName
-   * @param {Object[]} rows
-   * @param {Object[]} cachedRows
-   * @param {string} causeId
-   * @return {number}
-   * @private
-   */
-  async applyAuthoritativeRows(tableName, rows, cachedRows, causeId) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    const result =
-      await gateway.reconcileAuthoritativeCacheRows(
-        tableName,
-        rows,
-        {
-          causeId,
-          cachedRows,
-          cacheMutationTarget: this.cacheMutationTarget,
-          systemTableCache: this.systemTableCache,
-        },
-      );
-    return result?.mutationCount || NUM.ZERO;
-  }
-
-  /**
-   * Resolve the canonical system-table gateway for readiness repair.
-   * @return {ControlPlaneSystemTableGateway}
-   * @private
-   */
-  getControlPlaneSystemTableGateway() {
-    return assertCritical(
-      this.controlPlaneSystemTableGateway,
-      'ControlPlaneReadinessService requires controlPlaneSystemTableGateway',
-    );
   }
 
   /**
@@ -2371,8 +2864,55 @@ class ControlPlaneReadinessService {
     if (!hasMessageGroupRows) {
       return true;
     }
+    if (this.hasActiveAddressedMessageGroupService(serviceRows)) {
+      return true;
+    }
+    return this.hasStartupControlPlaneWriteGrace(serviceRows);
+  }
+
+  hasServeEligibleControlPlaneService(serviceRows) {
+    if (serviceRows.length === NUM.ZERO) {
+      return true;
+    }
+    const hasMessageGroupRows = serviceRows.some((serviceRow) => {
+      return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
+    });
+    if (!hasMessageGroupRows) {
+      return true;
+    }
+    return this.hasActiveAddressedMessageGroupService(serviceRows);
+  }
+
+  hasActiveAddressedMessageGroupService(serviceRows) {
     return serviceRows.some((serviceRow) => {
       return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+          SERVICE_STATUS.ACTIVE &&
+        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+    });
+  }
+
+  hasStartupControlPlaneWriteGrace(serviceRows) {
+    const messageGroupRows = serviceRows.filter((serviceRow) => {
+      return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
+    });
+    if (messageGroupRows.length === NUM.ZERO) {
+      return false;
+    }
+
+    const hasStoppedMessageGroupRow = messageGroupRows.some((serviceRow) => {
+      return String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+        SERVICE_STATUS.STOPPED &&
+        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+    });
+    if (!hasStoppedMessageGroupRow) {
+      return false;
+    }
+
+    return serviceRows.some((serviceRow) => {
+      return serviceRow?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP &&
         String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
         typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
@@ -2621,6 +3161,11 @@ class ControlPlaneReadinessService {
       return false;
     }
 
+    if (nodeId !== this.nodeId &&
+        isNodeReadyLeaseExplicitlyCleared(nodeRow)) {
+      return false;
+    }
+
     // §1.4.12 self-node fast path: a running node evaluating its own
     // cluster membership is trivially healthy — it is alive and
     // executing this check. This is the strongest possible signal,
@@ -2637,13 +3182,7 @@ class ControlPlaneReadinessService {
       return false;
     }
 
-    // §1.4.12: Live transport connectivity is the strongest evidence
-    // that a remote node is reachable. When the message router
-    // reports the node as connected, trust that signal over stale
-    // cache lease/heartbeat data. This prevents transient
-    // serveEligible=false during topology changes where CDC-driven
-    // cache updates lag behind authoritative state.
-    return true;
+    return false;
   }
 
   /**

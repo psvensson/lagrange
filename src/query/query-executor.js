@@ -33,6 +33,7 @@ import {
   QUERY_MESSAGE_TYPE,
   QUERY_OPERATOR,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
+  QUERY_ROUTING_REPAIR_REASON,
   QUERY_AST_NODE,
   QUERY_RESPONSE_TYPE,
   QUERY_SQL,
@@ -185,6 +186,12 @@ class QueryExecutor {
       QUERY_DEFAULTS.READ_RETRY_ATTEMPTS;
     this.noServiceWarnThrottleMs =
       QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS;
+    this.noHandlerAddressQuarantineMs =
+      Number.isFinite(options.noHandlerAddressQuarantineMs) &&
+      options.noHandlerAddressQuarantineMs > NUM.ZERO ?
+        Math.floor(options.noHandlerAddressQuarantineMs) :
+        this.noServiceWarnThrottleMs;
+    this.temporarilyUnroutableAddressesByPartition = new Map();
   }
 
   /**
@@ -1065,6 +1072,7 @@ class QueryExecutor {
     let lastError = null;
     let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
+    let awaitedRuntimeRoutingRepair = false;
     const routingReadinessDimension =
       executionOptions.routingReadinessDimension ||
       this.defaultRoutingReadinessDimension;
@@ -1157,8 +1165,31 @@ class QueryExecutor {
         }
       }
 
-      for (const serviceInfo of serviceCandidates) {
+      const candidateQueue = [...serviceCandidates];
+      const attemptedAddresses = new Set();
+      let leaderRecoveryQueued = false;
+      const queueLeaderRecoveryCandidates = () => {
+        if (forRead || leaderRecoveryQueued) {
+          return;
+        }
+        const recoveryCandidates = this.getLeaderRecoveryCandidates(
+          routingSnapshot,
+          attemptedAddresses,
+          preferSameLatencyGroup,
+        );
+        if (recoveryCandidates.length === 0) {
+          return;
+        }
+        leaderRecoveryQueued = true;
+        candidateQueue.push(...recoveryCandidates);
+      };
+
+      for (let candidateIndex = NUM.ZERO;
+        candidateIndex < candidateQueue.length;
+        candidateIndex += NUM.ONE) {
+        const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
+        attemptedAddresses.add(address);
         this.logger.debug(QUERY_LOG_MSG.ROUTING_QUERY_TO_PARTITION, {
           partitionId,
           address,
@@ -1197,6 +1228,10 @@ class QueryExecutor {
           this.throwIfCancelled(cancellationToken);
 
           if (response.acknowledged && response.success) {
+            this.clearTemporarilyUnroutableAddress(
+              partitionId,
+              address,
+            );
             return {
               partitionId,
               success: true,
@@ -1234,6 +1269,10 @@ class QueryExecutor {
             );
 
             if (redirectResponse.acknowledged && redirectResponse.success) {
+              this.clearTemporarilyUnroutableAddress(
+                partitionId,
+                response.leaderAddress,
+              );
               return {
                 partitionId,
                 success: true,
@@ -1263,6 +1302,38 @@ class QueryExecutor {
               partitionId,
               address,
             });
+            this.markTemporarilyUnroutableAddress(partitionId, address);
+            if (!awaitedRuntimeRoutingRepair &&
+                await this.maybeAwaitRuntimeRoutingRepair(
+                  routingSnapshot,
+                  {
+                    partitionId,
+                    participantNodeId: serviceInfo?.nodeId || null,
+                    routingReadinessDimension,
+                    refreshReason:
+                      QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+                  },
+                )) {
+              awaitedRuntimeRoutingRepair = true;
+              const refreshedResolution =
+                this.resolvePartitionServiceCandidates(
+                  partitionId,
+                  forRead,
+                  preferLeader,
+                  preferSameLatencyGroup,
+                  routingReadinessDimension,
+                );
+              routingSnapshot = refreshedResolution.routingSnapshot;
+              const refreshedRecoveryCandidates =
+                this.getLeaderRecoveryCandidates(
+                  routingSnapshot,
+                  attemptedAddresses,
+                  preferSameLatencyGroup,
+                );
+              if (refreshedRecoveryCandidates.length > NUM.ZERO) {
+                candidateQueue.push(...refreshedRecoveryCandidates);
+              }
+            }
             lastError = errorMessage;
             lastFailureDetails = {
               errorCode: response?.errorCode,
@@ -1272,14 +1343,23 @@ class QueryExecutor {
               participantAddress: address,
               backpressured: resolveParticipantBackpressureState(response),
             };
-            if (!forRead && this.isLeaderUnavailable(errorMessage)) {
+            if (!forRead &&
+                this.isLeaderUnavailable(
+                  errorMessage,
+                  response?.errorCode,
+                )) {
+              queueLeaderRecoveryCandidates();
               continue;
             }
             continue;
           }
 
           const errorMessage = response.error || ERRORS.QUERY_FAILED;
-          if (!forRead && this.isLeaderUnavailable(errorMessage)) {
+          if (!forRead &&
+              this.isLeaderUnavailable(
+                errorMessage,
+                response?.errorCode,
+              )) {
             lastError = errorMessage;
             lastFailureDetails = {
               errorCode: response?.errorCode,
@@ -1289,6 +1369,7 @@ class QueryExecutor {
               participantAddress: address,
               backpressured: resolveParticipantBackpressureState(response),
             };
+            queueLeaderRecoveryCandidates();
             continue;
           }
 
@@ -1326,8 +1407,50 @@ class QueryExecutor {
             ),
           };
         } catch (error) {
-          if (!forRead && this.isLeaderUnavailable(error.message)) {
-            lastError = error.message;
+          const errorMessage =
+            typeof error?.message === 'string' &&
+              error.message.length > NUM.ZERO ?
+              error.message :
+              ERRORS.QUERY_FAILED;
+
+          if (this.isNoHandlerFailure(errorMessage)) {
+            this.logger.warn(QUERY_LOG_MSG.NO_HANDLER_FOR_PARTITION, {
+              partitionId,
+              address,
+            });
+            this.markTemporarilyUnroutableAddress(partitionId, address);
+            if (!awaitedRuntimeRoutingRepair &&
+                await this.maybeAwaitRuntimeRoutingRepair(
+                  routingSnapshot,
+                  {
+                    partitionId,
+                    participantNodeId: serviceInfo?.nodeId || null,
+                    routingReadinessDimension,
+                    refreshReason:
+                      QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+                  },
+                )) {
+              awaitedRuntimeRoutingRepair = true;
+              const refreshedResolution =
+                this.resolvePartitionServiceCandidates(
+                  partitionId,
+                  forRead,
+                  preferLeader,
+                  preferSameLatencyGroup,
+                  routingReadinessDimension,
+                );
+              routingSnapshot = refreshedResolution.routingSnapshot;
+              const refreshedRecoveryCandidates =
+                this.getLeaderRecoveryCandidates(
+                  routingSnapshot,
+                  attemptedAddresses,
+                  preferSameLatencyGroup,
+                );
+              if (refreshedRecoveryCandidates.length > NUM.ZERO) {
+                candidateQueue.push(...refreshedRecoveryCandidates);
+              }
+            }
+            lastError = errorMessage;
             lastFailureDetails = {
               errorCode: error?.code || error?.errorCode,
               retryAfterMs: error?.retryAfterMs,
@@ -1336,6 +1459,27 @@ class QueryExecutor {
               participantAddress: address,
               backpressured: resolveParticipantBackpressureState(error),
             };
+            if (!forRead) {
+              queueLeaderRecoveryCandidates();
+            }
+            continue;
+          }
+
+          if (!forRead &&
+              this.isLeaderUnavailable(
+                errorMessage,
+                error?.code || error?.errorCode,
+              )) {
+            lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: error?.code || error?.errorCode,
+              retryAfterMs: error?.retryAfterMs,
+              deferRetry: error?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(error),
+            };
+            queueLeaderRecoveryCandidates();
             continue;
           }
 
@@ -1344,9 +1488,9 @@ class QueryExecutor {
           if (forRead) {
             this.logger.debug(
               QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE,
-              {partitionId, address, error: error.message},
+              {partitionId, address, error: errorMessage},
             );
-            lastError = error.message;
+            lastError = errorMessage;
             lastFailureDetails = {
               errorCode: error?.code || error?.errorCode,
               retryAfterMs: error?.retryAfterMs,
@@ -1361,7 +1505,7 @@ class QueryExecutor {
           this.logger.error(QUERY_LOG_MSG.QUERY_ROUTING_FAILED, {
             partitionId,
             address,
-            error: error.message,
+            error: errorMessage,
           });
           throw error;
         }
@@ -1376,6 +1520,174 @@ class QueryExecutor {
     return {
       ...buildFailureResult(lastError || ERRORS.QUERY_FAILED, lastFailureDetails),
     };
+  }
+
+  /**
+   * Queue alternative live replica targets after the canonical leader path has
+   * been disproven at runtime.
+   * @param {Object|null} routingSnapshot
+   * @param {Set<string>} attemptedAddresses
+   * @param {boolean} preferSameLatencyGroup
+   * @return {Array<Object>}
+   * @private
+   */
+  getLeaderRecoveryCandidates(
+    routingSnapshot,
+    attemptedAddresses = new Set(),
+    preferSameLatencyGroup = false,
+  ) {
+    const routableServices = Array.isArray(routingSnapshot?.routableServices) ?
+      routingSnapshot.routableServices :
+      [];
+
+    const localGroupId = this.resolveNodeLatencyGroupId(this.nodeId);
+    const orderedServices = this.orderServicesByLatencyGroup(
+      routableServices,
+      localGroupId,
+      preferSameLatencyGroup,
+    );
+    const candidates = [];
+    const seen = new Set();
+
+    for (const service of orderedServices) {
+      const address = service?.address;
+      if (typeof address !== 'string' ||
+          address.length === NUM.ZERO ||
+          this.isTemporarilyUnroutableAddress(
+            routingSnapshot?.partitionId || null,
+            address,
+          ) ||
+          attemptedAddresses.has(address)) {
+        continue;
+      }
+      const dedupeKey = service.service_id || service.replica_id || address;
+      if (!dedupeKey || seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      candidates.push({
+        address,
+        nodeId: service.node_id,
+        replicaId: service.service_id || service.replica_id,
+      });
+    }
+
+    return candidates;
+  }
+
+  /**
+   * Collect node IDs that should be refreshed when runtime routing disproves
+   * local partition-service metadata.
+   * @param {Object|null} routingSnapshot
+   * @param {string|null} participantNodeId
+   * @return {Array<string>}
+   * @private
+   */
+  collectRuntimeRoutingRepairNodeIds(
+    routingSnapshot,
+    participantNodeId = null,
+  ) {
+    const repairNodeIds = [];
+    const seen = new Set();
+    const addNodeId = (nodeId) => {
+      if (typeof nodeId !== 'string' ||
+          nodeId.length === NUM.ZERO ||
+          seen.has(nodeId)) {
+        return;
+      }
+      seen.add(nodeId);
+      repairNodeIds.push(nodeId);
+    };
+
+    addNodeId(participantNodeId);
+    addNodeId(routingSnapshot?.canonicalLeaderNodeId || null);
+
+    return repairNodeIds;
+  }
+
+  /**
+   * Await one authoritative node/service refresh when runtime routing shows a
+   * stale service address (for example, no handler at a cached partition
+   * service endpoint).
+   * @param {Object|null} routingSnapshot
+   * @param {Object} [options]
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async maybeAwaitRuntimeRoutingRepair(
+    routingSnapshot,
+    options = {},
+  ) {
+    const routingReadinessDimension =
+      options.routingReadinessDimension ||
+      routingSnapshot?.routingReadinessDimension ||
+      this.defaultRoutingReadinessDimension;
+    let repaired = false;
+
+    if (this.controlPlaneReadinessService &&
+        typeof this.controlPlaneReadinessService.getNodeReadiness ===
+          'function') {
+      const repairNodeIds = this.collectRuntimeRoutingRepairNodeIds(
+        routingSnapshot,
+        options.participantNodeId || null,
+      );
+      if (repairNodeIds.length > NUM.ZERO) {
+        await Promise.all(repairNodeIds.map(async (nodeId) => {
+          try {
+            await this.controlPlaneReadinessService.getNodeReadiness(
+              nodeId,
+              {
+                allowAuthoritativeRefresh: true,
+                requireFreshOnIneligible: true,
+                forceAuthoritativeRefresh: true,
+                maxCachedAgeMs: NUM.ZERO,
+                decisionDimension: routingReadinessDimension,
+                refreshReason:
+                  options.refreshReason ||
+                  QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+              },
+            );
+            repaired = true;
+          } catch (_error) {
+            return null;
+          }
+          return null;
+        }));
+      }
+    }
+
+    const routingOverlay = this.routingMetadataOverlay;
+    const partitionId =
+      typeof options.partitionId === 'string' &&
+        options.partitionId.length > NUM.ZERO ?
+        options.partitionId :
+        routingSnapshot?.partitionId || null;
+    if (routingOverlay &&
+        typeof routingOverlay.refreshPartitionRouting === 'function' &&
+        typeof partitionId === 'string' &&
+        partitionId.length > NUM.ZERO) {
+      try {
+        const overlayRepaired =
+          await routingOverlay.refreshPartitionRouting(
+            partitionId,
+            {
+              partitionId,
+              participantNodeId:
+                options.participantNodeId || null,
+              routingReadinessDimension,
+              routingSnapshot,
+              refreshReason:
+                options.refreshReason ||
+                QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+            },
+          );
+        repaired = overlayRepaired === true || repaired;
+      } catch (_error) {
+        return repaired;
+      }
+    }
+
+    return repaired;
   }
 
   /**
@@ -1408,17 +1720,35 @@ class QueryExecutor {
   }
 
   /**
+   * Check if an error represents a stale no-handler transport witness.
+   * @param {string} errorMessage - Error message.
+   * @return {boolean}
+   * @private
+   */
+  isNoHandlerFailure(errorMessage) {
+    return typeof errorMessage === 'string' &&
+      errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS);
+  }
+
+  /**
    * Check if an error indicates missing partition leadership.
    * @param {string} errorMessage - Error message.
    * @return {boolean} True if leader is unavailable.
    * @private
    */
-  isLeaderUnavailable(errorMessage) {
+  isLeaderUnavailable(errorMessage, errorCode = null) {
+    if (errorCode === 'ROUTER_CONNECTION_CLOSED') {
+      return true;
+    }
     return errorMessage &&
       (
         errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
         errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
         errorMessage.includes(ERRORS.NO_HANDLER_FOR_ADDRESS) ||
+        (
+          errorMessage.includes('Connection to node') &&
+          errorMessage.includes('closed')
+        ) ||
         errorMessage.includes('No connection to node') ||
         errorMessage.includes('Failed to forward write to leader')
       );
@@ -1445,6 +1775,95 @@ class QueryExecutor {
       return;
     }
     cancellationToken.throwIfCancelled();
+  }
+
+  /**
+   * Mark one partition service endpoint as temporarily unroutable after a
+   * runtime no-handler witness so follow-up calls do not immediately retry the
+   * same stale address.
+   * @param {string} partitionId
+   * @param {string} address
+   * @private
+   */
+  markTemporarilyUnroutableAddress(partitionId, address) {
+    if (typeof partitionId !== 'string' ||
+        partitionId.length === NUM.ZERO ||
+        typeof address !== 'string' ||
+        address.length === NUM.ZERO) {
+      return;
+    }
+
+    const expiresAt = Date.now() + this.noHandlerAddressQuarantineMs;
+    const existing =
+      this.temporarilyUnroutableAddressesByPartition.get(partitionId);
+    if (existing instanceof Map) {
+      existing.set(address, expiresAt);
+      return;
+    }
+    const addressExpiryMap = new Map();
+    addressExpiryMap.set(address, expiresAt);
+    this.temporarilyUnroutableAddressesByPartition.set(
+      partitionId,
+      addressExpiryMap,
+    );
+  }
+
+  /**
+   * Clear one temporary unroutable endpoint marker after a successful route.
+   * @param {string} partitionId
+   * @param {string} address
+   * @private
+   */
+  clearTemporarilyUnroutableAddress(partitionId, address) {
+    if (typeof partitionId !== 'string' ||
+        partitionId.length === NUM.ZERO ||
+        typeof address !== 'string' ||
+        address.length === NUM.ZERO) {
+      return;
+    }
+    const existing =
+      this.temporarilyUnroutableAddressesByPartition.get(partitionId);
+    if (!(existing instanceof Map)) {
+      return;
+    }
+    existing.delete(address);
+    if (existing.size === NUM.ZERO) {
+      this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
+    }
+  }
+
+  /**
+   * Return true when one partition endpoint is still inside the temporary
+   * no-handler quarantine window.
+   * @param {string} partitionId
+   * @param {string} address
+   * @return {boolean}
+   * @private
+   */
+  isTemporarilyUnroutableAddress(partitionId, address) {
+    if (typeof partitionId !== 'string' ||
+        partitionId.length === NUM.ZERO ||
+        typeof address !== 'string' ||
+        address.length === NUM.ZERO) {
+      return false;
+    }
+    const existing =
+      this.temporarilyUnroutableAddressesByPartition.get(partitionId);
+    if (!(existing instanceof Map)) {
+      return false;
+    }
+    const expiresAt = existing.get(address);
+    if (!Number.isFinite(expiresAt)) {
+      return false;
+    }
+    if (expiresAt > Date.now()) {
+      return true;
+    }
+    existing.delete(address);
+    if (existing.size === NUM.ZERO) {
+      this.temporarilyUnroutableAddressesByPartition.delete(partitionId);
+    }
+    return false;
   }
 
   /**
@@ -1519,6 +1938,9 @@ class QueryExecutor {
       if (!service) {
         return;
       }
+      if (this.isTemporarilyUnroutableAddress(partitionId, service.address)) {
+        return;
+      }
       const key = service.service_id || service.replica_id || service.address;
       if (seen.has(key)) {
         return;
@@ -1567,6 +1989,11 @@ class QueryExecutor {
         };
       }
       canonicalLeaderServices.forEach(addService);
+      if (candidates.length === NUM.ZERO) {
+        // Canonical leader rows are present but were quarantined after runtime
+        // no-handler witnesses. Try other live replicas to follow redirects.
+        orderedServices.forEach(addService);
+      }
       return {
         candidates,
         routingSnapshot,
@@ -1717,6 +2144,15 @@ class QueryExecutor {
 
     const services = [];
 
+    // Overlay metadata is authoritative during runtime repair and must
+    // override stale cache rows for the same replica/service identity.
+    const overlayRows = this.getOverlayPartitionServices(partitionId)
+      .filter((service) =>
+        service.partition_id === partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION,
+      );
+    services.push(...overlayRows);
+
     if (this.systemCache && typeof this.systemCache.filter === 'function') {
       const cacheRows = this.systemCache.filter(TABLES.SERVICES, (service) =>
         service.partition_id === partitionId &&
@@ -1724,13 +2160,6 @@ class QueryExecutor {
       ) || [];
       services.push(...cacheRows);
     }
-
-    const overlayRows = this.getOverlayPartitionServices(partitionId)
-      .filter((service) =>
-        service.partition_id === partitionId &&
-        service.service_type === SERVICE_TYPE.PARTITION,
-      );
-    services.push(...overlayRows);
 
     if (services.length === 0) {
       return [];
@@ -2129,18 +2558,40 @@ class QueryExecutor {
     let decision = null;
     let compactSnapshot = null;
     let readiness = null;
+    const partitionId = String(
+      service?.partition_id ||
+      service?.partitionId ||
+      '',
+    );
+    const partitionRow = partitionId.length > NUM.ZERO ?
+      this.getPartitionRecord(partitionId) :
+      null;
+    const tableName = String(
+      partitionRow?.table_name ||
+      partitionRow?.tableName ||
+      partitionRow?.table_id ||
+      partitionRow?.tableId ||
+      '',
+    ) || null;
 
     if (typeof this.controlPlaneReadinessService
       .getControlPlaneParticipationSync === 'function') {
+      const participationKind =
+        routingReadinessDimension ===
+          CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE ?
+          CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY :
+          CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ;
       const participation =
         this.controlPlaneReadinessService.getControlPlaneParticipationSync(
           nodeId,
           {
             allowAuthoritativeRefresh: true,
             requireFreshOnIneligible: true,
-            participationKind:
-              CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ,
+            participationKind,
             decisionDimension: routingReadinessDimension,
+            partitionId: partitionId || null,
+            tableName,
           },
         );
       readiness = participation?.snapshot || null;

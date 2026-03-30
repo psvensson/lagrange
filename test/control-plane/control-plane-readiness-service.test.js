@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   COLUMN,
+  NUM,
   STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -8,6 +9,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
@@ -15,6 +17,9 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../../src/cdc/cdc-integration-service.js';
 
 function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
@@ -134,6 +139,16 @@ function createMessageGroupService(nodeId) {
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-${nodeId}`,
+  };
+}
+
+function createPartitionService(nodeId, serviceId = `part-${nodeId}`) {
+  return {
+    [COLUMN.SERVICE_ID]: serviceId,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/${serviceId}`,
   };
 }
 
@@ -433,49 +448,6 @@ test('ControlPlaneReadinessService uses injected owners for async shared metadat
     t.equal(cacheFilterCalls, 0, 'async owner path should not use cache.filter');
   });
 
-test('ControlPlaneReadinessService routes authoritative cache repair through ' +
-  'the injected gateway instead of mutating the cache directly',
-async (t) => {
-  const cache = createCache({
-    nodes: [{
-      [COLUMN.NODE_ID]: 'node-a',
-      status: STATE.ACTIVE,
-    }],
-  });
-  const repairCalls = [];
-  const readinessService = new ControlPlaneReadinessService({
-    nodeId: 'node-a',
-    systemTableCache: cache,
-    cacheMutationTarget: {
-      applySystemTableChange() {
-        throw new Error('readiness repair must not mutate cache directly');
-      },
-    },
-    controlPlaneSystemTableGateway: {
-      reconcileAuthoritativeCacheRows(tableName, rows, options) {
-        repairCalls.push({tableName, rows, options});
-        return Promise.resolve({success: true, mutationCount: 2});
-      },
-    },
-  });
-
-  const mutationCount = await readinessService.applyAuthoritativeRows(
-    TABLES.NODES,
-    [{[COLUMN.NODE_ID]: 'node-a', status: STATE.ACTIVE}],
-    [{[COLUMN.NODE_ID]: 'node-a', status: STATE.ACTIVE}],
-    'readiness-repair:test',
-  );
-
-  t.equal(mutationCount, 2, 'gateway-provided mutation count should propagate');
-  t.equal(repairCalls.length, 1, 'readiness repair should delegate once');
-  t.equal(repairCalls[0].tableName, TABLES.NODES, 'readiness repair should target the requested table');
-  t.equal(
-    repairCalls[0].options.causeId,
-    'readiness-repair:test',
-    'readiness repair should preserve the repair cause',
-  );
-});
-
 test('ControlPlaneReadinessService reuses one owner-key evaluation for ' +
   'concurrent readiness reads', async (t) => {
   let releaseCapacityRead;
@@ -588,8 +560,8 @@ test('ControlPlaneReadinessService records serve and repair eligibility flips',
     t.end();
   });
 
-test('ControlPlaneReadinessService tolerates short stale-lease windows when ' +
-  'transport is connected', async (t) => {
+test('ControlPlaneReadinessService fails closed for stale lease rows even ' +
+  'when transport is connected', async (t) => {
   const now = 100000;
   const cache = createCache({
     nodes: [{
@@ -626,9 +598,10 @@ test('ControlPlaneReadinessService tolerates short stale-lease windows when ' +
 
   const readiness = await readinessService.getNodeReadiness('node-stale');
 
-  t.equal(readiness.dimensions.clusterMemberHealthy, true);
-  t.equal(readiness.dimensions.controlPlaneWritable, true);
-  t.equal(readiness.dimensions.placementEligible, true);
+  t.equal(readiness.dimensions.clusterMemberHealthy, false);
+  t.equal(readiness.dimensions.controlPlaneWritable, false);
+  t.equal(readiness.dimensions.placementEligible, false);
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true);
   t.end();
 });
 
@@ -682,8 +655,8 @@ test('ControlPlaneReadinessService fails closed when router transport ' +
   t.end();
 });
 
-test('ControlPlaneReadinessService preserves row-evidence grace when router ' +
-  'has no current transport evidence', async (t) => {
+test('ControlPlaneReadinessService does not preserve cluster membership from ' +
+  'stale row evidence when router transport is unknown', async (t) => {
   const now = 120000;
   const cache = createCache({
     nodes: [{
@@ -721,11 +694,11 @@ test('ControlPlaneReadinessService preserves row-evidence grace when router ' +
   const readiness = await readinessService
     .getNodeReadiness('node-router-unknown');
 
-  t.equal(readiness.dimensions.clusterMemberHealthy, true);
-  t.equal(readiness.dimensions.repairEligible, true);
-  t.equal(readiness.dimensions.serveEligible, true);
-  t.equal(readiness.dimensions.controlPlaneWritable, true);
-  t.equal(readiness.dimensions.placementEligible, true);
+  t.equal(readiness.dimensions.clusterMemberHealthy, false);
+  t.equal(readiness.dimensions.repairEligible, false);
+  t.equal(readiness.dimensions.serveEligible, false);
+  t.equal(readiness.dimensions.controlPlaneWritable, false);
+  t.equal(readiness.dimensions.placementEligible, false);
   t.end();
 });
 
@@ -922,6 +895,102 @@ async (t) => {
   );
   t.equal(authoritativeReads.length, 2,
     'readiness repair should refresh nodes and services authoritatively');
+  t.end();
+});
+
+test('ControlPlaneReadinessService repairs missing node rows from ' +
+  'authoritative evidence even when transport is disconnected',
+async (t) => {
+  const now = 310000;
+  const nodeId = 'node-missing-authoritative-repair';
+  const cache = createCache({
+    nodes: [],
+    services: [],
+  });
+  const authoritativeReads = [];
+  const repairedNodeRow = {
+    ...createActiveNode(nodeId),
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now - 100,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  };
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName) {
+        authoritativeReads.push(tableName);
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [repairedNodeRow],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [createMessageGroupService(nodeId)],
+          };
+        }
+        return {
+          success: false,
+          rows: [],
+        };
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(
+    nodeId,
+    {
+      allowAuthoritativeRefresh: true,
+      requireFreshOnIneligible: true,
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.same(
+    authoritativeReads,
+    [TABLES.NODES, TABLES.SERVICES],
+    'missing node evidence should trigger one authoritative node/service repair',
+  );
+  t.equal(
+    cache.get(TABLES.NODES, nodeId)?.[COLUMN.NODE_ID],
+    nodeId,
+    'authoritative repair should hydrate the missing node row in cache',
+  );
+  t.equal(
+    readiness.dimensions.repairEligible,
+    true,
+    'authoritative repair should restore repair eligibility for the recovered node',
+  );
+  t.notOk(
+    readiness.reasons.some((reason) =>
+      reason.code === CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+    ),
+    'repaired snapshots should not keep the missing-node blocker reason',
+  );
   t.end();
 });
 
@@ -1504,10 +1573,10 @@ async (t) => {
     },
   );
 
-  t.equal(first.dimensions.clusterMemberHealthy, true,
-    'transport-connected node stays healthy despite stale cache (§1.4.12)');
-  t.equal(second.dimensions.clusterMemberHealthy, true,
-    'cached snapshot preserves transport-connected healthy status');
+  t.equal(first.dimensions.clusterMemberHealthy, false,
+    'transport-connected node no longer stays healthy on stale cache alone');
+  t.equal(second.dimensions.clusterMemberHealthy, false,
+    'cached snapshot preserves the ineligible transport-only state');
   t.equal(
     authoritativeReads.length,
     2,
@@ -2295,6 +2364,94 @@ test('ControlPlaneReadinessService bypasses authoritative repair cooldown ' +
   t.end();
 });
 
+test('ControlPlaneReadinessService refreshes a transport-connected stale ' +
+  'stopped node row before denying repair routing', async (t) => {
+  const now = 640000;
+  const nodeId = 'node-restarted';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 60000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    }],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const authoritativeReads = [];
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName, sql, params, options,
+      ) {
+        authoritativeReads.push({tableName, sql, params, options});
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              ...createActiveNode(nodeId),
+              [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+              [COLUMN.LAST_HEARTBEAT]: now - 100,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+            }],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [createMessageGroupService(nodeId)],
+          };
+        }
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(
+    nodeId,
+    {
+      allowAuthoritativeRefresh: true,
+      requireFreshOnIneligible: true,
+      decisionDimension: 'repairEligible',
+    },
+  );
+
+  t.equal(readiness.dimensions.processAlive, true,
+    'authoritative refresh should replace the stale stopped lifecycle state');
+  t.equal(readiness.dimensions.repairEligible, true,
+    'transport-connected restarted nodes should recover repair routing after authoritative refresh');
+  t.equal(authoritativeReads.length, 2,
+    'stale stopped transport-connected rows should trigger authoritative node and service refresh');
+  t.equal(
+    cache.get(TABLES.NODES, nodeId)?.[COLUMN.STATUS],
+    SERVICE_STATUS.ACTIVE,
+    'authoritative refresh should update the cached node row back to active',
+  );
+  t.end();
+});
+
 test('ControlPlaneReadinessService authoritative repair can route to the ' +
   'leader path through repair-eligible SQL fallback instead of trusting ' +
   'local replica fallback rows',
@@ -2373,13 +2530,13 @@ async (t) => {
     });
     t.equal(
       read.options.replicaFallbackConsistency,
-      undefined,
-      'readiness repair must not accept stale local replica fallback rows',
+      'any_replica',
+      'readiness repair should prefer a local replica repair read before routed SQL',
     );
     t.equal(
       read.options?.queryOptions?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'readiness repair fallback must stay on repairEligible routing',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'readiness repair fallback must stay on control-plane recovery routing',
     );
     t.match(
       String(read.options?.queryOptions?.sessionId || ''),
@@ -2505,7 +2662,8 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
         const queryOptions = options?.queryOptions || {};
         if (options?.allowSqlFallback !== true ||
             queryOptions?.routingReadinessDimension !==
-              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
+              CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE ||
             typeof queryOptions?.sessionId !== 'string' ||
             queryOptions.sessionId.length === 0) {
           return {
@@ -2563,8 +2721,8 @@ test('ControlPlaneReadinessService repairs self readiness through the ' +
       'self readiness repair should be allowed to route through canonical SQL');
     t.equal(
       read.options?.queryOptions?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'repair fallback must stay on repairEligible routing',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'repair fallback must stay on control-plane recovery routing',
     );
     t.match(
       String(read.options?.queryOptions?.sessionId || ''),
@@ -2659,6 +2817,267 @@ test('ControlPlaneReadinessService treats config-safe publication as writable',
       reasonCodes.includes(
         CONTROL_PLANE_READINESS_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
       ),
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService exposes active priority control-plane recovery mode while publication is pending',
+  async (t) => {
+    let publicationReadOptions = null;
+    const cache = createCache({
+      nodes: [createActiveNode('node-priority-recovery')],
+      services: [createMessageGroupService('node-priority-recovery')],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-recovery',
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        'node-priority-recovery': {
+          nodeId: 'node-priority-recovery',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        getLatestPublicationForNode(_nodeId, options = null) {
+          publicationReadOptions = options;
+          return {
+            publicationEpoch: 14,
+            status: 'ACK_PENDING',
+            createdAt: 1200,
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: ['replica_operations-p1'],
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(
+      'node-priority-recovery',
+    );
+
+    t.equal(readiness.priorityControlPlaneRecovery.active, true);
+    t.same(
+      readiness.priorityControlPlaneRecovery.reasonCodes,
+      [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      'priority recovery mode should remain active until the membership publication is closed and priority partitions satisfy spread',
+    );
+    t.equal(readiness.priorityControlPlaneRecovery.publicationEpoch, 14);
+    t.equal(readiness.priorityControlPlaneRecovery.publicationStatus, 'ACK_PENDING');
+    t.equal(
+      publicationReadOptions?.preferAuthoritativeRead,
+      true,
+      'membership publication diagnostics should prefer authoritative publication reads',
+    );
+    t.equal(
+      publicationReadOptions?.preferOwnerRpcRead,
+      true,
+      'membership publication diagnostics should prefer owner-RPC publication reads',
+    );
+    t.equal(
+      publicationReadOptions?.requireOwnerRpcRead,
+      true,
+      'membership publication diagnostics should require owner-RPC reads',
+    );
+    t.equal(
+      publicationReadOptions?.localReadConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+      'membership publication diagnostics should read from local leaders only',
+    );
+    t.equal(
+      publicationReadOptions?.replicaFallbackConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+      'membership publication diagnostics should avoid any-replica fallback',
+    );
+    t.equal(
+      publicationReadOptions?.queryTimeoutMs,
+      NUM.THOUSAND,
+      'membership publication diagnostics should bound owner reads to the readiness timeout budget',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService clears priority control-plane recovery mode after publication and spread converge',
+  async (t) => {
+    const cache = createCache({
+      nodes: [createActiveNode('node-priority-steady')],
+      services: [createMessageGroupService('node-priority-steady')],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-steady',
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        'node-priority-steady': {
+          nodeId: 'node-priority-steady',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        getLatestPublicationForNode() {
+          return {
+            publicationEpoch: 15,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-priority-steady'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(
+      'node-priority-steady',
+    );
+
+    t.equal(readiness.priorityControlPlaneRecovery.active, false);
+    t.same(readiness.priorityControlPlaneRecovery.reasonCodes, []);
+    t.equal(readiness.priorityControlPlaneRecovery.publicationStatus, 'PUBLISHED');
+    t.end();
+  });
+
+test('ControlPlaneReadinessService refreshes stale published priority summaries before reporting recovery mode',
+  async (t) => {
+    const cache = createCache({
+      nodes: [createActiveNode('node-priority-refresh')],
+      services: [createMessageGroupService('node-priority-refresh')],
+    });
+    let reconcileOptions = null;
+    const stalePublication = {
+      publicationEpoch: 17,
+      status: 'PUBLISHED',
+      createdAt: 1200,
+      publishedActiveNodeIds: ['node-priority-refresh'],
+      priorityPartitionSummary: {
+        satisfied: false,
+        missingPartitionIds: ['sql_write_operations-p1'],
+      },
+    };
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-refresh',
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        'node-priority-refresh': {
+          nodeId: 'node-priority-refresh',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        async getLatestPublicationForNode() {
+          return stalePublication;
+        },
+        async reconcileClusterMembership(options = {}) {
+          reconcileOptions = options;
+          return {
+            publicationRow: {
+              ...stalePublication,
+              priorityPartitionSummary: {
+                satisfied: true,
+                missingPartitionIds: [],
+              },
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(
+      'node-priority-refresh',
+    );
+
+    t.equal(readiness.priorityControlPlaneRecovery.active, false);
+    t.same(readiness.priorityControlPlaneRecovery.reasonCodes, []);
+    t.equal(
+      reconcileOptions?.preferAuthoritativeRead,
+      true,
+      'stale published priority summaries should reconcile authoritatively',
+    );
+    t.equal(
+      reconcileOptions?.latestPublicationRow,
+      stalePublication,
+      'reconcile should reuse the currently published row as the baseline',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService keeps priority control-plane recovery mode active when published membership excludes the target node',
+  async (t) => {
+    const cache = createCache({
+      nodes: [createActiveNode('node-priority-missing')],
+      services: [createMessageGroupService('node-priority-missing')],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-missing',
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        'node-priority-missing': {
+          nodeId: 'node-priority-missing',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        getLatestPublicationForNode() {
+          return {
+            publicationEpoch: 16,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['different-node'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(
+      'node-priority-missing',
+    );
+
+    t.equal(readiness.priorityControlPlaneRecovery.active, true);
+    t.same(
+      readiness.priorityControlPlaneRecovery.reasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
+      'published membership that does not include the target node must remain in recovery mode',
     );
     t.end();
   });
@@ -3152,6 +3571,74 @@ async (t) => {
   t.end();
 });
 
+test('sync snapshot uses synchronous publication and capacity accessors ' +
+  'for recovery admission', async (t) => {
+  const nodeId = 'node-sync-priority-recovery';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    storageAccountingService: {
+      async getCapacitySnapshotForNode() {
+        return null;
+      },
+      getCapacitySnapshotForNodeSync(targetNodeId) {
+        if (targetNodeId !== nodeId) {
+          return null;
+        }
+        return {
+          nodeId,
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        };
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    membershipPublicationService: {
+      async getLatestPublicationForNode() {
+        return null;
+      },
+      getLatestPublicationForNodeSync(targetNodeId) {
+        if (targetNodeId !== nodeId) {
+          return null;
+        }
+        return {
+          publicationEpoch: 23,
+          status: 'ACK_PENDING',
+          publishedActiveNodeIds: [nodeId],
+          requiredAckNodeIds: [nodeId],
+          acknowledgedNodeIds: [],
+        };
+      },
+    },
+    now: () => 620000,
+  });
+
+  const readiness = readinessService.getNodeReadinessSync(nodeId);
+
+  t.equal(readiness.membershipPublication.status, 'ACK_PENDING');
+  t.equal(readiness.dimensions.controlPlanePublished, false);
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'sync readiness should keep recovery open when publication is pending');
+  t.equal(readiness.dimensions.placementEligible, true,
+    'sync readiness should honor synchronous storage capacity snapshots');
+  t.notOk(
+    readiness.reasons.some((reason) => {
+      return reason.code === CONTROL_PLANE_READINESS_REASON
+        .STORAGE_BUDGET_UNAVAILABLE;
+    }),
+    'sync readiness should not fabricate storage budget failures when sync capacity exists',
+  );
+  t.end();
+});
+
 test('sync snapshot reuses a fresher stored readiness evaluation when the ' +
   'visible cache row regresses', async (t) => {
   let now = 100000;
@@ -3485,10 +3972,10 @@ async (t) => {
 
 // ── Transport-connected lease-grace for topology changes (§1.4.12) ──
 
-test('isClusterMemberHealthy returns true for transport-connected node ' +
+test('isClusterMemberHealthy returns false for transport-connected node ' +
   'with expired lease and stale heartbeat during topology change ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
-  'verifies §1.4.12 transport reconciliation)',
+  'verifies transport is no longer alternate membership truth)',
 async (t) => {
   const now = 200000;
   const cache = createCache({
@@ -3527,15 +4014,130 @@ async (t) => {
   const readiness = await readinessService
     .getNodeReadiness('node-split-lag');
 
-  t.equal(readiness.dimensions.clusterMemberHealthy, true,
-    'transport-connected active node must remain cluster-member-healthy ' +
-    'despite expired lease and stale heartbeat in cache');
-  t.equal(readiness.dimensions.serveEligible, true,
-    'transport-connected active node must remain serve-eligible ' +
-    'despite stale cache evidence');
-  t.equal(readiness.dimensions.controlPlaneWritable, true,
-    'transport-connected active node must remain control-plane-writable ' +
-    'despite stale cache evidence');
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'transport-connected active node must not remain cluster-member-healthy ' +
+    'once lease evidence is stale');
+  t.equal(readiness.dimensions.serveEligible, false,
+    'transport-connected active node must not remain serve-eligible ' +
+    'when membership evidence is stale');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'transport-connected active node must not remain control-plane-writable ' +
+    'when membership evidence is stale');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'transport-connected active node may still remain recovery-eligible');
+  t.end();
+});
+
+test('transport-connected startup node remains recovery-eligible when a stale ' +
+  'stopped message-group row is the only remaining pre-cutover service row ' +
+  '(uses ControlPlaneReadinessService.hasWritableControlPlaneService, ' +
+  'verifies bootstrap-to-runtime handoff does not self-block register-service)',
+async (t) => {
+  const now = 200000;
+  const joiningNodeId = 'node-restarting';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(joiningNodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 1000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+    }],
+    services: [
+      {
+        ...createMessageGroupService(joiningNodeId),
+        [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+      },
+      createPartitionService(joiningNodeId, 'services-p1-r1'),
+    ],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [joiningNodeId]: {
+        nodeId: joiningNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(joiningNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'transport-connected startup node should not bypass stale lease evidence');
+  t.equal(readiness.dimensions.routingReady, true,
+    'active partition service routing should stay available during startup recovery');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'stale membership evidence must still block ordinary control-plane writes');
+  t.equal(readiness.dimensions.repairEligible, false,
+    'startup recovery must not reopen repair eligibility from transport alone');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'startup recovery must remain recovery-eligible so register-service can replace the stale row');
+  t.end();
+});
+
+test('isClusterMemberHealthy returns false for transport-connected node ' +
+  'with an explicit no-ready-lease watermark ' +
+  '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
+  'verifies durable rejoin quarantine beats transport grace)',
+async (t) => {
+  const now = 200000;
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode('node-durable-rejoin'),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 1000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    }],
+    services: [createMessageGroupService('node-durable-rejoin')],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'node-durable-rejoin': {
+        nodeId: 'node-durable-rejoin',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness('node-durable-rejoin');
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'transport-connected node must stay cluster-member-unhealthy when the owner explicitly cleared its ready lease');
+  t.equal(readiness.dimensions.serveEligible, false,
+    'transport-connected node must not be serve-eligible while durable rejoin quarantine is active');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'transport-connected node must not be control-plane-writable while durable rejoin quarantine is active');
   t.end();
 });
 
@@ -3821,5 +4423,496 @@ async (t) => {
     'self-node with non-active status must not use the self-node ' +
     'fast path — shutting_down nodes are not healthy cluster ' +
     'members');
+  t.end();
+});
+
+test('ControlPlaneReadinessService retains recovery admission on live ' +
+  'transport and service evidence', async (t) => {
+  const now = 500000;
+  const nodeId = 'node-recovery-grace';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache({
+      nodes: [{
+        ...createActiveNode(nodeId),
+        [COLUMN.LAST_HEARTBEAT]: now - 60000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+      }],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    messageRouter: {
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'transport-backed reconciliation should not keep cluster membership healthy');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'active control-plane service evidence should not remain writable without membership evidence');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'recovery eligibility should stay open on live transport and service evidence');
+  t.equal(readiness.dimensions.repairEligible, false,
+    'transport-backed recovery grace must not keep repair admission open');
+  t.end();
+});
+
+test('ControlPlaneReadinessService records recovery participation ' +
+  'decisions in the diagnostics ledger', (t) => {
+  const nodeId = 'node-recovery-ledger';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    messageRouter: {
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+  readinessService.recordAuthoritativeReadinessRepair({
+    nodeId,
+    repairKey: 'repair:node-participation-ledger',
+    stage: 'completed',
+    outcome: 'repaired',
+    repaired: true,
+    serviceRowCount: 1,
+  });
+
+  const participation = readinessService.getControlPlaneParticipationSync(
+    nodeId,
+    {
+      participationKind:
+        CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY,
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      tableName: TABLES.SERVICES,
+      partitionId: 'services-p1',
+    },
+  );
+  const ledgerEntries =
+    readinessService.getParticipationDecisionLedgerEntries();
+  const latestEntry = ledgerEntries[ledgerEntries.length - 1] || null;
+
+  t.equal(participation.eligible, true, 'recovery participation should pass');
+  t.match(latestEntry, {
+    nodeId,
+    tableName: TABLES.SERVICES,
+    partitionId: 'services-p1',
+    participationKind:
+      CONTROL_PLANE_PARTICIPATION_KIND.CONTROL_PLANE_RECOVERY,
+    decisionDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    eligible: true,
+    cacheWatermark: {
+      lastHeartbeat: 1000,
+      readyLeaseExpiresAt: 2000,
+    },
+    transportState: {
+      connected: true,
+      rowState: null,
+      routerState: 'connected',
+    },
+    authoritativeRepair: {
+      stage: 'completed',
+      outcome: 'repaired',
+      repaired: true,
+      serviceRowCount: 1,
+    },
+    lifecyclePhase: 'active',
+  });
+  t.end();
+});
+
+test('ControlPlaneReadinessService records authoritative repair attempts ' +
+  'and recovery epochs', async (t) => {
+  let now = 520000;
+  const nodeId = 'node-recovery-epoch';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.LAST_HEARTBEAT]: now - 60000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+    }],
+    services: [{
+      ...createMessageGroupService(nodeId),
+      [COLUMN.STATUS]: 'syncing',
+    }],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName) {
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              ...createActiveNode(nodeId),
+              [COLUMN.LAST_HEARTBEAT]: now - 25,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: now + 15000,
+            }],
+            source: 'sql_query_engine',
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [createMessageGroupService(nodeId)],
+            source: 'sql_query_engine',
+          };
+        }
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  await readinessService.getNodeReadiness(nodeId, {
+    allowAuthoritativeRefresh: false,
+  });
+  now += 1000;
+  const repairedReadiness = await readinessService.getNodeReadiness(
+    nodeId,
+    {allowAuthoritativeRefresh: true},
+  );
+  const repairStages =
+    readinessService.getAuthoritativeReadinessRepairLedgerEntries()
+      .map((entry) => entry.stage);
+  const recoveryEpochs =
+    readinessService.getRecoveryEpochHistoryByNodeId()[nodeId] || [];
+
+  t.equal(repairedReadiness.dimensions.clusterMemberHealthy, true,
+    'authoritative repair should restore healthy membership');
+  t.ok(repairStages.includes('scheduled'),
+    'repair ledger should retain the scheduled stage');
+  t.ok(repairStages.includes('completed'),
+    'repair ledger should retain the completed stage');
+  t.equal(recoveryEpochs.length, 1,
+    'closed recovery history should retain one completed epoch');
+  t.equal(recoveryEpochs[0].open, false,
+    'repaired readiness should close the recovery epoch');
+  t.ok(recoveryEpochs[0].events.length >= 2,
+    'recovery epoch should retain both degraded and recovered observations');
+  t.end();
+});
+
+test('ControlPlaneReadinessService getNodeReadiness remains read-only for ' +
+  'lifecycle and placement state when no authoritative refresh is requested',
+async (t) => {
+  const nodeId = 'node-read-only';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    cacheMutationTarget: {
+      applySystemTableChange() {
+        t.fail('readiness projection must not mutate cached lifecycle or placement rows');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      reconcileAuthoritativeCacheRows() {
+        t.fail('readiness projection must not reconcile authoritative rows without an explicit refresh path');
+      },
+      submitMutation() {
+        t.fail('readiness projection must not submit lifecycle or placement mutations');
+      },
+      executeQuery() {
+        t.fail('readiness projection must not execute write queries');
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 610000,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId, {
+    allowAuthoritativeRefresh: false,
+  });
+
+  t.equal(typeof readiness.dimensions.repairEligible, 'boolean',
+    'readiness should still derive repair eligibility as projection state');
+  t.equal(typeof readiness.dimensions.placementEligible, 'boolean',
+    'readiness should still derive placement eligibility as projection state');
+  t.end();
+});
+
+test('ControlPlaneReadinessService authoritative refresh reconciles ' +
+  'projection cache evidence without submitting lifecycle or placement writes',
+async (t) => {
+  let now = 620000;
+  const nodeId = 'node-projection-reconcile-only';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.LAST_HEARTBEAT]: now - 60000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+    }],
+    services: [{
+      ...createMessageGroupService(nodeId),
+      [COLUMN.STATUS]: 'syncing',
+    }],
+  });
+  const gatewayCalls = [];
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: {
+      applySystemTableChange() {
+        t.fail('authoritative refresh must delegate projection repair through the gateway');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async reconcileAuthoritativeCacheRows(tableName, rows, options) {
+        gatewayCalls.push({tableName, rows, options});
+        return {
+          success: true,
+          mutationCount: Array.isArray(rows) ? rows.length : 0,
+        };
+      },
+      submitMutation() {
+        t.fail('authoritative readiness refresh must not submit lifecycle or placement mutations');
+      },
+      executeQuery() {
+        t.fail('authoritative readiness refresh must not execute write queries');
+      },
+    },
+    messageRouter: {
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName) {
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              ...createActiveNode(nodeId),
+              [COLUMN.LAST_HEARTBEAT]: now - 25,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: now + 15000,
+            }],
+            source: 'sql_query_engine',
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [createMessageGroupService(nodeId)],
+            source: 'sql_query_engine',
+          };
+        }
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  await readinessService.getNodeReadiness(nodeId, {
+    allowAuthoritativeRefresh: false,
+  });
+  now += 1000;
+  const repairedReadiness = await readinessService.getNodeReadiness(nodeId, {
+    allowAuthoritativeRefresh: true,
+    decisionDimension: 'repairEligible',
+  });
+
+  t.equal(typeof repairedReadiness.dimensions.repairEligible, 'boolean',
+    'authoritative refresh should still return one projected readiness snapshot');
+  t.same(
+    gatewayCalls.map((call) => call.tableName),
+    [TABLES.NODES, TABLES.SERVICES],
+    'authoritative refresh should only reconcile projected node and service rows',
+  );
+  t.ok(gatewayCalls.every((call) => call.options?.causeId),
+    'authoritative refresh should preserve reconciliation cause ids');
+  t.end();
+});
+
+test('ControlPlaneReadinessService exposes controlPlanePublished while keeping recovery eligibility open during publication convergence', async (t) => {
+  const now = 610000;
+  const nodeId = 'node-publication-pending';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    messageRouter: {
+      getConnectionState(targetNodeId) {
+        return targetNodeId === nodeId ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    membershipPublicationService: {
+      getLatestPublicationForNode(targetNodeId) {
+        if (targetNodeId !== nodeId) {
+          return null;
+        }
+        return {
+          publicationEpoch: 14,
+          status: 'ACK_PENDING',
+          publishedActiveNodeIds: [nodeId],
+          requiredAckNodeIds: [nodeId],
+          acknowledgedNodeIds: [],
+        };
+      },
+    },
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(
+    readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED
+    ],
+    false,
+    'canonical readiness should expose a false controlPlanePublished dimension until the durable publication epoch is closed',
+  );
+  t.equal(
+    readiness.dimensions.controlPlaneRecoveryEligible,
+    true,
+    'recovery eligibility should stay open while the publication epoch is still awaiting acknowledgement so recovery traffic can finish convergence',
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService awaits async membership publication reads before computing recovery eligibility', async (t) => {
+  const nodeId = 'node-publication-async';
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    }),
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    membershipPublicationService: {
+      async getLatestPublicationForNode(targetNodeId) {
+        if (targetNodeId !== nodeId) {
+          return null;
+        }
+        return {
+          publicationEpoch: 22,
+          status: 'ACK_PENDING',
+          publishedActiveNodeIds: [nodeId],
+          requiredAckNodeIds: [nodeId],
+          acknowledgedNodeIds: [],
+        };
+      },
+    },
+    now: () => 610000,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId, {
+    maxCachedAgeMs: 0,
+  });
+
+  t.equal(readiness.membershipPublication.status, 'ACK_PENDING');
+  t.equal(readiness.dimensions.controlPlanePublished, false);
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'async readiness should await publication state and keep recovery open during convergence');
   t.end();
 });

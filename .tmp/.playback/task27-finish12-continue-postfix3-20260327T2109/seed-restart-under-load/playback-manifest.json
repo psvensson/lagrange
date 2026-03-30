@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seed-restart-under-load",
+  "startedAt": 1774647969023,
+  "endedAt": 1774648110596,
+  "durationMs": 141573,
+  "files": {
+    "events": ".tmp/.playback/task27-finish12-continue-postfix3-20260327T2109/seed-restart-under-load/events.ndjson",
+    "samples": ".tmp/.playback/task27-finish12-continue-postfix3-20260327T2109/seed-restart-under-load/samples.ndjson",
+    "snapshots": ".tmp/.playback/task27-finish12-continue-postfix3-20260327T2109/seed-restart-under-load/snapshots.ndjson",
+    "manifest": ".tmp/.playback/task27-finish12-continue-postfix3-20260327T2109/seed-restart-under-load/playback-manifest.json",
+    "viewer": ".tmp/.playback/task27-finish12-continue-postfix3-20260327T2109/seed-restart-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 68,
+    "samples": 65,
+    "snapshots": 120
+  },
+  "warnings": []
+}

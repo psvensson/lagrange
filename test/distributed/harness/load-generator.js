@@ -30,6 +30,7 @@ const NODE_FAILURE_THRESHOLD_DEFAULT = 3;
 const NODE_FAILURE_COOLDOWN_MS_DEFAULT = 5000;
 const QUERY_TIMEOUT_MS_DEFAULT = 2000;
 const ADMISSION_BACKOFF_MS_DEFAULT = 250;
+const EXTERNAL_ADMISSION_DIAGNOSTICS_MAX_AGE_MS_DEFAULT = 5000;
 const NODE_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 const NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN = 'circuit_open';
 const NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED = 'budget_exhausted';
@@ -47,6 +48,7 @@ const DISPATCH_STOP_REASON_TARGET = 'target';
 const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
 const REJECTED_REASON_QUEUE_FULL = 'queueFull';
+const REJECTED_REASON_FLOW_CONTROL = 'flowControl';
 const WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
 const WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
 const WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
@@ -54,6 +56,8 @@ const WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
 const WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
 const WAIT_REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
 const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
+const LOAD_LANE_TRANSIENT_TIMEOUT_FRAGMENT = 'query timeout after';
+const LOAD_LANE_TRANSIENT_CONNECTION_FRAGMENT = 'connection closed';
 const ADMIN_LANE_LOAD = 'load';
 
 const LOAD_TABLE_NAME = 'logs';
@@ -70,6 +74,7 @@ const WORKLOAD_PROFILE_BENCHMARK_EVENTS = 'benchmark_events_mixed';
 const BENCHMARK_PAYLOAD_MODULO = 100000;
 const BENCHMARK_EVENT_ID_PREFIX = 'bench-';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ADMISSION_AWARE_QUEUE_MULTIPLIER_DEFAULT = 2;
 
 const DEFAULT_OPERATIONS = Object.freeze([
   INSERT_OP,
@@ -363,6 +368,7 @@ function computeMetrics(
       {...rejectedAccounting.rejectedByReason} :
       {
         [REJECTED_REASON_QUEUE_FULL]: ZERO,
+        [REJECTED_REASON_FLOW_CONTROL]: ZERO,
       };
   }
   if (queuePressure && typeof queuePressure === 'object') {
@@ -430,6 +436,9 @@ class LoadRun {
   *   dispatch queue depth before overload rejection.
   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
   *   scheduled operations when pending queue exceeds depth.
+   * @param {boolean} [options.admissionAwareScheduling] - Convert
+   *   overload into bounded flow-control rejections instead of
+   *   unbounded scheduler backlog.
    * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
    *   Adaptive dispatch guardrail settings for control-plane pressure.
    */
@@ -475,6 +484,10 @@ class LoadRun {
       options.queryTimeoutMs > ZERO ?
         options.queryTimeoutMs :
         QUERY_TIMEOUT_MS_DEFAULT;
+    this._externalAdmissionDiagnosticsMaxAgeMs = normalizePositiveInteger(
+      options.externalAdmissionDiagnosticsMaxAgeMs,
+      EXTERNAL_ADMISSION_DIAGNOSTICS_MAX_AGE_MS_DEFAULT,
+    );
     this._nodeResolver =
       typeof options.nodeResolver === 'function' ?
         options.nodeResolver :
@@ -482,12 +495,17 @@ class LoadRun {
     this._dispatchIntervalMs = this._opsPerSec > ZERO ?
       MS_PER_SECOND / this._opsPerSec :
       MS_PER_SECOND;
+    this._admissionAwareScheduling =
+      options.admissionAwareScheduling === true;
     this._maxPendingQueueDepth =
       Number.isInteger(options.maxPendingQueueDepth) &&
       options.maxPendingQueueDepth >= ZERO ?
         options.maxPendingQueueDepth :
         null;
-    this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
+    this._earlyRejectOnQueueFull =
+      options.earlyRejectOnQueueFull === true ||
+      (options.earlyRejectOnQueueFull !== false &&
+        this._admissionAwareScheduling === true);
     this._targetOperationCount = Math.max(
       ZERO,
       Math.floor((this._durationMs * this._opsPerSec) / MS_PER_SECOND),
@@ -508,6 +526,7 @@ class LoadRun {
     this._rejectedOperations = ZERO;
     this._rejectedByReason = {
       [REJECTED_REASON_QUEUE_FULL]: ZERO,
+      [REJECTED_REASON_FLOW_CONTROL]: ZERO,
     };
     this._dispatchedOperationCount = ZERO;
     this._counter = ZERO;
@@ -578,16 +597,13 @@ class LoadRun {
       rejected: ZERO,
       rejectedByReason: {
         [REJECTED_REASON_QUEUE_FULL]: ZERO,
+        [REJECTED_REASON_FLOW_CONTROL]: ZERO,
       },
     };
   }
 
   _replaceAvailableNodes(nodes) {
     const normalizedNodes = this._normalizeResolvedNodes(nodes);
-    if (normalizedNodes.length === ZERO) {
-      return;
-    }
-
     const previousHealthByKey = this._nodeHealthByKey;
     const previousInFlightByKey = this._nodeInFlightByKey;
     const previousMetricsByKey = this._nodeMetricsByKey;
@@ -621,6 +637,22 @@ class LoadRun {
       );
     }
 
+    for (const [key, state] of previousHealthByKey.entries()) {
+      if (!nextNodeHealthByKey.has(key)) {
+        nextNodeHealthByKey.set(key, state);
+      }
+    }
+    for (const [key, inFlight] of previousInFlightByKey.entries()) {
+      if (!nextNodeInFlightByKey.has(key)) {
+        nextNodeInFlightByKey.set(key, inFlight);
+      }
+    }
+    for (const [key, metrics] of previousMetricsByKey.entries()) {
+      if (!nextNodeMetricsByKey.has(key)) {
+        nextNodeMetricsByKey.set(key, metrics);
+      }
+    }
+
     this._availableNodes = nextAvailableNodes;
     this._nodeHealthKeys = nextNodeHealthKeys;
     this._nodeHealthByKey = nextNodeHealthByKey;
@@ -639,9 +671,6 @@ class LoadRun {
       return;
     }
     const normalizedNodes = this._normalizeResolvedNodes(resolvedNodes);
-    if (normalizedNodes.length === ZERO) {
-      return;
-    }
     const nextKeys = normalizedNodes.map((node, index) =>
       this._resolveNodeHealthKey(node, index),
     );
@@ -718,6 +747,8 @@ class LoadRun {
       lastPressureSignalsTotal: ZERO,
       currentEffectiveMaxInFlight: this._maxInFlight,
       minEffectiveMaxInFlight: this._maxInFlight,
+      currentEffectiveDispatchIntervalMs: this._dispatchIntervalMs,
+      maxEffectiveDispatchIntervalMs: this._dispatchIntervalMs,
       engagedTransitions: ZERO,
       recoveryTransitions: ZERO,
       maxPressureSignalsDelta: ZERO,
@@ -734,7 +765,8 @@ class LoadRun {
       Number(this._waitReasons[WAIT_REASON_NODE_ADMISSION_BLOCKED] || ZERO) +
       Number(
         this._waitReasons[WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE] || ZERO,
-      );
+      ) +
+      Number(this._waitReasons[WAIT_REASON_TIMEOUT_WAITS] || ZERO);
     const pressureSignalsDelta = Math.max(
       ZERO,
       pressureSignalsTotal - Number(state.lastPressureSignalsTotal || ZERO),
@@ -816,6 +848,19 @@ class LoadRun {
       Number(state.minEffectiveMaxInFlight || this._maxInFlight),
       nextEffectiveMaxInFlight,
     );
+    const reductionFloorRatio = Math.max(0.1, ONE - reductionRatio);
+    const configuredDispatchIntervalMs = this._dispatchIntervalMs > ZERO ?
+      this._dispatchIntervalMs :
+      MIN_DISPATCH_DELAY_MS;
+    const nextEffectiveDispatchIntervalMs = Math.max(
+      MIN_DISPATCH_DELAY_MS,
+      configuredDispatchIntervalMs / reductionFloorRatio,
+    );
+    state.currentEffectiveDispatchIntervalMs = nextEffectiveDispatchIntervalMs;
+    state.maxEffectiveDispatchIntervalMs = Math.max(
+      Number(state.maxEffectiveDispatchIntervalMs || configuredDispatchIntervalMs),
+      nextEffectiveDispatchIntervalMs,
+    );
   }
 
   _countDispatchReadyNodes(nowMs) {
@@ -847,6 +892,31 @@ class LoadRun {
         ),
       ),
     );
+  }
+
+  _resolveEffectiveDispatchIntervalMs() {
+    const state = this._adaptiveDispatchGuardrail;
+    if (!state || state.enabled !== true) {
+      return Math.max(MIN_DISPATCH_DELAY_MS, this._dispatchIntervalMs);
+    }
+    return Math.max(
+      MIN_DISPATCH_DELAY_MS,
+      Number(
+        state.currentEffectiveDispatchIntervalMs || this._dispatchIntervalMs,
+      ),
+    );
+  }
+
+  _rebaseDispatchSchedule(nowMs) {
+    const state = this._adaptiveDispatchGuardrail;
+    if (!state || state.enabled !== true || !Number.isFinite(this._nextDispatchAtMs)) {
+      return;
+    }
+    const effectiveDispatchIntervalMs = this._resolveEffectiveDispatchIntervalMs();
+    const earliestDispatchAtMs = nowMs - effectiveDispatchIntervalMs;
+    if (this._nextDispatchAtMs < earliestDispatchAtMs) {
+      this._nextDispatchAtMs = earliestDispatchAtMs;
+    }
   }
 
   /**
@@ -928,6 +998,7 @@ class LoadRun {
     this._recordPendingQueueDepth(now);
     this._enforceQueueDepthBound(now);
     this._updateAdaptiveDispatchGuardrail(now);
+    this._rebaseDispatchSchedule(now);
     if (this._counter >= this._targetOperationCount) {
       this._schedulingStopped = true;
       if (!this._dispatchStoppedBy) {
@@ -938,6 +1009,7 @@ class LoadRun {
     }
 
     const effectiveMaxInFlight = this._resolveEffectiveMaxInFlight();
+    const effectiveDispatchIntervalMs = this._resolveEffectiveDispatchIntervalMs();
     let dispatchedThisTick = ZERO;
     while (
       Number.isFinite(this._nextDispatchAtMs) &&
@@ -965,8 +1037,12 @@ class LoadRun {
       this._inFlight++;
       this._executeWithFailover(sql, operation).finally(() => {
         this._inFlight = Math.max(ZERO, this._inFlight - ONE);
+        if (this._schedulingStopped === true &&
+            this._inFlight === ZERO) {
+          this._finish();
+        }
       });
-      this._nextDispatchAtMs += this._dispatchIntervalMs;
+      this._nextDispatchAtMs += effectiveDispatchIntervalMs;
       dispatchedThisTick++;
     }
 
@@ -1006,16 +1082,48 @@ class LoadRun {
   }
 
   _enforceQueueDepthBound(nowMs) {
-    if (this._maxPendingQueueDepth === null ||
-        this._earlyRejectOnQueueFull !== true) {
+    if (this._earlyRejectOnQueueFull !== true) {
+      return;
+    }
+    const queueDepthBound = this._resolveQueueDepthBound(nowMs);
+    if (queueDepthBound === null) {
       return;
     }
     const pendingDepth = this._estimatePendingQueueDepth(nowMs);
-    const overflow = pendingDepth - this._maxPendingQueueDepth;
+    const overflow = pendingDepth - queueDepthBound;
     if (overflow <= ZERO) {
       return;
     }
-    this._rejectScheduledOperations(overflow, REJECTED_REASON_QUEUE_FULL);
+    this._rejectScheduledOperations(
+      overflow,
+      this._resolveQueueOverflowRejectReason(),
+    );
+  }
+
+  _resolveQueueDepthBound(_nowMs) {
+    if (this._maxPendingQueueDepth !== null) {
+      return this._maxPendingQueueDepth;
+    }
+    if (this._admissionAwareScheduling !== true) {
+      return null;
+    }
+    return Math.max(
+      ONE,
+      Math.ceil(
+        this._resolveEffectiveMaxInFlight() *
+        ADMISSION_AWARE_QUEUE_MULTIPLIER_DEFAULT,
+      ),
+    );
+  }
+
+  _resolveQueueOverflowRejectReason() {
+    if (this._maxPendingQueueDepth !== null) {
+      return REJECTED_REASON_QUEUE_FULL;
+    }
+    if (this._admissionAwareScheduling === true) {
+      return REJECTED_REASON_FLOW_CONTROL;
+    }
+    return REJECTED_REASON_QUEUE_FULL;
   }
 
   _rejectScheduledOperations(count, reason) {
@@ -1062,6 +1170,7 @@ class LoadRun {
           typeof nodeMetrics.rejectedByReason !== 'object') {
         nodeMetrics.rejectedByReason = {
           [REJECTED_REASON_QUEUE_FULL]: ZERO,
+          [REJECTED_REASON_FLOW_CONTROL]: ZERO,
         };
       }
       if (!Object.hasOwn(nodeMetrics.rejectedByReason, reason)) {
@@ -1472,6 +1581,25 @@ class LoadRun {
       if (typeof node.isLoadAdmissionReady === 'function') {
         return node.isLoadAdmissionReady() !== false;
       }
+      if (typeof node.getLastReachabilityDiagnostics === 'function') {
+        const diagnostics = node.getLastReachabilityDiagnostics();
+        if (diagnostics && typeof diagnostics === 'object') {
+          const capturedAtMs = Number(
+            diagnostics.timestamp ?? diagnostics.capturedAtMs,
+          );
+          const diagnosticsAgeMs =
+            Number.isFinite(capturedAtMs) ?
+              Math.max(ZERO, Date.now() - capturedAtMs) :
+              ZERO;
+          const diagnosticsFresh =
+            diagnosticsAgeMs <= this._externalAdmissionDiagnosticsMaxAgeMs;
+          if (diagnosticsFresh &&
+              (diagnostics.adminReady === false ||
+                diagnostics.reachable === false)) {
+            return false;
+          }
+        }
+      }
     } catch (_error) {
       return false;
     }
@@ -1494,7 +1622,14 @@ class LoadRun {
       message.includes('query_admission_rejected') ||
       message.includes('routing not ready') ||
       message.includes('serve not ready') ||
-      message.includes('load lane admission denied');
+      message.includes('load lane admission denied') ||
+      (
+        message.includes('on lane ' + ADMIN_LANE_LOAD) &&
+        (
+          message.includes(LOAD_LANE_TRANSIENT_TIMEOUT_FRAGMENT) ||
+          message.includes(LOAD_LANE_TRANSIENT_CONNECTION_FRAGMENT)
+        )
+      );
   }
 
   _isRetryableControlPlanePressureError(error) {
@@ -1658,6 +1793,7 @@ class LoadRun {
           rejected: ZERO,
           rejectedByReason: {
             [REJECTED_REASON_QUEUE_FULL]: ZERO,
+            [REJECTED_REASON_FLOW_CONTROL]: ZERO,
           },
         };
       }
@@ -1686,6 +1822,7 @@ class LoadRun {
         nodeMetrics.rejectedByReason :
         {
           [REJECTED_REASON_QUEUE_FULL]: ZERO,
+          [REJECTED_REASON_FLOW_CONTROL]: ZERO,
         };
       for (const [reason, count] of Object.entries(rejectedByReason)) {
         if (!Object.hasOwn(summary[nodeId].rejectedByReason, reason)) {
@@ -1740,6 +1877,12 @@ class LoadRun {
       currentEffectiveMaxInFlight: this._resolveEffectiveMaxInFlight(),
       minEffectiveMaxInFlight: Number(
         state.minEffectiveMaxInFlight || this._maxInFlight,
+      ),
+      configuredDispatchIntervalMs: this._dispatchIntervalMs,
+      currentEffectiveDispatchIntervalMs:
+        this._resolveEffectiveDispatchIntervalMs(),
+      maxEffectiveDispatchIntervalMs: Number(
+        state.maxEffectiveDispatchIntervalMs || this._dispatchIntervalMs,
       ),
       pressureScore: Number(state.pressureScore || ZERO),
       pressureSignalThreshold: state.pressureSignalThreshold,
@@ -1863,10 +2006,13 @@ class LoadGenerator {
    *   for timeout-aware node handles.
   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
   *   cap to prevent one node from monopolizing global concurrency.
-   * @param {number} [options.maxPendingQueueDepth] - Optional max
-   *   dispatch queue depth before overload rejection.
-   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
-   *   scheduled operations when pending queue exceeds depth.
+  * @param {number} [options.maxPendingQueueDepth] - Optional max
+  *   dispatch queue depth before overload rejection.
+  * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+  *   scheduled operations when pending queue exceeds depth.
+   * @param {boolean} [options.admissionAwareScheduling] - Convert
+   *   overload into bounded flow-control rejections instead of
+   *   unbounded scheduler backlog.
    * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
    *   Optional adaptive dispatch guardrail settings.
    */
@@ -1917,7 +2063,12 @@ class LoadGenerator {
       options.maxPendingQueueDepth >= ZERO ?
         options.maxPendingQueueDepth :
         null;
-    this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
+    this._admissionAwareScheduling =
+      options.admissionAwareScheduling === true;
+    this._earlyRejectOnQueueFull =
+      options.earlyRejectOnQueueFull === true ||
+      (options.earlyRejectOnQueueFull !== false &&
+        this._admissionAwareScheduling === true);
     this._adaptiveDispatchGuardrail = options.adaptiveDispatchGuardrail;
     this._nodeResolver =
       typeof options.nodeResolver === 'function' ?
@@ -1959,6 +2110,7 @@ class LoadGenerator {
       admissionBackoffMs: this._admissionBackoffMs,
       maxPendingQueueDepth: this._maxPendingQueueDepth,
       earlyRejectOnQueueFull: this._earlyRejectOnQueueFull,
+      admissionAwareScheduling: this._admissionAwareScheduling,
       adaptiveDispatchGuardrail: this._adaptiveDispatchGuardrail,
       ...(this._nodeResolver ? {nodeResolver: this._nodeResolver} : {}),
       ...(this._nodeMaxInFlight !== null ?

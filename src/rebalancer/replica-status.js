@@ -159,6 +159,7 @@ const REPLACE_WORKFLOW_STEPS = [
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
   READINESS_SNAPSHOT: 'readinessSnapshot',
+  MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
   REPLICA_IDS: 'replicaIds',
   PEER_ADDRESSES: 'peerAddresses',
 });
@@ -317,6 +318,11 @@ function createOperation(params) {
       params.sourceReplicaId) {
     initialHistory[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] =
       params.sourceReplicaId;
+  }
+  if (Number.isInteger(params.membershipPublicationEpoch) &&
+      params.membershipPublicationEpoch >= 0) {
+    initialHistory[OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH] =
+      params.membershipPublicationEpoch;
   }
 
   return {

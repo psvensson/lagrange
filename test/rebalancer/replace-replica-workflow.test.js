@@ -86,8 +86,8 @@ test('REPLACE replica workflow', async (t) => {
     async (t) => {
       const deliveries = [];
       const messageRouter = {
-        async deliver(target, payload) {
-          deliveries.push({target, payload});
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
           return {
             acknowledged: true,
             status: 'initiated',
@@ -157,6 +157,11 @@ test('REPLACE replica workflow', async (t) => {
           'first REPLACE phase should issue CREATE_REPLICA to target node',
         );
         t.equal(
+          deliveries[0]?.options?.deliveryPriority,
+          'critical',
+          'replica dispatch should use the reserved control-plane lane',
+        );
+        t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.CREATING,
           'REPLACE operation should transition into CREATING after create dispatch',
@@ -191,6 +196,136 @@ test('REPLACE replica workflow', async (t) => {
         await coordinator.shutdown();
       }
     });
+
+  await t.test(
+    'REPLACE reconciliation dispatches source removal while owner key is already held',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.ACTIVE}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
+
+        const progressed =
+          await coordinator.operationWorkflowRunExclusive(
+            coordinator.getOperationOwnerSingleFlightKey(
+              operation.operationId,
+            ),
+            () => coordinator.reconcileOperationProgress(operation),
+          );
+
+        t.equal(progressed, true,
+          'reconciliation should progress a syncing REPLACE with active target');
+        t.equal(deliveries.length, 1,
+          'reconciliation should dispatch source-removal even with owner key held');
+        t.equal(
+          deliveries[0]?.payload?.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'reconcile path should dispatch source removal for REPLACE',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'reconcile path should advance REPLACE into STOPPING after remove dispatch',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'REPLACE reconciliation skips duplicate source removal when ACTIVE transition is already committed',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.ACTIVE}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
+        coordinator.operationWorkflowCoordinator
+          .markTransitionCommitted(
+            operation.operationId,
+            WORKFLOW_STEP.ACTIVE,
+          );
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(progressed, true,
+          'reconciliation should treat ACTIVE replay as observed progress');
+        t.equal(deliveries.length, 0,
+          'idempotent ACTIVE replays should not redispatch source removal');
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
 
   await t.test('RebalanceCoordinator routes REPLACE creation through storage admission',
     async (t) => {
@@ -396,6 +531,122 @@ test('REPLACE replica workflow', async (t) => {
           persistedOperation?.workflowStep,
           WORKFLOW_STEP.REMOVED,
           'remove phase completion should terminate the REPLACE operation',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test(
+    'RebalanceCoordinator keeps critical REPLACE in syncing while the authoritative replacement remains learner',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload) {
+          deliveries.push({target, payload});
+          return {
+            acknowledged: true,
+            status: deliveries.length === 1 ? 'initiated' : 'completed',
+          };
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      };
+      const authoritativeLearnerRow = {
+        service_id: 'nodes-p1-r4',
+        replica_id: 'nodes-p1-r4',
+        service_type: 'partition',
+        partition_id: 'nodes-p1',
+        node_id: 'node-d',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: 'learner',
+        address: 'node-d/partition/nodes-p1-r4',
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-a',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{...authoritativeLearnerRow}],
+            affectedRows: 1,
+          },
+        },
+        cacheData: {
+          services: [
+            {
+              service_id: 'nodes-p1-r1',
+              replica_id: 'nodes-p1-r1',
+              service_type: 'partition',
+              partition_id: 'nodes-p1',
+              node_id: 'node-a',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+              address: 'node-a/partition/nodes-p1-r1',
+            },
+            {
+              service_id: 'nodes-p1-r2',
+              replica_id: 'nodes-p1-r2',
+              service_type: 'partition',
+              partition_id: 'nodes-p1',
+              node_id: 'node-b',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-b/partition/nodes-p1-r2',
+            },
+            {
+              service_id: 'nodes-p1-r3',
+              replica_id: 'nodes-p1-r3',
+              service_type: 'partition',
+              partition_id: 'nodes-p1',
+              node_id: 'node-c',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-c/partition/nodes-p1-r3',
+            },
+          ],
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'nodes-p1',
+          entityType: 'partition',
+          entityId: 'nodes-p1',
+          nodeId: 'node-d',
+          sourceNodeId: 'node-a',
+          replicaId: 'nodes-p1-r1',
+        });
+
+        await coordinator.executeOperation(operation);
+        await coordinator.reconcileOperationProgress(operation);
+        const persistedOperation =
+          await coordinator.getOperation(operation.operationId);
+
+        t.equal(
+          deliveries.length,
+          1,
+          'critical REPLACE should not dispatch source removal while the target is still learner-only',
+        );
+        t.equal(
+          persistedOperation?.workflowStep,
+          WORKFLOW_STEP.SYNCING,
+          'critical REPLACE should remain in syncing until the replacement becomes voter-ready',
+        );
+        t.equal(
+          persistedOperation?.status,
+          ReplicaStatus.SYNCING,
+          'critical REPLACE should keep the operation in syncing while learner promotion is pending',
+        );
+        t.equal(
+          persistedOperation?.errorMessage ||
+            persistedOperation?.error_message ||
+            null,
+          null,
+          'critical REPLACE should not fail on the expected learner promotion window',
         );
       } finally {
         await coordinator.shutdown();

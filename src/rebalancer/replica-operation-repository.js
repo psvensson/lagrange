@@ -15,7 +15,10 @@
  */
 
 import {v4 as uuidv4} from 'uuid';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -34,14 +37,17 @@ import {
 } from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_READ_STRATEGY,
+  readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   TERMINAL_STATUSES,
   OperationType,
+  ReplicaStatus,
   getOperationMetadataString,
   getOperationMetadataStringArray,
+  isValidWorkflowStep,
   isTerminalStep,
   isCoordinatorOwnedOperationType,
 } from './replica-status.js';
@@ -55,6 +61,7 @@ import {
 } from './rebalancer-constants.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
+  SQL_RECONCILIATION_REASON,
   buildDivergenceEvent,
 } from '../control-plane/read-model-contract.js';
 import {
@@ -63,6 +70,7 @@ import {
 import {
   PARTITION_SERVICE_ERROR_MSG,
 } from '../partition/partition-service-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
@@ -111,15 +119,17 @@ const SQL = Object.freeze({
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ?`,
   SELECT_REPLICA_STATUS:
-    'SELECT status FROM services WHERE service_id = ?',
-  SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
+    `SELECT service_id, replica_id, partition_id, node_id,
+      service_type, status, raft_role, address
+    FROM services WHERE service_id = ?`,
+  SELECT_REPLICA_BY_PARTITION_NODE: `SELECT service_id, replica_id,
+      partition_id, node_id, service_type, status, raft_role, address
+    FROM services 
     WHERE partition_id = ? AND node_id = ?`,
 });
 
 const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
 const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
-const CDC_FALLBACK_PHASE_RECOVERY = 'recovery';
-const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
 const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS =
   TIME_MS.SECOND * NUM.TEN;
@@ -129,6 +139,10 @@ const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS =
 const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS =
   TIME_MS.SECOND * NUM.FIVE;
 const COORDINATOR_OWNER_COMPONENT = 'RebalanceCoordinator';
+const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS =
+  TIME_MS.SECOND * NUM.FIVE;
+const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS =
+  TIME_MS.SECOND / NUM.FIVE;
 
 function shouldDeferReplicaOperationOwnerRead(participation) {
   return participation?.reasonCode ===
@@ -173,21 +187,44 @@ function buildControlPlaneFailurePayload(nodeId, resultOrError) {
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
   routingReadinessDimension:
-    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 });
+const REPLICA_OPERATION_READINESS_DIMENSION =
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
   ...CONTROL_PLANE_QUERY_OPTIONS,
+  routingReadinessDimension:
+    REPLICA_OPERATION_READINESS_DIMENSION,
   readStrategy:
     CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
   controlPlaneTableName:
     SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
   controlPlaneOperationKind: 'read',
+  allowSqlFallback: true,
 });
+const REPLICA_OPERATION_STRICT_DEDUPE_READ_QUERY_OPTIONS = Object.freeze({
+  ...REPLICA_OPERATION_READ_QUERY_OPTIONS,
+  preferOwnerRpcRead: true,
+  requireOwnerRpcRead: true,
+  allowOwnerRpcFallback: true,
+  allowSqlFallback: false,
+});
+const REPLICA_OPERATION_PERSIST_CONFIRMATION_READ_QUERY_OPTIONS =
+  Object.freeze({
+    ...REPLICA_OPERATION_READ_QUERY_OPTIONS,
+    preferOwnerRpcRead: true,
+    requireOwnerRpcRead: false,
+    allowOwnerRpcFallback: true,
+    allowSqlFallback: false,
+  });
 const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
   QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
 ]);
 const RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES = Object.freeze([
   PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+]);
+const RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS = Object.freeze([
+  ERRORS.NO_HANDLER_FOR_ADDRESS,
 ]);
 
 /**
@@ -220,6 +257,16 @@ class ReplicaOperationRepository {
     this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
     this.nextIncompleteOperationSqlRetryAtMs = NUM.ZERO;
     this.replicaOperationTransitionQueue = Promise.resolve();
+    this.replicaOperationAuthoritativeVisibilityTimeoutMs =
+      Number.isFinite(options.authoritativeVisibilityTimeoutMs) &&
+        options.authoritativeVisibilityTimeoutMs >= NUM.ZERO ?
+        Math.floor(options.authoritativeVisibilityTimeoutMs) :
+        REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS;
+    this.replicaOperationAuthoritativeVisibilityRetryDelayMs =
+      Number.isFinite(options.authoritativeVisibilityRetryDelayMs) &&
+        options.authoritativeVisibilityRetryDelayMs >= NUM.ZERO ?
+        Math.floor(options.authoritativeVisibilityRetryDelayMs) :
+        REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS;
   }
 
   /**
@@ -344,10 +391,16 @@ class ReplicaOperationRepository {
     if (typeof operationType === 'string' &&
         typeof workflowStep === 'string' &&
         workflowStep.length > NUM.ZERO) {
-      return isTerminalStep(operationType, workflowStep);
+      if (isTerminalStep(operationType, workflowStep)) {
+        return true;
+      }
+      if (isValidWorkflowStep(operationType, workflowStep)) {
+        return false;
+      }
     }
 
-    return TERMINAL_STATUSES.includes(operation.status);
+    const status = String(operation.status || '').toLowerCase();
+    return TERMINAL_STATUSES.includes(status);
   }
 
   /**
@@ -417,6 +470,21 @@ class ReplicaOperationRepository {
   isReplaceRemovePhase(operation) {
     return operation?.type === OperationType.REPLACE &&
       operation?.workflowStep === WORKFLOW_STEP.ACTIVE;
+  }
+
+  /**
+   * Check whether a REPLACE operation is currently dispatching source removal.
+   * This includes the initial ACTIVE dispatch and STOPPING reconciliation
+   * re-dispatch while removal completion is still being observed.
+   * @param {object} operation
+   * @return {boolean}
+   */
+  isReplaceRemoveDispatchPhase(operation) {
+    if (operation?.type !== OperationType.REPLACE) {
+      return false;
+    }
+    return operation?.workflowStep === WORKFLOW_STEP.ACTIVE ||
+      operation?.workflowStep === WORKFLOW_STEP.STOPPING;
   }
 
   /**
@@ -583,17 +651,29 @@ class ReplicaOperationRepository {
    * @param {Array} params
    * @return {Promise<object>}
    */
-  async executeReplicaOperationsRead(sql, params = []) {
+  async executeReplicaOperationsRead(
+    sql,
+    params = [],
+    readOptions = null,
+  ) {
     const participationFailure =
       this.buildReplicaOperationReadParticipationFailure();
     if (participationFailure) {
       return participationFailure;
     }
-    return this.controlPlaneSystemTableGateway.readRows(
+    const queryOptions = readOptions &&
+      typeof readOptions === 'object' ?
+      {
+        ...REPLICA_OPERATION_READ_QUERY_OPTIONS,
+        ...readOptions,
+      } :
+      REPLICA_OPERATION_READ_QUERY_OPTIONS;
+    return readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       sql,
       params,
-      REPLICA_OPERATION_READ_QUERY_OPTIONS,
+      queryOptions,
     );
   }
 
@@ -617,9 +697,12 @@ class ReplicaOperationRepository {
             CONTROL_PLANE_PARTICIPATION_KIND
               .REPLICA_OPERATION_OWNER_READ,
           decisionDimension:
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+            REPLICA_OPERATION_READINESS_DIMENSION,
+          tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          partitionId:
+            INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS] || null,
         },
-    );
+      );
     if (!participation || participation.eligible === true) {
       return null;
     }
@@ -675,14 +758,48 @@ class ReplicaOperationRepository {
   }
 
   /**
+   * Query a single operation by ID from the authoritative owner path only.
+   * @param {string} operationId
+   * @param {object} [options]
+   * @param {boolean} [options.requireOwnerRpcRead]
+   * @return {Promise<object|null>}
+   */
+  async queryAuthoritativeOperationById(operationId, options = {}) {
+    const requireOwnerRpcRead =
+      options?.requireOwnerRpcRead === true;
+    const readQueryOptions = requireOwnerRpcRead ?
+      REPLICA_OPERATION_STRICT_DEDUPE_READ_QUERY_OPTIONS :
+      REPLICA_OPERATION_PERSIST_CONFIRMATION_READ_QUERY_OPTIONS;
+    const result = await this.executeReplicaOperationsRead(
+      SQL.SELECT_OPERATION_BY_ID,
+      [operationId],
+      readQueryOptions,
+    );
+
+    if (!result.success || !Array.isArray(result.rows) ||
+        result.rows.length === NUM.ZERO) {
+      return null;
+    }
+
+    const operation =
+      this.rowToOperation(result.rows[NUM.ZERO]);
+    return isCoordinatorOwnedOperationType(operation?.type) ?
+      operation :
+      null;
+  }
+
+  /**
    * Query all incomplete (in-flight) operations owned by this node.
    * @param {object} [options={}]
    * @param {boolean} [options.skipSqlFallbackWhenCacheEmpty]
+   * @param {boolean} [options.preferAuthoritativeRead]
    * @return {Promise<Array>}
    */
   async queryIncompleteOperations(options = {}) {
     const skipSqlFallbackWhenCacheEmpty =
       options.skipSqlFallbackWhenCacheEmpty === true;
+    const preferAuthoritativeRead =
+      options.preferAuthoritativeRead === true;
     const mapAndSortOperations = (rows) => rows
       .map((row) => this.rowToOperation(row))
       .filter((operation) =>
@@ -702,33 +819,35 @@ class ReplicaOperationRepository {
         );
       });
 
-    const cachedRows =
-      this.filterReplicaOperationRowsFromCache((row) => {
-        if (!row || row.source_node_id !== this.nodeId) {
-          return false;
-        }
-        if (!isCoordinatorOwnedOperationType(row.type)) {
-          return false;
-        }
+    if (!preferAuthoritativeRead) {
+      const cachedRows =
+        this.filterReplicaOperationRowsFromCache((row) => {
+          if (!row || row.source_node_id !== this.nodeId) {
+            return false;
+          }
+          if (!isCoordinatorOwnedOperationType(row.type)) {
+            return false;
+          }
 
-        return row.workflow_step === WORKFLOW_STEP.PENDING ||
-          row.workflow_step === WORKFLOW_STEP.SENDING ||
-          row.workflow_step === WORKFLOW_STEP.CREATING ||
-          row.workflow_step === WORKFLOW_STEP.SYNCING ||
-          row.workflow_step === WORKFLOW_STEP.STOPPING ||
-          (row.workflow_step === WORKFLOW_STEP.ACTIVE &&
-            row.type === OperationType.REPLACE);
-      });
-    if (cachedRows !== null) {
-      const cachedOperations =
-        mapAndSortOperations(cachedRows);
-      if (cachedOperations.length === NUM.ZERO &&
-          this.nextIncompleteOperationSqlRetryAtMs > Date.now()) {
-        return [];
-      }
-      if (cachedOperations.length > NUM.ZERO ||
-          skipSqlFallbackWhenCacheEmpty) {
-        return cachedOperations;
+          return row.workflow_step === WORKFLOW_STEP.PENDING ||
+            row.workflow_step === WORKFLOW_STEP.SENDING ||
+            row.workflow_step === WORKFLOW_STEP.CREATING ||
+            row.workflow_step === WORKFLOW_STEP.SYNCING ||
+            row.workflow_step === WORKFLOW_STEP.STOPPING ||
+            (row.workflow_step === WORKFLOW_STEP.ACTIVE &&
+              row.type === OperationType.REPLACE);
+        });
+      if (cachedRows !== null) {
+        const cachedOperations =
+          mapAndSortOperations(cachedRows);
+        if (cachedOperations.length === NUM.ZERO &&
+            this.nextIncompleteOperationSqlRetryAtMs > Date.now()) {
+          return [];
+        }
+        if (cachedOperations.length > NUM.ZERO ||
+            skipSqlFallbackWhenCacheEmpty) {
+          return cachedOperations;
+        }
       }
     }
 
@@ -819,10 +938,18 @@ class ReplicaOperationRepository {
     entityId,
     move,
     operationMatchesMoveIntent,
+    options = {},
   ) {
+    const readOptions = options?.readOptions &&
+      typeof options.readOptions === 'object' ?
+      options.readOptions :
+      null;
+    const allowCacheFallbackOnReadFailure =
+      options?.allowCacheFallbackOnReadFailure !== false;
     const result = await this.executeReplicaOperationsRead(
       SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
       [partitionId, targetNodeId, entityType, entityId],
+      readOptions,
     );
 
     if (result.success && Array.isArray(result.rows)) {
@@ -838,6 +965,10 @@ class ReplicaOperationRepository {
             operation, move, entityType, entityId,
           );
       }) || null;
+    }
+
+    if (!allowCacheFallbackOnReadFailure) {
+      return null;
     }
 
     // Fallback path for degraded SQL-read conditions.
@@ -1015,22 +1146,49 @@ class ReplicaOperationRepository {
   }
 
   /**
+   * Get operations for an entity from the authoritative replica_operations
+   * owner path without consulting the cache projection first.
+   * @param {string} entityType
+   * @param {string} entityId
+   * @return {Promise<Array>}
+   */
+  async getOperationsByEntityAuthoritative(entityType, entityId) {
+    const result = await this.executeReplicaOperationsRead(
+      SQL.SELECT_OPERATIONS_BY_ENTITY,
+      [entityType, entityId, entityId],
+    );
+
+    if (!result.success || !result.rows) {
+      return [];
+    }
+
+    return result.rows.map(
+      (row) => this.rowToOperation(row),
+    );
+  }
+
+  /**
    * Get count of non-terminal REMOVE operations.
+   * @param {object} [options={}]
    * @return {Promise<number>}
    */
   async getConcurrentRemoveCount(options = {}) {
-    const cachedRows =
-      this.filterReplicaOperationRowsFromCache(
-        (row) => row?.type === OperationType.REMOVE,
-      );
-    if (cachedRows !== null) {
-      const cachedCount = cachedRows
-        .map((row) => this.rowToOperation(row))
-        .filter((op) => !this.isOperationTerminal(op))
-        .length;
-      if (cachedCount > NUM.ZERO ||
-          options.skipSqlFallbackWhenCacheEmpty === true) {
-        return cachedCount;
+    const preferAuthoritativeRead =
+      options.preferAuthoritativeRead === true;
+    if (!preferAuthoritativeRead) {
+      const cachedRows =
+        this.filterReplicaOperationRowsFromCache(
+          (row) => row?.type === OperationType.REMOVE,
+        );
+      if (cachedRows !== null) {
+        const cachedCount = cachedRows
+          .map((row) => this.rowToOperation(row))
+          .filter((op) => !this.isOperationTerminal(op))
+          .length;
+        if (cachedCount > NUM.ZERO ||
+            options.skipSqlFallbackWhenCacheEmpty === true) {
+          return cachedCount;
+        }
       }
     }
 
@@ -1095,17 +1253,11 @@ class ReplicaOperationRepository {
           throw new Error(result.error);
         }
 
-        if (typeof result.changes === 'number') {
-          await this.waitForReplicaOperationCacheVisibility(
-            operation,
-          );
-          return result.changes > 0;
-        }
-
-        await this.waitForReplicaOperationCacheVisibility(
+        await this.confirmReplicaOperationPersistence(
           operation,
         );
-        return true;
+        const changeCount = this.extractMutationChangeCount(result);
+        return changeCount === null ? true : changeCount > NUM.ZERO;
       },
     );
   }
@@ -1148,80 +1300,69 @@ class ReplicaOperationRepository {
       throw new Error(result.error);
     }
 
-    await this.waitForReplicaOperationCacheVisibility(
+    await this.confirmReplicaOperationPersistence(
       operation,
     );
   }
 
   /**
-   * Wait for a persisted operation to become visible in cache.
+   * Confirm a persisted operation through authoritative reads and diagnose
+   * any cache lag as projection divergence.
    * @param {object} operation
    * @return {Promise<void>}
    */
-  async waitForReplicaOperationCacheVisibility(operation) {
-    if (!operation?.operationId ||
-        !this.cdcIntegrationService ||
-        typeof this.cdcIntegrationService
-          .waitForCacheUpdate !== 'function') {
+  async confirmReplicaOperationPersistence(operation) {
+    if (!operation?.operationId) {
       return;
     }
-    const minimumFields = {};
-    if (Number.isFinite(operation.updatedAt)) {
-      minimumFields.updated_at = operation.updatedAt;
-    }
-    if (Number.isFinite(operation.completedAt)) {
-      minimumFields.completed_at = operation.completedAt;
-    }
-    const expectedFields = {};
-    if (operation.replicaId !== null &&
-        operation.replicaId !== undefined) {
-      expectedFields.replica_id = operation.replicaId;
-    }
-    const expectedCacheFields =
-      Object.keys(expectedFields).length > NUM.ZERO ?
-        expectedFields :
-        undefined;
-    const minimumCacheFields =
-      Object.keys(minimumFields).length > NUM.ZERO ?
-        minimumFields :
-        undefined;
-    try {
-      await this.cdcIntegrationService.waitForCacheUpdate(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        operation.operationId,
-        true,
-        {
-          expectedFields: expectedCacheFields,
-          minimumFields: minimumCacheFields,
-          fallbackPhase: CDC_FALLBACK_PHASE_RECOVERY,
-        },
-      );
-      return;
-    } catch (error) {
-      if (!this.isCacheVisibilityGapError(error)) {
-        throw error;
-      }
 
+    const authoritativeOperation =
+      await this.confirmReplicaOperationVisibility(
+        operation,
+      );
+    if (!authoritativeOperation) {
+      throw new Error(
+        'Authoritative replica operation not confirmed: ' +
+        operation.operationId,
+      );
+    }
+
+    this.emitReplicaOperationPersistenceDivergence(
+      authoritativeOperation,
+    );
+  }
+
+  /**
+   * Confirm replica operation visibility through bounded authoritative reads.
+   * Cache propagation is eventually consistent under sustained control-plane
+   * load, so one missed cache observation must not be treated as a hard loss
+   * when the owner-local authoritative row is still progressing.
+   * @param {object} operation
+   * @return {Promise<object|null>}
+   * @private
+   */
+  async confirmReplicaOperationVisibility(operation) {
+    const deadlineMs =
+      Date.now() +
+      this.replicaOperationAuthoritativeVisibilityTimeoutMs;
+    while (true) {
       const observedOperation =
-        await this.queryOperationById(operation.operationId);
+        await this.queryAuthoritativeOperationById(
+          operation.operationId,
+        );
       if (this.isReplicaOperationVisibilitySatisfied(
         operation,
         observedOperation,
       )) {
-        return;
+        return observedOperation;
       }
-      throw error;
+      if (Date.now() >= deadlineMs) {
+        return null;
+      }
+      await this.waitForReplicaOperationVisibilityRetry(
+        this.replicaOperationAuthoritativeVisibilityRetryDelayMs,
+      );
     }
-  }
-
-  /**
-   * @param {Error|Object|null} error
-   * @return {boolean}
-   * @private
-   */
-  isCacheVisibilityGapError(error) {
-    return String(error?.message || '')
-      .includes(CACHE_VISIBILITY_ERROR_FRAGMENT);
   }
 
   /**
@@ -1243,6 +1384,16 @@ class ReplicaOperationRepository {
         observedOperation.replicaId !== expectedOperation.replicaId) {
       return false;
     }
+    if (expectedOperation.workflowStep !== null &&
+        expectedOperation.workflowStep !== undefined &&
+        observedOperation.workflowStep !== expectedOperation.workflowStep) {
+      return false;
+    }
+    if (expectedOperation.status !== null &&
+        expectedOperation.status !== undefined &&
+        observedOperation.status !== expectedOperation.status) {
+      return false;
+    }
     if (Number.isFinite(expectedOperation.updatedAt) &&
         Number(observedOperation.updatedAt) < expectedOperation.updatedAt) {
       return false;
@@ -1253,6 +1404,113 @@ class ReplicaOperationRepository {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Wait briefly before re-checking authoritative replica operation visibility.
+   * @param {number} delayMs
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForReplicaOperationVisibilityRetry(delayMs) {
+    await new Promise(
+      (resolve) => setTimeout(resolve, delayMs),
+    );
+  }
+
+  /**
+   * Emit divergence when the replica_operations cache lags the
+   * authoritative row after a confirmed write.
+   * @param {object} authoritativeOperation
+   * @return {void}
+   * @private
+   */
+  emitReplicaOperationPersistenceDivergence(authoritativeOperation) {
+    if (!authoritativeOperation?.operationId) {
+      return;
+    }
+
+    const cachedRow =
+      this.getReplicaOperationRowFromCache(
+        authoritativeOperation.operationId,
+      );
+    const authoritativeValue =
+      this.buildReplicaOperationDivergenceValue(
+        authoritativeOperation,
+      );
+    const cacheValue = cachedRow ? {
+      operation_id: cachedRow.operation_id || null,
+      replica_id: cachedRow.replica_id || null,
+      status: cachedRow.status || null,
+      workflow_step: cachedRow.workflow_step || null,
+      updated_at: Number(cachedRow.updated_at) || null,
+      completed_at: Number(cachedRow.completed_at) || null,
+      error_message: cachedRow.error_message || null,
+    } : null;
+
+    const divergentFields = [];
+    if (!cachedRow) {
+      divergentFields.push(...Object.keys(authoritativeValue));
+    } else {
+      for (const fieldName of Object.keys(authoritativeValue)) {
+        if ((cacheValue?.[fieldName] ?? null) !==
+            authoritativeValue[fieldName]) {
+          divergentFields.push(fieldName);
+        }
+      }
+    }
+
+    if (divergentFields.length === NUM.ZERO) {
+      return;
+    }
+
+    const divergenceType = !cachedRow ?
+      READ_MODEL_DIVERGENCE_TYPE.CACHE_MISSING :
+      READ_MODEL_DIVERGENCE_TYPE.FIELD_MISMATCH;
+    const event = buildDivergenceEvent({
+      divergenceType,
+      tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      ownerComponent: COORDINATOR_OWNER_COMPONENT,
+      reconciliationReason:
+        SQL_RECONCILIATION_REASON
+          .RECOVERY_OPERATION_PERSIST_CONFIRMATION,
+      rowKey: authoritativeOperation.operationId,
+      cacheValue,
+      authoritativeValue,
+      divergentFields,
+    });
+
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.READ_MODEL_DIVERGENCE,
+      event,
+    );
+    if (this.emitter) {
+      this.emitter.emit(
+        REBALANCE_COORDINATOR_EVENT.READ_MODEL_DIVERGENCE,
+        event,
+      );
+    }
+  }
+
+  /**
+   * @param {object} operation
+   * @return {object}
+   * @private
+   */
+  buildReplicaOperationDivergenceValue(operation) {
+    return {
+      operation_id: operation.operationId,
+      replica_id: operation.replicaId ?? null,
+      status: operation.status ?? null,
+      workflow_step: operation.workflowStep ?? null,
+      updated_at: Number.isFinite(operation.updatedAt) ?
+        operation.updatedAt :
+        null,
+      completed_at: Number.isFinite(operation.completedAt) ?
+        operation.completedAt :
+        null,
+      error_message: operation.errorMessage ?? null,
+    };
   }
 
   /**
@@ -1307,6 +1565,8 @@ class ReplicaOperationRepository {
         errorMessage.includes(
           ERRORS.PARTITION_SERVICE_NOT_FOUND,
         ) ||
+        RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS
+          .some((fragment) => errorMessage.includes(fragment)) ||
         RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES
           .includes(errorMessage) ||
         RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES
@@ -1398,13 +1658,56 @@ class ReplicaOperationRepository {
   // ── Replica Status Observation ──────────────────────────────────
 
   /**
-   * Get observed replica status from cache.
+   * Normalize one observed services row into workflow replica lifecycle.
+   *
+   * Partition replicas that report `status=active` but still carry a learner
+   * role are not fully operational for REPLACE progression yet; they remain in
+   * the syncing phase until promotion.
+   *
+   * @param {Object} row
+   * @return {string|null}
+   */
+  normalizeObservedReplicaLifecycle(row) {
+    const status = typeof row?.status === 'string' &&
+      row.status.length > NUM.ZERO ?
+      row.status.toLowerCase() :
+      null;
+    if (!status) {
+      return null;
+    }
+    if (status !== ReplicaStatus.ACTIVE) {
+      return status;
+    }
+
+    const serviceType = typeof row?.service_type === 'string' ?
+      row.service_type.toLowerCase() :
+      typeof row?.serviceType === 'string' ?
+        row.serviceType.toLowerCase() :
+        null;
+    if (serviceType !== SERVICE_TYPE.PARTITION) {
+      return status;
+    }
+
+    const raftRole = typeof row?.raft_role === 'string' ?
+      row.raft_role.toLowerCase() :
+      typeof row?.raftRole === 'string' ?
+        row.raftRole.toLowerCase() :
+        null;
+    if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
+      return ReplicaStatus.SYNCING;
+    }
+
+    return status;
+  }
+
+  /**
+   * Get one observed replica row from cache.
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
-   * @return {string|null}
+   * @return {Object|null}
    */
-  getObservedReplicaStatusFromCache(
+  getObservedReplicaRowFromCache(
     replicaId, partitionId, targetNodeId,
   ) {
     if (!this.systemTableCache) {
@@ -1418,13 +1721,6 @@ class ReplicaOperationRepository {
     const normalizedTargetNodeId =
       typeof targetNodeId === 'string' ? targetNodeId : '';
 
-    const normalizeRowStatus = (row) => {
-      const status = row?.status;
-      return typeof status === 'string' &&
-        status.length > NUM.ZERO ?
-        status :
-        null;
-    };
     const rowMatchesTarget = (row) => {
       if (!row || typeof row !== 'object') {
         return false;
@@ -1472,11 +1768,7 @@ class ReplicaOperationRepository {
         normalizedReplicaId,
       );
       if (rowMatchesTarget(cachedRow)) {
-        const observedStatus =
-          normalizeRowStatus(cachedRow);
-        if (observedStatus) {
-          return observedStatus;
-        }
+        return cachedRow;
       }
     }
 
@@ -1490,14 +1782,12 @@ class ReplicaOperationRepository {
         return rowReplicaId === normalizedReplicaId &&
           rowMatchesTarget(row);
       });
-      const observedStatus =
-        normalizeRowStatus(exactReplicaRow);
-      if (observedStatus) {
-        return observedStatus;
+      if (exactReplicaRow) {
+        return exactReplicaRow;
       }
     }
 
-    const partitionNodeRow = serviceRows.find((row) => {
+    return serviceRows.find((row) => {
       const rowNodeId =
         String(row?.node_id || row?.nodeId || '');
       const rowPartitionId = String(
@@ -1505,8 +1795,26 @@ class ReplicaOperationRepository {
       );
       return rowNodeId === normalizedTargetNodeId &&
         rowPartitionId === normalizedPartitionId;
-    });
-    return normalizeRowStatus(partitionNodeRow);
+    }) || null;
+  }
+
+  /**
+   * Get observed replica status from cache.
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {string} targetNodeId
+   * @return {string|null}
+   */
+  getObservedReplicaStatusFromCache(
+    replicaId, partitionId, targetNodeId,
+  ) {
+    return this.normalizeObservedReplicaLifecycle(
+      this.getObservedReplicaRowFromCache(
+        replicaId,
+        partitionId,
+        targetNodeId,
+      ),
+    );
   }
 
   /**
@@ -1520,9 +1828,11 @@ class ReplicaOperationRepository {
   async getActualReplicaStatus(
     replicaId, partitionId, targetNodeId,
   ) {
+    let observedRow = null;
     if (replicaId) {
       const result =
-        await this.controlPlaneSystemTableGateway.readRows(
+        await readAuthoritativeControlPlaneRows(
+          this.controlPlaneSystemTableGateway,
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_STATUS,
           [replicaId],
@@ -1531,30 +1841,37 @@ class ReplicaOperationRepository {
 
       if (result.success && result.rows &&
           result.rows.length > NUM.ZERO) {
-        return result.rows[NUM.ZERO].status;
+        observedRow = result.rows[NUM.ZERO];
       }
     }
 
-    // Secondary lookup by partition + node when replicaId
-    // yields no row
-    const result =
-      await this.controlPlaneSystemTableGateway.readRows(
-        SYSTEM_TABLE_NAME.SERVICES,
-        SQL.SELECT_REPLICA_BY_PARTITION_NODE,
-        [partitionId, targetNodeId],
-        CONTROL_PLANE_QUERY_OPTIONS,
-      );
+    if (!observedRow) {
+      // Secondary lookup by partition + node when replicaId
+      // yields no row
+      const result =
+        await readAuthoritativeControlPlaneRows(
+          this.controlPlaneSystemTableGateway,
+          SYSTEM_TABLE_NAME.SERVICES,
+          SQL.SELECT_REPLICA_BY_PARTITION_NODE,
+          [partitionId, targetNodeId],
+          CONTROL_PLANE_QUERY_OPTIONS,
+        );
 
-    if (result.success && result.rows &&
-        result.rows.length > NUM.ZERO) {
-      return result.rows[NUM.ZERO].status;
+      if (result.success && result.rows &&
+          result.rows.length > NUM.ZERO) {
+        observedRow = result.rows[NUM.ZERO];
+      }
     }
 
-    return this.getObservedReplicaStatusFromCache(
-      replicaId,
-      partitionId,
-      targetNodeId,
-    );
+    if (!observedRow) {
+      observedRow = this.getObservedReplicaRowFromCache(
+        replicaId,
+        partitionId,
+        targetNodeId,
+      );
+    }
+
+    return this.normalizeObservedReplicaLifecycle(observedRow);
   }
 
   /**

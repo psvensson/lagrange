@@ -11,6 +11,7 @@ import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
+  QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
   COLUMN,
@@ -37,6 +38,10 @@ import {
 import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
+import {
+  assertNoHandlerRepairConverged,
+  createStaleOverlayOwnerHandoffFixture,
+} from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -220,6 +225,140 @@ test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
     'overlay service should remain routable during the cache gap');
 });
 
+test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
+  'into QueryExecutor runtime repair', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const cache = createMockSystemCache([], [
+    {
+      partition_id: partitionId,
+      table_name: TABLES.REPLICA_OPERATIONS,
+      leader_node_id: 'old-owner',
+    },
+  ], [
+    {
+      service_id: 'replica_operations-p1-r1',
+      service_type: SERVICE_TYPE.PARTITION,
+      partition_id: partitionId,
+      node_id: 'old-owner',
+      raft_role: 'leader',
+      address: 'old-owner/partition/replica_operations-p1-r1',
+      status: SERVICE_STATUS.ACTIVE,
+    },
+  ]);
+  const authoritativeReads = [];
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    authoritativeControlPlaneView: {
+      async readRows(tableName, _sql, params) {
+        authoritativeReads.push({tableName, params});
+        if (tableName === TABLES.PARTITIONS) {
+          return {
+            success: true,
+            rows: [
+              {
+                partition_id: partitionId,
+                table_name: TABLES.REPLICA_OPERATIONS,
+                leader_node_id: 'new-owner',
+              },
+            ],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [
+              {
+                service_id: 'replica_operations-p1-r4',
+                service_type: SERVICE_TYPE.PARTITION,
+                partition_id: partitionId,
+                node_id: 'new-owner',
+                raft_role: 'leader',
+                address: 'new-owner/partition/replica_operations-p1-r4',
+                status: SERVICE_STATUS.ACTIVE,
+              },
+            ],
+          };
+        }
+        return {success: false, rows: []};
+      },
+    },
+  });
+
+  const refreshed =
+    await engine.queryExecutor.routingMetadataOverlay
+      .refreshPartitionRouting(partitionId);
+
+  t.equal(refreshed, true,
+    'composed overlay should expose authoritative refresh for runtime routing repair');
+  t.equal(authoritativeReads.length, 2,
+    'authoritative refresh should read both partitions and services for the target partition');
+
+  const candidates = engine.queryExecutor.getPartitionServiceCandidates(
+    partitionId,
+    true,
+  );
+  t.ok(
+    candidates.some(
+      (candidate) =>
+        candidate.address ===
+        'new-owner/partition/replica_operations-p1-r4',
+    ),
+    'refreshed authoritative owner endpoint should be visible to query routing after repair',
+  );
+
+  const recoveryCandidates =
+    engine.queryExecutor.getLeaderRecoveryCandidates(
+      engine.queryExecutor.getPartitionRoutingSnapshot(partitionId),
+      new Set(['old-owner/partition/replica_operations-p1-r1']),
+      false,
+    );
+  t.equal(recoveryCandidates.length, 1,
+    'leader recovery candidate selection should skip the stale attempted address');
+  t.equal(
+    recoveryCandidates[0].address,
+    'new-owner/partition/replica_operations-p1-r4',
+    'leader recovery should target the refreshed authoritative owner endpoint',
+  );
+});
+
+test('SQLQueryEngine - query routing repair avoids stale no-handler retry ' +
+  'when overlay refresh keeps the same service id', async (t) => {
+  const fixture = createStaleOverlayOwnerHandoffFixture({
+    sameServiceId: true,
+    refreshedAddress: 'new-owner/partition/replica_operations-p1-r1',
+    successRows: [{operation_id: 'op-engine-1'}],
+  });
+
+  const engine = new SQLQueryEngine({
+    systemCache: fixture.systemCache,
+    messageRouter: fixture.messageRouter,
+    routingMetadataOverlay: fixture.routingMetadataOverlay,
+    nodeId: 'local-node',
+  });
+
+  const result = await engine.queryExecutor.executeOnPartition(
+    fixture.partitionId,
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+    ['op-engine-1'],
+    true,
+  );
+
+  t.equal(result.success, true);
+  assertNoHandlerRepairConverged(t, {
+    deliveries: fixture.deliveries,
+    staleAddress: fixture.staleAddress,
+    refreshedAddress: fixture.refreshedAddress,
+    overlayRefreshCalls: fixture.overlayRefreshCalls,
+    context: 'SQL engine composed overlay repair',
+  });
+  t.equal(
+    fixture.overlayRefreshCalls[0].options.refreshReason,
+    QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
+    'engine-composed overlay refresh should keep stale-service repair reason',
+  );
+});
+
 test('SQLQueryEngine - executes SELECT query', async (t) => {
   // Set up mock partition data
   mockPartitionData.set('p1', [{id: 1, name: 'Alice'}]);
@@ -245,6 +384,76 @@ test('SQLQueryEngine - executes SELECT query', async (t) => {
 
   // Clean up
   mockPartitionData.clear();
+});
+
+test('SQLQueryEngine - reserves critical routing for topology tables and ' +
+  'demotes high-volume transaction metadata',
+async (t) => {
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter: createMockMessageRouter(),
+  });
+
+  t.equal(
+    engine.resolveRoutedDeliveryPriority(TABLES.NODES),
+    'critical',
+    'topology metadata should stay on the critical lane',
+  );
+  t.equal(
+    engine.resolveRoutedDeliveryPriority(TABLES.SQL_TRANSACTIONS),
+    'background',
+    'transaction metadata should not consume the reserved control lane',
+  );
+  t.equal(
+    engine.resolveRoutedDeliveryPriority(
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+    ),
+    'background',
+    'participant metadata should also use the background lane',
+  );
+});
+
+test('SQLQueryEngine - persists distributed transaction rows with background ' +
+  'delivery priority',
+async (t) => {
+  const submissions = [];
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter: createMockMessageRouter(),
+  });
+  engine.getControlPlaneSystemTableGateway = () => ({
+    supportsMutationSubmission: () => true,
+    submitMutation: async (mutation, options) => {
+      submissions.push({mutation, options});
+      return {success: true};
+    },
+  });
+
+  await engine.persistDistributedTransactionRow({
+    transactionId: 'tx-1',
+    sessionId: 'session-1',
+    status: 'ACTIVE',
+    transactionEpoch: 1,
+    timeoutDeadline: Date.now() + 1000,
+    createdAt: 1,
+    updatedAt: 2,
+  });
+  await engine.persistDistributedTransactionParticipantRow({
+    participantId: 'participant-1',
+    transactionId: 'tx-1',
+    partitionId: 'users-p1',
+    status: 'PREPARED',
+    lastError: null,
+    createdAt: 1,
+    updatedAt: 2,
+  });
+
+  t.equal(submissions.length, 2,
+    'transaction persistence should submit both mutations');
+  t.equal(submissions[0].options.deliveryPriority, 'background',
+    'transaction rows should use background delivery priority');
+  t.equal(submissions[1].options.deliveryPriority, 'background',
+    'participant rows should use background delivery priority');
 });
 
 test('SQLQueryEngine - query ingress reuses the shared pressure admission ' +
@@ -1373,6 +1582,100 @@ test('SQLQueryEngine - startup recovery invokes coordinator replay hook once',
     t.equal(replay.totalRecovered, 1);
     t.equal(replay.resumed, 1);
   });
+
+test('SQLQueryEngine - explicit activation gates distributed transaction ' +
+  'recovery until the owner enables it',
+async (t) => {
+  const cache = createMockSystemCache([], []);
+  const transactionRows = [{
+    transaction_id: 'tx-activation-gate-1',
+    session_id: 'activation-gate-session',
+    status: 'PREPARING',
+    created_at: 1,
+    updated_at: 2,
+  }];
+  const participantRows = [{
+    participant_id: 'tx-activation-gate-1:p1',
+    transaction_id: 'tx-activation-gate-1',
+    partition_id: 'p1',
+    status: 'ACTIVE',
+    created_at: 1,
+    updated_at: 2,
+  }];
+  const writeOperationRows = [];
+  const originalGetAll = cache.getAll.bind(cache);
+  cache.getAll = function(type) {
+    if (type === TABLES.SQL_TRANSACTIONS) {
+      return transactionRows;
+    }
+    if (type === TABLES.SQL_TRANSACTION_PARTICIPANTS) {
+      return participantRows;
+    }
+    if (type === TABLES.SQL_WRITE_OPERATIONS) {
+      return writeOperationRows;
+    }
+    return originalGetAll(type);
+  };
+
+  const capturedRecoverPayloads = [];
+  let replayCalls = 0;
+  let sweepStarts = 0;
+  const transactionCoordinator = {
+    transactionsBySession: new Map(),
+    recoverFromSystemTables(payload) {
+      capturedRecoverPayloads.push(payload);
+    },
+    async resumeRecoveredTransactions() {
+      replayCalls += 1;
+      return {
+        totalRecovered: 1,
+        resumed: 1,
+        failed: 0,
+        results: [],
+      };
+    },
+    startRecoverySweep() {
+      sweepStarts += 1;
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    transactionCoordinator,
+    autoStartDistributedTransactionRecovery: false,
+  });
+
+  let replay = await engine.waitForDistributedTransactionRecoveryReplay();
+  t.equal(capturedRecoverPayloads.length, 0,
+    'recovery should stay dormant before owner activation');
+  t.equal(replayCalls, 0,
+    'replay hook should not run before owner activation');
+  t.equal(sweepStarts, 0,
+    'periodic recovery sweep should stay dormant before owner activation');
+  t.same(
+    replay,
+    {
+      totalRecovered: 0,
+      resumed: 0,
+      failed: 0,
+      results: [],
+    },
+    'waiting before activation should return the empty replay summary',
+  );
+
+  replay = await engine.activateDistributedTransactionRecovery();
+  t.equal(capturedRecoverPayloads.length, 1,
+    'activation should hydrate recovery state from the latest cache');
+  t.equal(capturedRecoverPayloads[0].transactions.length, 1);
+  t.equal(capturedRecoverPayloads[0].participants.length, 1);
+  t.equal(replayCalls, 1,
+    'activation should trigger replay exactly once');
+  t.equal(sweepStarts, 1,
+    'activation should start the periodic recovery sweep');
+  t.equal(replay.totalRecovered, 1);
+  t.equal(replay.resumed, 1);
+});
 
 test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
   async (t) => {

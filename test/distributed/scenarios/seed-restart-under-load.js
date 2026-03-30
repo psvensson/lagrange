@@ -35,7 +35,12 @@ async function run(cluster, options = {}) {
     loadOpsPerSec,
     loadDuration,
     preRestartDelayMs,
+    preRestartActiveTimeoutMs,
+    restartReadinessTimeoutMs,
+    postRestartActiveTimeoutMs,
+    postRestartQuietWindowMs,
     convergenceTimeoutMs,
+    consistencyTimeoutMs,
     minSuccessRate,
   } = resolveSeedRestartUnderLoadScenarioConfig(options);
 
@@ -43,13 +48,41 @@ async function run(cluster, options = {}) {
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
   assert.ok(seedNode, 'Seed node should be available');
 
+  const loadNodesById = new Map(
+    nodes.map((node) => [String(node.id), node]),
+  );
+  const steadyLoadNodeIds = nodes
+    .filter((node) => String(node.id) !== String(seedNode.id))
+    .map((node) => String(node.id));
+  const availableLoadNodeIds = new Set(
+    steadyLoadNodeIds.length > ZERO ?
+      steadyLoadNodeIds :
+      nodes.map((node) => String(node.id)),
+  );
+  const resolveLoadNodes = () =>
+    Array.from(availableLoadNodeIds)
+      .map((nodeId) => loadNodesById.get(nodeId))
+      .filter((node) => node && typeof node.query === 'function');
+
   const loadRun = cluster.startLoad({
+    nodes: resolveLoadNodes(),
+    nodeResolver: resolveLoadNodes,
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
   });
 
   await sleep(preRestartDelayMs);
-  await cluster.restartNode(seedNode.id);
+  if (typeof cluster.waitForAllActive === 'function') {
+    await cluster.waitForAllActive({
+      mode: 'load',
+      timeoutMs: preRestartActiveTimeoutMs,
+    });
+  }
+
+  availableLoadNodeIds.delete(String(seedNode.id));
+  await cluster.restartNode(seedNode.id, {
+    readinessTimeoutMs: restartReadinessTimeoutMs,
+  });
 
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: convergenceTimeoutMs,
@@ -61,6 +94,7 @@ async function run(cluster, options = {}) {
     'Cluster did not converge after seed restart: ' +
     convergence.settledAfterMs + 'ms',
   );
+  availableLoadNodeIds.add(String(seedNode.id));
 
   const metrics = await loadRun.waitComplete();
   assert.ok(metrics.total > ZERO, 'Expected at least one load operation');
@@ -74,8 +108,18 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
   );
 
+  if (typeof cluster.waitForAllActive === 'function') {
+    await cluster.waitForAllActive({
+      mode: 'load',
+      timeoutMs: postRestartActiveTimeoutMs,
+    });
+  }
+
+  await sleep(postRestartQuietWindowMs);
+
   await cluster.waitForConsistencyConvergence({
-    timeoutMs: convergenceTimeoutMs,
+    timeoutMs: consistencyTimeoutMs,
+    forceRepairAfterMs: 0,
   });
 
   return {

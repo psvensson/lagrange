@@ -110,9 +110,11 @@ const createMessageGroupServicesWithLeader = () => {
  */
 const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
   service.getSystemTableCache = () => systemTableCache;
-  service.seedMessageGroupsPhase.getLeaderMessageGroupService = () => ({
+  service.getLeaderMessageGroupService = () => ({
     applyCDCEvent: async () => {},
   });
+  service.partitionServices = createPartitionServicesWithSubscribers();
+  service.messageGroupServices = createMessageGroupServicesWithLeader();
   service.seedCacheHydrationPhase.hydrateFromLocalPartitions =
     async () => hydrationResult;
   service.seedCacheHydrationPhase.ensureLatencyTopologyOwners = () => {};
@@ -149,10 +151,9 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
     const systemTableCache = createFullyHydratedCache();
     const hydrationResult = createCompleteHydrationResult();
     applyCommonStubs(service, systemTableCache, hydrationResult);
-
-    service.partitionServices = createPartitionServicesWithSubscribers();
-    service.messageGroupServices = createMessageGroupServicesWithLeader();
-
+        service.getLeaderMessageGroupService = () => ({
+          applyCDCEvent: async () => {},
+        });
     service.seedCacheHydrationPhase
       .subscribeToInitialSystemTableCDC = async () => {};
 

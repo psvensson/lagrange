@@ -2,8 +2,25 @@ import {
   getSystemCachePrimaryKeyField,
 } from '../../cache/system-cache-key-descriptor.js';
 import {
+  readAuthoritativeControlPlaneRows,
+  readProjectionControlPlaneRows,
+} from '../control-plane-system-table-gateway.js';
+import {
   createSystemMetadataGatewayRequiredError,
 } from '../system-metadata-access-error.js';
+
+function unwrapRowReadResult(result) {
+  if (Array.isArray(result)) {
+    return result[0] || null;
+  }
+  if (Array.isArray(result?.rows)) {
+    return result.rows[0] || null;
+  }
+  if (result && typeof result === 'object') {
+    return result;
+  }
+  return null;
+}
 
 class SystemMetadataOwnerBase {
   constructor(options = {}) {
@@ -71,17 +88,17 @@ class SystemMetadataOwnerBase {
           systemTableCache: this.getSystemTableCache(),
         } :
         options;
-    return this.requireGateway().executeRead({
+    return readProjectionControlPlaneRows(this.requireGateway(),
+      this.getTableName(), {
+      ...cacheAwareOptions,
       owner: this.getOwnerName(),
-      tableName: this.getTableName(),
-      strategy: 'cache',
       readFromCache,
-    }, cacheAwareOptions);
+    });
   }
 
   async readCachedByPrimaryKey(primaryKeyValue, options = {}) {
     const tableName = this.getTableName();
-    return this.executeCacheRead((systemTableCache) => {
+    const result = await this.executeCacheRead((systemTableCache) => {
       if (!systemTableCache) {
         return [];
       }
@@ -96,6 +113,7 @@ class SystemMetadataOwnerBase {
         return row?.[this.getPrimaryKeyField()] === primaryKeyValue;
       });
     }, options);
+    return unwrapRowReadResult(result);
   }
 
   async listCachedRows(options = {}) {
@@ -125,20 +143,29 @@ class SystemMetadataOwnerBase {
   }
 
   async readByPrimaryKey(primaryKeyValue, options = {}) {
-    return this.requireGateway().readRows(
+    const result = await readAuthoritativeControlPlaneRows(
+      this.requireGateway(),
       this.getTableName(),
       this.buildSelectByPrimaryKeySql(),
       [primaryKeyValue],
-      options,
+      {
+        ...options,
+        owner: this.getOwnerName(),
+      },
     );
+    return unwrapRowReadResult(result);
   }
 
   async listRows(options = {}) {
-    return this.requireGateway().readRows(
+    return readAuthoritativeControlPlaneRows(
+      this.requireGateway(),
       this.getTableName(),
       this.buildSelectAllSql(),
       [],
-      options,
+      {
+        ...options,
+        owner: this.getOwnerName(),
+      },
     );
   }
 

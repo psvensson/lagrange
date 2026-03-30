@@ -8,6 +8,7 @@ import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api
 import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
+  BOOTSTRAP_API_PROBE_REASON,
 } from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   BOOTSTRAP_PHASE,
@@ -27,7 +28,11 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
+import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -62,6 +67,44 @@ function createEmptySystemTableCache() {
     },
     getReadyNodes() {
       return [];
+    },
+  };
+}
+
+function createSatisfiedControlPlaneReadinessService() {
+  const diagnostics = Object.freeze({
+    publicationEpoch: 1,
+    status: 'PUBLISHED',
+    priorityPartitionSummary: Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 5,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    }),
+  });
+  return {
+    async getMembershipPublicationDiagnostics() {
+      return diagnostics;
+    },
+    getMembershipPublicationDiagnosticsSync() {
+      return diagnostics;
+    },
+  };
+}
+
+function createMutableControlPlaneReadinessService(initialDiagnostics) {
+  let diagnostics = initialDiagnostics;
+  return {
+    setDiagnostics(nextDiagnostics) {
+      diagnostics = nextDiagnostics;
+    },
+    async getMembershipPublicationDiagnostics() {
+      return diagnostics;
+    },
+    getMembershipPublicationDiagnosticsSync() {
+      return diagnostics;
     },
   };
 }
@@ -274,8 +317,8 @@ test('BootstrapAPI - bootstrap control-plane queries use the canonical gateway w
       'bootstrap gateway writes should not silently degrade');
     t.equal(capturedOptions.pressureRetryAfterMs, 375,
       'bootstrap gateway queries should propagate retry hints');
-    t.equal(capturedOptions.routingReadinessDimension, 'repairEligible',
-      'bootstrap gateway queries should keep repair-eligible routing semantics');
+    t.equal(capturedOptions.routingReadinessDimension, 'controlPlaneRecoveryEligible',
+      'bootstrap gateway queries should use recovery eligibility routing semantics');
   });
 
 test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway with shared admission policy',
@@ -332,8 +375,52 @@ test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway
       'bootstrap gateway mutations should not silently degrade');
     t.equal(capturedOptions.pressureRetryAfterMs, 375,
       'bootstrap gateway mutations should propagate retry hints');
-    t.equal(capturedOptions.routingReadinessDimension, 'repairEligible',
-      'bootstrap gateway mutations should keep repair-eligible routing semantics');
+    t.equal(capturedOptions.routingReadinessDimension, 'controlPlaneRecoveryEligible',
+      'bootstrap gateway mutations should use recovery eligibility routing semantics');
+  });
+
+test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC when present',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedRow = null;
+    const cdcIntegrationService = {
+      async upsertSystemTableRow(tableName, row) {
+        capturedRow = {tableName, row};
+        return {success: true, outcome: 'applied-via-runtime-owner'};
+      },
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      runtimeOwner: {
+        get cdcIntegrationService() {
+          return cdcIntegrationService;
+        },
+      },
+    });
+
+    const result = await api.executeBootstrapControlPlaneMutation({
+      operation: 'upsert',
+      tableName: TABLES.SERVICES,
+      row: {
+        service_id: 'svc-runtime-owner',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+      },
+    });
+
+    t.same(result, {success: true, outcome: 'applied-via-runtime-owner'},
+      'runtime-owner CDC should satisfy bootstrap mutation ingress');
+    t.same(capturedRow, {
+      tableName: TABLES.SERVICES,
+      row: {
+        service_id: 'svc-runtime-owner',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+      },
+    }, 'default gateway should route mutations through runtime-owner CDC');
   });
 
 test('BootstrapAPI - MOVE_REPLICA handoff insert persists through canonical mutation ingress',
@@ -970,6 +1057,7 @@ test('BootstrapAPI - readyz allows isolated message-group leader lag', async (t)
         return {success: true, rows: []};
       },
     },
+    controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
   });
 
   api.getMissingServiceLeaders = () => {
@@ -1175,6 +1263,7 @@ test('BootstrapAPI - readyz tolerates non-traffic control-plane partition lag',
           return {success: true, rows: []};
         },
       },
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     api.getMissingServiceLeaders = () => {
@@ -1319,6 +1408,447 @@ test('BootstrapAPI - bootstrap join readiness allows stable-window-only join-rea
     await api.shutdown();
   });
 
+test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstrap join stays open',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 14,
+            status: 'ACK_PENDING',
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: ['replica_operations-p1'],
+            },
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should stay blocked while priority control-plane recovery is active');
+    const readyBody = JSON.parse(readyResponse.body);
+    t.equal(readyBody.ready, false,
+      'readyz should expose ready=false during priority control-plane recovery');
+    t.ok(
+      readyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'readyz should surface the priority control-plane recovery blocker',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay open during priority control-plane recovery');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true while allowing recovery fan-out');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear the tolerated priority recovery blocker');
+
+    const priorityRecoveryHealth = api.bootstrapReadinessOwner
+      .getPriorityControlPlaneRecoveryHealth();
+    t.equal(priorityRecoveryHealth.healthy, false,
+      'priority recovery health should report an active blocker');
+    t.same(
+      priorityRecoveryHealth.details.priorityRecoveryReasonCodes,
+      [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      'priority recovery health should preserve the underlying control-plane reason codes',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readyz fails closed when published membership excludes the local node',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 15,
+            status: 'PUBLISHED',
+            publishedActiveNodeIds: ['other-node'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+            },
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should fail closed when the published membership excludes the local node');
+    const readyBody = JSON.parse(readyResponse.body);
+    t.ok(
+      readyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'readyz should classify local-node publication exclusion as pending recovery',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should remain open during publication recovery');
+
+    const priorityRecoveryHealth = api.bootstrapReadinessOwner
+      .getPriorityControlPlaneRecoveryHealth();
+    t.equal(priorityRecoveryHealth.healthy, false,
+      'priority recovery health should remain blocked while local node is excluded');
+    t.same(
+      priorityRecoveryHealth.details.priorityRecoveryReasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
+      'local-node publication exclusion should map to publication-epoch-pending recovery semantics',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readiness fails closed when control-plane diagnostics are unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          throw new Error('control-plane diagnostics unavailable');
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should fail closed when priority recovery diagnostics are unavailable',
+    );
+    const readyBody = JSON.parse(readyResponse.body);
+    t.ok(
+      readyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'readyz should classify diagnostics read failures as priority recovery pending',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay open so recovery fan-out can continue',
+    );
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true for priority recovery blockers');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated priority recovery blockers');
+
+    const priorityRecoveryHealth = api.bootstrapReadinessOwner
+      .getPriorityControlPlaneRecoveryHealth();
+    t.equal(priorityRecoveryHealth.healthy, false,
+      'priority recovery health should fail closed when diagnostics reads throw');
+    t.equal(
+      priorityRecoveryHealth.reasonCode,
+      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      'priority recovery health should classify diagnostics failures as pending recovery',
+    );
+    t.equal(
+      priorityRecoveryHealth.details.error,
+      'control-plane diagnostics unavailable',
+      'priority recovery health should preserve the diagnostics read failure ' +
+        'message',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readiness fails closed when membership publication diagnostics are missing',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return null;
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should fail closed when membership publication diagnostics are missing',
+    );
+    const readyBody = JSON.parse(readyResponse.body);
+    t.ok(
+      readyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'readyz should classify missing diagnostics as pending priority recovery',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay open when diagnostics are missing',
+    );
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true for pending recovery states');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated pending-recovery reasons');
+
+    const priorityRecoveryHealth = api.bootstrapReadinessOwner
+      .getPriorityControlPlaneRecoveryHealth();
+    t.equal(priorityRecoveryHealth.healthy, false,
+      'priority recovery health should fail closed when diagnostics are missing',
+    );
+    t.equal(
+      priorityRecoveryHealth.reasonCode,
+      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      'missing publication diagnostics should classify as pending priority recovery',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readiness response publication fields use synchronous diagnostics accessor',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const diagnostics = Object.freeze({
+      publicationEpoch: 33,
+      status: 'PUBLISHED',
+      priorityPartitionSummary: Object.freeze({
+        satisfied: true,
+        missingPartitionIds: Object.freeze([]),
+      }),
+    });
+    let asyncReadCount = 0;
+    let syncReadCount = 0;
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        async getMembershipPublicationDiagnostics() {
+          asyncReadCount += 1;
+          throw new Error('async diagnostics unavailable');
+        },
+        getMembershipPublicationDiagnosticsSync() {
+          syncReadCount += 1;
+          return diagnostics;
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should still fail closed when async diagnostics reads fail',
+    );
+    const readyBody = JSON.parse(readyResponse.body);
+    t.equal(readyBody.publishedControlPlaneEpoch, 33,
+      'readyz should still expose publication epoch from synchronous diagnostics',
+    );
+    t.equal(readyBody.publishedControlPlaneStatus, 'PUBLISHED',
+      'readyz should still expose publication status from synchronous diagnostics',
+    );
+    t.equal(asyncReadCount, 1,
+      'priority recovery gate should attempt exactly one async diagnostics read',
+    );
+    t.ok(syncReadCount >= 1,
+      'readiness response diagnostics should use the synchronous accessor',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readiness fails closed when control-plane readiness service is missing',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 503,
+      'readyz should fail closed when control-plane readiness service is unavailable');
+    const readyBody = JSON.parse(readyResponse.body);
+    t.ok(
+      readyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'readyz should classify missing readiness service as pending priority recovery',
+    );
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should remain open while recovery safety is unknown');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true for recovery-pending blockers');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated recovery-pending blockers');
+
+    const priorityRecoveryHealth = api.bootstrapReadinessOwner
+      .getPriorityControlPlaneRecoveryHealth();
+    t.equal(priorityRecoveryHealth.healthy, false,
+      'priority recovery health should fail closed when readiness service is unavailable');
+    t.equal(
+      priorityRecoveryHealth.reasonCode,
+      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      'missing readiness service should classify as pending priority recovery',
+    );
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - readiness stays gated until startup dependencies and stable window complete',
   async (t) => {
     initializeTestEnvironment();
@@ -1394,6 +1924,7 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
       systemTableCache: readinessCache,
       bootstrapService,
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -1450,6 +1981,127 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
       'readyz should promote after sustained success window elapses');
     body = JSON.parse(response.body);
     t.equal(body.ready, true, 'readyz should expose ready=true after promotion');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readyz demotes immediately when priority recovery regresses',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessCache = {
+      get() {
+        return null;
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: 'partition-1',
+            table_name: TABLES.NODES,
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.MESSAGE_GROUPS) {
+          return [{
+            group_id: 'mg-1',
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [{
+            service_id: 'partition-1-leader',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: 'partition-1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/partition/partition-1-leader',
+            raft_role: RAFT_ROLE.LEADER,
+            status: SERVICE_STATUS.ACTIVE,
+          }];
+        }
+        return [];
+      },
+    };
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 2,
+      now: () => Date.now(),
+      retryAfterMs: 250,
+    });
+    const controlPlaneReadinessService = createMutableControlPlaneReadinessService({
+      publicationEpoch: 4,
+      status: 'PUBLISHED',
+      priorityPartitionSummary: {
+        satisfied: true,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 3,
+        totalPriorityPartitionCount: 5,
+        missingPartitionIds: [],
+        blockedPartitions: [],
+      },
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: readinessCache,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+      },
+      readinessState,
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      controlPlaneReadinessService,
+      messageRouter: {},
+    });
+    await api.initialize(0, {listen: false});
+
+    let response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 200,
+      'readyz should start healthy while priority spread is satisfied');
+
+    controlPlaneReadinessService.setDiagnostics({
+      publicationEpoch: 5,
+      status: 'PUBLISHED',
+      priorityPartitionSummary: {
+        satisfied: false,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 5,
+        totalPriorityPartitionCount: 7,
+        missingPartitionIds: [
+          'replica_operations-p1',
+        ],
+        blockedPartitions: [
+          {
+            partitionId: 'replica_operations-p1',
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          },
+        ],
+      },
+    });
+
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should demote immediately when priority recovery becomes pending');
+    const body = JSON.parse(response.body);
+    t.ok(
+      body.reasons.includes(LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING),
+      'readyz should expose priority recovery blocker on first regressed probe',
+    );
 
     await api.shutdown();
   });
@@ -1518,6 +2170,7 @@ test('BootstrapAPI - readyz blocks on local query transport readiness before pro
       },
       readinessState,
       sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
       messageRouter: {
         getQueryDataPlaneTransportReadiness() {
           return localTransportReady ?
@@ -1993,6 +2646,108 @@ test('BootstrapAPI - defers concurrent bootstrap requests when admission is satu
     await api.shutdown();
   });
 
+test('BootstrapAPI - returns bootstrap-not-ready when control-plane dependencies are transiently unavailable',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    api.determineAndReserveMessageGroupAssignment = async () => ({
+      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+      groupId: 'mg-test',
+    });
+    api.buildBootstrapTopologySnapshotEnvelope = () => ({
+      systemTableSnapshots: {},
+      topologySnapshotMeta: null,
+    });
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => {
+      throw new Error(
+        'ControlPlaneSystemTableGateway requires cdcIntegrationService',
+      );
+    };
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440013',
+        nodeAddress: 'ws://localhost:9093',
+      },
+    });
+
+    t.equal(response.statusCode, 503,
+      'transient control-plane dependency gaps should defer bootstrap');
+    const body = JSON.parse(response.body);
+    t.equal(body.error, BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+      'response should use the canonical bootstrap-not-ready error');
+    t.equal(body.code, BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      'response should preserve the canonical bootstrap-not-ready code');
+    t.equal(body.retryAfterMs, 1000,
+      'response should include the bounded retry hint');
+    t.ok(
+      body.reasons.includes(
+        BOOTSTRAP_API_PROBE_REASON.CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+      ),
+      'response should expose the control-plane dependency blocker',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - forwards durable rejoin startup mode to assignment',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    let observedOptions = null;
+    api.determineAndReserveMessageGroupAssignment = async (_nodeId, options) => {
+      observedOptions = options;
+      return {
+        strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-test',
+        replicaCount: 3,
+      };
+    };
+    api.getCurrentEpoch = () => null;
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => [];
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440111',
+        nodeAddress: 'ws://localhost:9091',
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      },
+    });
+
+    t.equal(response.statusCode, 200);
+    t.same(observedOptions, {
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+  });
+
 test('BootstrapAPI - releases bootstrap admission slot after request failure',
   async (t) => {
     initializeTestEnvironment();
@@ -2203,6 +2958,85 @@ test('BootstrapAPI - waitForServiceLeaders returns promptly when leaders are mis
     t.equal(status.ready, false, 'should report leaders as not ready');
     t.ok(elapsedMs < 200,
       `should return quickly without waiting full timeout (elapsed=${elapsedMs}ms)`);
+  });
+
+test('BootstrapAPI - durable rejoin ignores non-traffic leader gaps during bootstrap admission',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const partitionRows = [
+      {partition_id: 'nodes-p1', table_id: TABLES.NODES, table_name: TABLES.NODES},
+      {partition_id: 'config-p1', table_id: TABLES.CONFIG, table_name: TABLES.CONFIG},
+      {
+        partition_id: 'message-groups-p1',
+        table_id: TABLES.MESSAGE_GROUPS,
+        table_name: TABLES.MESSAGE_GROUPS,
+      },
+      {
+        partition_id: 'replica-operations-p1',
+        table_id: TABLES.REPLICA_OPERATIONS,
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ];
+    const cache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return partitionRows;
+        }
+        return [];
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: cache,
+    });
+
+    api.getMissingServiceLeaders = () => {
+      return {
+        missingPartitionLeaders: [
+          'config-p1',
+          'message-groups-p1',
+          'replica-operations-p1',
+        ],
+        missingPartitionLeaderNodes: [
+          'config-p1',
+          'message-groups-p1',
+          'replica-operations-p1',
+        ],
+        missingPartitionLeaderAddresses: [
+          'config-p1',
+          'message-groups-p1',
+          'replica-operations-p1',
+        ],
+        missingMessageGroupLeaders: ['mg-1'],
+        missingMessageGroupLeaderNodes: ['mg-1'],
+        missingMessageGroupLeaderAddresses: ['mg-1'],
+      };
+    };
+
+    const defaultStatus = await api.waitForServiceLeaders();
+    t.equal(defaultStatus.ready, false,
+      'default bootstrap admission should still block on non-traffic gaps');
+
+    const durableRejoinStatus = await api.waitForServiceLeaders({
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+    t.equal(durableRejoinStatus.ready, true,
+      'durable rejoin should ignore non-traffic leader gaps');
   });
 
 test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) => {
@@ -3038,6 +3872,133 @@ test('BootstrapAPI - getReadyNodes handles empty cache', async (t) => {
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - strict ready-node reads use published membership without seed fallback',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const now = Date.now();
+    const mockCache = {
+      get: () => null,
+      getAll: (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return [
+            {
+              node_id: 'seed-node-1',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000,
+              status: 'active',
+            },
+            {
+              node_id: 'other-node',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000,
+              status: 'active',
+            },
+          ];
+        }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          return [
+            {
+              publication_id: 'publication-14',
+              publication_epoch: 14,
+              status: 'PUBLISHED',
+              published_active_node_ids: ['other-node'],
+            },
+          ];
+        }
+        return [];
+      },
+      filter: (tableName, predicate) => {
+        const all = mockCache.getAll(tableName);
+        return all.filter(predicate);
+      },
+      find: () => null,
+      getReadyNodes: () => ['seed-node-1', 'other-node'],
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    t.same(
+      api.getReadyNodes({requirePublishedMembership: true}),
+      ['other-node'],
+      'strict reads should only expose the published active-node set',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - cluster state marks active nodes from published membership only',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const now = Date.now();
+    const mockCache = {
+      get: () => null,
+      getAll: (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return [
+            {
+              node_id: 'seed-node-1',
+              node_address: 'ws://seed',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000,
+              status: 'active',
+            },
+            {
+              node_id: 'other-node',
+              node_address: 'ws://other',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000,
+              status: 'active',
+            },
+          ];
+        }
+        if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+          return [
+            {
+              publication_id: 'publication-14',
+              publication_epoch: 14,
+              status: 'PUBLISHED',
+              published_active_node_ids: ['other-node'],
+            },
+          ];
+        }
+        return [];
+      },
+      filter: () => [],
+      find: () => null,
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://seed',
+      systemTableCache: mockCache,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const clusterState = api.getClusterState();
+
+    t.equal(
+      clusterState.nodes.find((node) => node.nodeId === 'seed-node-1')?.status,
+      'unknown',
+      'seed node should not be forced active when it is absent from published membership',
+    );
+    t.equal(
+      clusterState.nodes.find((node) => node.nodeId === 'other-node')?.status,
+      'active',
+      'published members should remain active in cluster state',
+    );
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibility for non-seed nodes',
   async (t) => {

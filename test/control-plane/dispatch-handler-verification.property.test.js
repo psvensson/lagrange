@@ -3,9 +3,8 @@
  *
  * **Property 5: Dispatch handler verification**
  * *For any* replica operation dispatched by ReplicaDispatchService,
- * if the target node does not have a registered handler for the
- * operation's entity type, the dispatch SHALL be skipped and the
- * operation SHALL remain in its current workflow step (unchanged).
+ * dispatch advances based on target-node readiness and owner-path routing
+ * rather than cached entity-service rows.
  *
  * **Validates: Requirements 8.1**
  *
@@ -65,7 +64,6 @@ const ENTITY_TYPES = [
 
 /**
  * Arbitrary for generating a REMOVE replica operation row.
- * Handler check only applies to non-ADD operations.
  */
 const removeOperationRowArb = fc.record({
   operation_id: fc.uuid(),
@@ -91,6 +89,27 @@ const removeOperationRowArb = fc.record({
 const addOperationRowArb = fc.record({
   operation_id: fc.uuid(),
   type: fc.constant(OperationType.ADD),
+  partition_id: fc.uuid(),
+  [COLUMN.ENTITY_TYPE]: fc.constantFrom(...ENTITY_TYPES),
+  [COLUMN.ENTITY_ID]: fc.uuid(),
+  replica_id: fc.uuid(),
+  source_node_id: fc.uuid(),
+  target_node_id: fc.uuid(),
+  status: fc.constant(ReplicaStatus.PENDING),
+  workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
+  created_at: fc.integer({min: 1, max: 9999999999}),
+  updated_at: fc.integer({min: 1, max: 9999999999}),
+  completed_at: fc.constant(null),
+  error_message: fc.constant(null),
+  steps_history: fc.constant('[]'),
+});
+
+/**
+ * Arbitrary for generating a REPLACE replica operation row.
+ */
+const replaceOperationRowArb = fc.record({
+  operation_id: fc.uuid(),
+  type: fc.constant(OperationType.REPLACE),
   partition_id: fc.uuid(),
   [COLUMN.ENTITY_TYPE]: fc.constantFrom(...ENTITY_TYPES),
   [COLUMN.ENTITY_ID]: fc.uuid(),
@@ -274,12 +293,11 @@ function createMockDispatchService(options = {}) {
 
 test('Property 5: Dispatch handler verification', async (t) => {
   /**
-   * Property: When no handler is registered on the target node
-   * for the operation's entity type, dispatch is skipped and the
-   * operation's workflow_step remains unchanged (PENDING).
+   * Property: REMOVE operations bypass the cache-backed handler check
+   * and rely on owner-path routing.
    */
   t.test(
-    'dispatch is skipped when no handler registered on target',
+    'REMOVE operations bypass handler check',
     async (t) => {
       await fc.assert(
         fc.asyncProperty(
@@ -289,32 +307,24 @@ test('Property 5: Dispatch handler verification', async (t) => {
             const nodeRows = new Map();
             nodeRows.set(targetNodeId, buildReadyNodeRow(targetNodeId));
 
-            // No service entries — no handler on target
+            // No service entries — owner-path routing should still dispatch.
             const {service, tracking} = createMockDispatchService({
               serviceEntries: [],
               nodeRows,
+              claimSucceeds: true,
             });
 
-            const originalStep = row.workflow_step;
             await service.dispatchOperationRow(row);
 
-            // Workflow step must remain unchanged
-            if (row.workflow_step !== originalStep) {
+            if (!tracking.claimCalled) {
               return false;
             }
 
-            // No claim should have been attempted
-            if (tracking.claimCalled) {
+            if (!tracking.executeOperationCalled) {
               return false;
             }
 
-            // No dispatch event should have been emitted
-            if (tracking.dispatchedEvents.length !== NUM.ZERO) {
-              return false;
-            }
-
-            // executeOperation should not have been called
-            if (tracking.executeOperationCalled) {
+            if (tracking.dispatchedEvents.length !== NUM.ONE) {
               return false;
             }
 
@@ -325,18 +335,17 @@ test('Property 5: Dispatch handler verification', async (t) => {
       );
 
       t.pass(
-        'dispatch is skipped when no handler registered on target',
+        'REMOVE operations bypass handler check',
       );
     },
   );
 
   /**
-   * Property: When a handler IS registered on the target node
-   * for the operation's entity type, dispatch proceeds and
-   * claimPendingDispatch is called.
+   * Property: A matching entity-service row is no longer required for
+   * REMOVE dispatch to proceed.
    */
   t.test(
-    'dispatch proceeds when handler is registered on target',
+    'REMOVE dispatch does not require handler registration on target',
     async (t) => {
       await fc.assert(
         fc.asyncProperty(
@@ -347,13 +356,8 @@ test('Property 5: Dispatch handler verification', async (t) => {
             const nodeRows = new Map();
             nodeRows.set(targetNodeId, buildReadyNodeRow(targetNodeId));
 
-            // Service entry matches target node and entity type
-            const serviceEntries = [
-              buildServiceEntry(targetNodeId, entityType),
-            ];
-
             const {service, tracking} = createMockDispatchService({
-              serviceEntries,
+              serviceEntries: [],
               nodeRows,
               claimSucceeds: true,
             });
@@ -382,18 +386,17 @@ test('Property 5: Dispatch handler verification', async (t) => {
       );
 
       t.pass(
-        'dispatch proceeds when handler is registered on target',
+        'REMOVE dispatch does not require handler registration on target',
       );
     },
   );
 
   /**
-   * Property: The handler check uses the correct entity type
-   * from the operation. A service entry for a different entity
-   * type on the same node does NOT satisfy the handler check.
+   * Property: A mismatched cached entity-service row does not block
+   * REMOVE dispatch.
    */
   t.test(
-    'handler check uses correct entity type from operation',
+    'REMOVE dispatch ignores mismatched cached handler rows',
     async (t) => {
       await fc.assert(
         fc.asyncProperty(
@@ -417,21 +420,20 @@ test('Property 5: Dispatch handler verification', async (t) => {
             const {service, tracking} = createMockDispatchService({
               serviceEntries,
               nodeRows,
+              claimSucceeds: true,
             });
 
-            const originalStep = row.workflow_step;
             await service.dispatchOperationRow(row);
 
-            // Dispatch should be skipped — wrong entity type
-            if (row.workflow_step !== originalStep) {
+            if (!tracking.claimCalled) {
               return false;
             }
 
-            if (tracking.claimCalled) {
+            if (!tracking.executeOperationCalled) {
               return false;
             }
 
-            if (tracking.dispatchedEvents.length !== NUM.ZERO) {
+            if (tracking.dispatchedEvents.length !== NUM.ONE) {
               return false;
             }
 
@@ -442,7 +444,7 @@ test('Property 5: Dispatch handler verification', async (t) => {
       );
 
       t.pass(
-        'handler check uses correct entity type from operation',
+        'REMOVE dispatch ignores mismatched cached handler rows',
       );
     },
   );
@@ -490,6 +492,53 @@ test('Property 5: Dispatch handler verification', async (t) => {
       );
 
       t.pass('ADD operations bypass handler check');
+    },
+  );
+
+  /**
+   * Property: REPLACE operations bypass the cache-backed handler gate
+   * and rely on owner-path routing.
+   */
+  t.test(
+    'REPLACE operations bypass handler check',
+    async (t) => {
+      await fc.assert(
+        fc.asyncProperty(
+          replaceOperationRowArb,
+          async (row) => {
+            const targetNodeId = row.target_node_id;
+            const nodeRows = new Map();
+            nodeRows.set(
+              targetNodeId, buildReadyNodeRow(targetNodeId),
+            );
+
+            const {service, tracking} = createMockDispatchService({
+              serviceEntries: [],
+              nodeRows,
+              claimSucceeds: true,
+            });
+
+            await service.dispatchOperationRow(row);
+
+            if (!tracking.claimCalled) {
+              return false;
+            }
+
+            if (!tracking.executeOperationCalled) {
+              return false;
+            }
+
+            if (tracking.dispatchedEvents.length !== NUM.ONE) {
+              return false;
+            }
+
+            return true;
+          },
+        ),
+        {numRuns: 10},
+      );
+
+      t.pass('REPLACE operations bypass handler check');
     },
   );
 });

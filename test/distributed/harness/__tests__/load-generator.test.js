@@ -369,6 +369,50 @@ test('nodeResolver refreshes the tracked node set with stable per-node keys',
     }
   });
 
+test('nodeResolver can withdraw all active nodes without reverting to stale ' +
+  'dispatch targets', async () => {
+    const initialNode = {
+      id: 'initial-node',
+      async query() {
+        return {rows: []};
+      },
+    };
+    let dynamicNodes = [initialNode];
+
+    const gen = new LoadGenerator([initialNode], {
+      opsPerSec: 10,
+      duration: 100,
+      maxInFlight: 2,
+      nodeMaxInFlight: 1,
+      nodeResolver: () => dynamicNodes,
+    });
+    const run = gen.start();
+    try {
+      const initialNodeKey = 'node-initial-node';
+      run._nodeMetricsByKey.get(initialNodeKey).dispatched = 3;
+      dynamicNodes = [];
+      run._syncAvailableNodesFromResolver();
+      assert.deepEqual(
+        run._availableNodes.map((node) => node.id),
+        [],
+        'resolver refresh should allow the active dispatch set to become empty',
+      );
+      assert.deepEqual(
+        run._nodeHealthKeys,
+        [],
+        'no active node keys should remain after the resolver withdraws all nodes',
+      );
+      assert.equal(
+        run._nodeMetricsByKey.get(initialNodeKey).dispatched,
+        3,
+        'historical metrics should survive temporary admission withdrawal',
+      );
+    } finally {
+      run.cancel();
+      await run.waitComplete();
+    }
+  });
+
 test('benchmark workload uses a unique event-id prefix for each run', async () => {
   const recordedSql = [];
   const node = {
@@ -1178,6 +1222,116 @@ test('externally admission-blocked nodes are skipped before dispatch attempts',
     }
   });
 
+test('fresh unreachable reachability diagnostics block dispatch before attempts',
+  async () => {
+    let blockedCalls = ZERO;
+    const nowMs = Date.now();
+    const nodes = [
+      {
+        id: 'reachability-blocked-node',
+        getLastReachabilityDiagnostics() {
+          return {
+            timestamp: nowMs,
+            reachable: false,
+            adminReady: false,
+          };
+        },
+        async query(_sql) {
+          blockedCalls++;
+          throw new Error('reachability-blocked node should not be queried');
+        },
+      },
+      {
+        id: 'healthy-node',
+        async query(_sql) {
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 160,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.equal(
+        blockedCalls,
+        ZERO,
+        'expected reachability-blocked nodes to be skipped before dispatch',
+      );
+      assert.equal(
+        Number(metrics?.perNode?.['reachability-blocked-node']?.attemptErrors || ZERO),
+        ZERO,
+        'expected reachability-blocked nodes to avoid attempt errors',
+      );
+      assert.ok(
+        Number(
+          metrics?.perNode?.['reachability-blocked-node']?.waitReasons?.nodeAdmissionBlocked ||
+            ZERO,
+        ) > ZERO,
+        'expected blocked reachability diagnostics to register admission wait pressure',
+      );
+      assert.equal(
+        Number(metrics?.nonAdmissionAttemptErrors || ZERO),
+        ZERO,
+        'expected healthy-only execution to avoid non-admission attempt errors',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('admission-control treats load-lane timeout churn as admission pressure',
+  async () => {
+    let transientTimeoutCalls = ZERO;
+    const nodes = [{
+      id: 'load-lane-timeout-node',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        transientTimeoutCalls++;
+        const error = new Error(
+          'Admin API query failed for node load-lane-timeout-node on lane load: ' +
+            'Query timeout after 3000ms',
+        );
+        error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+        throw error;
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(
+        transientTimeoutCalls > ZERO,
+        'expected load-lane timeout churn attempts',
+      );
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'expected load-lane timeout churn to avoid operation failures',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'expected load-lane timeout churn to avoid operation errors',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'expected load-lane timeout churn to remain visible in attemptErrors',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
 test('admission-control treats typed retryable participant failures as admission signals',
   async () => {
     let admissionErrors = ZERO;
@@ -1553,6 +1707,58 @@ test('bounded queue emits stable queueFull reject reason when early reject is en
     }
   });
 
+test('admission-aware scheduling sheds queued work instead of leaving a ' +
+  'duration-timeout backlog under sustained admission pressure',
+async () => {
+  const nodes = [
+    {
+      id: 'blocked-node',
+      async query(_sql) {
+        const error = new Error('query_admission_deferred');
+        error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+        error.deferRetry = true;
+        error.retryAfterMs = 50;
+        throw error;
+      },
+    },
+    {
+      id: 'healthy-node',
+      async query(_sql) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        return {rows: []};
+      },
+    },
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 500,
+    duration: 220,
+    maxInFlight: 4,
+    nodeMaxInFlight: 2,
+    admissionBackoffMs: 10,
+    admissionAwareScheduling: true,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(
+      Number(metrics?.waitReasons?.nodeAdmissionBlocked || ZERO) > ZERO,
+      'expected admission pressure to be observed',
+    );
+    assert.ok(
+      Number(metrics?.rejectedByReason?.flowControl || ZERO) > ZERO,
+      'expected admission-aware scheduling to shed excess queued work',
+    );
+    assert.ok(
+      Number(metrics?.undispatchedByReason?.durationTimeout || ZERO) <
+        Number(metrics?.rejectedByReason?.flowControl || ZERO),
+      'flow-controlled shedding should dominate any residual duration-timeout backlog',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('load path uses queryWithTimeout when node supports timeout-aware query',
   async () => {
     const capturedTimeouts = [];
@@ -1754,6 +1960,15 @@ test('adaptive dispatch guardrail reduces effective dispatch pressure during sus
         Number(metrics.dispatchGuardrail.minEffectiveMaxInFlight || configuredMaxInFlight) <
           configuredMaxInFlight,
         'expected guardrail to reduce effective dispatch pressure below configured maxInFlight',
+      );
+      assert.ok(
+        Number(
+          metrics.dispatchGuardrail.maxEffectiveDispatchIntervalMs ||
+            metrics.dispatchGuardrail.configuredDispatchIntervalMs ||
+            ZERO,
+        ) >
+          Number(metrics.dispatchGuardrail.configuredDispatchIntervalMs || ZERO),
+        'expected guardrail to stretch dispatch pacing under sustained admission stress',
       );
     } finally {
       run.cancel();

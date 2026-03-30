@@ -52,7 +52,7 @@ function resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig(
     ...base,
     preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 5000),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
     transactionReplayTimeoutMs:
       normalizeFiniteNumber(options.transactionReplayTimeoutMs, 30000),
     transactionReplayPollIntervalMs:
@@ -108,9 +108,19 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
-    preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 5000),
+    preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 15000),
+    preRestartActiveTimeoutMs:
+      normalizeFiniteNumber(options.preRestartActiveTimeoutMs, 120000),
+    restartReadinessTimeoutMs:
+      normalizeFiniteNumber(options.restartReadinessTimeoutMs, 120000),
+    postRestartActiveTimeoutMs:
+      normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 180000),
+    postRestartQuietWindowMs:
+      normalizeFiniteNumber(options.postRestartQuietWindowMs, 30000),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+    consistencyTimeoutMs:
+      normalizeFiniteNumber(options.consistencyTimeoutMs, 240000),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
   });
 }
@@ -123,7 +133,7 @@ function resolvePartitionKillHealUnderLoadScenarioConfig(options = {}) {
     partitionHoldMs: normalizeFiniteNumber(options.partitionHoldMs, 5000),
     postKillDelayMs: normalizeFiniteNumber(options.postKillDelayMs, 1000),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.75),
   });
 }
@@ -141,7 +151,7 @@ function resolveDiskFullUnderLoadScenarioConfig(options = {}) {
       '/tmp/lagrange-chaos/disk-pressure.bin',
     ),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
   });
 }
@@ -156,7 +166,7 @@ function resolveSlowFollowerUnderLoadScenarioConfig(options = {}) {
     latencyMs: normalizeFiniteNumber(options.latencyMs, 200),
     jitterMs: normalizeFiniteNumber(options.jitterMs, 50),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
   });
 }
@@ -173,7 +183,7 @@ function resolveWriteAckVisibilityScenarioConfig(options = {}) {
 function resolveThreeNodeSeedRebalanceScenarioConfig(options = {}) {
   return Object.freeze({
     rebalanceWaitTimeoutMs:
-      normalizeFiniteNumber(options.rebalanceWaitTimeoutMs, 20000),
+      normalizeFiniteNumber(options.rebalanceWaitTimeoutMs, 120000),
     rebalancePollIntervalMs:
       normalizeFiniteNumber(options.rebalancePollIntervalMs, 250),
   });

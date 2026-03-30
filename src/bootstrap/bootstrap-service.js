@@ -62,12 +62,11 @@ import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
+import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
+import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
 import {
   waitForLocalQueryTransportReadiness,
 } from './shared/local-query-transport-readiness.js';
-import {
-  waitForTrafficReadiness,
-} from './traffic-readiness-utils.js';
 import {assertCritical} from '../utils/assert.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
@@ -89,6 +88,9 @@ import {
   MessageGroupServiceHandlerSetup,
 } from './shared/message-group-service-handler-setup.js';
 import {
+  activateSteadyStateRuntimeHandoff,
+} from './shared/startup-sql-runtime-handoff.js';
+import {
   activateMessageGroupServiceRows,
 } from './shared/message-group-service-activation.js';
 import {
@@ -96,8 +98,23 @@ import {
 } from '../utils/replica-creation-progress-reporter.js';
 import {
   buildMessageGroupOwnerNotReadyError,
+  getBootstrapMessageGroupService,
+  resolveOperationalMessageGroupSelection,
+  resolveOperationalMessageGroupSelectionAsync,
 } from './shared/message-group-selection.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
+import {
+  BootstrapNodeReadyRebalanceOwner,
+} from './owners/bootstrap-node-ready-rebalance-owner.js';
+import {
+  StartupRuntimeHandoffOwner,
+} from './owners/startup-runtime-handoff-owner.js';
+import {
+  SeedRuntimeBridgeOwner,
+} from './owners/seed-runtime-bridge-owner.js';
+import {
+  SeedRegistrationRuntimeOwner,
+} from './owners/seed-registration-runtime-owner.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
 import {
@@ -125,7 +142,6 @@ import {
 import {
   isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
-  wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
 import {
@@ -201,6 +217,12 @@ class BootstrapService extends EventEmitter {
       this.config.replicaRegistrationTraceEnabled,
     );
     this.bootstrapReadinessState = options.readinessState || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.onLocalAdminRuntimeReady =
+      typeof options.onLocalAdminRuntimeReady === 'function' ?
+        options.onLocalAdminRuntimeReady :
+        null;
+    this.localAdminRuntimeReadyNotified = false;
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
@@ -242,17 +264,97 @@ class BootstrapService extends EventEmitter {
     this.endpointService = null;
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
-    this.controlPlaneBackgroundWritersActivated = false;
     this.controlPlaneBackgroundWriterActivationPromise = null;
-    this.messageGroupServiceHandlerRegistered = false;
-    this.messageGroupServiceEndpointsPublished = false;
+    this.messageGroupServiceHandler = null;
 
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
-    this.runtimeDriverRegistry = runtimeWiring.runtimeDriverRegistry;
-    this.serviceRuntimeLifecycle = runtimeWiring.serviceRuntimeLifecycle;
+    const self = this;
+    this.runtimeDependencyOwner = {
+      runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,
+      serviceRuntimeLifecycle: runtimeWiring.serviceRuntimeLifecycle,
+      get logger() {
+        return self.logger;
+      },
+      get transport() {
+        return self.transport;
+      },
+      get messageRouter() {
+        return self.messageRouter;
+      },
+      get cdcIntegrationService() {
+        return self.cdcIntegrationService;
+      },
+      get replicaHandler() {
+        return self.replicaHandler;
+      },
+      get replicaStateMachine() {
+        return self.replicaStateMachine;
+      },
+      get heartbeatService() {
+        return self.heartbeatService;
+      },
+      get leaseService() {
+        return self.leaseService;
+      },
+      get endpointService() {
+        return self.endpointService;
+      },
+      get dispatchService() {
+        return self.dispatchService;
+      },
+      get tablePolicyService() {
+        return self.tablePolicyService;
+      },
+      get latencyTopology() {
+        return self.latencyTopology;
+      },
+      get runtimeServiceHandler() {
+        return self.runtimeServiceHandler;
+      },
+      get rebalanceCoordinator() {
+        return self.rebalanceCoordinator;
+      },
+      get controlPlaneReadinessService() {
+        return self.controlPlaneReadinessService;
+      },
+      get bootstrapReadinessState() {
+        return self.bootstrapReadinessState;
+      },
+      get serviceLifecycleManager() {
+        return self.serviceLifecycleManager;
+      },
+      get serviceReconciler() {
+        return self.serviceReconciler;
+      },
+    };
+    Object.defineProperties(this, {
+      runtimeDriverRegistry: {
+        configurable: true,
+        enumerable: true,
+        get: () => this.runtimeDependencyOwner.runtimeDriverRegistry,
+      },
+      serviceRuntimeLifecycle: {
+        configurable: true,
+        enumerable: true,
+        get: () => this.runtimeDependencyOwner.serviceRuntimeLifecycle,
+      },
+    });
+    this.bootstrapApiOwner = {
+      get phase() {
+        return self.phase;
+      },
+      get config() {
+        return self.config;
+      },
+      get messageRouter() {
+        return self.messageRouter;
+      },
+      waitForPartitionLeadership: () => self.waitForPartitionLeadership(),
+      getEpochManager: () => self.getEpochManager(),
+    };
     this.runtimeDrivers = runtimeWiring.drivers;
 
     // CDC integration service for system table writes
@@ -285,11 +387,6 @@ class BootstrapService extends EventEmitter {
     this.partitionsCreated = NUM.ZERO;
     this.messageGroupsCreated = NUM.ZERO;
 
-    // Node-ready rebalance dedupe state.
-    this.rebalanceTriggeredNodeIds = new Set();
-    this.pendingNodeReadyRebalanceTimers = new Map();
-    this.nodeReadyRebalanceRetryEligibleNodeIds = new Set();
-
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
@@ -298,6 +395,76 @@ class BootstrapService extends EventEmitter {
       owner: 'createRuntimeStartupWiring',
       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.nodeReadyRebalanceOwner = new BootstrapNodeReadyRebalanceOwner({
+      delegates: {
+        getLogger: () => this.logger,
+        getNodeReadyRebalanceDelayMs: () => this.nodeReadyRebalanceDelayMs,
+        getPartitionServices: () => this.partitionServices,
+        executeNodeReadyRebalance: (reason) => {
+          if (Object.prototype.hasOwnProperty.call(
+            this,
+            'triggerRebalancingOnAllPartitions',
+          )) {
+            this.triggerRebalancingOnAllPartitions(reason);
+            return;
+          }
+          this.nodeReadyRebalanceOwner.triggerRebalancingOnAllPartitions(reason);
+        },
+      },
+    });
+    this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
+      delegates: {
+        getCompatibilityService: () => this,
+        isShuttingDown: () => this.isShuttingDown === true,
+        getMetadataPublicationReadinessOptions: () => ({
+          readinessState: this.bootstrapReadinessState,
+          sleep: (delayMs) => this.sleep(delayMs),
+          onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
+            this.logger.warn(
+              'Retrying seed steady-state control-plane writers until lifecycle metadata publication readiness is satisfied',
+              {
+                nodeId: this.nodeId,
+                attempt,
+                maxAttempts,
+                nextDelayMs: delayMs,
+                lifecycleReadiness: snapshot || null,
+              },
+            );
+          },
+        }),
+        onMetadataPublicationReadinessDeferred: (error) => {
+          this.logger.warn(
+            'Deferring seed steady-state control-plane writers until lifecycle metadata publication readiness is satisfied',
+            {
+              nodeId: this.nodeId,
+              error: error?.message || String(error),
+              lifecycleReadiness: error?.lifecycleReadiness || null,
+            },
+          );
+        },
+        getLeaseService: () => this.leaseService,
+        getLeaseRunningState: () => LEASE_STATE.RUNNING,
+        getHeartbeatService: () => this.heartbeatService,
+        buildHeartbeatStartOptions: () => ({
+          nodeAddress: this.nodeAddress,
+          getStats: () => NodeService.getInstance().getNodeStats(),
+        }),
+        getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
+        activateDistributedTransactionRecovery: () => {
+          const sqlQueryEngine = this.sqlQueryEngine;
+          if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
+            'function') {
+            return;
+          }
+          void sqlQueryEngine.activateDistributedTransactionRecovery();
+        },
+        onControlPlaneBackgroundWritersActivated: () => {
+          this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
+            nodeId: this.nodeId,
+          });
+        },
+      },
     });
     this.seedPhaseOwners = createSeedPhaseOwners(this);
     this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({
@@ -319,6 +486,8 @@ class BootstrapService extends EventEmitter {
     this.cleanupRequired = false;
     this.isShuttingDown = false;
     this.shutdownPromise = null;
+    this.deferredLatencyTopologyStartHandle = null;
+    this.deferredLatencyTopologyStartKind = null;
 
     // Build concern-scoped delegate bundles for extracted phase modules.
     // Each bundle groups delegates by concern (D2.2) so owners receive
@@ -339,9 +508,19 @@ class BootstrapService extends EventEmitter {
     this.seedRegistrationPhase = new SeedRegistrationPhase({
       delegates: seedDelegates,
     });
-    this.seedCacheHydrationPhase = new SeedCacheHydrationPhase({
+    this.seedRegistrationRuntimeOwner =
+      new SeedRegistrationRuntimeOwner({
+        delegates: seedDelegates,
+      });
+    this.seedRuntimeBridgeOwner = new SeedRuntimeBridgeOwner({
       delegates: seedDelegates,
     });
+    this.seedCacheHydrationPhase = new SeedCacheHydrationPhase({
+      delegates: seedDelegates,
+      runtimeBridgeOwner: this.seedRuntimeBridgeOwner,
+    });
+    this.seedRuntimeBridgeOwner.compatibilityPhase =
+      this.seedCacheHydrationPhase;
     this.seedCleanupHandler = new SeedCleanupHandler({
       delegates: this._composeSeedDelegates(delegateBundles, {
         cleanupOnly: true,
@@ -442,17 +621,14 @@ class BootstrapService extends EventEmitter {
 
       // -- Service resolution --
       getLeaderMessageGroupService: (options) =>
-        self.seedMessageGroupsPhase
-          .getLeaderMessageGroupService(options),
+        self.getLeaderMessageGroupService(options),
       getBootstrapMessageGroupService: () =>
         self.seedMessageGroupsPhase
           .getBootstrapMessageGroupService(),
       resolveOperationalMessageGroupSelection: (options) =>
-        self.seedMessageGroupsPhase
-          .resolveOperationalMessageGroupSelection(options),
+        self.resolveOperationalMessageGroupSelection(options),
       resolveOperationalMessageGroupSelectionAsync: (options) =>
-        self.seedMessageGroupsPhase
-          .resolveOperationalMessageGroupSelectionAsync(options),
+        self.resolveOperationalMessageGroupSelectionAsync(options),
 
       // -- Runtime references --
       getSystemTableCache: () => self.getSystemTableCache(),
@@ -615,26 +791,26 @@ class BootstrapService extends EventEmitter {
       swapSystemTableWriter: () =>
         self.seedRegistrationPhase.swapSystemTableWriter(),
       ensureBootstrapCdcIntegrationService: () =>
-        self.seedCacheHydrationPhase
+        self.seedRuntimeBridgeOwner
           .ensureBootstrapCdcIntegrationService(),
       handleNodeReadyRebalanceTrigger: (cdcEvent, prevRow) =>
-        self.handleNodeReadyRebalanceTrigger(
+        self.nodeReadyRebalanceOwner.handleNodeReadyRebalanceTrigger(
           cdcEvent, prevRow,
         ),
       propagatePartitionCDCEvent: (mgs, cdcEvent) =>
-        self.seedCacheHydrationPhase
+        self.seedRuntimeBridgeOwner
           .propagatePartitionCDCEvent(mgs, cdcEvent),
       resolveCdcPropagationMessageGroup: (preferred) =>
         self.seedCacheHydrationPhase
           .resolveCdcPropagationMessageGroup(preferred),
       applyCurrentEpochFromCache: () =>
-        self.seedCacheHydrationPhase
+        self.seedRuntimeBridgeOwner
           .applyCurrentEpochFromCache(),
       hydrateFromLocalPartitions: (stc, mg) =>
         self.seedCacheHydrationPhase
           .hydrateFromLocalPartitions(stc, mg),
       createCdcPipelineReadinessGate: (stc) =>
-        self.seedCacheHydrationPhase
+        self.seedRuntimeBridgeOwner
           .createCdcPipelineReadinessGate(stc),
       emit: (event, data) => self.emit(event, data),
       sleep: (ms) => self.sleep(ms),
@@ -771,6 +947,15 @@ class BootstrapService extends EventEmitter {
           self.rpcClient = null;
         }
       },
+      clearRuntimeServiceHandler: async () => {
+        if (self.runtimeServiceHandler) {
+          self.runtimeServiceHandler.unregisterFromRouter(
+            self.messageRouter,
+          );
+          await self.runtimeServiceHandler.shutdown();
+          self.runtimeServiceHandler = null;
+        }
+      },
       clearReplicaStateMachine: () => {
         if (self.replicaStateMachine) {
           self.replicaStateMachine.stopTimeoutChecker();
@@ -797,7 +982,7 @@ class BootstrapService extends EventEmitter {
         self.rebalanceCoordinator = null;
       },
       clearNodeReadyRebalanceState: () => {
-        self.clearNodeReadyRebalanceState();
+        self.nodeReadyRebalanceOwner.clearNodeReadyRebalanceState();
       },
     };
   }
@@ -857,7 +1042,6 @@ class BootstrapService extends EventEmitter {
 
       const messageGroupHandlerStartMs = Date.now();
       this.initializeMessageGroupServiceHandler();
-      this.messageGroupServiceHandlerRegistered = true;
       this.logger.info('metrics.bootstrap.post_pipeline.message_group_handler', {
         nodeId: this.nodeId,
         durationMs: Date.now() - messageGroupHandlerStartMs,
@@ -870,6 +1054,7 @@ class BootstrapService extends EventEmitter {
         nodeId: this.nodeId,
         durationMs: Date.now() - controlPlaneStartMs,
       });
+      await this.notifyLocalAdminRuntimeReady();
 
       const registerSeedStartMs = Date.now();
       await this.registerSeedNodeWithControlPlane();
@@ -883,8 +1068,13 @@ class BootstrapService extends EventEmitter {
       // can come up without being blocked by topology/rebalancer warm-up.
       const topologyStartMs = Date.now();
       const startTopologyAsync = () => {
+        this.deferredLatencyTopologyStartHandle = null;
+        this.deferredLatencyTopologyStartKind = null;
+        if (this.isShuttingDown === true) {
+          return;
+        }
         try {
-          this.seedCacheHydrationPhase
+          this.seedRuntimeBridgeOwner
             .startLatencyTopologyLifecycle();
           this.logger.info('metrics.bootstrap.post_pipeline.latency_topology', {
             nodeId: this.nodeId,
@@ -899,9 +1089,11 @@ class BootstrapService extends EventEmitter {
         }
       };
       if (typeof setImmediate === 'function') {
-        setImmediate(startTopologyAsync);
+        this.deferredLatencyTopologyStartKind = 'immediate';
+        this.deferredLatencyTopologyStartHandle = setImmediate(startTopologyAsync);
       } else {
-        setTimeout(startTopologyAsync, 0);
+        this.deferredLatencyTopologyStartKind = 'timeout';
+        this.deferredLatencyTopologyStartHandle = setTimeout(startTopologyAsync, 0);
       }
 
       // Initialize runtime service handler AFTER control-plane readiness.
@@ -921,7 +1113,10 @@ class BootstrapService extends EventEmitter {
         this.lifecycleStateMachine.transition(NodeState.CONNECTING);
       }
       this.phase = BootstrapPhase.COMPLETE;
-      void this.activateControlPlaneBackgroundWriters();
+      activateSteadyStateRuntimeHandoff({
+        owner: this.runtimeHandoffOwner,
+        activateControlPlaneBackgroundWriters: true,
+      });
       const duration = Date.now() - this.startTime;
 
       this.logger.info(BootstrapLog.COMPLETED, {
@@ -1083,208 +1278,27 @@ class BootstrapService extends EventEmitter {
    * @return {boolean} True when a new rebalance trigger was scheduled.
    */
   handleNodeReadyRebalanceTrigger(cdcEvent, previousNodeRow) {
-    const rawNodeRow = cdcEvent?.data || null;
-    const previousRow = previousNodeRow &&
-      typeof previousNodeRow === 'object' ?
-      previousNodeRow :
-      {};
-    const incomingRow = rawNodeRow &&
-      typeof rawNodeRow === 'object' ?
-      rawNodeRow :
-      {};
-    const nodeRow = {
-      ...previousRow,
-      ...incomingRow,
-      node_id:
-        incomingRow.node_id ??
-        incomingRow.nodeId ??
-        previousRow.node_id ??
-        previousRow.nodeId ??
-        null,
-      status:
-        incomingRow.status ??
-        incomingRow.nodeStatus ??
-        incomingRow.state ??
-        incomingRow.lifecycle_state ??
-        incomingRow.lifecycleState ??
-        previousRow.status ??
-        previousRow.nodeStatus ??
-        previousRow.state ??
-        previousRow.lifecycle_state ??
-        previousRow.lifecycleState ??
-        null,
-      ready_lease_expires_at:
-        incomingRow.ready_lease_expires_at ??
-        incomingRow.readyLeaseExpiresAt ??
-        incomingRow.readyLeaseExpiresAtMs ??
-        incomingRow.readyLeaseExpires ??
-        previousRow.ready_lease_expires_at ??
-        previousRow.readyLeaseExpiresAt ??
-        previousRow.readyLeaseExpiresAtMs ??
-        previousRow.readyLeaseExpires ??
-        null,
-    };
-    const nodeId = nodeRow?.node_id;
-    if (!nodeId) {
-      this.logger.info('Skipping node-ready rebalance trigger: missing node_id', {
-        operation: cdcEvent?.operation || null,
-      });
-      return false;
-    }
-
-    const now = Date.now();
-    if (isNodeHeartbeatWatermarkRegression(previousRow, incomingRow)) {
-      this.logger.debug(
-        'Skipping node-ready rebalance trigger: stale node liveness regression',
-        {
-          nodeId,
-          operation: cdcEvent?.operation || null,
-          previousReadyLeaseExpiresAt:
-            previousRow.ready_lease_expires_at ??
-            previousRow.readyLeaseExpiresAt ??
-            null,
-          incomingReadyLeaseExpiresAt:
-            incomingRow.ready_lease_expires_at ??
-            incomingRow.readyLeaseExpiresAt ??
-            null,
-          previousLastHeartbeat:
-            previousRow.last_heartbeat ??
-            previousRow.lastHeartbeat ??
-            null,
-          incomingLastHeartbeat:
-            incomingRow.last_heartbeat ??
-            incomingRow.lastHeartbeat ??
-            null,
-        },
-      );
-      return false;
-    }
-    const isReadyByWallClock = isNodeRecordReady(nodeRow, {now});
-    const isReadyWhenWritten = wasNodeRecordReadyWhenWritten(nodeRow, {now});
-    const isReady = isReadyByWallClock || isReadyWhenWritten;
-    const wasReady = wasNodeRecordReadyWhenWritten(previousRow, {now});
-
-    if (!isReady) {
-      this.logger.info('Skipping node-ready rebalance trigger: node not ready', {
-        nodeId,
-        status: nodeRow.status || null,
-        readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
-        readyByWallClock: isReadyByWallClock,
-        readyWhenWritten: isReadyWhenWritten,
-        operation: cdcEvent?.operation || null,
-      });
-      const existingTimer = this.pendingNodeReadyRebalanceTimers.get(nodeId);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-        this.pendingNodeReadyRebalanceTimers.delete(nodeId);
-        // The scheduled trigger did not fire; allow a future true transition
-        // to schedule once the node becomes ready again.
-        this.rebalanceTriggeredNodeIds.delete(nodeId);
-      }
-      this.nodeReadyRebalanceRetryEligibleNodeIds.delete(nodeId);
-      return false;
-    }
-
-    const hasExistingTrigger = this.rebalanceTriggeredNodeIds.has(nodeId);
-    const hasPendingTimer = this.pendingNodeReadyRebalanceTimers.has(nodeId);
-    const retryEligible = this.nodeReadyRebalanceRetryEligibleNodeIds.has(nodeId);
-
-    if (wasReady) {
-      if (!retryEligible || hasExistingTrigger || hasPendingTimer) {
-        this.logger.debug(
-          'Skipping node-ready rebalance trigger: no not-ready to ready transition',
-          {
-            nodeId,
-            status: nodeRow.status || null,
-            readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
-            operation: cdcEvent?.operation || null,
-          },
-        );
-        return false;
-      }
-
-      this.logger.info(
-        'Retrying node-ready rebalance trigger after previous cache-gated miss',
-        {
-          nodeId,
-          reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
-          status: nodeRow.status || null,
-          readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
-          operation: cdcEvent?.operation || null,
-        },
-      );
-    }
-
-    if (this.rebalanceTriggeredNodeIds.has(nodeId)) {
-      this.logger.info('Skipping node-ready rebalance trigger: already scheduled', {
-        nodeId,
-      });
-      return false;
-    }
-    this.rebalanceTriggeredNodeIds.add(nodeId);
-
-    if (this.pendingNodeReadyRebalanceTimers.has(nodeId)) {
-      return false;
-    }
-
-    this.logger.info('Scheduling node-ready rebalance trigger', {
-      nodeId,
-      reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
-      delayMs: this.nodeReadyRebalanceDelayMs,
-      status: nodeRow.status || null,
-      readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
-    });
-
-    const timer = setTimeout(() => {
-      void this.executeNodeReadyRebalanceTrigger(nodeId);
-    }, this.nodeReadyRebalanceDelayMs);
-    if (typeof timer.unref === 'function') {
-      timer.unref();
-    }
-    this.pendingNodeReadyRebalanceTimers.set(nodeId, timer);
-    return true;
+    return this.nodeReadyRebalanceOwner.handleNodeReadyRebalanceTrigger(
+      cdcEvent,
+      previousNodeRow,
+    );
   }
 
   /**
-   * Execute one cache-gated node-ready rebalance trigger.
+  * Execute one node-ready rebalance trigger.
    * @param {string} nodeId - Node that transitioned to ready.
    * @return {Promise<void>}
    * @private
    */
   async executeNodeReadyRebalanceTrigger(nodeId) {
-    this.pendingNodeReadyRebalanceTimers.delete(nodeId);
-
-    try {
-      await this.seedCacheHydrationPhase
-        .waitForReadyNodeInCache(nodeId);
-    } catch (error) {
-      this.nodeReadyRebalanceRetryEligibleNodeIds.add(nodeId);
-      this.rebalanceTriggeredNodeIds.delete(nodeId);
-      this.logger.warn(
-        'Skipping node-ready rebalance trigger: node not ready in cache before timeout',
-        {
-          nodeId,
-          reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
-          error: error.message,
-        },
-      );
-      return;
-    }
-
-    this.nodeReadyRebalanceRetryEligibleNodeIds.delete(nodeId);
-    this.triggerRebalancingOnAllPartitions(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
+    return this.nodeReadyRebalanceOwner.executeNodeReadyRebalanceTrigger(nodeId);
   }
 
   /**
    * Clear all pending node-ready rebalance timers and dedupe state.
    */
   clearNodeReadyRebalanceState() {
-    for (const timer of this.pendingNodeReadyRebalanceTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.pendingNodeReadyRebalanceTimers.clear();
-    this.rebalanceTriggeredNodeIds.clear();
-    this.nodeReadyRebalanceRetryEligibleNodeIds.clear();
+    this.nodeReadyRebalanceOwner.clearNodeReadyRebalanceState();
   }
 
   /**
@@ -1294,32 +1308,7 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   triggerRebalancingOnAllPartitions(reason) {
-    const nodeReadyScoped = reason === BOOTSTRAP_REBALANCE_REASON.NODE_READY;
-    let leaderPartitionCount = NUM.ZERO;
-    let triggeredPartitionCount = NUM.ZERO;
-
-    for (const partition of this.partitionServices.values()) {
-      if (!partition?.isLeader) {
-        continue;
-      }
-      leaderPartitionCount++;
-      if (nodeReadyScoped &&
-          !this.shouldTriggerNodeReadyRebalanceForPartition(partition)) {
-        continue;
-      }
-      triggeredPartitionCount++;
-      partition.triggerRebalanceCheck(reason);
-    }
-
-    this.logger.info(BootstrapLog.REBALANCE_TRIGGER, {
-      reason,
-      partitionCount: this.partitionServices.size,
-      leaderPartitionCount,
-      triggeredPartitionCount,
-      scope: nodeReadyScoped ?
-        'bootstrap_convergence_critical' :
-        'all_leader_partitions',
-    });
+    this.nodeReadyRebalanceOwner.triggerRebalancingOnAllPartitions(reason);
   }
 
   /**
@@ -1330,31 +1319,16 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   shouldTriggerNodeReadyRebalanceForPartition(partition) {
-    const tableName =
-      partition?.tableName ||
-      partition?.table_id ||
-      partition?.tableId ||
-      null;
-    if (typeof tableName === 'string' &&
-        NODE_READY_REBALANCE_TABLE_SET.has(tableName)) {
-      return true;
-    }
+    return this.nodeReadyRebalanceOwner
+      .shouldTriggerNodeReadyRebalanceForPartition(partition);
+  }
 
-    const partitionId =
-      partition?.partitionId ||
-      partition?.partition_id ||
-      partition?.serviceId ||
-      partition?.service_id ||
-      null;
-    if (typeof partitionId !== 'string' || partitionId.length === NUM.ZERO) {
-      return false;
-    }
-    for (const nodeReadyTableName of BOOTSTRAP_NODE_READY_REBALANCE_TABLES) {
-      if (partitionId === `${nodeReadyTableName}-p1`) {
-        return true;
-      }
-    }
-    return false;
+  get pendingNodeReadyRebalanceTimers() {
+    return this.nodeReadyRebalanceOwner.pendingNodeReadyRebalanceTimers;
+  }
+
+  get rebalanceTriggeredNodeIds() {
+    return this.nodeReadyRebalanceOwner.rebalanceTriggeredNodeIds;
   }
 
 
@@ -1366,14 +1340,25 @@ class BootstrapService extends EventEmitter {
     return this.epochManager;
   }
 
+  hasPublishedLocalServiceEndpoints() {
+    const systemTableCache = this.getSystemTableCache();
+    const localEndpointRows = systemTableCache?.filter?.(
+      TABLES.SERVICE_ENDPOINTS,
+      (row) => row?.[COLUMN.NODE_ID] === this.nodeId,
+    ) ||
+      (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || [])
+        .filter((row) => row?.[COLUMN.NODE_ID] === this.nodeId);
+    return localEndpointRows.length > 0;
+  }
+
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
       systemTableWriter: this.cdcIntegrationService,
       messageRouter: this.messageRouter,
       deferTransientFailures: true,
-      handlerRegistered: this.messageGroupServiceHandlerRegistered,
-      endpointsPublished: this.messageGroupServiceEndpointsPublished,
+      messageGroupServiceHandler: this.messageGroupServiceHandler,
+      endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
       messageGroupServices: this.messageGroupServices,
       onDeferredActivation: ({groupId, replicaId, error}) => {
         this.logger.warn(
@@ -1418,7 +1403,7 @@ class BootstrapService extends EventEmitter {
    */
   initializeReplicaHandler() {
     const messageGroupService =
-      this.seedMessageGroupsPhase.getLeaderMessageGroupService();
+      this.getLeaderMessageGroupService();
 
     let dataDir = STORAGE_DEFAULT.DATA_DIR;
     if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
@@ -1518,14 +1503,14 @@ class BootstrapService extends EventEmitter {
               );
             }
 
-            await this.seedCacheHydrationPhase
+            await this.seedRuntimeBridgeOwner
               .propagatePartitionCDCEvent(
                 propagationMessageGroupService,
                 cdcEvent,
               );
 
             if (tableName === TABLES.CONFIG) {
-              this.seedCacheHydrationPhase
+              this.seedRuntimeBridgeOwner
                 .applyCurrentEpochFromCache();
             }
           }
@@ -1835,6 +1820,28 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Notify one startup-owned hook that cache-backed local admin surfaces can
+   * come online before full cluster self-publication completes.
+   * @return {Promise<void>}
+   * @private
+   */
+  async notifyLocalAdminRuntimeReady() {
+    if (this.localAdminRuntimeReadyNotified ||
+        typeof this.onLocalAdminRuntimeReady !== 'function') {
+      return;
+    }
+    this.localAdminRuntimeReadyNotified = true;
+    await this.onLocalAdminRuntimeReady({
+      nodeId: this.nodeId,
+      systemTableCache: this.getSystemTableCache(),
+      cacheMutationTarget: this.getSystemTableCache(),
+      messageRouter: this.messageRouter,
+      partitionServices: this.partitionServices,
+      owner: this,
+    });
+  }
+
+  /**
    * Initialize the RuntimeServiceHandler behind the PG wire safety
    * gate. The gate ensures control-plane readiness before allowing
    * runtime-service replica operations. Startup failure is isolated
@@ -1914,7 +1921,6 @@ class BootstrapService extends EventEmitter {
 
     if (result) {
       this.messageGroupServiceHandler = result.messageGroupServiceHandler;
-      this.messageGroupServiceHandlerRegistered = true;
     }
   }
 
@@ -2017,9 +2023,6 @@ class BootstrapService extends EventEmitter {
           diskUsagePercent: stats.diskUsagePercent,
         },
       );
-      await this.seedCacheHydrationPhase
-        .waitForReadyNodeInCache(this.nodeId);
-      this.messageGroupServiceEndpointsPublished = true;
     } catch (error) {
       this.logger.error(BootstrapLog.CONTROL_PLANE_REGISTER_FAILED, {
         nodeId: this.nodeId,
@@ -2036,67 +2039,22 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async activateControlPlaneBackgroundWriters() {
-    if (this.controlPlaneBackgroundWritersActivated) {
-      return;
-    }
-    if (this.controlPlaneBackgroundWriterActivationPromise) {
-      return this.controlPlaneBackgroundWriterActivationPromise;
-    }
+    return this.runtimeHandoffOwner.activateControlPlaneBackgroundWriters();
+  }
 
-    this.controlPlaneBackgroundWriterActivationPromise = (async () => {
-      try {
-        await waitForTrafficReadiness({
-          readinessState: this.bootstrapReadinessState,
-          sleep: (delayMs) => this.sleep(delayMs),
-          onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
-            this.logger.warn(
-              'Retrying seed steady-state control-plane writers until lifecycle traffic readiness is satisfied',
-              {
-                nodeId: this.nodeId,
-                attempt,
-                maxAttempts,
-                nextDelayMs: delayMs,
-                lifecycleReadiness: snapshot || null,
-              },
-            );
-          },
-        });
-      } catch (error) {
-        this.logger.warn(
-          'Deferring seed steady-state control-plane writers until lifecycle traffic readiness is satisfied',
-          {
-            nodeId: this.nodeId,
-            error: error?.message || String(error),
-            lifecycleReadiness: error?.lifecycleReadiness || null,
-          },
-        );
-        this.controlPlaneBackgroundWriterActivationPromise = null;
-        return;
-      }
+  /**
+   * Activate steady-state distributed transaction recovery once the
+   * runtime-owned SQL engine has been attached and lifecycle publication
+   * is ready. Seed restarts must defer replay until after cache hydration.
+   * @return {void}
+   * @private
+   */
+  activateDistributedTransactionRecovery() {
+    return this.runtimeHandoffOwner.activateDistributedTransactionRecovery();
+  }
 
-      if (this.controlPlaneBackgroundWritersActivated) {
-        this.controlPlaneBackgroundWriterActivationPromise = null;
-        return;
-      }
-
-      if (this.leaseService) {
-        this.leaseService.start();
-      }
-      if (this.heartbeatService) {
-        this.heartbeatService.start({
-          nodeAddress: this.nodeAddress,
-          getStats: () => NodeService.getInstance().getNodeStats(),
-        });
-      }
-
-      this.controlPlaneBackgroundWritersActivated = true;
-      this.controlPlaneBackgroundWriterActivationPromise = null;
-      this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
-        nodeId: this.nodeId,
-      });
-    })();
-
-    return this.controlPlaneBackgroundWriterActivationPromise;
+  hasActiveControlPlaneBackgroundWriters() {
+    return this.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters();
   }
 
   /**
@@ -2415,7 +2373,29 @@ class BootstrapService extends EventEmitter {
    * @return {Object|null}
    */
   getLeaderPartition(tableName) {
-    return this.seedRegistrationPhase.getLeaderPartition(tableName);
+    return this.seedRegistrationRuntimeOwner.getLeaderPartition(tableName);
+  }
+
+  resolveOperationalMessageGroupSelection(options = {}) {
+    return resolveOperationalMessageGroupSelection(
+      this.messageGroupServices,
+      options,
+    );
+  }
+
+  async resolveOperationalMessageGroupSelectionAsync(options = {}) {
+    return resolveOperationalMessageGroupSelectionAsync(
+      this.messageGroupServices,
+      options,
+    );
+  }
+
+  getLeaderMessageGroupService(options = {}) {
+    return this.resolveOperationalMessageGroupSelection(options).service;
+  }
+
+  getBootstrapMessageGroupService() {
+    return getBootstrapMessageGroupService(this.messageGroupServices);
   }
 
   /**
@@ -2604,22 +2584,24 @@ class BootstrapService extends EventEmitter {
       return;
     }
 
-    // Check if server is already running (started during bootstrap)
-    if (this.messageRouter.server) {
+    // Update the port if not already set
+    if (!this.messageRouter.wsPort) {
+      this.messageRouter.wsPort = wsPort;
+    }
+
+    const serverAlreadyRunning = Boolean(this.messageRouter.server);
+    await this.messageRouter.initialize({startServer: true});
+    if (typeof this.messageRouter.setExternalAdmissionEnabled === 'function') {
+      this.messageRouter.setExternalAdmissionEnabled(true);
+    }
+
+    if (serverAlreadyRunning) {
       this.logger.debug(BootstrapLog.WS_ALREADY_RUNNING, {
         nodeId: this.nodeId,
         wsPort: wsPort,
       });
       return;
     }
-
-    // Update the port if not already set
-    if (!this.messageRouter.wsPort) {
-      this.messageRouter.wsPort = wsPort;
-    }
-
-    // Start server and establish self-connection
-    await this.messageRouter.initialize({startServer: true});
 
     this.logger.info(BootstrapLog.WS_SERVER_STARTED, {
       nodeId: this.nodeId,
@@ -2689,6 +2671,23 @@ class BootstrapService extends EventEmitter {
     }
 
     this.shutdownPromise = (async () => {
+      this.isShuttingDown = true;
+
+      if (this.deferredLatencyTopologyStartHandle) {
+        if (this.deferredLatencyTopologyStartKind === 'immediate' &&
+            typeof clearImmediate === 'function') {
+          clearImmediate(this.deferredLatencyTopologyStartHandle);
+        } else {
+          clearTimeout(this.deferredLatencyTopologyStartHandle);
+        }
+        this.deferredLatencyTopologyStartHandle = null;
+        this.deferredLatencyTopologyStartKind = null;
+      }
+
+      if (typeof setImmediate === 'function') {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+
       this.logger.info(BootstrapLog.SHUTDOWN, {
         nodeId: this.nodeId,
         messageGroupServices: this.messageGroupServices.size,

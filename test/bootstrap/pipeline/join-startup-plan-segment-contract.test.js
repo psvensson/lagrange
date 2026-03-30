@@ -12,7 +12,10 @@
  */
 
 import {test} from '../../../src/test-helpers/tap.js';
-import {createJoinStartupPlan} from
+import {
+  READINESS_CONVERGENCE_PHASE,
+  createJoinStartupPlan,
+} from
   '../../../src/bootstrap/pipeline/join-startup-plan.js';
 import {
   JOIN_PLAN_SEGMENT,
@@ -22,7 +25,7 @@ import {NUM} from '../../../src/constants/index.js';
 
 // -- Suite-local fixture constants --
 
-const EXPECTED_PHASE_COUNT = 5;
+const EXPECTED_PHASE_COUNT = 6;
 
 /**
  * Expected phase names in the current join startup plan, in order.
@@ -35,6 +38,7 @@ const EXPECTED_PHASE_NAMES = Object.freeze([
   'joining:message-group-assignment',
   JOINING_PHASE.WAITING_LEADERSHIP,
   JOINING_PHASE.QUERYING_STATE,
+  READINESS_CONVERGENCE_PHASE,
 ]);
 
 /**
@@ -65,6 +69,9 @@ function buildStubJoinService() {
       joinExistingMessageGroup: async () => {},
       waitForLeadership: async () => {},
       querySystemState: async () => {},
+    },
+    joinReadinessEvaluator: {
+      waitForCanonicalJoinReadinessConvergence: async () => {},
     },
     bootstrapResponse: {
       messageGroupAssignment: {
@@ -183,6 +190,23 @@ test('createJoinStartupPlan - each segment is a non-empty array of phases',
         `segment "${segmentName}" should be a non-empty array (D4.1)`,
       );
     }
+  });
+
+test('createJoinStartupPlan - membership and readiness segments do not alias the same phase',
+  async (t) => {
+    const service = buildStubJoinService();
+    const plan = createJoinStartupPlan(service);
+
+    t.not(
+      plan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP][0],
+      plan.segments[JOIN_PLAN_SEGMENT.READINESS][0],
+      'membership and readiness should be anchored to distinct phase objects',
+    );
+    t.equal(
+      plan.segments[JOIN_PLAN_SEGMENT.READINESS][0]?.name,
+      READINESS_CONVERGENCE_PHASE,
+      'readiness should expose its own convergence phase',
+    );
   });
 
 // ---------------------------------------------------------------------------

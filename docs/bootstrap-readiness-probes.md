@@ -14,21 +14,30 @@ guidance for Kubernetes and NGINX.
 
 ### `GET /startupz`
 
-- Meaning: one-time bootstrap completion.
-- Success: `200` when bootstrap phase is complete.
-- Failure: `503` before bootstrap completes.
+- Meaning: one-time startup handoff completion.
+- Success: `200` when seed or join startup has completed cache hydration,
+  established required subscriptions, and handed steady-state ownership to the
+  canonical lifecycle/reconciliation paths.
+- Failure: `503` before startup handoff completes.
 - Notes: should be monotonic within one process lifetime.
 
 ### `GET /readyz`
 
 - Meaning: node is safe to serve join/admin traffic.
-- Success: `200` when join dependencies are healthy and stable.
+- Success: `200` when the node's readiness dimensions are healthy enough to
+  serve traffic. Operationally this means the control plane is
+  `repairEligible`, self/ingress serving requirements are satisfied, and no
+  blocking readiness reason remains active.
 - Failure: `503` with `reasons` and optional `retryAfterMs`.
+
+Readiness is a projection over canonical owner rows, cache state, and bounded
+health evidence. It is not an alternate ownership path.
 
 ### `GET /bootstrap/ready`
 
 - Meaning: seed is ready to accept `POST /bootstrap`.
-- Success: `200`.
+- Success: `200` when the seed can safely process join/bootstrap traffic using
+  the current canonical readiness state.
 - Failure: `503` with readiness reason codes and retry guidance.
 - Notes: lightweight and side-effect free.
 
@@ -82,3 +91,15 @@ Tune these values with observed startup latency in each environment.
 3. Use `/startupz` for startup probes to avoid readiness flapping on boot.
 4. Update dashboards and alerts to track `/readyz` status and reason codes.
 5. Remove `/health` readiness assumptions from clients before deprecation.
+
+## Operator Interpretation Rules
+
+1. Treat `/startupz` as a monotonic startup-complete signal, not as proof that
+  every steady-state dependency is still healthy.
+2. Treat `/readyz` as the authoritative probe for ongoing admission and load
+  balancing decisions.
+3. Treat `/bootstrap/ready` as a seed-specific readiness view for join intake,
+  not as a substitute for general readiness.
+4. When `/readyz` disagrees with cached topology expectations, prefer the
+  readiness reason codes and diagnostics endpoints over ad-hoc cache
+  interpretation.

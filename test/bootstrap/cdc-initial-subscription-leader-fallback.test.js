@@ -293,6 +293,105 @@ test(
 );
 
 test(
+  'subscribeToCDC accepts strict local ingress after repair when no remote target exists yet',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+    const propagatedEvents = [];
+    let capturedCdcSubscriber = null;
+    let repairSelectionCalls = 0;
+
+    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
+      async (messageGroup, cdcEvent) => {
+        propagatedEvents.push({messageGroup, cdcEvent});
+      };
+    service.latencyTopology = {
+      cdcGroupPropagationService: {
+        propagateCDCEvent: async () => {},
+      },
+    };
+
+    const localRelay = {
+      initialized: true,
+      groupId: 'mg-1',
+      systemTableCache: {
+        get: () => null,
+      },
+      subscribeToCDC: async () => {},
+      isLeaderReplica: () => false,
+      getMetadataIngressReadiness: () => ({
+        ready: false,
+        reason: 'leader metadata incomplete',
+        retryAfterMs: 250,
+      }),
+      resolveMetadataIngressForwardSelection: async () => {
+        repairSelectionCalls += 1;
+        return {
+          strictForwarding: true,
+          strictForwardRetryAfterMs: 250,
+          targets: [],
+          suppressedCount: 0,
+          localIngress: true,
+        };
+      },
+    };
+
+    const mockPartition = {
+      subscribeToCDCWithHandshake: async (subscriber, options = {}) => {
+        capturedCdcSubscriber = subscriber;
+        return {
+          subscriberId: options.subscriberId || null,
+          subscriptionEpoch: 1,
+          catchup: {
+            mode: 'none',
+            bufferedEventsReplayed: 0,
+          },
+        };
+      },
+      isLeader: false,
+    };
+
+    service.partitionServices = new Map([
+      ['nodes-p1-r1', mockPartition],
+    ]);
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', localRelay],
+    ]);
+
+    await service.seedCacheHydrationPhase.subscribeToCDC(
+      'nodes',
+      'nodes-p1',
+      ['nodes-p1-r1'],
+    );
+
+    await capturedCdcSubscriber({
+      tableName: 'nodes',
+      operation: 'UPSERT',
+      data: {node_id: 'node-b'},
+    });
+
+    assert.equal(
+      propagatedEvents.length,
+      1,
+      'strict local ingress should keep CDC propagation bound to the operational local message group',
+    );
+    assert.equal(
+      propagatedEvents[0]?.messageGroup,
+      localRelay,
+      'strict local ingress should return the local relay as the operational ingress service',
+    );
+    assert.ok(
+      repairSelectionCalls >= 1,
+      'strict local ingress should still use the repair-aware selection path before admitting the relay',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
   'subscribeToCDC subscribes each message group once per table',
   async (t) => {
     setupEnvironment();

@@ -1,3 +1,4 @@
+import {ControlPlanePublicationsOwner} from './control-plane-publications-owner.js';
 import {LogsOwner} from './logs-owner.js';
 import {MessageGroupsOwner} from './message-groups-owner.js';
 import {NodesOwner} from './nodes-owner.js';
@@ -18,6 +19,7 @@ function createOwnerOptions(options = {}) {
 function createSystemMetadataOwners(options = {}) {
   const ownerOptions = createOwnerOptions(options);
   return Object.freeze({
+    controlPlanePublicationsOwner: new ControlPlanePublicationsOwner(ownerOptions),
     nodesOwner: new NodesOwner(ownerOptions),
     servicesOwner: new ServicesOwner(ownerOptions),
     partitionsOwner: new PartitionsOwner(ownerOptions),

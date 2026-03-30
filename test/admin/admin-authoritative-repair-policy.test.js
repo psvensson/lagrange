@@ -171,6 +171,7 @@ test('authoritative repair policy narrows node coverage gap repair to discovery 
         TABLES.PARTITIONS,
         TABLES.SERVICES,
         TABLES.TABLES,
+        TABLES.CONTROL_PLANE_PUBLICATIONS,
         TABLES.NODE_ENDPOINTS,
         TABLES.SERVICE_DEFINITIONS,
         TABLES.SERVICE_ENDPOINTS,

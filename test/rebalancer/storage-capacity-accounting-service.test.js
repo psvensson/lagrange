@@ -128,6 +128,41 @@ test('estimateReplicaBytes - invalid sizeBytes defaults to zero',
     t.end();
   });
 
+test('getCapacitySnapshotForNodeSync derives capacity from cache-backed tables',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-sync',
+      [COLUMN.STORAGE_BUDGET_BYTES]: 1000,
+      [COLUMN.STATUS]: 'active',
+    });
+    insertRow(cache, TABLES.PARTITIONS, {
+      [COLUMN.PARTITION_ID]: 'part-1',
+      [COLUMN.SIZE_BYTES]: 100,
+    });
+    insertRow(cache, TABLES.SERVICES, {
+      [COLUMN.SERVICE_ID]: 'svc-sync',
+      [COLUMN.NODE_ID]: 'node-sync',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.PARTITION_ID]: 'part-1',
+      [COLUMN.STATUS]: 'active',
+    });
+
+    const service = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+
+    const snapshot = service.getCapacitySnapshotForNodeSync('node-sync');
+
+    t.equal(snapshot.nodeId, 'node-sync');
+    t.equal(snapshot.budgetBytes, 1000);
+    t.equal(snapshot.pressureState, PRESSURE_STATE.NORMAL);
+    t.ok(snapshot.budgetBytes > 0,
+      'sync capacity snapshot should derive a positive budget from cached capacity');
+    t.end();
+  });
+
 test('estimateReplicaBytes - negative sizeBytes defaults to zero',
   async (t) => {
     initializeConfig();

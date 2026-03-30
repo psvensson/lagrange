@@ -39,6 +39,7 @@ const SYSTEM_TABLE_NAME = {
   LIVE_QUERIES: TABLES.LIVE_QUERIES,
   CONTEXTS: TABLES.CONTEXTS,
   CODE: TABLES.CODE,
+  CONTROL_PLANE_PUBLICATIONS: TABLES.CONTROL_PLANE_PUBLICATIONS,
   REPLICA_OPERATIONS: TABLES.REPLICA_OPERATIONS,
   NODE_ENDPOINTS: TABLES.NODE_ENDPOINTS,
   SERVICE_DEFINITIONS: TABLES.SERVICE_DEFINITIONS,
@@ -415,6 +416,40 @@ const CODE_SCHEMA = {
   ],
 };
 
+
+const CONTROL_PLANE_PUBLICATIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  columns: [
+    {name: 'publication_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'publication_kind', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'publication_epoch', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'publisher_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'source_topology_epoch', type: COLUMN_TYPE.INTEGER},
+    {name: 'source_snapshot_version', type: COLUMN_TYPE.INTEGER},
+    {name: 'published_active_node_ids', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'required_ack_node_ids', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'acknowledged_node_ids', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'priority_partition_summary', type: COLUMN_TYPE.TEXT},
+    {name: 'membership_lifecycle_summary', type: COLUMN_TYPE.TEXT},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'reason_code', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'published_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'closed_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'transition_history', type: COLUMN_TYPE.TEXT, notNull: true},
+  ],
+  indices: [
+    {
+      name: 'idx_control_plane_publications_kind_epoch',
+      columns: ['publication_kind', 'publication_epoch'],
+    },
+    {
+      name: 'idx_control_plane_publications_status_updated',
+      columns: ['status', 'updated_at'],
+    },
+  ],
+};
 /**
  * Replica operations system table schema.
  * Stores persistent log of all replica operations for debugging and recovery.
@@ -1165,6 +1200,7 @@ const SYSTEM_TABLE_SCHEMAS = [
   LIVE_QUERIES_SCHEMA,
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
+  CONTROL_PLANE_PUBLICATIONS_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
@@ -1202,6 +1238,8 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.LIVE_QUERIES]: 'live_queries-p1',
   [SYSTEM_TABLE_NAME.CONTEXTS]: 'contexts-p1',
   [SYSTEM_TABLE_NAME.CODE]: 'code-p1',
+  [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]:
+    'control_plane_publications-p1',
   [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: 'replica_operations-p1',
   [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: 'node_endpoints-p1',
   [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: 'service_definitions-p1',
@@ -1230,6 +1268,14 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
 };
 
+const PRIORITY_CONTROL_PLANE_PARTITION_IDS = new Set([
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTIONS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS],
+  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
+]);
+
 /**
  * Pre-assigned replica IDs for initial system table partitions.
  * Each partition has 3 replicas on the seed node.
@@ -1250,6 +1296,11 @@ const INITIAL_REPLICA_IDS = {
   ],
   [SYSTEM_TABLE_NAME.CONTEXTS]: ['contexts-p1-r1', 'contexts-p1-r2', 'contexts-p1-r3'],
   [SYSTEM_TABLE_NAME.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
+  [SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS]: [
+    'control_plane_publications-p1-r1',
+    'control_plane_publications-p1-r2',
+    'control_plane_publications-p1-r3',
+  ],
   [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: [
     'replica_operations-p1-r1', 'replica_operations-p1-r2', 'replica_operations-p1-r3',
   ],
@@ -1450,6 +1501,7 @@ export {
   LIVE_QUERIES_SCHEMA,
   CONTEXTS_SCHEMA,
   CODE_SCHEMA,
+  CONTROL_PLANE_PUBLICATIONS_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
@@ -1471,6 +1523,7 @@ export {
   STORAGE_RESERVATIONS_SCHEMA,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
+  PRIORITY_CONTROL_PLANE_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,

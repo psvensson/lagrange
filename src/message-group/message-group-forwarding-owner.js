@@ -282,8 +282,13 @@ class MessageGroupForwardingOwner {
 
   shouldUseCanonicalLocalIngressForStrictCDC(selection = null) {
     const service = this.service;
+    const allowMetadataPublicationConvergenceIngress =
+      typeof service.isMetadataPublicationConvergenceWindowOpen ===
+        TYPEOF.FUNCTION &&
+      service.isMetadataPublicationConvergenceWindowOpen() === true;
     if (selection?.strictForwarding !== true ||
-        service.shouldAllowJoinConvergenceStrictTargeting() !== true) {
+        (service.shouldAllowJoinConvergenceStrictTargeting() !== true &&
+          !allowMetadataPublicationConvergenceIngress)) {
       return false;
     }
 
@@ -304,6 +309,8 @@ class MessageGroupForwardingOwner {
     // authoritative or live leader hints are locally visible. In that window,
     // fail closed causes a bootstrap deadlock because the local cache updates
     // needed to make ingress "ready" can only arrive through this strict path.
+    // Seed/bootstrap convergence can hit the same self-deadlock while leader
+    // metadata is still incomplete but lifecycle publication is already open.
     if (Array.isArray(selection?.targets) &&
         selection.targets.length === NUM.ZERO) {
       return true;
@@ -438,6 +445,22 @@ class MessageGroupForwardingOwner {
         tableName,
         operation: 'metadata_ingress',
       });
+    }
+    if (selection.strictForwarding === true &&
+        selection.targets.length === NUM.ZERO) {
+      const readiness = service.canAcceptCDCEvent({
+        tableName,
+        operation: 'metadata_ingress',
+      });
+      if (readiness?.ready === true && readiness?.localIngress === true) {
+        return {
+          ...selection,
+          localIngress: true,
+          strictForwardRetryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+            readiness.retryAfterMs :
+            selection.strictForwardRetryAfterMs,
+        };
+      }
     }
     return selection;
   }
@@ -842,7 +865,7 @@ class MessageGroupForwardingOwner {
       queryTimeoutMs: service.forwardTopologyRepairQueryTimeoutMs,
       sessionId,
       routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     };
     const [groupResult, serviceResult] = await Promise.all([

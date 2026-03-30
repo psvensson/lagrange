@@ -104,6 +104,9 @@ const SQL_RECONCILIATION_REASON = Object.freeze({
   RECOVERY_REPLICA_STATUS: 'recovery_replica_status',
   /** Recovery reconciliation of stale/orphan reservations. */
   RECOVERY_RESERVATION_RECONCILE: 'recovery_reservation_reconcile',
+  /** Authoritative confirmation after replica operation persistence. */
+  RECOVERY_OPERATION_PERSIST_CONFIRMATION:
+    'recovery_operation_persist_confirmation',
   /** Diagnostics comparison of cache vs authoritative state. */
   DIAGNOSTICS_CACHE_RECONCILE: 'diagnostics_cache_reconcile',
   /** Allocating canonical replica ID requires authoritative dedup. */

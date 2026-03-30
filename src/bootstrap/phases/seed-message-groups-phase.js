@@ -361,16 +361,6 @@ class SeedMessageGroupsPhase {
   }
 
   /**
-   * Get the operational message-group service for runtime traffic.
-   * @param {Object} [options]
-   * @param {Array<string>} [options.requiredTables]
-   * @return {Object|null}
-   */
-  getLeaderMessageGroupService(options = {}) {
-    return this.resolveOperationalMessageGroupSelection(options).service;
-  }
-
-  /**
    * Get a bootstrap-only message-group handle before leadership exists.
    * This must only be used during formation-time wiring.
    * @return {Object|null}

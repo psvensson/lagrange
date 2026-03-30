@@ -82,6 +82,34 @@ class ProvisioningAdmissionPolicy {
   }
 
   /**
+   * @param {string|null} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isCriticalSystemPartition(partitionId) {
+    if (typeof this.delegates.isCriticalSystemPartition === 'function') {
+      return this.delegates.isCriticalSystemPartition(partitionId) === true;
+    }
+    return false;
+  }
+
+  /**
+   * Resolve whether one admission should use critical-system semantics.
+   * @param {Object} context
+   * @return {boolean}
+   * @private
+   */
+  resolveAdmissionCriticality(context = {}) {
+    const partitionId =
+      context.partitionId ||
+      context.entityId ||
+      context.move?.partitionId ||
+      context.move?.entityId ||
+      null;
+    return this.isCriticalSystemPartition(partitionId);
+  }
+
+  /**
    * @param {string} moveType
    * @return {string|null}
    * @private
@@ -337,18 +365,21 @@ class ProvisioningAdmissionPolicy {
     const estimatedBytes = this.estimateProvisioningAdmissionBytes(
       context?.entityType,
     );
+    const isCritical = this.resolveAdmissionCriticality(context);
     const storageAdmissionService = this.getStorageAdmissionService();
     let admissionResult = null;
     if (moveType === OperationType.ADD) {
       admissionResult = await storageAdmissionService.checkAdd({
         targetNodeId: context.move.nodeId,
         estimatedBytes,
+        isCritical,
       });
     } else if (moveType === OperationType.REPLACE) {
       admissionResult = await storageAdmissionService.checkReplace({
         sourceNodeId: context.sourceNodeId,
         targetNodeId: context.move.nodeId,
         estimatedBytes,
+        isCritical,
       });
     }
 

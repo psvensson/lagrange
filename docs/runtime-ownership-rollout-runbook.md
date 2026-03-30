@@ -1,55 +1,50 @@
-# Runtime Ownership Rollout and Rollback Runbook
+# Runtime Ownership Operations Runbook
 
-This runbook defines phased rollout, rollback, feature-gate behavior, and
-failure handling for runtime-ownership closure changes.
+This runbook defines the steady-state operating model, release verification,
+rollback posture, feature-gate behavior, and failure handling after
+runtime-ownership closure.
 
-## 1. Phased Rollout Sequence
+## 1. Steady-State Operating Model
 
-| Phase | Scope | Entry Criteria | Exit Criteria |
-|---|---|---|---|
-| P0 | Baseline and backup | Cluster healthy, current schema snapshot captured | Baseline checkpoints recorded |
-| P1 | Schema and runtime descriptor alignment | P0 complete | `service_definitions` runtime columns and compatibility paths validated |
-| P2 | SQL dispatch and callback ownership closure | P1 complete | `executeRequest` dispatch and callback contracts validated |
-| P3 | Unified runtime lifecycle activation | P2 complete | startup-owned runtime registry/lifecycle paths validated |
-| P4 | Admin ingress enforcement progression | P3 complete | adapter-first ingress validated in observe, then enforce |
-| P5 | Governance closure sign-off | P4 complete | closure matrix and completion gates fully satisfied |
+The runtime-ownership cutover is closed. Operators should reason about the
+system using these active boundaries only:
 
-### Phase Actions
+1. `Service_Runtime_Lifecycle` owns runtime lifecycle operations.
+2. `Runtime_Driver_Registry` owns runtime selection; no fallback driver path
+   exists.
+3. `SqlCore.executeRequest(...)` owns canonical SQL dispatch, including
+   callback dispatch.
+4. Admin and WASM ingress surfaces are compatibility adapters only; they route
+   into replicated handlers and the SQL/CDC path rather than owning mutations.
+5. Startup wiring in `BootstrapService` and `NodeJoiningService` is limited to
+   provisioning and handoff. Those services do not retain a parallel
+   steady-state runtime ownership path after startup completes.
+6. Rollback, if needed, is by reverting the deployment or release build. Do
+   not restore deprecated live bypass paths inside the same runtime.
 
-1. P0:
-   - Capture current `service_definitions`, `services`, and `wasm_operations`
-     snapshots.
-   - Record current admin enforcement mode and OCI feature-gate state.
-2. P1:
-   - Deploy schema/model/runtime descriptor contract changes.
-   - Run V1 contract checkpoint commands.
-3. P2:
-   - Deploy `SqlCore.executeRequest` stage/plan/callback dispatch closure.
-   - Deploy explicit callback runtime-kind propagation and SELECT-only checks.
-   - Run V2 dispatch checkpoint commands.
-4. P3:
-   - Deploy startup wiring for `Runtime_Driver_Registry` and
-     `Service_Runtime_Lifecycle`.
-   - Run V3 runtime ownership checkpoint commands.
-5. P4:
-   - Start with admin enforcement mode `observe`.
-   - Validate adapter routing and meta-leader unavailable behavior.
-   - Promote to `enforce` only after no bypass-path warnings remain.
-   - Run V4 admin checkpoint commands.
-6. P5:
-   - Complete docs parity and governance checks (V5, V6).
-   - Mark closure tasks done only after evidence is present.
+## 2. Release Verification and Safe Rollback
 
-## 2. Rollback Triggers and Safe Rollback Actions
+Before promotion or after an incident rollback, verify:
 
-| Phase | Trigger | Safe Rollback Action |
-|---|---|---|
-| P1 | Service-definition mutation errors spike | Keep new columns; revert writer behavior to compatibility defaults and re-run migration checks |
-| P2 | Callback or stage/plan requests fail unexpectedly | Roll back to previous release build; preserve data and re-run V2 tests before reattempt |
-| P3 | Startup/runtime lifecycle activation failures | Revert build; keep persisted metadata intact; validate runtime descriptors before retry |
-| P4 (observe) | Warning volume indicates unresolved bypass callers | Stay in `observe`; do not promote to `enforce`; remediate callers |
-| P4 (enforce) | `BYPASS_REJECTED` errors on critical paths | Immediately revert to `observe` enforcement mode; remediate callers; retry later |
-| P5 | Docs/evidence mismatch at sign-off | Block release sign-off; fix matrix/docs/checkpoints before progressing |
+1. `service_definitions` runtime descriptor columns match the deployed service
+   types and runtime kinds.
+2. Admin ingress follows adapter-first routing with no bypass-path warnings or
+   rejects outside expected enforcement behavior.
+3. Callback requests carry explicit `runtimeKind` and remain SELECT-only.
+4. Diagnostics show the canonical lifecycle owner path rather than a startup-
+   local or adapter-local path.
+5. Closure evidence in
+   `.kiro/specs/runtime-ownership-closure/completion-gates.md` and
+   `.kiro/specs/runtime-ownership-closure/closure-matrix.md` still matches the
+   deployed code.
+
+Safe rollback rules:
+
+1. Revert to the last known-good release build.
+2. Preserve persisted runtime metadata and descriptor columns.
+3. Re-validate runtime descriptors and diagnostics before reattempting a
+   promotion.
+4. Do not reintroduce removed dual-path ownership logic as an operational fix.
 
 ## 3. Feature-Gate Behavior Tables
 

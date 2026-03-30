@@ -12,8 +12,11 @@ import {
 } from '../harness/scenario-config.js';
 import {
   BENCHMARK_WORKLOAD_PROFILE,
+  createPartitioningAdaptiveDispatchGuardrail,
+  createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
   assertSplitPolicyPrecondition,
+  resolvePartitioningBenchmarkLoadOpsPerSec,
   resolvePartitioningLoadTableName,
   sleep,
   queryTableDistribution,
@@ -77,18 +80,42 @@ async function run(cluster, options = {}) {
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
+  if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
+    await cluster.waitForControlPlaneQuiescence();
+  }
 
   const tablePreparation = await prepareBenchmarkPartitioningTable(
     seedNode,
-    {tableName: effectiveTableName},
+    {
+      tableName: effectiveTableName,
+      queryNodes: nodes,
+    },
   );
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-read-write-load-distribution',
   });
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      queryNodes: nodes,
+    },
+  );
+  const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
+    loadOpsPerSec,
+    loadNodePlan.initialNodes.length,
+    nodes.length,
+  );
 
   const loadRun = cluster.startLoad({
-    opsPerSec: loadOpsPerSec,
+    nodes: loadNodePlan.initialNodes,
+    nodeResolver: loadNodePlan.nodeResolver,
+    opsPerSec: effectiveLoadOpsPerSec,
     duration: loadDuration,
+    adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: loadOperations,
     tableName: effectiveTableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
@@ -102,6 +129,7 @@ async function run(cluster, options = {}) {
       pollIntervalMs: distributionPollIntervalMs,
       minAdditionalPartitions,
       minDistinctReplicaNodes,
+      queryNodes: nodes,
     });
 
     if (postDistributionSoakMs > ZERO) {
@@ -110,6 +138,9 @@ async function run(cluster, options = {}) {
   } finally {
     if (typeof loadRun.cancel === 'function') {
       loadRun.cancel();
+    }
+    if (typeof loadNodePlan.stop === 'function') {
+      loadNodePlan.stop();
     }
   }
 
@@ -127,6 +158,7 @@ async function run(cluster, options = {}) {
 
   const finalDistribution = await queryTableDistribution(seedNode, {
     tableName: effectiveTableName,
+    queryNodes: nodes,
   });
   assert.ok(
     finalDistribution.replicaNodeCount >= minDistinctReplicaNodes,

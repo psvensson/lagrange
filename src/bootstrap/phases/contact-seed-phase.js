@@ -54,6 +54,7 @@ class ContactSeedPhase {
     }
     const nodeAddress = this.delegates.getNodeAddress();
     assertCritical(nodeAddress, JOINING_ERROR_MSG.NODE_ADDRESS_REQUIRED);
+    const startupMode = this.delegates.getJoinStartupMode?.();
 
     const bootstrapUrl =
       `${seedNodeAddress}${JOINING_HTTP.BOOTSTRAP_PATH}`;
@@ -83,10 +84,15 @@ class ContactSeedPhase {
       attempt += 1;
       try {
         const httpPostImpl = this.delegates.getHttpPostImpl();
-        const response = await httpPostImpl(bootstrapUrl, {
+        const bootstrapRequest = {
           nodeId: this.nodeId,
           nodeAddress,
-        });
+        };
+        if (typeof startupMode === TYPEOF.STRING &&
+            startupMode.length > NUM.ZERO) {
+          bootstrapRequest.startupMode = startupMode;
+        }
+        const response = await httpPostImpl(bootstrapUrl, bootstrapRequest);
 
         if (!response.success) {
           const bootstrapError = new Error(

@@ -418,7 +418,11 @@ class HeartbeatService extends EventEmitter {
     if (!Number.isFinite(writeTimeoutMs) || writeTimeoutMs <= ZERO) {
       return ONE;
     }
-    return Math.max(ONE, Math.floor(writeTimeoutMs / 2));
+    const reporterSlackMs = Math.min(
+      HEARTBEAT_DEFAULT.ATTEMPT_TIMEOUT_SAFETY_MARGIN_MS,
+      Math.max(ONE, Math.floor(writeTimeoutMs / 5)),
+    );
+    return Math.max(ONE, writeTimeoutMs - reporterSlackMs);
   }
 
   /**

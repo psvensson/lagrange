@@ -784,8 +784,9 @@ async (t) => {
         timeoutMs,
         unref() {},
       };
-      // Trigger reporter timeout watchdog immediately to keep this test deterministic.
-      if (timeoutMs === 3000) {
+      // Trigger reporter timeout watchdog immediately to keep this test
+      // deterministic across reporter-timeout budget tuning.
+      if (timeoutMs <= 5000) {
         callback();
       }
       return handle;
@@ -806,6 +807,65 @@ async (t) => {
       service.getHeartbeatPublicationDiagnostics().targetAddress,
       null,
       'reporter-timeout diagnostics should not invent a routed SQL target',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('HeartbeatService avoids premature reporter timeout when reporter ' +
+  'completes within the bounded heartbeat write budget',
+async (t) => {
+  initEnv();
+
+  let reporterAttempts = 0;
+  let nodeUpdates = 0;
+  const service = new HeartbeatService({
+    nodeId: 'node-reporter-budget-aligned',
+    nodeAddress: '10.0.0.16:8080',
+    heartbeatAttemptTimeoutMs: 7000,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => {
+        nodeUpdates += 1;
+        return {success: true};
+      },
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    systemTableCache: createMockCache(),
+    nodeMetadataMinUpdateIntervalMs: 0,
+    nodeMetadataMaxStalenessMs: 5000,
+    nodeStateReporter: async () => {
+      reporterAttempts += 1;
+      return {
+        publicationPath: 'node_state_reporter',
+        targetAddress: 'seed-1/message-group/mg-1',
+      };
+    },
+    setTimeoutFn: (callback, timeoutMs) => {
+      const handle = {
+        timeoutMs,
+        unref() {},
+      };
+      // Simulate a regression where the reporter budget is cut too low.
+      if (timeoutMs <= 3200) {
+        callback();
+      }
+      return handle;
+    },
+    clearTimeoutFn: () => {},
+  });
+
+  try {
+    await service.sendHeartbeat(null, ['partition_replica']);
+
+    t.equal(reporterAttempts, 1, 'reporter should execute once');
+    t.equal(nodeUpdates, 0,
+      'successful reporter heartbeat should not fall back to routed SQL writes');
+    t.equal(
+      service.getHeartbeatPublicationDiagnostics().publicationPath,
+      'node_state_reporter',
+      'publication diagnostics should preserve reporter path on success',
     );
   } finally {
     ConfigurationManager.resetInstance();

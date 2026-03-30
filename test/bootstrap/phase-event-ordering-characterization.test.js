@@ -12,6 +12,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+import {READINESS_CONVERGENCE_PHASE} from
+  '../../src/bootstrap/pipeline/join-startup-plan.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_EVENT,
@@ -65,6 +67,7 @@ const EXPECTED_JOIN_PHASE_ORDER = Object.freeze([
   JOINING_PHASE.CREATING_MESSAGE_GROUP,
   JOINING_PHASE.WAITING_LEADERSHIP,
   JOINING_PHASE.QUERYING_STATE,
+  READINESS_CONVERGENCE_PHASE,
 ]);
 
 const PHASE_EVENT_START = 'phase:start';
@@ -111,7 +114,7 @@ test('Seed bootstrap - emits phase:start and phase:complete in correct order',
     // Stub post-pipeline steps
     bootstrap.initializeReplicaHandler = () => {};
     bootstrap.initializeMessageGroupServiceHandler = () => {
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {};
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -177,7 +180,7 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
     };
     bootstrap.initializeReplicaHandler = () => {};
     bootstrap.initializeMessageGroupServiceHandler = () => {
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {};
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -238,7 +241,7 @@ test('Seed bootstrap - emits COMPLETE event after all phases', async (t) => {
   };
   bootstrap.initializeReplicaHandler = () => {};
   bootstrap.initializeMessageGroupServiceHandler = () => {
-    bootstrap.messageGroupServiceHandlerRegistered = true;
+    bootstrap.messageGroupServiceHandler = {};
   };
   bootstrap.initializeControlPlaneService = async () => {};
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -640,6 +643,7 @@ test('Join startup - MOVE_REPLICA strategy emits joining_message_group phase',
       JOINING_PHASE.JOINING_MESSAGE_GROUP,
       JOINING_PHASE.WAITING_LEADERSHIP,
       JOINING_PHASE.QUERYING_STATE,
+      READINESS_CONVERGENCE_PHASE,
     ];
     t.same(
       phaseStarts,
@@ -671,7 +675,7 @@ test('Seed bootstrap - phase event payloads include phase and nodeId',
     };
     bootstrap.initializeReplicaHandler = () => {};
     bootstrap.initializeMessageGroupServiceHandler = () => {
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {};
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -800,7 +804,7 @@ async (t) => {
   };
   bootstrap.initializeReplicaHandler = () => {};
   bootstrap.initializeMessageGroupServiceHandler = () => {
-    bootstrap.messageGroupServiceHandlerRegistered = true;
+    bootstrap.messageGroupServiceHandler = {};
   };
   bootstrap.initializeControlPlaneService = async () => {};
   bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -993,14 +997,14 @@ async (t) => {
     );
   }
 
-  // Verify subPhase values match JOINING_PHASE_TO_SUB_PHASE mapping
-  // The last phase (querying_state) is terminal and auto-advances
+  // Verify subPhase values match JOINING_PHASE_TO_SUB_PHASE mapping.
+  // The last phase (readiness convergence) is terminal and auto-advances
   // to READY, which resets subPhase to null.
   const lastComplete = completePayloads[completePayloads.length - NUM.ONE];
   t.equal(
     lastComplete.phase,
-    JOINING_PHASE.QUERYING_STATE,
-    'last join phase is querying_state',
+    READINESS_CONVERGENCE_PHASE,
+    'last join phase is readiness convergence',
   );
   t.equal(
     lastComplete.subPhase,
@@ -1083,7 +1087,7 @@ async (t) => {
   };
   bootstrap.initializeReplicaHandler = () => {};
   bootstrap.initializeMessageGroupServiceHandler = () => {
-    bootstrap.messageGroupServiceHandlerRegistered = true;
+    bootstrap.messageGroupServiceHandler = {};
   };
   bootstrap.initializeControlPlaneService = async () => {};
   bootstrap.registerSeedNodeWithControlPlane = async () => {};

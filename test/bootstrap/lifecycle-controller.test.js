@@ -2,6 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {LifecycleController} from '../../src/bootstrap/lifecycle-controller.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
+  LIFECYCLE_DEPENDENCY_DEMOTION_POLICY,
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -112,4 +113,39 @@ test('LifecycleController - propagates hard dependency reasons and does not bloc
       'snapshot should expose stable-window origin timestamp');
     t.ok(snapshot.degradedReasons.includes(LIFECYCLE_REASON.OBSERVABILITY_BACKLOG),
       'soft blockers should remain visible post-promotion');
+  });
+
+test('LifecycleController - immediate demotion policy bypasses failure threshold',
+  async (t) => {
+    const lifecycle = new LifecycleController({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 2,
+    });
+
+    lifecycle.setDependency('startup_complete', true, {
+      reasonCode: LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+      classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
+    });
+    lifecycle.setDependency('priority_control_plane_recovery', true, {
+      reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
+      demotionPolicy: LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.IMMEDIATE,
+    });
+
+    let snapshot = lifecycle.evaluate();
+    t.equal(snapshot.ready, true, 'controller should promote when dependencies are ready');
+
+    lifecycle.setDependency('priority_control_plane_recovery', false, {
+      reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
+      demotionPolicy: LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.IMMEDIATE,
+    });
+
+    snapshot = lifecycle.evaluate();
+    t.equal(snapshot.ready, false,
+      'immediate demotion policy should not wait for threshold retries');
+    t.equal(snapshot.phase, LIFECYCLE_PHASE.DEGRADED,
+      'immediate demotion should transition straight to degraded');
+    t.same(snapshot.reasons, [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      'immediate blocker reason should be surfaced');
   });

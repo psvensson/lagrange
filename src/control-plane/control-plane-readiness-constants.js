@@ -10,6 +10,8 @@ const CONTROL_PLANE_READINESS_DIMENSION = Object.freeze({
   LOAD_READY: 'loadReady',
   PLACEMENT_ELIGIBLE: 'placementEligible',
   CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
+  CONTROL_PLANE_PUBLISHED: 'controlPlanePublished',
+  CONTROL_PLANE_RECOVERY_ELIGIBLE: 'controlPlaneRecoveryEligible',
   METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
   REPAIR_ELIGIBLE: 'repairEligible',
   SERVE_ELIGIBLE: 'serveEligible',
@@ -21,11 +23,13 @@ const CONTROL_PLANE_READINESS_OWNER = Object.freeze({
   STORAGE_ACCOUNTING: 'StorageCapacityAccountingService',
   CDC_GROUP_PROPAGATION: 'CDCGroupPropagationService',
   MESSAGE_ROUTER: 'MessageRouter',
+  MEMBERSHIP_PUBLICATION: 'MembershipPublicationCoordinator',
 });
 
 const CONTROL_PLANE_PARTICIPATION_KIND = Object.freeze({
   ROUTED_READ: 'routed_read',
   REPLICA_OPERATION_OWNER_READ: 'replica_operation_owner_read',
+  CONTROL_PLANE_RECOVERY: 'control_plane_recovery',
 });
 
 const CONTROL_PLANE_PARTICIPATION_DECISION = Object.freeze({
@@ -45,8 +49,15 @@ const CONTROL_PLANE_READINESS_REASON = Object.freeze({
   STORAGE_PRESSURE_HARD: 'storage_pressure_hard',
   STORAGE_PRESSURE_EXHAUSTED: 'storage_pressure_exhausted',
   CONTROL_PLANE_WRITE_UNHEALTHY: 'control_plane_write_unhealthy',
+  CONTROL_PLANE_PUBLICATION_PENDING: 'control_plane_publication_pending',
   METADATA_PUBLICATION_DEGRADED: 'metadata_publication_degraded',
   METADATA_PUBLICATION_REPAIR_ONLY: 'metadata_publication_repair_only',
+});
+const CONTROL_PLANE_PRIORITY_RECOVERY_REASON = Object.freeze({
+  PUBLICATION_EPOCH_PENDING: 'publication_epoch_pending',
+  PRIORITY_PARTITIONS_NOT_SPREAD: 'priority_partitions_not_spread',
+  CONTROL_PLANE_NOT_WRITABLE: 'control_plane_not_writable',
+  RECOVERY_ELIGIBILITY_PENDING: 'recovery_eligibility_pending',
 });
 
 const CONTROL_PLANE_PUBLICATION_MODE = Object.freeze({
@@ -58,6 +69,7 @@ const CONTROL_PLANE_PUBLICATION_MODE = Object.freeze({
 const CONTROL_PLANE_READINESS_DEFAULT = Object.freeze({
   LOAD_READY_MAX_PERCENT: NUM.HUNDRED,
   CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS: NUM.THIRTY_THOUSAND,
+  MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS: NUM.THOUSAND,
   NON_RUNNING_PROCESS_STATES: Object.freeze([
     NODE_STATE.FAILED,
     NODE_STATE.SHUTTING_DOWN,
@@ -86,6 +98,7 @@ const READINESS_SNAPSHOT_KEY = Object.freeze({
 export {
   CONTROL_PLANE_PARTICIPATION_DECISION,
   CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,

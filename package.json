@@ -1,7 +1,7 @@
 {
   "name": "distributed-database-system",
   "version": "1.0.0",
-  "description": "A scalable distributed database system with Raft consensus",
+  "description": "Experimental distributed SQL database and compute-near-data runtime",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -51,6 +51,9 @@
     "migration:raft:rollback-drill": "node scripts/run-raft-migration-rollback-drill.js",
   "distributed:all": "bash scripts/run-all-distributed-scenarios.sh --verbose",
   "distributed:rerun-failed": "bash scripts/rerun-failed-distributed-scenarios.sh --verbose",
+  "test:task27:invariant-suite": "bash scripts/run-task27-deterministic-invariant-suite.sh",
+  "test:task27:distributed-stall-gate": "bash scripts/run-task27-distributed-stall-gate.sh --verbose",
+  "test:task27:ci": "npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate",
   "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",
   "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
   "summarize:harness": "node scripts/summarize-harness-runs.js",

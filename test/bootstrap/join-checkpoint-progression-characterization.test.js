@@ -12,6 +12,8 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
+import {READINESS_CONVERGENCE_PHASE} from
+  '../../src/bootstrap/pipeline/join-startup-plan.js';
 import {
   JOINING_PHASE,
   BOOTSTRAP_EVENT,
@@ -67,6 +69,7 @@ const EXPECTED_PLAN_PHASE_NAMES = Object.freeze([
   'joining:message-group-assignment',
   JOINING_PHASE.WAITING_LEADERSHIP,
   JOINING_PHASE.QUERYING_STATE,
+  READINESS_CONVERGENCE_PHASE,
 ]);
 
 function initializeTestEnvironment() {
@@ -140,6 +143,7 @@ function stubJoinServiceForCheckpointTests(service) {
   };
   service.joinReadinessEvaluator
     .waitForCanonicalJoinReadinessConvergence = async () => {
+    tracking.executedPhases.push(READINESS_CONVERGENCE_PHASE);
     tracking.readinessConverged = true;
   };
   service.signalReadyForReplicas = async () => {
@@ -155,7 +159,7 @@ function stubJoinServiceForCheckpointTests(service) {
     tracking.joinCompleted = true;
     service.lifecycleStateMachine.transition('ready');
     service.phase = JOINING_PHASE.COMPLETE;
-    service.controlPlaneBackgroundWritersActivated = true;
+    service.hasActiveControlPlaneBackgroundWriters = () => true;
     service.emit(BOOTSTRAP_EVENT.COMPLETE, {
       nodeId: service.nodeId,
       duration: service.now() - service.startTime,
@@ -215,6 +219,7 @@ test('Join checkpoint progression - steps execute in canonical order',
         JOINING_PHASE.CREATING_MESSAGE_GROUP,
         JOINING_PHASE.WAITING_LEADERSHIP,
         JOINING_PHASE.QUERYING_STATE,
+        READINESS_CONVERGENCE_PHASE,
       ],
       'phases should execute in the canonical join plan order',
     );
@@ -601,7 +606,7 @@ async (t) => {
   service.lifecycleStateMachine.transition('discovering');
   service.lifecycleStateMachine.transition('joining');
   service.lifecycleStateMachine.transition('ready');
-  service.controlPlaneBackgroundWritersActivated = true;
+  service.hasActiveControlPlaneBackgroundWriters = () => true;
   t.equal(
     finalizedStep.shouldRerun(),
     false,

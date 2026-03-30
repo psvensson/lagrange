@@ -17,6 +17,8 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {JOIN_BACKFILL_SCOPE} from
   '../../src/bootstrap/node-joining-constants.js';
+import {STARTUP_JOIN_MODE} from
+  '../../src/bootstrap/rejoin-hints-constants.js';
 
 const NODE_ID = 'readiness-gate-join-test-node';
 const NODE_ADDRESS = 'ws://127.0.0.1:19092';
@@ -251,6 +253,45 @@ test('phaseQuerySystemState succeeds when CDC pipeline is ready',
 
     await service.phaseQuerySystemState();
     t.pass('phaseQuerySystemState completed with ready CDC pipeline');
+  });
+
+test('phaseQuerySystemState restores durable local partition services ' +
+  'before node admission writes', async (t) => {
+    const service = new NodeJoiningService({
+      nodeId: NODE_ID,
+      nodeAddress: NODE_ADDRESS,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      config: {
+        leadershipWaitTimeoutMs: 10,
+      },
+    });
+    const systemTableCache = createFullyHydratedCache();
+    applyCommonStubs(service, systemTableCache);
+    service.bootstrapResponse = createBootstrapResponseFromCache(
+      systemTableCache,
+    );
+
+    const callOrder = [];
+    service.restoreDurableRejoinLocalPartitionServices = async (cache) => {
+      t.equal(cache, systemTableCache,
+        'durable restore should receive the hydrated system cache');
+      callOrder.push('restore');
+    };
+    service.subscribeToCDCEvents = async () => {};
+    service.createCdcPipelineReadinessGate = () => ({
+      waitForReady: async () => {},
+    });
+    service.registerNodeInCluster = async () => {
+      callOrder.push('register');
+    };
+
+    await service.phaseQuerySystemState();
+
+    t.same(
+      callOrder,
+      ['restore', 'register'],
+      'durable rejoin should re-activate local partition handlers before routed node admission writes',
+    );
   });
 
 test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot covers discovery-critical tables',

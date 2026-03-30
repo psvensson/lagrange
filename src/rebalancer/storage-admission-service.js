@@ -222,6 +222,23 @@ class StorageAdmissionService {
   }
 
   /**
+   * Resolve readiness decision dimension for admission.
+   * Critical system partition operations use recovery eligibility so
+   * placement can converge during publication ACK_PENDING epochs.
+   *
+   * @param {Object} [options]
+   * @return {string}
+   * @private
+   */
+  resolveProvisioningReadinessDecisionDimension(options = {}) {
+    if (options?.isCritical === true) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  /**
    * Check admission for an ADD operation.
    * @param {Object} options
    * @return {Promise<Object>}
@@ -231,7 +248,7 @@ class StorageAdmissionService {
       ...options,
       operationType: STORAGE_ADMISSION_OPERATION_TYPE.REBALANCE_ADD,
       requiredReplicaCount: STORAGE_ADMISSION_DEFAULT.REQUIRED_REPLICA_COUNT,
-      isCritical: false,
+      isCritical: options.isCritical === true,
     });
   }
 
@@ -324,6 +341,8 @@ class StorageAdmissionService {
     const readinessSnapshots = {};
     let legacyReason = STORAGE_ADMISSION_REASON.CAPACITY_AVAILABLE;
     let legacyProjectedUtilization = null;
+    const readinessDecisionDimension =
+      this.resolveProvisioningReadinessDecisionDimension(options);
 
     for (const nodeId of candidateNodeIds) {
       const readiness = await this.controlPlaneReadinessService
@@ -334,17 +353,17 @@ class StorageAdmissionService {
           allowStaleOnCacheChange: true,
           maxCachedAgeMs: this.resolveReadinessSnapshotCacheMaxAgeMs(),
           decisionDimension:
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+            readinessDecisionDimension,
         });
       const eligibilityDecision = evaluateEligibilityDecision(
         readiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        readinessDecisionDimension,
       );
       const nodeSummary = this.summarizeNodeReadinessRow(nodeId);
       readinessSnapshots[nodeId] =
         compactEligibilitySnapshot(
           readiness,
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          readinessDecisionDimension,
         );
       const capacity = await this.evaluateCapacity({
         targetNodeId: nodeId,

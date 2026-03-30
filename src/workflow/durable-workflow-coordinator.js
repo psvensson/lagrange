@@ -98,9 +98,12 @@ class DurableWorkflowCoordinator {
      *   transition history entry.
      * @param {Object} [updates] - Additional workflow field updates applied
      *   alongside the transition.
+     * @param {Object} [options] - Transition behavior options.
+     * @param {boolean} [options.markCommitted=true] - Whether to mark the
+     *   transition idempotency key as committed after persistence.
      * @return {Promise<Object>} Updated workflow state.
      */
-    async transitionStep(workflowId, transition, updates = {}) {
+    async transitionStep(workflowId, transition, updates = {}, options = {}) {
       const nextStep = transition?.nextStep;
       if (!nextStep) {
         throw new Error(WORKFLOW_ERROR_MSG.NEXT_STEP_REQUIRED);
@@ -153,7 +156,9 @@ class DurableWorkflowCoordinator {
       Object.assign(workflow, updates);
 
       await this.persistWorkflow(workflow);
-      this.markTransitionCommitted(workflowId, nextStep);
+      if (options.markCommitted !== false) {
+        this.markTransitionCommitted(workflowId, nextStep);
+      }
       return workflow;
     }
 

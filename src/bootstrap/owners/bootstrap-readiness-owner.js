@@ -8,8 +8,8 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {
-  BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LIVENESS,
+  BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_PROBE_SCOPE,
   BOOTSTRAP_API_ROUTE,
@@ -19,20 +19,47 @@ import {
 } from '../bootstrap-readiness-state-constants.js';
 import {
   LIFECYCLE_DEPENDENCY_CLASS,
+  LIFECYCLE_DEPENDENCY_DEMOTION_POLICY,
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../lifecycle-controller-constants.js';
 import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+} from '../../control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../control-plane/control-plane-publication-merge.js';
+import {
   getLocalQueryTransportReadiness,
 } from '../shared/local-query-transport-readiness.js';
 
+const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
+  SQL_ENGINE_READY: 'sql_engine_ready',
+  LEADER_METADATA_READY: 'leader_metadata_ready',
+  RUNTIME_WIRING_READY: 'runtime_wiring_ready',
+  LOCAL_QUERY_TRANSPORT_READY: 'local_query_transport_ready',
+  CONTROL_PLANE_WRITE_HEALTH: 'control_plane_write_health',
+  PRIORITY_CONTROL_PLANE_RECOVERY: 'priority_control_plane_recovery',
+});
+
 const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
 ]);
+
+const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
+  SERVICE_UNAVAILABLE: 'control_plane_recovery_service_unavailable',
+  DIAGNOSTICS_PROVIDER_UNAVAILABLE:
+    'control_plane_recovery_diagnostics_provider_unavailable',
+  DIAGNOSTICS_READ_FAILED: 'control_plane_recovery_diagnostics_read_failed',
+  DIAGNOSTICS_UNAVAILABLE: 'control_plane_recovery_diagnostics_unavailable',
+  DIAGNOSTICS_INCOMPLETE: 'control_plane_recovery_diagnostics_incomplete',
+});
 
 class BootstrapReadinessOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.lastBootstrapJoinBlockedSignature = null;
   }
 
   getSeedNodeId() {
@@ -55,6 +82,10 @@ class BootstrapReadinessOwner {
     return this.delegates.getSqlQueryEngine?.() || null;
   }
 
+  getControlPlaneReadinessService() {
+    return this.delegates.getControlPlaneReadinessService?.() || null;
+  }
+
   getControlPlaneWriteHealthProvider() {
     return this.delegates.getControlPlaneWriteHealthProvider?.() || null;
   }
@@ -63,6 +94,14 @@ class BootstrapReadinessOwner {
     return this.delegates.getLeaderReadinessStatusForProbe?.() || {
       ready: false,
     };
+  }
+
+  getStartupRecoveryCoordinator() {
+    return this.delegates.getStartupRecoveryCoordinator?.() || null;
+  }
+
+  getLogger() {
+    return this.delegates.getLogger?.() || null;
   }
 
   handleLivenessProbeRequest(reply) {
@@ -105,8 +144,8 @@ class BootstrapReadinessOwner {
     return response;
   }
 
-  handleReadinessProbeRequest(reply) {
-    const snapshot = this.evaluateReadinessSnapshot();
+  async handleReadinessProbeRequest(reply) {
+    const snapshot = await this.evaluateReadinessSnapshotAsync();
     const statusCode = snapshot.ready ?
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
@@ -117,9 +156,9 @@ class BootstrapReadinessOwner {
     return response;
   }
 
-  handleBootstrapReadinessProbeRequest(reply) {
+  async handleBootstrapReadinessProbeRequest(reply) {
     const snapshot = this.resolveReadinessSnapshotForScope(
-      this.evaluateReadinessSnapshot(),
+      await this.evaluateReadinessSnapshotAsync(),
       BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     );
     const statusCode = snapshot.ready ?
@@ -128,6 +167,8 @@ class BootstrapReadinessOwner {
     const response = this.buildReadinessProbeResponse(snapshot, {
       scope: BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
     });
+
+    this.logBootstrapJoinReadinessProjection(snapshot, response);
 
     this.recordReadinessProbeResult(
       BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
@@ -171,17 +212,18 @@ class BootstrapReadinessOwner {
     if (snapshot.draining === true) {
       return false;
     }
-    if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY) {
-      if (reasons.length === NUM.ZERO) {
-        return false;
-      }
-      return blockingReasons.length === NUM.ZERO;
-    }
-
     if (snapshot.phase === LIFECYCLE_PHASE.JOIN_READY) {
       return reasons.length === NUM.ONE &&
         reasons[NUM.ZERO] ===
           LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
+    }
+
+    if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY ||
+        snapshot.phase === LIFECYCLE_PHASE.DEGRADED) {
+      if (reasons.length === NUM.ZERO) {
+        return false;
+      }
+      return blockingReasons.length === NUM.ZERO;
     }
 
     return false;
@@ -207,6 +249,8 @@ class BootstrapReadinessOwner {
       response.retryAfterMs = snapshot.retryAfterMs;
     }
     this.appendReadinessProgressFields(response, snapshot);
+    this.appendStartupRecoveryFields(response, snapshot);
+    this.appendMembershipPublicationFields(response, snapshot);
     if (typeof options.scope === TYPEOF.STRING && options.scope.length > NUM.ZERO) {
       response.scope = options.scope;
     }
@@ -245,6 +289,158 @@ class BootstrapReadinessOwner {
     return response;
   }
 
+  appendStartupRecoveryFields(response, snapshot) {
+    if (!response || typeof response !== TYPEOF.OBJECT ||
+        !snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return response;
+    }
+    const coordinator = this.getStartupRecoveryCoordinator();
+    if (!coordinator || typeof coordinator.evaluate !== TYPEOF.FUNCTION) {
+      return response;
+    }
+    const startupRecovery = coordinator.evaluate({snapshot});
+    if (!startupRecovery || typeof startupRecovery !== TYPEOF.OBJECT) {
+      return response;
+    }
+    if (typeof startupRecovery.recoveryStage === TYPEOF.STRING &&
+        startupRecovery.recoveryStage.length > NUM.ZERO) {
+      response.recoveryStage = startupRecovery.recoveryStage;
+    }
+    if (Number.isFinite(startupRecovery.recoveryStageRank)) {
+      response.recoveryStageRank = Math.max(
+        NUM.ZERO,
+        Math.floor(startupRecovery.recoveryStageRank),
+      );
+    }
+    if (typeof startupRecovery.controlPlaneRecoveryReady === TYPEOF.BOOLEAN) {
+      response.controlPlaneRecoveryReady =
+        startupRecovery.controlPlaneRecoveryReady;
+    }
+    if (typeof startupRecovery.metadataPublicationReady === TYPEOF.BOOLEAN) {
+      response.metadataPublicationReady =
+        startupRecovery.metadataPublicationReady;
+    }
+    if (typeof startupRecovery.backgroundWorkReady === TYPEOF.BOOLEAN) {
+      response.backgroundWorkReady = startupRecovery.backgroundWorkReady;
+    }
+    if (typeof startupRecovery.recoveryBlocked === TYPEOF.BOOLEAN) {
+      response.recoveryBlocked = startupRecovery.recoveryBlocked;
+    }
+    return response;
+  }
+
+  appendMembershipPublicationFields(response, snapshot) {
+    if (!response || typeof response !== TYPEOF.OBJECT) {
+      return response;
+    }
+    const membershipPublication = this.getMembershipPublicationDiagnostics(
+      snapshot?.timestamp,
+    );
+    if (!membershipPublication) {
+      return response;
+    }
+    if (Number.isFinite(membershipPublication.publicationEpoch)) {
+      response.publishedControlPlaneEpoch = Math.max(
+        NUM.ZERO,
+        Math.floor(membershipPublication.publicationEpoch),
+      );
+    }
+    if (typeof membershipPublication.status === TYPEOF.STRING &&
+        membershipPublication.status.length > NUM.ZERO) {
+      response.publishedControlPlaneStatus = membershipPublication.status;
+    }
+    return response;
+  }
+
+  getMembershipPublicationDiagnostics(observedAt) {
+    const service = this.getControlPlaneReadinessService();
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
+    }
+    try {
+      if (typeof service.getMembershipPublicationDiagnosticsSync ===
+          TYPEOF.FUNCTION) {
+        return service.getMembershipPublicationDiagnosticsSync(
+          this.getSeedNodeId(),
+          observedAt,
+        );
+      }
+      if (typeof service.getMembershipPublicationDiagnostics !== TYPEOF.FUNCTION) {
+        return null;
+      }
+      const diagnostics = service.getMembershipPublicationDiagnostics(
+        this.getSeedNodeId(),
+        observedAt,
+      );
+      if (diagnostics && typeof diagnostics.then === TYPEOF.FUNCTION) {
+        return null;
+      }
+      return diagnostics;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  logBootstrapJoinReadinessProjection(snapshot, response) {
+    const logger = this.getLogger();
+    if (!logger || typeof logger.info !== TYPEOF.FUNCTION) {
+      return;
+    }
+    if (snapshot?.ready === true) {
+      this.lastBootstrapJoinBlockedSignature = null;
+      return;
+    }
+
+    const bootstrapService = this.getBootstrapService();
+    const leaderStatus = this.getLeaderReadinessStatusForProbe();
+    const localQueryTransportReadiness =
+      this.getLocalQueryTransportReadiness();
+    const controlPlaneWriteHealth = this.getControlPlaneWriteHealth();
+    const membershipPublication = this.getMembershipPublicationDiagnostics(
+      response?.timestamp,
+    );
+    const messageRouter = this.getMessageRouter() ||
+      bootstrapService?.messageRouter ||
+      null;
+    const logPayload = {
+      nodeId: this.getSeedNodeId(),
+      phase: response?.phase || null,
+      state: response?.state || null,
+      reasons: Array.isArray(response?.reasons) ? response.reasons : [],
+      bootstrapServicePhase: bootstrapService?.phase || null,
+      hasSqlQueryEngine: Boolean(this.getSqlQueryEngine()),
+      hasMessageRouter: Boolean(messageRouter),
+      leaderStatus,
+      localQueryTransportReadiness,
+      controlPlaneWriteHealth,
+      publishedControlPlaneEpoch:
+        membershipPublication?.publicationEpoch ?? null,
+      publishedControlPlaneStatus:
+        membershipPublication?.status ?? null,
+    };
+    const signature = JSON.stringify({
+      phase: logPayload.phase,
+      state: logPayload.state,
+      reasons: logPayload.reasons,
+      bootstrapServicePhase: logPayload.bootstrapServicePhase,
+      hasSqlQueryEngine: logPayload.hasSqlQueryEngine,
+      hasMessageRouter: logPayload.hasMessageRouter,
+      leaderReady: leaderStatus?.ready === true,
+      localQueryTransportReady:
+        localQueryTransportReadiness?.ready !== false,
+      controlPlaneWriteHealthy:
+        controlPlaneWriteHealth?.healthy === true,
+      publishedControlPlaneEpoch: logPayload.publishedControlPlaneEpoch,
+      publishedControlPlaneStatus: logPayload.publishedControlPlaneStatus,
+    });
+    if (signature === this.lastBootstrapJoinBlockedSignature) {
+      return;
+    }
+    this.lastBootstrapJoinBlockedSignature = signature;
+    logger.info(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_JOIN_READINESS_BLOCKED,
+      logPayload);
+  }
+
   evaluateReadinessSnapshot() {
     const readinessState = this.getReadinessState();
     if (!readinessState ||
@@ -264,7 +460,33 @@ class BootstrapReadinessOwner {
         timestamp: Date.now(),
       };
     }
+    const priorityControlPlaneRecoveryHealth =
+      this.getPriorityControlPlaneRecoveryHealth();
+    return this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
+      readinessState,
+      priorityControlPlaneRecoveryHealth,
+    );
+  }
 
+  async evaluateReadinessSnapshotAsync() {
+    const readinessState = this.getReadinessState();
+    if (!readinessState ||
+        typeof readinessState.setDependency !== TYPEOF.FUNCTION) {
+      return this.evaluateReadinessSnapshot();
+    }
+
+    const priorityControlPlaneRecoveryHealth =
+      await this.getPriorityControlPlaneRecoveryHealthAsync();
+    return this.evaluateReadinessSnapshotWithPriorityRecoveryHealth(
+      readinessState,
+      priorityControlPlaneRecoveryHealth,
+    );
+  }
+
+  evaluateReadinessSnapshotWithPriorityRecoveryHealth(
+    readinessState,
+    priorityControlPlaneRecoveryHealth,
+  ) {
     const startupComplete = this.isStartupComplete();
     readinessState.setDependency(
       READINESS_DEPENDENCY.STARTUP_COMPLETE,
@@ -278,7 +500,7 @@ class BootstrapReadinessOwner {
     );
 
     readinessState.setDependency(
-      'sql_engine_ready',
+      BOOTSTRAP_READINESS_DEPENDENCY.SQL_ENGINE_READY,
       this.isSqlEngineDependencyReady(),
       {
         reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
@@ -287,7 +509,7 @@ class BootstrapReadinessOwner {
 
     const leaderStatus = this.getLeaderReadinessStatusForProbe();
     readinessState.setDependency(
-      'leader_metadata_ready',
+      BOOTSTRAP_READINESS_DEPENDENCY.LEADER_METADATA_READY,
       leaderStatus.ready === true,
       {
         reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
@@ -296,7 +518,7 @@ class BootstrapReadinessOwner {
     );
 
     readinessState.setDependency(
-      'runtime_wiring_ready',
+      BOOTSTRAP_READINESS_DEPENDENCY.RUNTIME_WIRING_READY,
       this.isRuntimeWiringReady(),
       {
         reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
@@ -306,7 +528,7 @@ class BootstrapReadinessOwner {
     const localQueryTransportReadiness =
       this.getLocalQueryTransportReadiness();
     readinessState.setDependency(
-      'local_query_transport_ready',
+      BOOTSTRAP_READINESS_DEPENDENCY.LOCAL_QUERY_TRANSPORT_READY,
       localQueryTransportReadiness.ready !== false,
       {
         reasonCode: LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
@@ -316,7 +538,7 @@ class BootstrapReadinessOwner {
 
     const controlPlaneWriteHealth = this.getControlPlaneWriteHealth();
     readinessState.setDependency(
-      'control_plane_write_health',
+      BOOTSTRAP_READINESS_DEPENDENCY.CONTROL_PLANE_WRITE_HEALTH,
       controlPlaneWriteHealth.healthy === true,
       {
         reasonCode: controlPlaneWriteHealth.reasonCode,
@@ -325,7 +547,181 @@ class BootstrapReadinessOwner {
       },
     );
 
+    readinessState.setDependency(
+      BOOTSTRAP_READINESS_DEPENDENCY.PRIORITY_CONTROL_PLANE_RECOVERY,
+      priorityControlPlaneRecoveryHealth.healthy === true,
+      {
+        reasonCode: priorityControlPlaneRecoveryHealth.reasonCode,
+        details: priorityControlPlaneRecoveryHealth.details,
+        classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
+        demotionPolicy: LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.IMMEDIATE,
+      },
+    );
+
     return readinessState.evaluate();
+  }
+
+  getPriorityControlPlaneRecoveryHealth() {
+    const service = this.getControlPlaneReadinessService();
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
+      );
+    }
+    if (typeof service.getMembershipPublicationDiagnosticsSync !== TYPEOF.FUNCTION) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
+          .DIAGNOSTICS_PROVIDER_UNAVAILABLE,
+      );
+    }
+
+    try {
+      const membershipPublication = service.getMembershipPublicationDiagnosticsSync(
+        this.getSeedNodeId(),
+        Date.now(),
+      );
+      return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
+        membershipPublication,
+      );
+    } catch (error) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  async getPriorityControlPlaneRecoveryHealthAsync() {
+    const service = this.getControlPlaneReadinessService();
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
+      );
+    }
+    const observedAt = Date.now();
+    try {
+      let membershipPublication = null;
+      if (typeof service.getMembershipPublicationDiagnostics === TYPEOF.FUNCTION) {
+        membershipPublication = await service.getMembershipPublicationDiagnostics(
+          this.getSeedNodeId(),
+          observedAt,
+        );
+      } else if (typeof service.getMembershipPublicationDiagnosticsSync ===
+          TYPEOF.FUNCTION) {
+        membershipPublication = service.getMembershipPublicationDiagnosticsSync(
+          this.getSeedNodeId(),
+          observedAt,
+        );
+      } else {
+        return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+          PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
+            .DIAGNOSTICS_PROVIDER_UNAVAILABLE,
+        );
+      }
+      return this.buildPriorityControlPlaneRecoveryHealthFromDiagnostics(
+        membershipPublication,
+      );
+    } catch (error) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  buildPriorityControlPlaneRecoveryHealthFromDiagnostics(membershipPublication) {
+    if (!membershipPublication ||
+        typeof membershipPublication !== TYPEOF.OBJECT) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_UNAVAILABLE,
+      );
+    }
+    const publicationStatus = membershipPublication?.status || null;
+    if (typeof publicationStatus !== TYPEOF.STRING ||
+        publicationStatus.length === NUM.ZERO) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_INCOMPLETE,
+        null,
+        {
+          publicationEpoch: membershipPublication?.publicationEpoch ?? null,
+          publicationStatus: publicationStatus || null,
+        },
+      );
+    }
+    const priorityPartitionSummary =
+      membershipPublication?.priorityPartitionSummary &&
+        typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
+        membershipPublication.priorityPartitionSummary :
+        null;
+    if (!priorityPartitionSummary ||
+        typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_INCOMPLETE,
+        null,
+        {
+          publicationEpoch: membershipPublication?.publicationEpoch ?? null,
+          publicationStatus,
+          priorityPartitionSummary,
+        },
+      );
+    }
+
+    const publicationPending = String(publicationStatus).toUpperCase() !==
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    const localNodeId = String(this.getSeedNodeId() || '').trim();
+    const publishedActiveNodeIds = Array.isArray(
+      membershipPublication?.publishedActiveNodeIds,
+    ) ?
+      membershipPublication.publishedActiveNodeIds
+        .map((nodeId) => String(nodeId || '').trim())
+        .filter((nodeId) => nodeId.length > NUM.ZERO) :
+      [];
+    const publicationExcludesLocalNode = !publicationPending &&
+      localNodeId.length > NUM.ZERO &&
+      !publishedActiveNodeIds.includes(localNodeId);
+    const reasonCodes = [];
+    if (publicationPending || publicationExcludesLocalNode) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      );
+    }
+    if (priorityPartitionSummary.satisfied === false) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      );
+    }
+
+    return {
+      healthy: reasonCodes.length === NUM.ZERO,
+      reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      details: reasonCodes.length > NUM.ZERO ? {
+        publicationEpoch: membershipPublication?.publicationEpoch ?? null,
+        publicationStatus,
+        priorityPartitionSummary,
+        priorityRecoveryReasonCodes: Object.freeze([...reasonCodes]),
+      } : null,
+    };
+  }
+
+  buildPriorityControlPlaneRecoveryUnavailableHealth(
+    failureReason,
+    error = null,
+    context = null,
+  ) {
+    const details = {
+      failureReason,
+    };
+    if (context && typeof context === TYPEOF.OBJECT) {
+      Object.assign(details, context);
+    }
+    if (error) {
+      details.error = error?.message || String(error);
+    }
+    return {
+      healthy: false,
+      reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      details,
+    };
   }
 
   getControlPlaneWriteHealth() {

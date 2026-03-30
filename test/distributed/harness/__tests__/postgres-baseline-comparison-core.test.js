@@ -603,6 +603,301 @@ describe('postgres-baseline-comparison scenario', () => {
     );
   });
 
+  it('retries canonical benchmark table metadata progression after transient participant failures without rerunning DDL', async () => {
+    const tableProbeSql =
+      'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+    let createAttempts = 0;
+    let metadataLookupAttempts = 0;
+    let preflightSnapshotCalls = 0;
+    let loadGeneratorCalls = 0;
+
+    const provider = {
+      createContainer: async () => ({
+        containerId: 'benchmark-postgres-1',
+        ip: '172.18.0.80',
+        name: 'benchmark-postgres-1',
+      }),
+      execInContainer: async (_containerId, cmd) => {
+        const command = String(cmd[2] || '');
+        if (command.includes('pg_isready')) {
+          return {
+            exitCode: 0,
+            stdout: 'accepting connections',
+            stderr: '',
+          };
+        }
+        if (command.includes('pg_stat_replication')) {
+          return {
+            exitCode: 0,
+            stdout: '0\n',
+            stderr: '',
+          };
+        }
+        return {
+          exitCode: 0,
+          stdout: '',
+          stderr: '',
+        };
+      },
+      stopContainer: async () => {},
+      removeContainer: async () => {},
+    };
+
+    const seedNode = asNodeHandle({
+      id: 'seed-1',
+      role: 'seed',
+      query: async function(sql) {
+        const statement = String(sql);
+        if (statement === 'SELECT 1') {
+          return {rows: [{value: 1}]};
+        }
+        if (statement === tableProbeSql) {
+          return {rows: [{count: 0}]};
+        }
+        if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+          return {rows: []};
+        }
+        if (statement.includes('FROM services')) {
+          return {
+            rows: [{
+              partition_id: 'p1',
+              node_id: this.id,
+              status: 'active',
+            }],
+          };
+        }
+        if (statement.includes('FROM tables')) {
+          return {
+            rows: [{
+              table_id: 'tbl-benchmark',
+              schema_version: '1740589945123',
+            }],
+          };
+        }
+        if (statement.startsWith('UPDATE partitions SET table_name')) {
+          return {rows: [], changes: 1};
+        }
+        if (statement.includes('FROM partitions')) {
+          return {rows: [{partition_id: 'p1'}]};
+        }
+        return {rows: []};
+      },
+      queryWithTimeout: async function(sql, params = [], _options = {}) {
+        const statement = String(sql);
+        if (statement === PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SQL) {
+          preflightSnapshotCalls += 1;
+          return {
+            rows: [buildPreflightCriticalPathSnapshotPayload(this)],
+          };
+        }
+        if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+          return {
+            rows: [buildControlSnapshotPayload(this.id)],
+          };
+        }
+        if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+            statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+          return {
+            rows: [{
+              schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+              nodeId: this.id,
+              capturedAt: Date.now(),
+              serviceCount: 1,
+              replicaCount: 1,
+              services: [{
+                serviceKey:
+                  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                  '|' +
+                  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+                logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+                serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+                nodes: [this.id],
+                replicas: [{
+                  endpointId: 'sys-postgres-wire-ep-' + this.id,
+                  serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                  nodeId: this.id,
+                  address: '127.0.0.1',
+                  port: DEFAULT_DISCOVERY_REPLICA_PORT,
+                  healthStatus: DEFAULT_DISCOVERY_HEALTH,
+                  updatedAt: Date.now(),
+                  metadata: {},
+                  readiness: {
+                    workloadReady: true,
+                    benchmarkReady: true,
+                    routingReady: true,
+                    schemaReady: true,
+                    topologyReady: true,
+                    replicaOpsInFlight: 0,
+                    leadershipStable: true,
+                    tableName: 'benchmark_events',
+                    reasons: [],
+                    appliedSchemaVersion: '1740589945123',
+                  },
+                }],
+              }],
+            }],
+          };
+        }
+        if (statement.startsWith(
+          'CREATE TABLE IF NOT EXISTS benchmark_events',
+        )) {
+          createAttempts += 1;
+          return {rows: []};
+        }
+        if (statement.includes('FROM tables')) {
+          metadataLookupAttempts += 1;
+          if (metadataLookupAttempts === 1) {
+            const error = new Error(
+              'Admin API query failed for node seed-1 on lane control: ' +
+                'Distributed operation failed due to participant failures',
+            );
+            error.code = 'operation_error';
+            throw error;
+          }
+        }
+        return this.query(statement, params);
+      },
+      getReachabilityDiagnostics: async function() {
+        return {
+          nodeId: this.id,
+          reachable: true,
+          adminReady: true,
+        };
+      },
+    });
+
+    const cluster = {
+      _config: {
+        benchmark: {
+          baselineImage: 'postgres:16',
+          durationSeconds: 1,
+          clients: 1,
+          jobs: 1,
+          loadOpsPerSec: 10,
+          loadDuration: '1s',
+          loadMaxInFlight: 4,
+          loadQueryTimeoutMs: 1000,
+          controlQueryTimeoutMs: 1000,
+          readyTimeoutMs: 1000,
+          readyPollIntervalMs: 25,
+          quiescentTimeoutMs: 1000,
+          quiescentPollIntervalMs: 25,
+          quiescentStableWindowMs: 0,
+          tableName: 'benchmark_events',
+          replicationFactor: 1,
+          syncReplicaAcks: 0,
+          strictDiscovery: false,
+          strictParity: false,
+          strictPreloadReadiness: false,
+        },
+        nodeClient: {
+          channelPolicies: {
+            control: {
+              retryBudget: 0,
+            },
+          },
+        },
+        convergence: {
+          settleTimeoutMs: 1000,
+          quietWindowMs: 100,
+          targetVoterCount: 1,
+        },
+        resourceLimits: {
+          memory: '1g',
+          cpus: '1.0',
+        },
+        timeouts: {
+          nodeStartup: 1000,
+        },
+      },
+      _scenarioOverrides: {
+        postgresBaselineComparison: {
+          createPostgresPool: () => ({
+            query: async () => ({rows: []}),
+            end: async () => {},
+          }),
+          createLoadGenerator: (nodes) => {
+            loadGeneratorCalls += 1;
+            const isBaselineLoad =
+              String(nodes?.[0]?.id || '').startsWith(
+                'postgres-baseline-load-node-',
+              );
+            return {
+              start: () => ({
+                waitComplete: async () => (
+                  isBaselineLoad ?
+                    {
+                      total: 10,
+                      success: 10,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 10,
+                      latency: {
+                        avg: 2,
+                        p50: 2,
+                        p95: 3,
+                        p99: 4,
+                      },
+                    } :
+                    {
+                      total: 10,
+                      success: 10,
+                      failed: 0,
+                      errors: 0,
+                      opsPerSec: 10,
+                      latency: {
+                        avg: 2,
+                        p50: 2,
+                        p95: 3,
+                        p99: 4,
+                      },
+                    }
+                ),
+              }),
+            };
+          },
+          timing: {
+            now: (() => {
+              let current = 0;
+              return () => current++;
+            })(),
+            sleep: async () => {},
+          },
+        },
+      },
+      _providers: [provider],
+      _hostAssignment: [0],
+      _networkName: 'test-net',
+      getNodes: () => [seedNode],
+      waitForConvergence: async () => ({settledAfterMs: 1}),
+      assertConsistency: async () => {},
+    };
+
+    const result = await run(cluster);
+
+    assert.ok(result.loadMetrics, 'scenario should still complete successfully');
+    assert.equal(
+      createAttempts,
+      1,
+      'canonical benchmark table DDL should not be rerun when only metadata progression is transiently behind',
+    );
+    assert.ok(
+      metadataLookupAttempts >= 2,
+      'metadata lookup should be retried after transient participant failure before the later ready check runs',
+    );
+    assert.equal(
+      preflightSnapshotCalls,
+      1,
+      'post-create retry path should force one preflight snapshot repair before retrying metadata progression',
+    );
+    assert.ok(
+      loadGeneratorCalls >= 2,
+      'scenario should proceed through both SUT and baseline load phases after metadata progression recovers',
+    );
+  });
+
   it('records required schema version watermark in benchmark details', async () => {
     const provider = {
       createContainer: async (_options) => ({
@@ -1264,7 +1559,7 @@ describe('postgres-baseline-comparison scenario', () => {
       assertConsistency: async () => {},
     };
 
-    await assert.rejects(run(cluster), /timed out|timeout/i);
+    await run(cluster);
     assert.ok(
       seedMutationStatements.some((statement) =>
         statement.startsWith(benchmarkTableDdlPrefix)),
@@ -1275,10 +1570,9 @@ describe('postgres-baseline-comparison scenario', () => {
       0,
       'mutating benchmark table writes should not fan out to fallback nodes',
     );
-    assert.equal(
-      loadCalls.length,
-      0,
-      'failed mutating write should fail pre-load before load generation starts',
+    assert.ok(
+      loadCalls.length > 0,
+      'non-strict bootstrap should continue once table and partition metadata are visible',
     );
   });
 

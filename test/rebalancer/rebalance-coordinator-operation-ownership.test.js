@@ -4,6 +4,7 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
 
 function createWorkflowCoordinatorSpy() {
   const coordinator = new DurableWorkflowCoordinator();
@@ -341,6 +342,156 @@ test('RebalanceCoordinator createOperation enforces concurrent add budget when r
     }
   });
 
+test('RebalanceCoordinator createOperation rejects stale membership publication epoch plans',
+  async (t) => {
+    let executeQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 7,
+            status: 'PUBLISHED',
+          };
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          executeQueryCalls += 1;
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    try {
+      try {
+        await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'partition-1',
+          entityType: 'partition',
+          entityId: 'partition-1',
+          nodeId: 'node-remote',
+          membershipPublicationEpoch: 6,
+        });
+        t.fail('stale epoch-bound placement should be rejected');
+      } catch (error) {
+        t.equal(
+          error?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_CHANGED,
+          'stale epoch-bound placement should expose a typed skip reason',
+        );
+        t.equal(
+          error?.requestedMembershipPublicationEpoch,
+          6,
+          'error should expose requested publication epoch',
+        );
+        t.equal(
+          error?.currentMembershipPublicationEpoch,
+          7,
+          'error should expose current publication epoch',
+        );
+      }
+      t.equal(
+        executeQueryCalls,
+        0,
+        'stale epoch-bound placement must not persist any operation row',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('RebalanceCoordinator createOperation persists membership publication epoch metadata',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationDiagnosticsSync() {
+          return {
+            publicationEpoch: 7,
+            status: 'PUBLISHED',
+          };
+        },
+        getNodeReadinessSync() {
+          return {
+            nodeId: 'node-remote',
+            dimensions: {
+              repairEligible: true,
+            },
+          };
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = await coordinator.createOperation({
+        type: 'ADD',
+        partitionId: 'partition-1',
+        entityType: 'partition',
+        entityId: 'partition-1',
+        nodeId: 'node-remote',
+        membershipPublicationEpoch: 7,
+      });
+
+      t.equal(
+        operation.stepsHistory[0]?.membershipPublicationEpoch,
+        7,
+        'epoch-bound operation should persist its planning publication epoch',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('RebalanceCoordinator limits critical partitions to one add-like operation in flight',
   async (t) => {
     const coordinator = new RebalanceCoordinator({
@@ -373,7 +524,7 @@ test('RebalanceCoordinator limits critical partitions to one add-like operation 
       enableTimeouts: false,
     });
     coordinator.initialize();
-    coordinator.getOperationsByEntity = async () => ([
+    coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
       {
         operationId: 'op-critical-existing',
         type: 'REPLACE',
@@ -409,6 +560,309 @@ test('RebalanceCoordinator limits critical partitions to one add-like operation 
       await coordinator.shutdown();
     }
   });
+
+test('RebalanceCoordinator critical add-like gate uses authoritative ' +
+  'replica_operations reads when cache is empty', async (t) => {
+  const coordinator = new RebalanceCoordinator({
+    nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+    ...createStorageOwners(),
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+  coordinator.repository.getOperationsByEntity = async () => [];
+  coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
+    {
+      operationId: 'op-authoritative-existing',
+      type: 'REPLACE',
+      workflowStep: WORKFLOW_STEP.CREATING,
+      status: 'creating',
+    },
+  ]);
+
+  try {
+    try {
+      await coordinator.createOperation({
+        type: 'REPLACE',
+        partitionId: 'config-p1',
+        entityType: 'partition',
+        entityId: 'config-p1',
+        nodeId: 'node-remote',
+        enforceConcurrentOperationBudget: true,
+      });
+      t.fail(
+        'critical partition should reject a second add-like operation ' +
+        'when only the authoritative read sees it',
+      );
+    } catch (error) {
+      t.equal(
+        error?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        'critical partition create should still fail with a typed budget error',
+      );
+      t.equal(
+        error?.conflictingOperationId,
+        'op-authoritative-existing',
+        'authoritative conflicting operation should surface through the gate',
+      );
+    }
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        filter() {
+          return [];
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.repository.getOperationsByEntityAuthoritative = async () => [];
+    coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
+    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = Date.now();
+
+    try {
+      let nonCriticalError = null;
+      try {
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId: 'users-p1',
+          },
+        );
+      } catch (error) {
+        nonCriticalError = error;
+      }
+      t.equal(
+        nonCriticalError?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        'non-critical partitions should still respect empty-cache admission backoff',
+      );
+
+      await coordinator.ensureConcurrentOperationBudgetAllowed(
+        OperationType.REPLACE,
+        {
+          partitionId: 'control_plane_publications-p1',
+        },
+      );
+      t.ok(
+        sqlQueryCalls > 0,
+        'critical partition create admission should issue authoritative operation-count reads',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test(
+  'RebalanceCoordinator keeps priority add budget independent from ' +
+    'non-priority in-flight adds',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [{
+            operation_id: 'op-non-priority',
+            type: 'REPLACE',
+            partition_id: 'users-p1',
+            source_node_id: 'node-local',
+            target_node_id: 'node-remote',
+            replica_id: 'users-p1-r2',
+            status: 'syncing',
+            workflow_step: 'SYNCING',
+            created_at: 100,
+            updated_at: 101,
+            completed_at: null,
+            error_message: null,
+            steps_history: '[]',
+          }];
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.config.maxConcurrentAdds = 1;
+
+    try {
+      let nonPriorityError = null;
+      try {
+        await coordinator.ensureConcurrentOperationBudgetAllowed(
+          OperationType.REPLACE,
+          {
+            partitionId: 'users-p2',
+          },
+        );
+      } catch (error) {
+        nonPriorityError = error;
+      }
+      t.equal(
+        nonPriorityError?.rebalanceSkipReason,
+        REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+        'non-priority add/replace should still respect shared add budget',
+      );
+
+      await coordinator.ensureConcurrentOperationBudgetAllowed(
+        OperationType.REPLACE,
+        {
+          partitionId: 'control_plane_publications-p1',
+        },
+      );
+      t.pass(
+        'priority control-plane add/replace should use its dedicated add budget lane',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'RebalanceCoordinator does not treat REPLACE STOPPING phase as ' +
+    'add-budget in-flight for priority recovery',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.config.maxConcurrentAdds = 1;
+    coordinator.queryIncompleteOperations = async () => ([{
+      operationId: 'op-priority-remove-phase',
+      type: 'REPLACE',
+      partitionId: 'sql_write_operations-p1',
+      sourceNodeId: 'node-local',
+      targetNodeId: 'node-remote-a',
+      replicaId: 'sql_write_operations-p1-r4',
+      status: 'removing',
+      workflowStep: 'STOPPING',
+      createdAt: 100,
+      updatedAt: 101,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: [],
+    }]);
+
+    try {
+      await coordinator.ensureConcurrentOperationBudgetAllowed(
+        OperationType.REPLACE,
+        {
+          partitionId: 'sql_transaction_participants-p1',
+        },
+      );
+      t.pass(
+        'priority recovery should continue while prior REPLACE source-removal is still reconciling',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
 
 test('RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight',
   async (t) => {

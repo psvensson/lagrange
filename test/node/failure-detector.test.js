@@ -54,12 +54,34 @@ function createMockCDCService() {
   };
 }
 
-function createMockMutationGateway(sqlQueryEngine = null) {
+function createMockMutationGateway(sqlQueryEngine = null, cdcIntegrationService = null) {
   const operations = [];
   const gateway = {
     operations,
     async submitMutation(mutation, options = {}) {
       operations.push({...mutation, options});
+      if (cdcIntegrationService) {
+        switch (mutation?.operation) {
+          case 'update':
+            return cdcIntegrationService.updateSystemTableRow(
+              mutation.tableName,
+              mutation.whereClause,
+              mutation.data,
+            );
+          case 'insert':
+            return cdcIntegrationService.insertSystemTableRow(
+              mutation.tableName,
+              mutation.row,
+            );
+          case 'delete':
+            return cdcIntegrationService.deleteSystemTableRow(
+              mutation.tableName,
+              mutation.whereClause,
+            );
+          default:
+            break;
+        }
+      }
       return {
         success: true,
         partitionResult: {affectedRows: 1},
@@ -69,6 +91,9 @@ function createMockMutationGateway(sqlQueryEngine = null) {
     },
   };
   if (sqlQueryEngine) {
+    gateway.readAuthoritativeRows = async (_tableName, sql, params = []) => {
+      return sqlQueryEngine.executeQuery(sql, params);
+    };
     gateway.readRows = async (_tableName, sql, params = []) => {
       return sqlQueryEngine.executeQuery(sql, params);
     };
@@ -238,6 +263,7 @@ test('FailureDetector - detects node suspicion', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -315,6 +341,7 @@ test('FailureDetector - skips stale suspicion overwrite when heartbeat advanced 
       nodeId: 'test-node',
       sqlQueryEngine: mockEngine,
       cdcIntegrationService: mockCDC,
+      controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
     });
     detector.initialize();
 
@@ -356,6 +383,7 @@ test('FailureDetector - detects node failure', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -413,6 +441,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -455,6 +484,7 @@ test('FailureDetector - detects node recovery', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -489,6 +519,7 @@ test('FailureDetector - skips self node', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -516,6 +547,7 @@ test('FailureDetector - skips already failed nodes', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 
@@ -543,6 +575,7 @@ test('FailureDetector - healthy nodes are not affected', async (t) => {
     nodeId: 'test-node',
     sqlQueryEngine: mockEngine,
     cdcIntegrationService: mockCDC,
+    controlPlaneSystemTableGateway: createMockMutationGateway(mockEngine, mockCDC),
   });
   detector.initialize();
 

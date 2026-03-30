@@ -13,11 +13,9 @@
 
 import {
   COLUMN,
-  ENDPOINT_STATUS,
   NUM,
   TABLES,
   TIME_MS,
-  TRANSPORT_TYPE,
   TYPEOF,
 } from '../constants/index.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from '../partition/partition-constants.js';
@@ -34,6 +32,9 @@ import {AUTHORITATIVE_REPAIR_TRIGGER} from
 import {summarizeReplicaOperationLiveness} from
   '../rebalancer/replica-operation-liveness.js';
 import {
+  TERMINAL_STATUSES as REPLICA_OPERATION_TERMINAL_STATUSES,
+} from '../rebalancer/replica-status.js';
+import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_ERROR_MESSAGE,
@@ -46,13 +47,26 @@ import {
   uniqueSorted,
 } from './admin-helpers.js';
 import {
+  resolveActiveNodeViews,
   buildReadinessByNodeId,
   hasCanonicalWebSocketEndpoint,
   hasCanonicalWebSocketEndpoints,
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
-  resolveCanonicalActiveNodeIds,
 } from '../control-plane/active-node-projection.js';
+import {
+  normalizeControlPlanePublicationRow,
+} from '../control-plane/system-row-normalizers.js';
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
+  PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_CORRELATION_KEY,
+  PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
+  PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
+} from '../control-plane/priority-recovery-diagnostics-constants.js';
 import {evaluateSharedMetadataNodeCoverage} from
   './admin-shared-metadata-consistency.js';
 import {
@@ -62,6 +76,7 @@ import {
   shouldAttemptAuthoritativeRepair,
 } from './admin-authoritative-repair-evaluation.js';
 import {LogsTableService} from '../logging/logs-table-service.js';
+import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const LEADER_RAFT_ROLE = 'leader';
@@ -72,6 +87,7 @@ const PARTITION_STATE_UNKNOWN = 'unknown';
 const SQL_DIAGNOSTICS_REPLICA_COUNT = NUM.THREE;
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS = 5000;
+const CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT = 64;
 const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 const MANAGED_SPLIT_WORKFLOW_TYPE = 'managed_split';
 const CONTROL_SNAPSHOT_REPAIR_REASON = 'control_snapshot';
@@ -80,6 +96,48 @@ const CDC_TELEMETRY_MODE = Object.freeze({
   CATCHUP: 'catchup',
 });
 const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;
+const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
+const AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP =
+  'leader_resolution_gap';
+const PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION = 1;
+const PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION = 'partition';
+const PRIORITY_RECOVERY_RAFT_ROLE_LEARNER = 'learner';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID = 'operation_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_PARTITION_ID = 'partition_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_ENTITY_ID = 'entity_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_ENTITY_TYPE = 'entity_type';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_STATUS = 'status';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_WORKFLOW_STEP = 'workflow_step';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_TARGET_NODE_ID = 'target_node_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_SOURCE_NODE_ID = 'source_node_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_REPLICA_ID = 'replica_id';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT = 'created_at';
+const PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT = 'updated_at';
+const PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE = 'raft_role';
+const PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID = 'node_id';
+const PRIORITY_RECOVERY_SERVICE_FIELD_STATUS = 'status';
+const PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID = 'partition_id';
+const PRIORITY_RECOVERY_STATUS_ACTIVE = 'active';
+const PRIORITY_RECOVERY_LEARNER_HOLD_REASON_NOT_RECOVERY_ELIGIBLE =
+  'not_control_plane_recovery_eligible';
+const PRIORITY_RECOVERY_LEARNER_HOLD_REASON_RECOVERY_ONLY =
+  'recovery_eligible_not_repair_eligible';
+const PRIORITY_RECOVERY_LEARNER_HOLD_REASON_NO_READINESS =
+  'readiness_unknown';
+const PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP = 'priority_spread_gap';
+const PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING =
+  'priority_partition_missing';
+const PRIORITY_RECOVERY_PUBLICATION_INCLUSION_REASON_RECOVERY_ELIGIBLE_PROJECTION_INCLUDED =
+  'recovery_eligible_projection_included';
+const PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_READINESS_PROJECTION_EXCLUDED =
+  'readiness_projection_excluded';
+const PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_CLUSTER_MEMBER_UNHEALTHY =
+  'cluster_member_unhealthy';
+const PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET = new Set(
+  REPLICA_OPERATION_TERMINAL_STATUSES.map((status) =>
+    String(status || '').toLowerCase(),
+  ),
+);
 
 /**
  * Normalize one arbitrary value to a non-negative integer.
@@ -117,6 +175,28 @@ function buildLogsTableRetentionDiagnostics() {
     sharedPressureBackpressured:
       stats.sharedPressureBackpressured === true,
   };
+}
+
+function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
+  const causeChain = Array.isArray(repair?.causeChain) ?
+    repair.causeChain.filter((value) =>
+      typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    ) :
+    ADMIN_CACHE_DUMP.EMPTY;
+  return causeChain.length > NUM.ZERO &&
+    causeChain.every((value) =>
+      value === AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP,
+    );
+}
+
+function isReadyLocalQueryTransportDiagnostic(localQueryTransport = null) {
+  if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
+    return false;
+  }
+  if (localQueryTransport.ready === true) {
+    return true;
+  }
+  return String(localQueryTransport.state || '').toLowerCase() === 'ready';
 }
 
 function buildCdcReplayRetentionDiagnostics(partitionServices) {
@@ -188,6 +268,560 @@ function buildCdcReplayRetentionDiagnostics(partitionServices) {
   };
 }
 
+function attachAuthoritativeRepairDiagnostics(snapshot, options = {}) {
+  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+    return snapshot;
+  }
+
+  const activeProjection =
+    options.repairEvaluation?.nodeCoverage?.activeProjection || null;
+  snapshot.authoritativeRepair = {
+    applied: options.repair?.applied === true,
+    forced: options.forceAuthoritativeRepair === true,
+    triggerCodes: Array.isArray(options.repairEvaluation?.triggerCodes) ?
+      [...options.repairEvaluation.triggerCodes] :
+      ADMIN_CACHE_DUMP.EMPTY,
+    activeProjectionCoverageGap:
+      activeProjection?.hasCoverageGap === true,
+    activeProjectionMissingNodeIds: Array.isArray(
+      activeProjection?.missingNodeIds,
+    ) ?
+      [...activeProjection.missingNodeIds] :
+      ADMIN_CACHE_DUMP.EMPTY,
+  };
+  return snapshot;
+}
+
+function resolvePublicationOrderingValue(row, keys = []) {
+  for (const key of keys) {
+    const value = Number(row?.[key]);
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return NUM.ZERO;
+}
+
+function isMembershipPublicationRow(row) {
+  const normalizedRow = normalizeControlPlanePublicationRow(row);
+  const publicationKind = String(normalizedRow.publicationKind || '').toLowerCase();
+  return publicationKind.length === NUM.ZERO ||
+    publicationKind === MEMBERSHIP_PUBLICATION_KIND;
+}
+
+function resolveLatestMembershipPublicationRow(
+  publicationRows = [],
+  options = {},
+) {
+  const expectedStatus = typeof options.status === TYPEOF.STRING ?
+    options.status.toUpperCase() :
+    null;
+  const normalizedRows = (Array.isArray(publicationRows) ? publicationRows : [])
+    .filter((row) => row && typeof row === TYPEOF.OBJECT)
+    .filter((row) => isMembershipPublicationRow(row))
+    .map((row) => normalizeControlPlanePublicationRow(row))
+    .filter((row) => {
+      if (expectedStatus && row.status !== expectedStatus) {
+        return false;
+      }
+      return Boolean(
+        row.publicationId ||
+        row.publicationEpoch ||
+        row.status ||
+        (Array.isArray(row.publishedActiveNodeIds) &&
+          row.publishedActiveNodeIds.length > NUM.ZERO),
+      );
+    });
+  if (normalizedRows.length === NUM.ZERO) {
+    return null;
+  }
+  normalizedRows.sort((left, right) => {
+    const publicationEpochDelta =
+      resolvePublicationOrderingValue(
+        right,
+        ['publicationEpoch', 'publication_epoch'],
+      ) -
+      resolvePublicationOrderingValue(
+        left,
+        ['publicationEpoch', 'publication_epoch'],
+      );
+    if (publicationEpochDelta !== NUM.ZERO) {
+      return publicationEpochDelta;
+    }
+    const publishedAtDelta =
+      resolvePublicationOrderingValue(
+        right,
+        ['publishedAt', 'published_at'],
+      ) -
+      resolvePublicationOrderingValue(
+        left,
+        ['publishedAt', 'published_at'],
+      );
+    if (publishedAtDelta !== NUM.ZERO) {
+      return publishedAtDelta;
+    }
+    return resolvePublicationOrderingValue(
+      right,
+      ['updatedAt', 'updated_at'],
+    ) -
+      resolvePublicationOrderingValue(
+        left,
+        ['updatedAt', 'updated_at'],
+      );
+  });
+  return normalizedRows[NUM.ZERO] || null;
+}
+
+function normalizePriorityRecoveryInteger(value) {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? Math.floor(parsedValue) : null;
+}
+
+function normalizePriorityRecoveryStringList(values = []) {
+  return uniqueSorted(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > NUM.ZERO),
+  );
+}
+
+function inferPriorityRecoveryTableNameFromPartitionId(partitionId) {
+  const normalizedPartitionId = String(partitionId || '');
+  if (normalizedPartitionId.length === NUM.ZERO) {
+    return null;
+  }
+  const partitionSuffixIndex = normalizedPartitionId.lastIndexOf('-p');
+  if (partitionSuffixIndex <= NUM.ZERO) {
+    return normalizedPartitionId;
+  }
+  const suffix = normalizedPartitionId.slice(partitionSuffixIndex + 2);
+  if (!/^\d+$/.test(suffix)) {
+    return normalizedPartitionId;
+  }
+  return normalizedPartitionId.slice(NUM.ZERO, partitionSuffixIndex);
+}
+
+function buildPriorityRecoveryCorrelationKey(partitionId, epoch, operationId) {
+  const normalizedPartitionId = String(partitionId || '').trim();
+  if (normalizedPartitionId.length === NUM.ZERO) {
+    return null;
+  }
+  const normalizedEpoch = Number.isInteger(epoch) ?
+    String(epoch) :
+    PRIORITY_RECOVERY_CORRELATION_KEY.EPOCH_UNKNOWN;
+  const normalizedOperationId =
+    typeof operationId === TYPEOF.STRING && operationId.length > NUM.ZERO ?
+      operationId :
+      PRIORITY_RECOVERY_CORRELATION_KEY.OPERATION_UNKNOWN;
+  return [
+    normalizedPartitionId,
+    normalizedEpoch,
+    normalizedOperationId,
+  ].join(PRIORITY_RECOVERY_CORRELATION_KEY.SEPARATOR);
+}
+
+function buildPriorityRecoverySemanticPartitionSetMap() {
+  const partitionSetsBySemanticState = {};
+  for (const semanticState of PRIORITY_RECOVERY_SEMANTIC_STATE_IDS) {
+    partitionSetsBySemanticState[semanticState] = new Set();
+  }
+  return partitionSetsBySemanticState;
+}
+
+function resolvePriorityRecoverySemanticState(options = {}) {
+  const blockerReasons = normalizePriorityRecoveryStringList(
+    options.blockerReasons,
+  );
+  for (const blockerReason of PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE) {
+    if (!blockerReasons.includes(blockerReason)) {
+      continue;
+    }
+    return PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE[blockerReason] ||
+      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
+  }
+
+  if (options.plannerReady === true) {
+    return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
+  }
+  if (options.hasActiveOperationContexts === true) {
+    return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
+  }
+  return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
+}
+
+function resolvePriorityRecoveryReasonCodesFromReadiness(readinessEntry) {
+  const reasons = Array.isArray(readinessEntry?.reasons) ?
+    readinessEntry.reasons :
+    [];
+  return normalizePriorityRecoveryStringList(reasons.map((reason) =>
+    String(reason?.code || '').trim(),
+  ));
+}
+
+function buildPriorityRecoveryPlannerByPartitionId(priorityPartitionSummary) {
+  const normalizedSummary =
+    priorityPartitionSummary &&
+      typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+      priorityPartitionSummary :
+      null;
+  const blockedPartitions = Array.isArray(normalizedSummary?.blockedPartitions) ?
+    normalizedSummary.blockedPartitions :
+    [];
+  const missingPartitionIds = normalizePriorityRecoveryStringList(
+    normalizedSummary?.missingPartitionIds,
+  );
+  const plannerByPartitionId = {};
+
+  for (const partition of blockedPartitions) {
+    const partitionId = String(partition?.partitionId || '').trim();
+    if (partitionId.length === NUM.ZERO) {
+      continue;
+    }
+    const spreadGap = Math.max(
+      NUM.ZERO,
+      normalizePriorityRecoveryInteger(partition?.spreadGap) || NUM.ZERO,
+    );
+    plannerByPartitionId[partitionId] = {
+      partitionId,
+      requiredDistinctNodeCount:
+        normalizePriorityRecoveryInteger(partition?.requiredDistinctNodeCount),
+      readyDistinctNodeCount:
+        normalizePriorityRecoveryInteger(partition?.readyDistinctNodeCount),
+      spreadGap,
+      ready: spreadGap === NUM.ZERO,
+      reasons: spreadGap > NUM.ZERO ?
+        [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_SPREAD_GAP] :
+        [],
+    };
+  }
+
+  for (const partitionId of missingPartitionIds) {
+    if (plannerByPartitionId[partitionId]) {
+      if (!plannerByPartitionId[partitionId].reasons.includes(
+        PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING,
+      )) {
+        plannerByPartitionId[partitionId].reasons.push(
+          PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING,
+        );
+      }
+      continue;
+    }
+    plannerByPartitionId[partitionId] = {
+      partitionId,
+      requiredDistinctNodeCount:
+        normalizePriorityRecoveryInteger(normalizedSummary?.requiredDistinctNodeCount),
+      readyDistinctNodeCount: NUM.ZERO,
+      spreadGap: normalizePriorityRecoveryInteger(
+        normalizedSummary?.requiredDistinctNodeCount,
+      ) || NUM.ONE,
+      ready: false,
+      reasons: [PRIORITY_RECOVERY_PLANNER_REASON_PRIORITY_PARTITION_MISSING],
+    };
+  }
+
+  return plannerByPartitionId;
+}
+
+function buildPriorityRecoveryReplicaOperationContexts(
+  replicaOperationRows = [],
+  replicaOperationsSummary = null,
+) {
+  const operationTimelineById =
+    replicaOperationsSummary?.operationTimelineById &&
+      typeof replicaOperationsSummary.operationTimelineById === TYPEOF.OBJECT ?
+      replicaOperationsSummary.operationTimelineById :
+      {};
+  const byOperationId = {};
+  const byPartitionId = {};
+
+  for (const replicaOperationRow of Array.isArray(replicaOperationRows) ?
+    replicaOperationRows :
+    []) {
+    const operationId = firstStringField(
+      replicaOperationRow,
+      PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_OPERATION_ID,
+      'operationId',
+    );
+    if (!operationId) {
+      continue;
+    }
+    const entityType = String(firstStringField(
+      replicaOperationRow,
+      PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_ENTITY_TYPE,
+      'entityType',
+      'service_type',
+      'serviceType',
+    ) || PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION).toLowerCase();
+    if (entityType !== PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION) {
+      continue;
+    }
+    const partitionId = firstStringField(
+      replicaOperationRow,
+      PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_PARTITION_ID,
+      'partitionId',
+      PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_ENTITY_ID,
+      'entityId',
+    );
+    if (!partitionId) {
+      continue;
+    }
+
+    const timeline = Array.isArray(operationTimelineById[operationId]) ?
+      operationTimelineById[operationId] :
+      [];
+    const timelineSteps = normalizePriorityRecoveryStringList(
+      timeline.map((entry) => String(entry?.step || '').trim()),
+    );
+    const latestTimelineEntry = timeline.length > NUM.ZERO ?
+      timeline[timeline.length - 1] :
+      null;
+
+    const context = {
+      operationId,
+      partitionId,
+      tableName: inferPriorityRecoveryTableNameFromPartitionId(partitionId),
+      status: String(firstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_STATUS,
+        'status',
+      ) || '').toLowerCase(),
+      workflowStep: String(firstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_WORKFLOW_STEP,
+        'workflowStep',
+      ) || '').toUpperCase(),
+      sourceNodeId: firstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_SOURCE_NODE_ID,
+        'sourceNodeId',
+      ),
+      targetNodeId: firstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_TARGET_NODE_ID,
+        'targetNodeId',
+      ),
+      replicaId: firstStringField(
+        replicaOperationRow,
+        PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_REPLICA_ID,
+        'replicaId',
+        'service_id',
+        'serviceId',
+      ),
+      createdAtMs: normalizePriorityRecoveryInteger(
+        replicaOperationRow[PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_CREATED_AT] ??
+        replicaOperationRow.createdAt,
+      ),
+      updatedAtMs: normalizePriorityRecoveryInteger(
+        replicaOperationRow[PRIORITY_RECOVERY_REPLICA_OPERATION_FIELD_UPDATED_AT] ??
+        replicaOperationRow.updatedAt,
+      ),
+      timelineLength: timeline.length,
+      timelineStepCount: timelineSteps.length,
+      latestTimelineStep: String(latestTimelineEntry?.step || '').toUpperCase() || null,
+      latestTimelineStatus: String(latestTimelineEntry?.status || '').toLowerCase() || null,
+      latestTimelineInFlight: latestTimelineEntry?.inFlight === true,
+    };
+    byOperationId[operationId] = context;
+    if (!byPartitionId[partitionId]) {
+      byPartitionId[partitionId] = [];
+    }
+    byPartitionId[partitionId].push(context);
+  }
+
+  for (const partitionId of Object.keys(byPartitionId)) {
+    byPartitionId[partitionId].sort((left, right) =>
+      String(left.operationId).localeCompare(String(right.operationId)),
+    );
+  }
+
+  return {
+    byOperationId,
+    byPartitionId,
+  };
+}
+
+function isPriorityRecoveryOperationContextTerminal(operationContext) {
+  if (!operationContext || typeof operationContext !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const status = String(operationContext.status || '').toLowerCase();
+  if (status.length === NUM.ZERO) {
+    return false;
+  }
+  return PRIORITY_RECOVERY_TERMINAL_OPERATION_STATUS_SET.has(status);
+}
+
+function buildPriorityRecoveryAdmissionByPartitionId(workflowAdmissionsByWorkflowId = {}) {
+  const admissionByPartitionId = {};
+  for (const workflow of Object.values(
+    workflowAdmissionsByWorkflowId || {},
+  )) {
+    if (!workflow || typeof workflow !== TYPEOF.OBJECT) {
+      continue;
+    }
+    const workflowId = String(workflow.workflowId || '').trim();
+    if (workflowId.length === NUM.ZERO) {
+      continue;
+    }
+    const admission =
+      workflow.admission && typeof workflow.admission === TYPEOF.OBJECT ?
+        workflow.admission :
+        null;
+    const partitionIds = normalizePriorityRecoveryStringList([
+      workflow.sourcePartitionId,
+      ...(Array.isArray(workflow.targetPartitionIds) ?
+        workflow.targetPartitionIds :
+        []),
+    ]);
+    for (const partitionId of partitionIds) {
+      admissionByPartitionId[partitionId] = {
+        workflowId,
+        workflowType: workflow.workflowType || null,
+        transitionState: workflow.transitionState || null,
+        decisionType: admission?.decisionType || null,
+        decisionDimension: admission?.decisionDimension || null,
+        admissionDecisionAt: workflow.admissionDecisionAt || null,
+        eligibleNodeIds: normalizePriorityRecoveryStringList(admission?.eligibleNodeIds),
+        ineligibleNodes: Array.isArray(admission?.ineligibleNodes) ?
+          admission.ineligibleNodes.map((entry) => ({
+            nodeId: String(entry?.nodeId || ''),
+            reasonCodes: normalizePriorityRecoveryStringList(entry?.reasonCodes),
+          })).filter((entry) => entry.nodeId.length > NUM.ZERO) :
+          [],
+        blockingReasons: normalizePriorityRecoveryStringList(
+          workflow.blockingReasons,
+        ),
+      };
+    }
+  }
+  return admissionByPartitionId;
+}
+
+function buildPriorityRecoveryLearnerPromotionByPartitionId(
+  serviceRows = [],
+  readinessByNodeId = {},
+) {
+  const learnerByPartitionId = {};
+  for (const serviceRow of Array.isArray(serviceRows) ? serviceRows : []) {
+    const partitionId = firstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_PARTITION_ID,
+      'partitionId',
+    );
+    if (!partitionId) {
+      continue;
+    }
+    const status = String(firstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_STATUS,
+      'status',
+    ) || '').toLowerCase();
+    const raftRole = String(firstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_RAFT_ROLE,
+      'raftRole',
+    ) || '').toLowerCase();
+    if (status !== PRIORITY_RECOVERY_STATUS_ACTIVE ||
+        raftRole !== PRIORITY_RECOVERY_RAFT_ROLE_LEARNER) {
+      continue;
+    }
+    const nodeId = firstStringField(
+      serviceRow,
+      PRIORITY_RECOVERY_SERVICE_FIELD_NODE_ID,
+      'nodeId',
+    );
+    if (!nodeId) {
+      continue;
+    }
+    if (!learnerByPartitionId[partitionId]) {
+      learnerByPartitionId[partitionId] = [];
+    }
+    learnerByPartitionId[partitionId].push(nodeId);
+  }
+
+  const learnerPromotionByPartitionId = {};
+  for (const [partitionId, learnerNodeIds] of Object.entries(
+    learnerByPartitionId,
+  )) {
+    const learnerHoldByNodeId = {};
+    const promotableLearnerNodeIds = [];
+    for (const nodeId of normalizePriorityRecoveryStringList(learnerNodeIds)) {
+      const readiness = readinessByNodeId[nodeId] || null;
+      const dimensions =
+        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT ?
+          readiness.dimensions :
+          {};
+      const repairEligible =
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true;
+      const recoveryEligible =
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+        ] === true;
+      if (repairEligible) {
+        promotableLearnerNodeIds.push(nodeId);
+        continue;
+      }
+      const reasonCodes = resolvePriorityRecoveryReasonCodesFromReadiness(readiness);
+      learnerHoldByNodeId[nodeId] = {
+        holdReason:
+          readiness ?
+            (recoveryEligible ?
+              PRIORITY_RECOVERY_LEARNER_HOLD_REASON_RECOVERY_ONLY :
+              PRIORITY_RECOVERY_LEARNER_HOLD_REASON_NOT_RECOVERY_ELIGIBLE) :
+            PRIORITY_RECOVERY_LEARNER_HOLD_REASON_NO_READINESS,
+        reasonCodes,
+      };
+    }
+    learnerPromotionByPartitionId[partitionId] = {
+      activeLearnerNodeIds: normalizePriorityRecoveryStringList(learnerNodeIds),
+      promotableLearnerNodeIds,
+      activeLearnerNodeCount: learnerNodeIds.length,
+      promotableLearnerNodeCount: promotableLearnerNodeIds.length,
+      learnerHoldByNodeId,
+    };
+  }
+
+  return learnerPromotionByPartitionId;
+}
+
+function buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence) {
+  const projectionDiagnostics =
+    publicationConvergence?.projectionDiagnostics &&
+      typeof publicationConvergence.projectionDiagnostics === TYPEOF.OBJECT ?
+      publicationConvergence.projectionDiagnostics :
+      null;
+  const inclusionReasonsByNodeId = {};
+  const exclusionReasonsByNodeId = {};
+  for (const nodeId of normalizePriorityRecoveryStringList(
+    projectionDiagnostics?.recoveryEligibleIncludedNodeIds,
+  )) {
+    inclusionReasonsByNodeId[nodeId] = [
+      PRIORITY_RECOVERY_PUBLICATION_INCLUSION_REASON_RECOVERY_ELIGIBLE_PROJECTION_INCLUDED,
+    ];
+  }
+  for (const nodeId of normalizePriorityRecoveryStringList(
+    projectionDiagnostics?.readinessExcludedNodeIds,
+  )) {
+    exclusionReasonsByNodeId[nodeId] = [
+      PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_READINESS_PROJECTION_EXCLUDED,
+    ];
+  }
+  for (const nodeId of normalizePriorityRecoveryStringList(
+    projectionDiagnostics?.clusterMemberUnhealthyExcludedNodeIds,
+  )) {
+    exclusionReasonsByNodeId[nodeId] = [
+      ...(Array.isArray(exclusionReasonsByNodeId[nodeId]) ?
+        exclusionReasonsByNodeId[nodeId] :
+        []),
+      PRIORITY_RECOVERY_PUBLICATION_EXCLUSION_REASON_CLUSTER_MEMBER_UNHEALTHY,
+    ];
+  }
+  return {
+    inclusionReasonsByNodeId,
+    exclusionReasonsByNodeId,
+  };
+}
+
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 
 /**
@@ -213,8 +847,16 @@ class AdminControlSnapshot {
     this.messageRouter = deps.messageRouter || null;
     this.cdcIntegrationService =
       deps.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      deps.controlPlaneSystemTableGateway || null;
     this.controlPlaneReadinessService =
       deps.controlPlaneReadinessService || null;
+    this.startupRecoveryCoordinator =
+      deps.startupRecoveryCoordinator ||
+      new StartupRecoveryCoordinator({
+        readinessState: deps.bootstrapReadinessState || null,
+        now: deps.nowFn,
+      });
     this.heartbeatService = deps.heartbeatService || null;
     this.readinessSnapshotCacheMaxAgeMs =
       Number.isFinite(deps.readinessSnapshotCacheMaxAgeMs) &&
@@ -254,10 +896,19 @@ class AdminControlSnapshot {
     const replicaOperationRows =
       this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
     const capturedAt = this.nowFn();
+    const preferAuthoritativePublicationRead =
+      options.preferAuthoritativePublicationRead === true ||
+      options.allowAuthoritativeRepair === true ||
+      options.forceAuthoritativeRepair === true;
+    const reconcileAuthoritativeMembershipPublication =
+      options.reconcileAuthoritativeMembershipPublication === true ||
+      options.forceAuthoritativeRepair === true;
     const controlPlaneDiagnostics =
       await this.buildControlPlaneDiagnosticsSnapshot({
         capturedAt,
         tableRows,
+        preferAuthoritativePublicationRead,
+        reconcileAuthoritativeMembershipPublication,
         allowAuthoritativeReadinessRefresh:
           options.allowAuthoritativeReadinessRefresh,
         allowStaleReadinessOnCacheChange:
@@ -269,12 +920,44 @@ class AdminControlSnapshot {
       this.systemTableCache.getAll(TABLES.SERVICES);
     const nodeEndpointRows =
       this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS);
-    const nodeIds = this.resolveControlSnapshotActiveNodeIds(
+    const publicationRows =
+      this.systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS);
+    const publicationRowsForActiveNodeResolution = Array.isArray(publicationRows) ?
+      publicationRows.slice() :
+      [];
+    if (controlPlaneDiagnostics?.publishedMembershipObservation &&
+        typeof controlPlaneDiagnostics.publishedMembershipObservation === TYPEOF.OBJECT) {
+      publicationRowsForActiveNodeResolution.push(
+        controlPlaneDiagnostics.publishedMembershipObservation,
+      );
+    }
+    const activeNodeViews = this.resolveControlSnapshotNodeViews(
       nodeRows,
       serviceRows,
       nodeEndpointRows,
       controlPlaneDiagnostics,
+      publicationRowsForActiveNodeResolution,
     );
+    if (controlPlaneDiagnostics && typeof controlPlaneDiagnostics === TYPEOF.OBJECT) {
+      controlPlaneDiagnostics.activeNodeViews = {
+        authoritativeSource: activeNodeViews.authoritativeSource,
+        authoritativeNodeIds: [...activeNodeViews.authoritativeActiveNodeIds],
+        projectedServingNodeIds: [...activeNodeViews.projectedServingNodeIds],
+        locallyEligibleNodeIds: [...activeNodeViews.locallyEligibleNodeIds],
+        suspectedOrTransitioningNodeIds: [
+          ...activeNodeViews.suspectedOrTransitioningNodeIds,
+        ],
+        membershipFreeze: activeNodeViews.membershipFreeze,
+        effectiveSource: activeNodeViews.effectiveSource,
+        effectiveNodeIds: [...activeNodeViews.effectiveActiveNodeIds],
+        projectedNodeIds: [...activeNodeViews.projectedActiveNodeIds],
+        publishedNodeIds: Array.isArray(activeNodeViews.publishedActiveNodeIds) ?
+          [...activeNodeViews.publishedActiveNodeIds] :
+          [],
+        publishedMembershipAvailable:
+          activeNodeViews.publishedMembershipAvailable === true,
+      };
+    }
     const activePartitionRows =
       filterActiveServingPartitionRows(
         partitionRows,
@@ -316,7 +999,14 @@ class AdminControlSnapshot {
       schemaVersion: ADMIN_CONTROL_SNAPSHOT.SCHEMA_VERSION,
       nodeId: this.nodeId,
       capturedAt,
-      nodes: nodeIds,
+      nodes: [...activeNodeViews.authoritativeActiveNodeIds],
+      publishedNodes: Array.isArray(activeNodeViews.publishedActiveNodeIds) ?
+        [...activeNodeViews.publishedActiveNodeIds] :
+        [],
+      projectedNodes: [...activeNodeViews.projectedServingNodeIds],
+      suspectedOrTransitioningNodes: [
+        ...activeNodeViews.suspectedOrTransitioningNodeIds,
+      ],
       partitions: partitionIds,
       cdcTelemetry: this.buildLocalCdcTelemetry(),
       controlPlaneDiagnostics,
@@ -408,35 +1098,33 @@ class AdminControlSnapshot {
       );
     }
     const repairedSnapshot =
-      await this.buildLocalControlSnapshot(options);
+      await this.buildLocalControlSnapshot({
+        ...options,
+        preferAuthoritativePublicationRead: true,
+      });
     const repairedEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(
         repairedSnapshot,
       );
-    if (forceAuthoritativeRepair &&
-        hasAuthoritativeRepairTrigger(
-          repairedEvaluation,
-          AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
-        )) {
-      const missingNodeIds = Array.isArray(
-        repairedEvaluation?.nodeCoverage?.activeProjection?.missingNodeIds,
-      ) ?
-        repairedEvaluation.nodeCoverage.activeProjection.missingNodeIds :
-        ADMIN_CACHE_DUMP.EMPTY;
-      throw new Error(
-        'Authoritative control snapshot repair left active-node ' +
-        'projection undercovered' +
-        (
-          missingNodeIds.length > NUM.ZERO ?
-            ': ' + missingNodeIds.join(',') :
-            ''
-        ),
-      );
-    }
-    return repairedSnapshot;
+    return attachAuthoritativeRepairDiagnostics(
+      repairedSnapshot,
+      {
+        repair,
+        repairEvaluation: repairedEvaluation,
+        forceAuthoritativeRepair,
+      },
+    );
   }
 
   canDegradeAuthoritativeControlSnapshotRepairFailure(options = {}) {
+    if (options.forceAuthoritativeRepair !== true &&
+        hasOnlyLeaderResolutionGapRepairCause(options.repair) &&
+        isReadyLocalQueryTransportDiagnostic(
+          options.repair?.localQueryTransport,
+        )) {
+      return true;
+    }
+
     if (hasAuthoritativeRepairTrigger(
       options.repairEvaluation,
       AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
@@ -465,17 +1153,66 @@ class AdminControlSnapshot {
     serviceRows = [],
     nodeEndpointRows = [],
     controlPlaneDiagnostics = null,
+    publicationRows = [],
   ) {
-    return resolveCanonicalActiveNodeIds({
+    return this.resolveControlSnapshotNodeViews(
       nodeRows,
       serviceRows,
       nodeEndpointRows,
-      readinessByNodeId: buildReadinessByNodeId({
-        readinessByNodeId:
-          controlPlaneDiagnostics?.readinessByNodeId || null,
-      }),
+      controlPlaneDiagnostics,
+      publicationRows,
+    ).authoritativeActiveNodeIds;
+  }
+
+  resolveControlSnapshotNodeViews(
+    nodeRows = [],
+    serviceRows = [],
+    nodeEndpointRows = [],
+    controlPlaneDiagnostics = null,
+    publicationRows = [],
+  ) {
+    const latestPublishedMembershipObservation =
+      controlPlaneDiagnostics?.publishedMembershipObservation || null;
+    const publicationConvergence =
+      controlPlaneDiagnostics?.publicationConvergence || null;
+    const latestPublishedPublicationObservation =
+      latestPublishedMembershipObservation ||
+      (String(publicationConvergence?.status || '').toUpperCase() ===
+        'PUBLISHED' ?
+        publicationConvergence :
+        null);
+    const readinessByNodeId = buildReadinessByNodeId({
+      readinessByNodeId:
+        controlPlaneDiagnostics?.readinessByNodeId || null,
+    });
+    const activeNodeViews = resolveActiveNodeViews({
+      nodeRows,
+      serviceRows,
+      nodeEndpointRows,
+      publicationRows,
+      latestPublicationRow: latestPublishedPublicationObservation,
+      readinessByNodeId,
       nowMs: this.nowFn(),
     });
+
+    return {
+      authoritativeSource: activeNodeViews.authoritativeSource,
+      authoritativeActiveNodeIds: [...activeNodeViews.authoritativeActiveNodeIds],
+      projectedServingNodeIds: [...activeNodeViews.projectedServingNodeIds],
+      locallyEligibleNodeIds: [...activeNodeViews.locallyEligibleNodeIds],
+      suspectedOrTransitioningNodeIds: [
+        ...activeNodeViews.suspectedOrTransitioningNodeIds,
+      ],
+      membershipFreeze: activeNodeViews.membershipFreeze,
+      effectiveSource: activeNodeViews.effectiveSource,
+      effectiveActiveNodeIds: [...activeNodeViews.effectiveActiveNodeIds],
+      projectedActiveNodeIds: [...activeNodeViews.projectedActiveNodeIds],
+      publishedActiveNodeIds: Array.isArray(activeNodeViews.publishedActiveNodeIds) ?
+        [...activeNodeViews.publishedActiveNodeIds] :
+        null,
+      publishedMembershipAvailable:
+        Array.isArray(activeNodeViews.publishedActiveNodeIds),
+    };
   }
 
   isControlSnapshotActiveNode(
@@ -660,12 +1397,13 @@ class AdminControlSnapshot {
       readinessByNodeId:
         options.controlPlaneDiagnostics?.readinessByNodeId || null,
     });
-    const activeNodeIds = new Set(this.resolveControlSnapshotActiveNodeIds(
+    const activeNodeViews = this.resolveControlSnapshotNodeViews(
       nodeRows,
       serviceRows,
       nodeEndpointRows,
       options.controlPlaneDiagnostics || null,
-    ));
+    );
+    const activeNodeIds = new Set(activeNodeViews.projectedActiveNodeIds);
     const visibleNodeIds = new Set();
 
     for (const [nodeId, readinessEntry] of Object.entries(
@@ -891,6 +1629,33 @@ class AdminControlSnapshot {
     const capturedAt = Number.isFinite(options.capturedAt) ?
       options.capturedAt :
       this.nowFn();
+    const observedMembershipPublication =
+      await this.ensureMembershipPublicationObservation({
+        preferAuthoritativeRead:
+          options.preferAuthoritativePublicationRead === true,
+        reconcileAuthoritativeMembership:
+          options.reconcileAuthoritativeMembershipPublication === true,
+      });
+    let observedPublishedMembership =
+      await this.ensurePublishedMembershipObservation(
+        observedMembershipPublication,
+        {
+          preferAuthoritativeRead:
+            options.preferAuthoritativePublicationRead === true,
+        },
+      );
+    if (!observedPublishedMembership &&
+        options.preferAuthoritativePublicationRead !== true &&
+        observedMembershipPublication &&
+        typeof observedMembershipPublication === TYPEOF.OBJECT &&
+        String(observedMembershipPublication.status || '').toUpperCase() !==
+          'PUBLISHED') {
+      observedPublishedMembership =
+        await this.ensurePublishedMembershipObservation(
+          observedMembershipPublication,
+          {preferAuthoritativeRead: true},
+        );
+    }
     const readinessEntries = await this.resolveControlPlaneReadinessEntries({
       allowAuthoritativeRefresh:
         options.allowAuthoritativeReadinessRefresh !== false,
@@ -914,8 +1679,28 @@ class AdminControlSnapshot {
 
     const publicationMode =
       this.resolvePublicationModeDiagnostics(readinessEntries);
+    const publicationConvergence =
+      this.resolvePublicationConvergenceDiagnostics(
+        readinessEntries,
+        observedMembershipPublication,
+      );
     const readinessTransitionsByNodeId =
       this.resolveReadinessTransitionHistory();
+    const priorityControlPlaneRecoveryByNodeId =
+      this.resolvePriorityControlPlaneRecoveryByNodeId(readinessEntries);
+    const participationDecisions =
+      this.resolveParticipationDecisionDiagnostics();
+    const authoritativeReadinessRepairs =
+      this.resolveAuthoritativeReadinessRepairDiagnostics();
+    const recoveryEpochsByNodeId =
+      this.resolveRecoveryEpochDiagnostics();
+    const controlPlaneOperations =
+      this.resolveControlPlaneOperationDiagnostics();
+    const startupRecovery =
+      this.startupRecoveryCoordinator &&
+        typeof this.startupRecoveryCoordinator.evaluate === TYPEOF.FUNCTION ?
+        this.startupRecoveryCoordinator.evaluate() :
+        null;
     const heartbeatPublication =
       this.resolveHeartbeatPublicationDiagnostics();
     const workflowDiagnostics =
@@ -927,10 +1712,26 @@ class AdminControlSnapshot {
     const replicaOperationRows =
       this.systemTableCache?.getAll(TABLES.REPLICA_OPERATIONS) ||
       ADMIN_CACHE_DUMP.EMPTY;
+    const serviceRows =
+      this.systemTableCache?.getAll(TABLES.SERVICES) ||
+      ADMIN_CACHE_DUMP.EMPTY;
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(
         replicaOperationRows,
       );
+    const priorityRecoveryDecisionSnapshots =
+      this.buildPriorityRecoveryDecisionSnapshots({
+        capturedAt,
+        publicationConvergence,
+        readinessByNodeId,
+        placementEligibilityByNodeId,
+        workflowAdmissionsByWorkflowId:
+          workflowDiagnostics.workflowAdmissionsByWorkflowId,
+        controlPlaneOperations,
+        replicaOperationRows,
+        replicaOperations,
+        serviceRows,
+      });
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
     const partitionServices = this.resolveLocalPartitionServices &&
       typeof this.resolveLocalPartitionServices === TYPEOF.FUNCTION ?
@@ -945,21 +1746,561 @@ class AdminControlSnapshot {
       nodeId: this.nodeId,
       capturedAt,
       publicationMode,
+      publicationConvergence,
+      publishedMembershipObservation:
+        this.resolvePublicationConvergenceDiagnostics(
+          ADMIN_CACHE_DUMP.EMPTY,
+          observedPublishedMembership,
+        ),
       heartbeatPublication,
       readinessByNodeId,
       nodeLivenessByNodeId,
+      priorityControlPlaneRecoveryByNodeId,
       readinessTransitionsByNodeId,
+      participationDecisions,
+      authoritativeReadinessRepairs,
+      recoveryEpochsByNodeId,
+      startupRecovery,
       placementEligibilityByNodeId,
       workflowAdmissionsByWorkflowId:
         workflowDiagnostics.workflowAdmissionsByWorkflowId,
       timeoutClassifications:
         workflowDiagnostics.timeoutClassifications,
+      controlPlaneOperations,
+      priorityRecoveryDecisionSnapshots,
       replicaOperations,
       splitEvaluation,
       logsTable,
       cdcReplay,
       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
     };
+  }
+
+  /**
+   * Build priority-recovery cross-service decision snapshots keyed by
+   * partition/epoch/op.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  buildPriorityRecoveryDecisionSnapshots(options = {}) {
+    const publicationConvergence =
+      options.publicationConvergence &&
+        typeof options.publicationConvergence === TYPEOF.OBJECT ?
+        options.publicationConvergence :
+        null;
+    const publicationEpoch = normalizePriorityRecoveryInteger(
+      publicationConvergence?.publicationEpoch,
+    );
+    const readinessByNodeId =
+      options.readinessByNodeId &&
+        typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+        options.readinessByNodeId :
+        {};
+    const plannerByPartitionId = buildPriorityRecoveryPlannerByPartitionId(
+      publicationConvergence?.priorityPartitionSummary,
+    );
+    const admissionByPartitionId = buildPriorityRecoveryAdmissionByPartitionId(
+      options.workflowAdmissionsByWorkflowId,
+    );
+    const replicaOperationContexts = buildPriorityRecoveryReplicaOperationContexts(
+      options.replicaOperationRows,
+      options.replicaOperations,
+    );
+    const learnerPromotionByPartitionId = buildPriorityRecoveryLearnerPromotionByPartitionId(
+      options.serviceRows,
+      readinessByNodeId,
+    );
+    const publicationNodeDecisions =
+      buildPriorityRecoveryPublicationNodeDecisions(publicationConvergence);
+
+    const allPartitionIds = new Set([
+      ...Object.keys(plannerByPartitionId),
+      ...Object.keys(admissionByPartitionId),
+      ...Object.keys(replicaOperationContexts.byPartitionId),
+      ...Object.keys(learnerPromotionByPartitionId),
+    ]);
+    const recoveryEligibleIncludedNodeIds = normalizePriorityRecoveryStringList(
+      publicationConvergence?.projectionDiagnostics
+        ?.recoveryEligibleIncludedNodeIds,
+    );
+    const snapshots = [];
+    const blockerPartitionIdsByReason = {};
+    for (const blockerReason of PRIORITY_RECOVERY_PROGRESS_CLASS_IDS) {
+      blockerPartitionIdsByReason[blockerReason] = new Set();
+    }
+    const partitionIdsBySemanticState =
+      buildPriorityRecoverySemanticPartitionSetMap();
+
+    for (const partitionId of [...allPartitionIds].sort()) {
+      const planner = plannerByPartitionId[partitionId] || {
+        partitionId,
+        requiredDistinctNodeCount: null,
+        readyDistinctNodeCount: null,
+        spreadGap: null,
+        ready: null,
+        reasons: [],
+      };
+      const admission = admissionByPartitionId[partitionId] || {
+        workflowId: null,
+        workflowType: null,
+        transitionState: null,
+        decisionType: null,
+        decisionDimension: null,
+        admissionDecisionAt: null,
+        eligibleNodeIds: [],
+        ineligibleNodes: [],
+        blockingReasons: [],
+      };
+      const learnerPromotion = learnerPromotionByPartitionId[partitionId] || {
+        activeLearnerNodeIds: [],
+        promotableLearnerNodeIds: [],
+        activeLearnerNodeCount: 0,
+        promotableLearnerNodeCount: 0,
+        learnerHoldByNodeId: {},
+      };
+      const operationContexts = Array.isArray(
+        replicaOperationContexts.byPartitionId[partitionId],
+      ) ? replicaOperationContexts.byPartitionId[partitionId] : [];
+      const activeOperationContexts = operationContexts.filter((context) =>
+        !isPriorityRecoveryOperationContextTerminal(context),
+      );
+      const hasActiveOperationContexts = activeOperationContexts.length > NUM.ZERO;
+      const operationIds = operationContexts.length > NUM.ZERO ?
+        operationContexts.map((context) => context.operationId) :
+        [null];
+
+      const ineligibleNodeIds = normalizePriorityRecoveryStringList(
+        admission.ineligibleNodes.map((entry) => entry.nodeId),
+      );
+      const recoveryEligibleExcludedNodeIds = recoveryEligibleIncludedNodeIds
+        .filter((nodeId) => ineligibleNodeIds.includes(nodeId));
+      const admissionDecisionMissing =
+        admission.decisionType === null &&
+        admission.decisionDimension === null &&
+        admission.eligibleNodeIds.length === NUM.ZERO &&
+        ineligibleNodeIds.length === NUM.ZERO &&
+        admission.blockingReasons.length === NUM.ZERO;
+
+      const eligibleButNoOperation =
+        planner.ready === false &&
+        (admission.eligibleNodeIds.length > NUM.ZERO ||
+          admissionDecisionMissing) &&
+        !hasActiveOperationContexts;
+      const operationCreatedNoStepTransitions =
+        hasActiveOperationContexts &&
+        activeOperationContexts.every((context) =>
+          context.timelineStepCount <= NUM.ONE,
+        );
+      const learnerActiveNeverPromotable =
+        learnerPromotion.activeLearnerNodeCount > NUM.ZERO &&
+        learnerPromotion.promotableLearnerNodeCount === NUM.ZERO;
+      const publicationRecoveryEligibleButCoordinatorExcludesNode =
+        recoveryEligibleExcludedNodeIds.length > NUM.ZERO;
+      const blockerReasons = [];
+      if (eligibleButNoOperation) {
+        blockerReasons.push(
+          PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+        );
+      }
+      if (operationCreatedNoStepTransitions) {
+        blockerReasons.push(
+          PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+        );
+      }
+      if (learnerActiveNeverPromotable) {
+        blockerReasons.push(
+          PRIORITY_RECOVERY_BLOCKER_REASON.LEARNER_NEVER_PROMOTABLE,
+        );
+      }
+      if (publicationRecoveryEligibleButCoordinatorExcludesNode) {
+        blockerReasons.push(
+          PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+        );
+      }
+      for (const blockerReason of blockerReasons) {
+        blockerPartitionIdsByReason[blockerReason].add(partitionId);
+      }
+      const semanticState = resolvePriorityRecoverySemanticState({
+        blockerReasons,
+        plannerReady: planner.ready === true,
+        hasActiveOperationContexts,
+      });
+      if (partitionIdsBySemanticState[semanticState] instanceof Set) {
+        partitionIdsBySemanticState[semanticState].add(partitionId);
+      }
+
+      for (const operationId of operationIds) {
+        const operationContext =
+          operationId && replicaOperationContexts.byOperationId[operationId] ?
+            replicaOperationContexts.byOperationId[operationId] :
+            null;
+        snapshots.push({
+          partitionId,
+          epoch: publicationEpoch,
+          operationId,
+          correlationKey: buildPriorityRecoveryCorrelationKey(
+            partitionId,
+            publicationEpoch,
+            operationId,
+          ),
+          semanticState,
+          planner,
+          admission: {
+            ...admission,
+            ineligibleNodeIds,
+            recoveryEligibleExcludedNodeIds,
+          },
+          coordinator: {
+            operationCount: operationContexts.length,
+            operationIds: operationContexts.map((context) => context.operationId),
+            operation: operationContext,
+          },
+          publication: {
+            publicationStatus: publicationConvergence?.publicationStatus || null,
+            pendingAckNodeIds: normalizePriorityRecoveryStringList(
+              publicationConvergence?.pendingAckNodeIds,
+            ),
+            inclusionReasonsByNodeId:
+              publicationNodeDecisions.inclusionReasonsByNodeId,
+            exclusionReasonsByNodeId:
+              publicationNodeDecisions.exclusionReasonsByNodeId,
+          },
+          readiness: {
+            recoveryEligibleOnlyNodeIds: normalizePriorityRecoveryStringList(
+              Object.entries(readinessByNodeId)
+                .filter(([_nodeId, readinessEntry]) => {
+                  const dimensions =
+                    readinessEntry?.dimensions &&
+                      typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+                      readinessEntry.dimensions :
+                      {};
+                  return dimensions[
+                    CONTROL_PLANE_READINESS_DIMENSION
+                      .CONTROL_PLANE_RECOVERY_ELIGIBLE
+                  ] === true &&
+                    dimensions[
+                      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+                    ] !== true;
+                })
+                .map(([nodeId]) => nodeId),
+            ),
+            learnerPromotion,
+          },
+          blockerReasons,
+        });
+      }
+    }
+
+    const normalizedPartitionIdsBySemanticState = {};
+    for (const semanticState of PRIORITY_RECOVERY_SEMANTIC_STATE_IDS) {
+      normalizedPartitionIdsBySemanticState[semanticState] = [
+        ...partitionIdsBySemanticState[semanticState],
+      ].sort();
+    }
+    const unresolvedSemanticStateIds =
+      PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS
+        .filter((semanticState) =>
+          normalizedPartitionIdsBySemanticState[semanticState].length > NUM.ZERO,
+        );
+    const unresolvedSemanticPartitionIds = normalizePriorityRecoveryStringList(
+      unresolvedSemanticStateIds.flatMap((semanticState) =>
+        normalizedPartitionIdsBySemanticState[semanticState],
+      ),
+    );
+
+    return {
+      schemaVersion: PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION,
+      capturedAt: options.capturedAt || null,
+      publicationEpoch,
+      snapshotCount: snapshots.length,
+      partitionCount: allPartitionIds.size,
+      snapshots,
+      blockerPartitionIdsByReason: PRIORITY_RECOVERY_PROGRESS_CLASS_IDS
+        .reduce((accumulator, blockerReason) => {
+          accumulator[blockerReason] = [
+            ...(blockerPartitionIdsByReason[blockerReason] || []),
+          ].sort();
+          return accumulator;
+        }, {}),
+      partitionIdsBySemanticState: normalizedPartitionIdsBySemanticState,
+      unresolvedSemanticStateIds,
+      unresolvedSemanticStateCount: unresolvedSemanticStateIds.length,
+      unresolvedSemanticBlockedPartitionIds: unresolvedSemanticPartitionIds,
+      unresolvedSemanticBlockedPartitionCount:
+        unresolvedSemanticPartitionIds.length,
+    };
+  }
+
+  async ensureMembershipPublicationObservation(options = {}) {
+    const membershipPublicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService || null;
+    const hasMembershipPublicationService =
+      membershipPublicationService &&
+      typeof membershipPublicationService === TYPEOF.OBJECT;
+    const preferAuthoritativeRead =
+      options.preferAuthoritativeRead === true;
+    const reconcileAuthoritativeMembership =
+      options.reconcileAuthoritativeMembership === true ||
+      (preferAuthoritativeRead &&
+        Object.hasOwn(options, 'reconcileAuthoritativeMembership') !== true);
+
+    let publicationRow = null;
+    if (hasMembershipPublicationService &&
+        !preferAuthoritativeRead &&
+        typeof membershipPublicationService.getLatestClusterPublicationSync ===
+        TYPEOF.FUNCTION) {
+      publicationRow =
+        membershipPublicationService.getLatestClusterPublicationSync();
+    }
+    if (hasMembershipPublicationService &&
+        (preferAuthoritativeRead || !publicationRow) &&
+        typeof membershipPublicationService.getLatestClusterPublication ===
+          TYPEOF.FUNCTION) {
+      publicationRow =
+        await membershipPublicationService.getLatestClusterPublication(
+          preferAuthoritativeRead ? {preferAuthoritativeRead} : {},
+        );
+    }
+    if (hasMembershipPublicationService &&
+        typeof membershipPublicationService.reconcileClusterMembership ===
+          TYPEOF.FUNCTION &&
+        preferAuthoritativeRead &&
+        reconcileAuthoritativeMembership) {
+      const reconcileResult =
+        await membershipPublicationService.reconcileClusterMembership({
+          preferAuthoritativeRead: true,
+          latestPublicationRow: publicationRow,
+        });
+      publicationRow = reconcileResult?.publicationRow || publicationRow;
+    } else if (hasMembershipPublicationService &&
+        !publicationRow &&
+        typeof membershipPublicationService.reconcileClusterMembership ===
+          TYPEOF.FUNCTION) {
+      const reconcileResult =
+        await membershipPublicationService.reconcileClusterMembership();
+      publicationRow = reconcileResult?.publicationRow || null;
+    }
+    if (!publicationRow) {
+      publicationRow = resolveLatestMembershipPublicationRow(
+        this.systemTableCache?.getAll?.(TABLES.CONTROL_PLANE_PUBLICATIONS),
+      );
+    }
+    const publicationId = publicationRow?.publicationId ||
+      publicationRow?.publication_id ||
+      null;
+    const requiredAckNodeIds = Array.isArray(
+      publicationRow?.requiredAckNodeIds ?? publicationRow?.required_ack_node_ids,
+    ) ?
+      (publicationRow.requiredAckNodeIds ?? publicationRow.required_ack_node_ids) :
+      [];
+    if (publicationId &&
+        requiredAckNodeIds.includes(this.nodeId) &&
+        hasMembershipPublicationService &&
+        typeof membershipPublicationService.acknowledgePublication ===
+          TYPEOF.FUNCTION) {
+      publicationRow = await membershipPublicationService.acknowledgePublication(
+        publicationId,
+        this.nodeId,
+        {publicationRow},
+      ) || publicationRow;
+    }
+    return publicationRow;
+  }
+
+  async ensurePublishedMembershipObservation(
+    fallbackPublication = null,
+    options = {},
+  ) {
+    if (fallbackPublication && typeof fallbackPublication === TYPEOF.OBJECT &&
+        String(fallbackPublication.status || '').toUpperCase() === 'PUBLISHED') {
+      return fallbackPublication;
+    }
+
+    const membershipPublicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService || null;
+    const hasMembershipPublicationService =
+      membershipPublicationService &&
+      typeof membershipPublicationService === TYPEOF.OBJECT;
+
+    if (options.preferAuthoritativeRead !== true &&
+        hasMembershipPublicationService &&
+        typeof membershipPublicationService.getLatestPublishedClusterPublicationSync ===
+        TYPEOF.FUNCTION) {
+      const publicationRow =
+        membershipPublicationService.getLatestPublishedClusterPublicationSync();
+      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+        return publicationRow;
+      }
+    }
+    if (hasMembershipPublicationService &&
+        typeof membershipPublicationService.getLatestPublishedClusterPublication ===
+        TYPEOF.FUNCTION) {
+      const publicationRow =
+        await membershipPublicationService.getLatestPublishedClusterPublication(
+          options.preferAuthoritativeRead === true ?
+            {preferAuthoritativeRead: true} :
+            {},
+        );
+      if (publicationRow && typeof publicationRow === TYPEOF.OBJECT) {
+        return publicationRow;
+      }
+    }
+    return resolveLatestMembershipPublicationRow(
+      this.systemTableCache?.getAll?.(TABLES.CONTROL_PLANE_PUBLICATIONS),
+      {
+        status: 'PUBLISHED',
+      },
+    );
+  }
+
+  resolvePublicationConvergenceDiagnostics(
+    readinessEntries = [],
+    fallbackPublication = null,
+  ) {
+    for (const readiness of Array.isArray(readinessEntries) ? readinessEntries : []) {
+      const membershipPublication = readiness?.membershipPublication;
+      if (!membershipPublication || typeof membershipPublication !== TYPEOF.OBJECT) {
+        continue;
+      }
+      const requiredAckNodeIds = Array.isArray(
+        membershipPublication.requiredAckNodeIds,
+      ) ? membershipPublication.requiredAckNodeIds : [];
+      const acknowledgedNodeIds = Array.isArray(
+        membershipPublication.acknowledgedNodeIds,
+      ) ? membershipPublication.acknowledgedNodeIds : [];
+      const membershipLifecycleSummary =
+        membershipPublication.membershipLifecycleSummary &&
+        typeof membershipPublication.membershipLifecycleSummary ===
+          TYPEOF.OBJECT ?
+          membershipPublication.membershipLifecycleSummary :
+          null;
+      const projectionDiagnostics =
+        membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+          membershipLifecycleSummary.projectionDiagnostics :
+          null;
+      return {
+        publicationEpoch: membershipPublication.publicationEpoch ?? null,
+        status: membershipPublication.status || null,
+        publicationStatus: membershipPublication.status || null,
+        publishedActiveNodeIds: Array.isArray(
+          membershipPublication.publishedActiveNodeIds,
+        ) ? [...membershipPublication.publishedActiveNodeIds] : [],
+        requiredAckNodeIds: [...requiredAckNodeIds],
+        acknowledgedNodeIds: [...acknowledgedNodeIds],
+        pendingAckNodeIds: requiredAckNodeIds.filter(
+          (nodeId) => !acknowledgedNodeIds.includes(nodeId),
+        ),
+        priorityPartitionSummary:
+          membershipPublication.priorityPartitionSummary || null,
+        sourceTopologyEpoch:
+          membershipPublication.sourceTopologyEpoch ?? null,
+        sourceSnapshotVersion:
+          membershipPublication.sourceSnapshotVersion ?? null,
+        publishedAt: membershipPublication.publishedAt || null,
+        updatedAt: membershipPublication.updatedAt || null,
+        membershipLifecycleSummary,
+        projectionDiagnostics,
+      };
+    }
+    if (fallbackPublication && typeof fallbackPublication === TYPEOF.OBJECT) {
+      const requiredAckNodeIds = Array.isArray(
+        fallbackPublication.requiredAckNodeIds ??
+          fallbackPublication.required_ack_node_ids,
+      ) ?
+        (fallbackPublication.requiredAckNodeIds ??
+          fallbackPublication.required_ack_node_ids) :
+        [];
+      const acknowledgedNodeIds = Array.isArray(
+        fallbackPublication.acknowledgedNodeIds ??
+          fallbackPublication.acknowledged_node_ids,
+      ) ?
+        (fallbackPublication.acknowledgedNodeIds ??
+          fallbackPublication.acknowledged_node_ids) :
+        [];
+      const membershipLifecycleSummary =
+        fallbackPublication.membershipLifecycleSummary &&
+        typeof fallbackPublication.membershipLifecycleSummary === TYPEOF.OBJECT ?
+          fallbackPublication.membershipLifecycleSummary :
+          (fallbackPublication.membership_lifecycle_summary &&
+          typeof fallbackPublication.membership_lifecycle_summary ===
+            TYPEOF.OBJECT ?
+            fallbackPublication.membership_lifecycle_summary :
+            null);
+      const projectionDiagnostics =
+        membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+          membershipLifecycleSummary.projectionDiagnostics :
+          null;
+      return {
+        publicationEpoch:
+          fallbackPublication.publicationEpoch ??
+          fallbackPublication.publication_epoch ??
+          null,
+        status:
+          fallbackPublication.status || null,
+        publicationStatus:
+          fallbackPublication.status || null,
+        publishedActiveNodeIds: Array.isArray(
+          fallbackPublication.publishedActiveNodeIds ??
+            fallbackPublication.published_active_node_ids,
+        ) ?
+          [
+            ...(fallbackPublication.publishedActiveNodeIds ??
+              fallbackPublication.published_active_node_ids),
+          ] :
+          [],
+        requiredAckNodeIds: [...requiredAckNodeIds],
+        acknowledgedNodeIds: [...acknowledgedNodeIds],
+        pendingAckNodeIds: requiredAckNodeIds.filter(
+          (nodeId) => !acknowledgedNodeIds.includes(nodeId),
+        ),
+        priorityPartitionSummary:
+          fallbackPublication.priorityPartitionSummary ??
+          fallbackPublication.priority_partition_summary ??
+          null,
+        sourceTopologyEpoch:
+          fallbackPublication.sourceTopologyEpoch ??
+          fallbackPublication.source_topology_epoch ??
+          null,
+        sourceSnapshotVersion:
+          fallbackPublication.sourceSnapshotVersion ??
+          fallbackPublication.source_snapshot_version ??
+          null,
+        publishedAt:
+          fallbackPublication.publishedAt ??
+          fallbackPublication.published_at ??
+          null,
+        updatedAt:
+          fallbackPublication.updatedAt ??
+          fallbackPublication.updated_at ??
+          null,
+        membershipLifecycleSummary,
+        projectionDiagnostics,
+      };
+    }
+    return null;
+  }
+
+  resolvePriorityControlPlaneRecoveryByNodeId(readinessEntries = []) {
+    const entries = {};
+    for (const readiness of Array.isArray(readinessEntries) ? readinessEntries : []) {
+      const nodeId = firstStringField(readiness, COLUMN.NODE_ID, 'nodeId');
+      if (!nodeId) {
+        continue;
+      }
+      const priorityControlPlaneRecovery =
+        readiness?.priorityControlPlaneRecovery;
+      if (!priorityControlPlaneRecovery ||
+          typeof priorityControlPlaneRecovery !== TYPEOF.OBJECT) {
+        continue;
+      }
+      entries[nodeId] = priorityControlPlaneRecovery;
+    }
+    return entries;
   }
 
   /**
@@ -1064,6 +2405,96 @@ class AdminControlSnapshot {
         {};
     } catch (_error) {
       return {};
+    }
+  }
+
+  /**
+   * Resolve recent canonical participation decisions.
+   * @return {Object[]}
+   * @private
+   */
+  resolveParticipationDecisionDiagnostics() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService
+          .getParticipationDecisionLedgerEntries !== TYPEOF.FUNCTION) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+    try {
+      const entries =
+        this.controlPlaneReadinessService.getParticipationDecisionLedgerEntries({
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+      return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+    } catch (_error) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+  }
+
+  /**
+   * Resolve recent authoritative readiness repair attempts.
+   * @return {Object[]}
+   * @private
+   */
+  resolveAuthoritativeReadinessRepairDiagnostics() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService
+          .getAuthoritativeReadinessRepairLedgerEntries !==
+            TYPEOF.FUNCTION) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+    try {
+      const entries =
+        this.controlPlaneReadinessService
+          .getAuthoritativeReadinessRepairLedgerEntries({
+            limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+          });
+      return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+    } catch (_error) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+  }
+
+  /**
+   * Resolve bounded recovery epoch history by node.
+   * @return {Object}
+   * @private
+   */
+  resolveRecoveryEpochDiagnostics() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService
+          .getRecoveryEpochHistoryByNodeId !== TYPEOF.FUNCTION) {
+      return {};
+    }
+    try {
+      const history =
+        this.controlPlaneReadinessService.getRecoveryEpochHistoryByNodeId();
+      return history && typeof history === TYPEOF.OBJECT ?
+        history :
+        {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  /**
+   * Resolve recent control-plane system-table operations.
+   * @return {Object[]}
+   * @private
+   */
+  resolveControlPlaneOperationDiagnostics() {
+    if (!this.controlPlaneSystemTableGateway ||
+        typeof this.controlPlaneSystemTableGateway
+          .getControlPlaneOperationLedgerEntries !== TYPEOF.FUNCTION) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+    try {
+      const entries =
+        this.controlPlaneSystemTableGateway.getControlPlaneOperationLedgerEntries({
+          limit: CONTROL_PLANE_DIAGNOSTICS_LEDGER_LIMIT,
+        });
+      return Array.isArray(entries) ? entries : ADMIN_CACHE_DUMP.EMPTY;
+    } catch (_error) {
+      return ADMIN_CACHE_DUMP.EMPTY;
     }
   }
 

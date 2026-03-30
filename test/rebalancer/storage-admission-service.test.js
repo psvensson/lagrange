@@ -90,18 +90,45 @@ function createServices(cache, accounting) {
 }
 
 function createReadiness(nodeId, overrides = {}) {
+  const overrideDimensions = overrides.dimensions || {};
+  const baseDimensions = {
+    processAlive: true,
+    clusterMemberHealthy: true,
+    routingReady: true,
+    loadReady: true,
+    placementEligible: true,
+    controlPlaneWritable: true,
+    metadataPublicationHealthy: true,
+    controlPlanePublished: true,
+  };
+  const dimensions = {
+    ...baseDimensions,
+    ...overrideDimensions,
+  };
+  if (!Object.prototype.hasOwnProperty.call(
+    overrideDimensions,
+    'repairEligible',
+  )) {
+    dimensions.repairEligible =
+      dimensions.processAlive === true &&
+      dimensions.clusterMemberHealthy === true &&
+      dimensions.routingReady === true &&
+      dimensions.controlPlaneWritable === true &&
+      dimensions.metadataPublicationHealthy === true;
+  }
+  if (!Object.prototype.hasOwnProperty.call(
+    overrideDimensions,
+    'controlPlaneRecoveryEligible',
+  )) {
+    dimensions.controlPlaneRecoveryEligible =
+      dimensions.routingReady === true &&
+      dimensions.controlPlaneWritable === true &&
+      dimensions.metadataPublicationHealthy === true &&
+      dimensions.controlPlanePublished !== false;
+  }
   return Object.freeze({
     nodeId,
-    dimensions: {
-      processAlive: true,
-      clusterMemberHealthy: true,
-      routingReady: true,
-      loadReady: true,
-      placementEligible: true,
-      controlPlaneWritable: true,
-      metadataPublicationHealthy: true,
-      ...(overrides.dimensions || {}),
-    },
+    dimensions,
     reasons: Object.freeze(overrides.reasons || []),
   });
 }
@@ -480,7 +507,12 @@ test('checkSplit - returns blocked result when too few nodes are eligible',
     ]);
     t.same(result.ineligibleNodes, [{
       nodeId: 'node-b',
-      failedDimensions: ['placementEligible', 'controlPlaneWritable'],
+      failedDimensions: [
+        'placementEligible',
+        'controlPlaneWritable',
+        'repairEligible',
+        'controlPlaneRecoveryEligible',
+      ],
       reasonCodes: [
         STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
         ADMISSION_REASON.NO_BUDGET_REGISTERED,
@@ -709,6 +741,89 @@ test('checkSplit - repairs stale connected node readiness from ' +
   );
   t.end();
 });
+
+test('checkReplace - critical admission requests control-plane recovery readiness',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-critical',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+
+    const readinessCalls = [];
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService(
+        {
+          'node-critical': createReadiness('node-critical'),
+        },
+        (call) => readinessCalls.push(call),
+      ),
+    });
+
+    const result = await admission.checkReplace({
+      targetNodeId: 'node-critical',
+      estimatedBytes: NUM.TEN,
+      requiredReplicaCount: 1,
+      isCritical: true,
+    });
+
+    t.equal(result.allowed, true, 'critical admission should allow healthy nodes');
+    t.equal(readinessCalls.length, 1, 'critical admission should consult readiness once');
+    t.equal(
+      readinessCalls[0]?.options?.decisionDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'critical admission should evaluate control-plane recovery eligibility',
+    );
+    t.end();
+  });
+
+test('checkAdd - critical admission requests control-plane recovery readiness',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-critical-add',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+
+    const readinessCalls = [];
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService(
+        {
+          'node-critical-add': createReadiness('node-critical-add'),
+        },
+        (call) => readinessCalls.push(call),
+      ),
+    });
+
+    const result = await admission.checkAdd({
+      targetNodeId: 'node-critical-add',
+      estimatedBytes: NUM.TEN,
+      isCritical: true,
+    });
+
+    t.equal(result.allowed, true, 'critical add admission should allow healthy nodes');
+    t.equal(readinessCalls.length, 1, 'critical add admission should consult readiness once');
+    t.equal(
+      readinessCalls[0]?.options?.decisionDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'critical add admission should evaluate control-plane recovery eligibility',
+    );
+    t.end();
+  });
 
 test('checkAdd reuses cached readiness snapshots for background admission',
   async (t) => {

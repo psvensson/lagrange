@@ -17,6 +17,14 @@ import {BootstrapService} from './bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {BootstrapReadinessState} from './bootstrap/bootstrap-readiness-state.js';
 import {READINESS_EVENT} from './bootstrap/bootstrap-readiness-state-constants.js';
+import {
+  RejoinHintsPersistenceService,
+  persistBootstrapRejoinHints,
+  resolveAutoRejoinStartupDecision,
+} from './bootstrap/rejoin-hints.js';
+import {
+  STARTUP_JOIN_MODE,
+} from './bootstrap/rejoin-hints-constants.js';
 import {LIFECYCLE_REASON} from './bootstrap/lifecycle-controller-constants.js';
 import {AdminWebSocketAPI} from './admin/admin-websocket-api.js';
 import {ADMIN_DEFAULT} from './admin/admin-constants.js';
@@ -58,6 +66,9 @@ import {
 import {
   createControlPlaneRuntimeBundle,
 } from './control-plane/control-plane-runtime-bundle.js';
+import {
+  MembershipLifecycleController,
+} from './control-plane/membership-lifecycle-controller.js';
 import {SPLIT_MERGE_EVENT} from
   './partition/partition-constants.js';
 import {STABILIZATION_RESET_TRIGGER} from
@@ -66,6 +77,9 @@ import {wireMigrationWorkflowOwners} from
   './migration/migration-composition.js';
 import {wireMigrationRecoveryOnLeaderElection} from
   './migration/migration-recovery-trigger.js';
+import {
+  attachSqlRuntimeToStartupOwner,
+} from './bootstrap/shared/startup-sql-runtime-handoff.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -303,6 +317,8 @@ function createAdminAPIWithLiveQuery(options) {
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
     heartbeatService: options.heartbeatService || null,
+    startupRecoveryCoordinator: options.startupRecoveryCoordinator || null,
+    bootstrapReadinessState: options.bootstrapReadinessState || null,
     partitionServicesProvider:
       typeof options.partitionServicesProvider === 'function' ?
         options.partitionServicesProvider :
@@ -511,6 +527,203 @@ function createReadinessStateWithDiagnostics(logger, nodeId) {
 }
 
 /**
+ * Emit one runtime handoff snapshot after bootstrap or join startup.
+ * @param {Object} options
+ * @param {Object} options.logger
+ * @param {string} options.nodeId
+ * @param {string} options.startupBranch
+ * @param {Object|null} options.bootstrapAPI
+ * @param {Object|null} options.startupOwner
+ * @param {Object|null} options.adminRuntime
+ */
+function reportStartupRuntimeHandoff(options) {
+  if (!options?.logger || typeof options.logger.info !== 'function') {
+    return;
+  }
+  options.logger.info(ENTRYPOINT_LOG_MSG.STARTUP_RUNTIME_HANDOFF, {
+    nodeId: options.nodeId,
+    startupBranch: options.startupBranch,
+    startupPhase:
+      options.startupOwner?.phase ||
+      options.bootstrapAPI?.bootstrapService?.phase ||
+      null,
+    bootstrapApiHasSqlQueryEngine:
+      Boolean(options.bootstrapAPI?.sqlQueryEngine),
+    bootstrapApiHasMessageRouter:
+      Boolean(options.bootstrapAPI?.messageRouter),
+    bootstrapApiHasStartupRecoveryCoordinator:
+      Boolean(options.bootstrapAPI?.startupRecoveryCoordinator),
+    adminRuntimeStarted: Boolean(options.adminRuntime?.adminAPI),
+    adminPort: options.adminRuntime?.adminPort ?? null,
+  });
+}
+
+/**
+ * Resolve runtime-facing node addresses from config.
+ * @param {Object} config
+ * @return {{
+ *   restApiPort: number,
+ *   wsPort: number,
+ *   nodeHttpAddress: string,
+ *   advertisedNodeWsAddress: string
+ * }}
+ */
+function resolveRuntimeAddresses(config) {
+  const restApiPort =
+    config.get(CONFIG_KEY.NODE_REST_API_PORT) ||
+    ENTRYPOINT_DEFAULT.REST_API_PORT;
+  const wsPort =
+    config.get(CONFIG_KEY.NODE_WS_PORT) ||
+    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+  const nodeHttpAddress =
+    config.get(CONFIG_KEY.NODE_ADDRESS) ||
+    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+  const advertisedNodeWsAddress =
+    resolveAdvertisedWebSocketAddress({
+      advertisedAddress: config.get(
+        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+      ),
+      nodeAddress: nodeHttpAddress,
+      wsPort,
+      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+    });
+  return {
+    restApiPort,
+    wsPort,
+    nodeHttpAddress,
+    advertisedNodeWsAddress,
+  };
+}
+
+/**
+ * Probe one persisted peer address for auto-rejoin.
+ * @param {string} peerAddress
+ * @return {Promise<boolean>}
+ */
+async function probeAutoRejoinPeerAddress(peerAddress) {
+  const normalizedPeerAddress = String(peerAddress || '');
+  if (normalizedPeerAddress.length === 0) {
+    return false;
+  }
+
+  const baseUrl = normalizedPeerAddress.startsWith('http') ?
+    normalizedPeerAddress :
+    `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${normalizedPeerAddress}`;
+  try {
+    const response = await fetch(
+      `${baseUrl}${ENTRYPOINT_DEFAULT.AUTO_REJOIN_HEALTH_PATH}`,
+      {
+        method: 'GET',
+        signal: AbortSignal.timeout(
+          ENTRYPOINT_DEFAULT.AUTO_REJOIN_PROBE_TIMEOUT_MS,
+        ),
+      },
+    );
+    return response.ok;
+  } catch (_error) {
+    return false;
+  }
+}
+
+/**
+ * Resolve one startup join decision from explicit config or persisted rejoin hints.
+ * @param {Object} options
+ * @param {Object} options.cliArgs
+ * @param {Object} options.env
+ * @param {Object} options.config
+ * @param {Object} options.dataDirectoryManager
+ * @param {Object} options.logger
+ * @return {Promise<{
+ *   seedNodeAddress: string|null,
+ *   startupMode: string,
+ *   source: string,
+ * }>}
+ */
+async function resolveStartupJoinDecision(options) {
+  const explicitSeedNodeAddress = options.cliArgs.seedNodeAddress ||
+    options.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
+  const nodeId = options.config.get(CONFIG_KEY.NODE_ID);
+  const {nodeHttpAddress} = resolveRuntimeAddresses(options.config);
+  const autoRejoinDecision = await resolveAutoRejoinStartupDecision({
+    dataDir: options.dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: nodeHttpAddress,
+    probePeerAddress: probeAutoRejoinPeerAddress,
+  });
+  options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOIN_DECISION, {
+    nodeId,
+    nodeAddress: nodeHttpAddress,
+    explicitSeedNodeAddress: explicitSeedNodeAddress || null,
+    mode: autoRejoinDecision.mode,
+    source: autoRejoinDecision.source,
+    startupMode: autoRejoinDecision.startupMode,
+    peerAddress: autoRejoinDecision.peerAddress || null,
+    durableStateDetected: autoRejoinDecision.durableStateDetected === true,
+    identityMismatch: autoRejoinDecision.identityMismatch === true,
+  });
+  if (explicitSeedNodeAddress) {
+    if (autoRejoinDecision.identityMismatch === true) {
+      throw new Error(autoRejoinDecision.error);
+    }
+    return {
+      seedNodeAddress: explicitSeedNodeAddress,
+      startupMode:
+        autoRejoinDecision.startupMode ===
+          STARTUP_JOIN_MODE.DURABLE_REJOIN ?
+          STARTUP_JOIN_MODE.DURABLE_REJOIN :
+          STARTUP_JOIN_MODE.FRESH_JOIN,
+      source: 'explicit',
+    };
+  }
+  if (autoRejoinDecision.mode === 'fail') {
+    throw new Error(autoRejoinDecision.error);
+  }
+  if (autoRejoinDecision.mode !== 'join') {
+    return {
+      seedNodeAddress: null,
+      startupMode: STARTUP_JOIN_MODE.SEED,
+      source: autoRejoinDecision.source,
+    };
+  }
+
+  options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOINING_CLUSTER, {
+    nodeId,
+    peerAddress: autoRejoinDecision.peerAddress,
+    source: autoRejoinDecision.source,
+    startupMode: autoRejoinDecision.startupMode,
+  });
+  return {
+    seedNodeAddress: autoRejoinDecision.peerAddress,
+    startupMode: autoRejoinDecision.startupMode,
+    source: autoRejoinDecision.source,
+  };
+}
+
+/**
+ * Start durable rejoin-hint persistence for the current runtime.
+ * @param {Object} options
+ * @param {string} options.dataDir
+ * @param {string} options.nodeId
+ * @param {string} options.nodeAddress
+ * @param {string} options.nodeRole
+ * @param {Function} options.getSystemTableCache
+ * @param {Object} options.logger
+ * @return {RejoinHintsPersistenceService}
+ */
+function startRejoinHintsPersistence(options) {
+  const persistence = new RejoinHintsPersistenceService({
+    dataDir: options.dataDir,
+    nodeId: options.nodeId,
+    nodeAddress: options.nodeAddress,
+    nodeRole: options.nodeRole,
+    getSystemTableCache: options.getSystemTableCache,
+    logger: options.logger,
+  });
+  persistence.start();
+  return persistence;
+}
+
+/**
  * Hydrate runtime-owned service references into an already-initialized
  * BootstrapAPI instance.
  * @param {Object} options
@@ -529,6 +742,10 @@ function hydrateBootstrapApiRuntime(options) {
   options.bootstrapAPI.replicaHandler = options.replicaHandler;
   options.bootstrapAPI.epochManager = options.epochManager;
   options.bootstrapAPI.messageRouter = options.messageRouter;
+  if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
+    options.bootstrapAPI.startupRecoveryCoordinator =
+      options.startupRecoveryCoordinator || null;
+  }
 }
 
 /**
@@ -626,6 +843,7 @@ async function createSqlRuntimeComposition(options) {
     serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
     wasmExecutor,
     migrationAutoWire: false,
+    autoStartDistributedTransactionRecovery: false,
   });
 
   wireMigrationWorkflowOwners({
@@ -697,17 +915,71 @@ async function startAdminRuntimeComposition(options) {
     serviceDiagnosticsProvider:
       createServiceDiagnosticsProvider(options.owner),
     heartbeatService: options.owner.heartbeatService,
+    startupRecoveryCoordinator:
+      options.owner.rebalanceCoordinator?.startupRecoveryCoordinator || null,
+    bootstrapReadinessState:
+      options.owner.bootstrapReadinessState || null,
     partitionServicesProvider: () => options.partitionServices,
   });
   const adminAPI = adminStartup.adminAPI;
   const liveQueryWiring = adminStartup.liveQueryWiring;
   const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
   await adminAPI.initialize(adminPort);
+  const logger = options.owner?.logger;
+  if (logger && typeof logger.info === 'function') {
+    logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_STARTED, {
+      nodeId: options.nodeId,
+      adminPort,
+      hasSqlQueryEngine: Boolean(options.sqlQueryEngine),
+      hasMessageRouter: Boolean(options.messageRouter),
+      partitionServiceCount: Number.isFinite(options.partitionServices?.size) ?
+        options.partitionServices.size :
+        null,
+    });
+  }
   return {
+    nodeId: options.nodeId,
     adminAPI,
     liveQueryWiring,
     adminPort,
   };
+}
+
+/**
+ * Attach the SQL engine to an already-started admin runtime.
+ * This allows the local admin health/socket surface to come up before
+ * full cluster publication converges, while SQL-backed admin actions
+ * activate later in the startup sequence.
+ * @param {Object|null} adminRuntime
+ * @param {Object|null} sqlQueryEngine
+ * @return {void}
+ */
+function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
+  if (!adminRuntime || !sqlQueryEngine) {
+    return;
+  }
+  const logger = adminRuntime.adminAPI?.logger;
+  if (typeof adminRuntime.adminAPI?.setSQLQueryEngine === 'function') {
+    adminRuntime.adminAPI.setSQLQueryEngine(sqlQueryEngine);
+    if (logger && typeof logger.info === 'function') {
+      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
+        nodeId: adminRuntime.nodeId || null,
+      });
+    }
+    return;
+  }
+  if (adminRuntime.liveQueryWiring?.liveQueryManager &&
+      typeof adminRuntime.liveQueryWiring.liveQueryManager.initialize ===
+        'function') {
+    adminRuntime.liveQueryWiring.liveQueryManager.initialize({
+      sqlQueryEngine,
+    });
+    if (logger && typeof logger.info === 'function') {
+      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
+        nodeId: adminRuntime.nodeId || null,
+      });
+    }
+  }
 }
 
 /**
@@ -734,6 +1006,7 @@ async function resolveLogsTableServiceFromPersistence(logsPersistence) {
  * @param {Object} options.bootstrapAPI
  * @param {Object|null} options.heartbeatService
  * @param {Object|null} options.logsPersistence
+ * @param {Object|null} options.rejoinHintsPersistence
  * @param {Object|null} options.dynamicConfigWiring
  * @param {Function} options.detachMigrationRecovery
  * @param {Function} options.ownerCleanup
@@ -758,9 +1031,17 @@ function createShutdownSignalHandler(options) {
     try {
       const drainDeadlineMs =
         Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
-      const drainingSnapshot = options.bootstrapAPI.markDraining({
-        drainDeadlineMs,
-      });
+      const drainingSnapshot =
+        typeof options.membershipLifecycleController?.submitDrainIntent ===
+          'function' ?
+          await options.membershipLifecycleController.submitDrainIntent({
+            drainDeadlineMs,
+            reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
+            signal,
+          }) :
+          options.bootstrapAPI.markDraining({
+            drainDeadlineMs,
+          });
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,
         phase: drainingSnapshot?.phase || null,
@@ -777,6 +1058,7 @@ function createShutdownSignalHandler(options) {
         options.logsPersistence,
       );
       await shutdownLogsTablePersistence(logsTableService, options.logger);
+      await options.rejoinHintsPersistence?.stop?.();
       shutdownDynamicConfigWiring(options.dynamicConfigWiring, options.logger);
       if (typeof options.detachMigrationRecovery === 'function') {
         options.detachMigrationRecovery();
@@ -810,6 +1092,98 @@ function registerShutdownSignalHandlers(shutdownHandler) {
 }
 
 /**
+ * Register one-time process lifecycle diagnostics for early exit debugging.
+ * @param {Object} logger
+ * @param {Function} contextProvider
+ */
+function registerProcessLifecycleDiagnostics(logger, contextProvider) {
+  const registrationKey = '__ddbProcessLifecycleDiagnosticsRegistered';
+  if (globalThis[registrationKey]) {
+    return;
+  }
+  globalThis[registrationKey] = true;
+  const resolveContext = () => {
+    if (typeof contextProvider !== 'function') {
+      return {};
+    }
+    try {
+      const context = contextProvider();
+      return context && typeof context === 'object' ? context : {};
+    } catch (_error) {
+      return {};
+    }
+  };
+
+  process.on('beforeExit', (code) => {
+    logger.info(ENTRYPOINT_LOG_MSG.PROCESS_BEFORE_EXIT, {
+      code,
+      ...resolveContext(),
+    });
+  });
+  process.on('exit', (code) => {
+    logger.info(ENTRYPOINT_LOG_MSG.PROCESS_EXIT, {
+      code,
+      ...resolveContext(),
+    });
+  });
+  process.on('uncaughtExceptionMonitor', (error, origin) => {
+    logger.error(ENTRYPOINT_LOG_MSG.PROCESS_UNCAUGHT_EXCEPTION, {
+      origin,
+      error: error?.message || String(error),
+      stack: error?.stack || null,
+      ...resolveContext(),
+    });
+  });
+  process.on('unhandledRejection', (reason) => {
+    logger.error(ENTRYPOINT_LOG_MSG.PROCESS_UNHANDLED_REJECTION, {
+      error: reason?.message || String(reason),
+      stack: reason?.stack || null,
+      ...resolveContext(),
+    });
+  });
+}
+
+/**
+ * Emit a short post-startup liveness pulse to detect early exit or server loss.
+ * @param {Object} options
+ * @param {Object} options.logger
+ * @param {string} options.nodeId
+ * @param {string} options.startupBranch
+ * @param {Object|null} options.bootstrapAPI
+ * @param {Object|null} options.startupOwner
+ */
+function scheduleStartupLivenessPulse(options) {
+  const logger = options?.logger;
+  if (!logger || typeof logger.info !== 'function') {
+    return;
+  }
+  let pulseCount = 0;
+  const timer = setInterval(() => {
+    pulseCount += 1;
+    logger.info(ENTRYPOINT_LOG_MSG.STARTUP_LIVENESS_PULSE, {
+      nodeId: options.nodeId,
+      startupBranch: options.startupBranch,
+      pulseCount,
+      bootstrapApiInitialized:
+        options.bootstrapAPI?.isInitialized?.() === true,
+      bootstrapApiHasFastify: Boolean(options.bootstrapAPI?.fastify),
+      bootstrapApiServerListening:
+        options.bootstrapAPI?.fastify?.server?.listening === true,
+      bootstrapApiHasSqlQueryEngine: Boolean(options.bootstrapAPI?.sqlQueryEngine),
+      bootstrapApiHasMessageRouter: Boolean(options.bootstrapAPI?.messageRouter),
+      startupPhase: options.startupOwner?.phase || null,
+      pid: process.pid,
+    });
+    if (pulseCount >= 10) {
+      clearInterval(timer);
+    }
+  }, 2000);
+  if (typeof timer.unref === 'function') {
+    timer.unref();
+  }
+}
+
+/**
  * Compose and start one joining-node runtime path.
  * @param {Object} options
  * @param {Object} options.config
@@ -817,39 +1191,51 @@ function registerShutdownSignalHandlers(shutdownHandler) {
  * @param {Object} options.dataDirectoryManager
  * @param {Object} options.rolloutControls
  * @param {string} options.seedNodeAddress
+ * @param {string} options.startupMode
  * @param {Object} options.env
  * @return {Promise<void>}
  */
 async function startJoinNode(options) {
   const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
   const seedNodeAddress = String(options.seedNodeAddress || '');
+  const nodeId = config.get(CONFIG_KEY.NODE_ID);
+  const startupMode = typeof options.startupMode === 'string' &&
+    options.startupMode.length > 0 ?
+    options.startupMode :
+    STARTUP_JOIN_MODE.FRESH_JOIN;
   const env = options.env || process.env;
+  const {
+    restApiPort: _restApiPort,
+    wsPort,
+    nodeHttpAddress: joiningNodeAddress,
+    advertisedNodeWsAddress,
+  } = resolveRuntimeAddresses(config);
+
+  try {
+    await persistBootstrapRejoinHints({
+      dataDir: dataDirectoryManager.getDataDir(),
+      nodeId,
+      nodeAddress: joiningNodeAddress,
+      nodeRole: 'joiner',
+      peerAddresses: [seedNodeAddress],
+      clusterNodeCount: 2,
+    });
+  } catch (error) {
+    mainLogger.warn('Failed to persist bootstrap rejoin hints', {
+      nodeId,
+      dataDir: dataDirectoryManager.getDataDir(),
+      error: error.message,
+    });
+  }
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
     seedNodeAddress,
+    startupMode,
   });
 
   const seedUrl = seedNodeAddress.startsWith('http') ?
     seedNodeAddress :
     `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`;
-
-  const restApiPort =
-    config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
-  const wsPort =
-    config.get(CONFIG_KEY.NODE_WS_PORT) ||
-    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
-  const joiningNodeAddress =
-    config.get(CONFIG_KEY.NODE_ADDRESS) ||
-    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
-  const advertisedNodeWsAddress =
-    resolveAdvertisedWebSocketAddress({
-      advertisedAddress: config.get(
-        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
-      ),
-      nodeAddress: joiningNodeAddress,
-      wsPort,
-      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
-    });
   const joiningConfig = {};
   const joinHttpTimeoutMs = parsePositiveTimeoutMs(
     env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
@@ -865,11 +1251,32 @@ async function startJoinNode(options) {
   }
   joiningConfig.autoResumeRetryableFailures = true;
 
-  const nodeId = config.get(CONFIG_KEY.NODE_ID);
   const joinReadinessState = createReadinessStateWithDiagnostics(
     mainLogger,
     nodeId,
   );
+  let joinAdminRuntime = null;
+  let bootstrapAPI = null;
+  const membershipLifecycleController = new MembershipLifecycleController({
+    nodeId,
+    startupMode,
+    delegates: {
+      onDrainIntent: ({intent}) => {
+        if (bootstrapAPI?.markDraining) {
+          return bootstrapAPI.markDraining({
+            drainDeadlineMs: intent.drainDeadlineMs,
+            reasonCode: intent.reasonCode,
+          });
+        }
+        return {
+          phase: null,
+          reasons: intent.reasonCode ? [intent.reasonCode] : [],
+          draining: true,
+          drainDeadlineMs: intent.drainDeadlineMs,
+        };
+      },
+    },
+  });
   const nodeJoiningService = new NodeJoiningService({
     nodeId,
     nodeAddress: joiningNodeAddress,
@@ -879,11 +1286,28 @@ async function startJoinNode(options) {
     dataDir: dataDirectoryManager.getDataDir(),
     rolloutControls,
     readinessState: joinReadinessState,
+    startupMode,
+    membershipLifecycleController,
+    onLocalAdminRuntimeReady: async (runtime) => {
+      if (joinAdminRuntime) {
+        return;
+      }
+      joinAdminRuntime = await startAdminRuntimeComposition({
+        nodeId: runtime.nodeId,
+        systemTableCache: runtime.systemTableCache,
+        cacheMutationTarget:
+          runtime.cacheMutationTarget || runtime.systemTableCache,
+        sqlQueryEngine: null,
+        owner: runtime.owner,
+        messageRouter: runtime.messageRouter,
+        partitionServices: runtime.partitionServices,
+      });
+    },
     config: Object.keys(joiningConfig).length > 0 ?
       joiningConfig :
       undefined,
   });
-  const bootstrapAPI = new BootstrapAPI({
+  bootstrapAPI = new BootstrapAPI({
     seedNodeId: nodeId,
     seedNodeAddress: joiningNodeAddress,
     seedNodeWsAddress: advertisedNodeWsAddress,
@@ -898,6 +1322,7 @@ async function startJoinNode(options) {
     readinessState: joinReadinessState,
     controlPlaneWriteHealthProvider:
       createControlPlaneWriteHealthProvider(nodeJoiningService),
+    runtimeOwner: nodeJoiningService.runtimeDependencyOwner,
     rolloutControls,
   });
 
@@ -938,20 +1363,30 @@ async function startJoinNode(options) {
     replicaHandler: joinResult.replicaHandler,
     epochManager: nodeJoiningService.epochManager,
     messageRouter: joinResult.messageRouter,
+    startupRecoveryCoordinator:
+      nodeJoiningService.rebalanceCoordinator?.startupRecoveryCoordinator ||
+      null,
   });
 
   const joinSqlRuntime = await createSqlRuntimeComposition({
     nodeId,
     systemTableCache,
     messageRouter: joinResult.messageRouter,
-    owner: nodeJoiningService,
+    owner: nodeJoiningService.runtimeDependencyOwner,
     partitionServices: joinResult.partitionServices,
     logger: mainLogger,
   });
   const sqlQueryEngine = joinSqlRuntime.sqlQueryEngine;
   const detachJoinMigrationRecovery =
     joinSqlRuntime.detachMigrationRecovery;
-  bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
+  attachSqlRuntimeToStartupOwner({
+    owner: nodeJoiningService,
+    sqlQueryEngine,
+    systemTableCache,
+    cacheMutationTarget: cacheMutationTarget || systemTableCache,
+    messageRouter: joinResult.messageRouter,
+    partitionServicesProvider: () => joinResult.partitionServices,
+  });
 
   const joinDynamicConfigWiring = await startDynamicConfigWiring({
     nodeId,
@@ -959,26 +1394,55 @@ async function startJoinNode(options) {
     sqlQueryEngine,
     messageGroupServices: joinResult.messageGroupServices,
     partitionServices: joinResult.partitionServices,
-    runtimeOwner: nodeJoiningService,
+    runtimeOwner: nodeJoiningService.runtimeDependencyOwner,
   }, mainLogger);
 
-  const joinAdminRuntime = await startAdminRuntimeComposition({
-    nodeId,
-    systemTableCache,
-    cacheMutationTarget: cacheMutationTarget || systemTableCache,
-    sqlQueryEngine,
-    owner: nodeJoiningService,
-    messageRouter: joinResult.messageRouter,
-    partitionServices: joinResult.partitionServices,
-  });
+  bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
+  if (!joinAdminRuntime) {
+    joinAdminRuntime = await startAdminRuntimeComposition({
+      nodeId,
+      systemTableCache,
+      cacheMutationTarget: cacheMutationTarget || systemTableCache,
+      sqlQueryEngine,
+      owner: nodeJoiningService.runtimeDependencyOwner,
+      messageRouter: joinResult.messageRouter,
+      partitionServices: joinResult.partitionServices,
+    });
+  } else {
+    attachSqlEngineToAdminRuntime(joinAdminRuntime, sqlQueryEngine);
+  }
+
   const adminAPI = joinAdminRuntime.adminAPI;
   const liveQueryWiring = joinAdminRuntime.liveQueryWiring;
   const adminPort = joinAdminRuntime.adminPort;
+  reportStartupRuntimeHandoff({
+    logger: mainLogger,
+    nodeId,
+    startupBranch: 'join',
+    bootstrapAPI,
+    startupOwner: nodeJoiningService,
+    adminRuntime: joinAdminRuntime,
+  });
+  const rejoinHintsPersistence = startRejoinHintsPersistence({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: joiningNodeAddress,
+    nodeRole: 'joiner',
+    getSystemTableCache: () => systemTableCache,
+    logger: mainLogger,
+  });
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
     nodeId,
     adminWebSocketPort: adminPort,
     dataDir: dataDirectoryManager.getDataDir(),
+  });
+  scheduleStartupLivenessPulse({
+    logger: mainLogger,
+    nodeId,
+    startupBranch: 'join',
+    bootstrapAPI,
+    startupOwner: nodeJoiningService,
   });
 
   joinLogsPersistence = startLogsTablePersistence(
@@ -992,8 +1456,10 @@ async function startJoinNode(options) {
     logger: mainLogger,
     nodeId,
     bootstrapAPI,
+    membershipLifecycleController,
     heartbeatService: nodeJoiningService.heartbeatService,
     logsPersistence: joinLogsPersistence,
+    rejoinHintsPersistence,
     dynamicConfigWiring: joinDynamicConfigWiring,
     detachMigrationRecovery: detachJoinMigrationRecovery,
     ownerCleanup: () => nodeJoiningService.cleanup(),
@@ -1016,31 +1482,19 @@ async function startJoinNode(options) {
 async function startSeedNode(options) {
   const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
   const nodeId = config.get(CONFIG_KEY.NODE_ID);
+  const {
+    wsPort,
+    nodeHttpAddress: seedNodeHttpAddress,
+    advertisedNodeWsAddress,
+  } = resolveRuntimeAddresses(config);
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
-
-  const restApiPort =
-    config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
-  const wsPort =
-    config.get(CONFIG_KEY.NODE_WS_PORT) ||
-    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
-  const seedNodeHttpAddress =
-    config.get(CONFIG_KEY.NODE_ADDRESS) ||
-    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
-  const advertisedNodeWsAddress =
-    resolveAdvertisedWebSocketAddress({
-      advertisedAddress: config.get(
-        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
-      ),
-      nodeAddress: seedNodeHttpAddress,
-      wsPort,
-      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
-    });
 
   const readinessState = createReadinessStateWithDiagnostics(
     mainLogger,
     nodeId,
   );
+  let seedAdminRuntime = null;
   const bootstrapService = new BootstrapService({
     nodeId,
     nodeAddress: seedNodeHttpAddress,
@@ -1049,6 +1503,21 @@ async function startSeedNode(options) {
     wsPort: wsPort,
     rolloutControls,
     readinessState,
+    onLocalAdminRuntimeReady: async (runtime) => {
+      if (seedAdminRuntime) {
+        return;
+      }
+      seedAdminRuntime = await startAdminRuntimeComposition({
+        nodeId: runtime.nodeId,
+        systemTableCache: runtime.systemTableCache,
+        cacheMutationTarget:
+          runtime.cacheMutationTarget || runtime.systemTableCache,
+        sqlQueryEngine: null,
+        owner: runtime.owner,
+        messageRouter: runtime.messageRouter,
+        partitionServices: runtime.partitionServices,
+      });
+    },
   });
 
   const bootstrapAPI = new BootstrapAPI({
@@ -1066,6 +1535,8 @@ async function startSeedNode(options) {
     readinessState,
     controlPlaneWriteHealthProvider:
       createControlPlaneWriteHealthProvider(bootstrapService),
+    bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+    runtimeOwner: bootstrapService.runtimeDependencyOwner,
     rolloutControls,
   });
 
@@ -1097,6 +1568,9 @@ async function startSeedNode(options) {
     replicaHandler: bootstrapResult.replicaHandler,
     epochManager: bootstrapResult.epochManager,
     messageRouter: bootstrapResult.messageRouter,
+    startupRecoveryCoordinator:
+      bootstrapService.rebalanceCoordinator?.startupRecoveryCoordinator ||
+      null,
   });
 
   try {
@@ -1112,13 +1586,21 @@ async function startSeedNode(options) {
     nodeId,
     systemTableCache,
     messageRouter: bootstrapResult.messageRouter,
-    owner: bootstrapService,
+    owner: bootstrapService.runtimeDependencyOwner,
     partitionServices: bootstrapResult.partitionServices,
     logger: mainLogger,
   });
   const sqlQueryEngine = seedSqlRuntime.sqlQueryEngine;
   const detachSeedMigrationRecovery =
     seedSqlRuntime.detachMigrationRecovery;
+  attachSqlRuntimeToStartupOwner({
+    owner: bootstrapService,
+    sqlQueryEngine,
+    systemTableCache,
+    cacheMutationTarget: systemTableCache,
+    messageRouter: bootstrapResult.messageRouter,
+    partitionServicesProvider: () => bootstrapResult.partitionServices,
+  });
 
   const seedDynamicConfigWiring = await startDynamicConfigWiring({
     nodeId,
@@ -1126,29 +1608,55 @@ async function startSeedNode(options) {
     sqlQueryEngine,
     messageGroupServices: bootstrapResult.messageGroupServices,
     partitionServices: bootstrapResult.partitionServices,
-    runtimeOwner: bootstrapService,
+    runtimeOwner: bootstrapService.runtimeDependencyOwner,
   }, mainLogger);
 
   bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
-
-  const seedAdminRuntime = await startAdminRuntimeComposition({
-    nodeId,
-    systemTableCache,
-    cacheMutationTarget: systemTableCache,
-    sqlQueryEngine,
-    owner: bootstrapService,
-    messageRouter: bootstrapResult.messageRouter,
-    partitionServices: bootstrapResult.partitionServices,
-  });
+  if (!seedAdminRuntime) {
+    seedAdminRuntime = await startAdminRuntimeComposition({
+      nodeId,
+      systemTableCache,
+      cacheMutationTarget: systemTableCache,
+      sqlQueryEngine,
+      owner: bootstrapService.runtimeDependencyOwner,
+      messageRouter: bootstrapResult.messageRouter,
+      partitionServices: bootstrapResult.partitionServices,
+    });
+  } else {
+    attachSqlEngineToAdminRuntime(seedAdminRuntime, sqlQueryEngine);
+  }
   const adminAPI = seedAdminRuntime.adminAPI;
   const liveQueryWiring = seedAdminRuntime.liveQueryWiring;
   const adminPort = seedAdminRuntime.adminPort;
+  reportStartupRuntimeHandoff({
+    logger: mainLogger,
+    nodeId,
+    startupBranch: 'seed',
+    bootstrapAPI,
+    startupOwner: bootstrapService,
+    adminRuntime: seedAdminRuntime,
+  });
+  const rejoinHintsPersistence = startRejoinHintsPersistence({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: seedNodeHttpAddress,
+    nodeRole: 'seed',
+    getSystemTableCache: () => systemTableCache,
+    logger: mainLogger,
+  });
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
     nodeId,
     restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
     adminWebSocketPort: adminPort,
     dataDir: dataDirectoryManager.getDataDir(),
+  });
+  scheduleStartupLivenessPulse({
+    logger: mainLogger,
+    nodeId,
+    startupBranch: 'seed',
+    bootstrapAPI,
+    startupOwner: bootstrapService,
   });
 
   seedLogsPersistence = startLogsTablePersistence(
@@ -1164,6 +1672,7 @@ async function startSeedNode(options) {
     bootstrapAPI,
     heartbeatService: bootstrapService.heartbeatService,
     logsPersistence: seedLogsPersistence,
+    rejoinHintsPersistence,
     dynamicConfigWiring: seedDynamicConfigWiring,
     detachMigrationRecovery: detachSeedMigrationRecovery,
     ownerCleanup: () => bootstrapService.shutdown(),
@@ -1210,6 +1719,10 @@ async function main() {
   // Create subsystem-specific loggers
   const mainLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.MAIN);
   const configLogger = loggingService.forSubsystem(ENTRYPOINT_SUBSYSTEM.CONFIG);
+  registerProcessLifecycleDiagnostics(mainLogger, () => ({
+    nodeId: config.get(CONFIG_KEY.NODE_ID),
+    pid: process.pid,
+  }));
 
   const selectedRaftProvider = getProcessRaftProvider(process.env);
   mainLogger.info(RAFT_PROVIDER_LOG_MSG.SELECTED, {
@@ -1248,17 +1761,23 @@ async function main() {
   }
 
   // Check if we're joining an existing cluster or starting as seed node
-  const seedNodeAddress = cliArgs.seedNodeAddress ||
-    process.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
+  const startupJoinDecision = await resolveStartupJoinDecision({
+    cliArgs,
+    env: process.env,
+    config,
+    dataDirectoryManager,
+    logger: mainLogger,
+  });
   const rolloutControls = resolveRolloutControlsFromEnvironment(process.env);
 
-  if (seedNodeAddress) {
+  if (startupJoinDecision.seedNodeAddress) {
     await startJoinNode({
       config,
       mainLogger,
       dataDirectoryManager,
       rolloutControls,
-      seedNodeAddress,
+      seedNodeAddress: startupJoinDecision.seedNodeAddress,
+      startupMode: startupJoinDecision.startupMode,
       env: process.env,
     });
     return;

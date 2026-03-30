@@ -28,6 +28,8 @@ import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
+import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
+import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
 import {
   waitForLocalQueryTransportReadiness,
 } from './shared/local-query-transport-readiness.js';
@@ -68,6 +70,10 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
+import {
+  resolveMembershipJoinIntentType,
+  MembershipLifecycleController,
+} from '../control-plane/membership-lifecycle-controller.js';
 import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
@@ -119,9 +125,6 @@ import {
   CreateMessageGroupPhase,
 } from './phases/create-message-group-phase.js';
 import {
-  JoinMessageGroupPhase,
-} from './phases/join-message-group-phase.js';
-import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
 } from '../runtime/control-plane-rollout-controls.js';
@@ -161,6 +164,12 @@ import {RAFT_ROLE} from '../raft/constants.js';
 
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
+import {
+  StartupRuntimeHandoffOwner,
+} from './owners/startup-runtime-handoff-owner.js';
+import {
+  JoinMessageGroupRuntimeOwner,
+} from './owners/join-message-group-runtime-owner.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 import {
   createJoinStartupPlan,
@@ -178,6 +187,9 @@ import {
 import {
   activateMessageGroupServiceRows,
 } from './shared/message-group-service-activation.js';
+import {
+  activateSteadyStateRuntimeHandoff,
+} from './shared/startup-sql-runtime-handoff.js';
 import {
   extractJoinSchemaVersionFromRecord,
   compareJoinSchemaVersions,
@@ -215,6 +227,7 @@ const JOIN_SESSION_PHASE = Object.freeze({
 import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
+import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 
 const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
   ReplicaStatus.ACTIVE,
@@ -350,6 +363,16 @@ class NodeJoiningService extends EventEmitter {
       options.startupMode.length > NUM.ZERO ?
         options.startupMode :
         STARTUP_JOIN_MODE.FRESH_JOIN;
+    this.membershipLifecycleController =
+      options.membershipLifecycleController &&
+        typeof options.membershipLifecycleController.submitJoinIntent ===
+          TYPEOF.FUNCTION ?
+        options.membershipLifecycleController :
+        new MembershipLifecycleController({
+          nodeId: this.nodeId,
+          startupMode: this.startupMode,
+          now: this.now,
+        });
 
     // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl = typeof options.httpPost === TYPEOF.FUNCTION ?
@@ -385,15 +408,85 @@ class NodeJoiningService extends EventEmitter {
     this.endpointService = null;
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
-    this.controlPlaneBackgroundWritersActivated = false;
-    this.controlPlaneHeartbeatStartOptions = null;
 
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
-    this.runtimeDriverRegistry = runtimeWiring.runtimeDriverRegistry;
-    this.serviceRuntimeLifecycle = runtimeWiring.serviceRuntimeLifecycle;
+    const self = this;
+    this.runtimeDependencyOwner = {
+      runtimeDriverRegistry: runtimeWiring.runtimeDriverRegistry,
+      serviceRuntimeLifecycle: runtimeWiring.serviceRuntimeLifecycle,
+      get logger() {
+        return self.logger;
+      },
+      get transport() {
+        return self.transport;
+      },
+      get messageRouter() {
+        return self.messageRouter;
+      },
+      get rpcClient() {
+        return self.rpcClient;
+      },
+      get cdcIntegrationService() {
+        return self.cdcIntegrationService;
+      },
+      get replicaHandler() {
+        return self.replicaHandler;
+      },
+      get replicaStateMachine() {
+        return self.replicaStateMachine;
+      },
+      get heartbeatService() {
+        return self.heartbeatService;
+      },
+      get leaseService() {
+        return self.leaseService;
+      },
+      get endpointService() {
+        return self.endpointService;
+      },
+      get dispatchService() {
+        return self.dispatchService;
+      },
+      get tablePolicyService() {
+        return self.tablePolicyService;
+      },
+      get latencyTopology() {
+        return self.latencyTopology;
+      },
+      get runtimeServiceHandler() {
+        return self.runtimeServiceHandler;
+      },
+      get rebalanceCoordinator() {
+        return self.rebalanceCoordinator;
+      },
+      get controlPlaneReadinessService() {
+        return self.rebalanceCoordinator?.controlPlaneReadinessService || null;
+      },
+      get bootstrapReadinessState() {
+        return self.joinReadinessState;
+      },
+      get serviceLifecycleManager() {
+        return self.serviceLifecycleManager;
+      },
+      get serviceReconciler() {
+        return self.serviceReconciler;
+      },
+    };
+    Object.defineProperties(this, {
+      runtimeDriverRegistry: {
+        configurable: true,
+        enumerable: true,
+        get: () => this.runtimeDependencyOwner.runtimeDriverRegistry,
+      },
+      serviceRuntimeLifecycle: {
+        configurable: true,
+        enumerable: true,
+        get: () => this.runtimeDependencyOwner.serviceRuntimeLifecycle,
+      },
+    });
     this.runtimeDrivers = runtimeWiring.drivers;
 
     // RPC client for control plane dispatch
@@ -414,9 +507,7 @@ class NodeJoiningService extends EventEmitter {
     this.cdcSubscriptionsActive = false;
     // Control plane target address for control messages
     this.controlPlaneTargetAddress = null;
-    this.messageGroupServiceHandlerRegistered = false;
-    this.messageGroupServiceEndpointsPublished = false;
-    this.joinMembershipPublished = false;
+    this.messageGroupServiceHandler = null;
     this.controlPlaneKernelIngress =
       options.controlPlaneKernelIngress instanceof ControlPlaneKernelIngress ?
         options.controlPlaneKernelIngress :
@@ -452,6 +543,59 @@ class NodeJoiningService extends EventEmitter {
       owner: 'createRuntimeStartupWiring',
       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+    });
+    this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
+      delegates: {
+        getCompatibilityService: () => this,
+        getLeaseService: () => this.leaseService,
+        getLeaseRunningState: () => LEASE_STATE.RUNNING,
+        getHeartbeatService: () => this.heartbeatService,
+        getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
+        buildHeartbeatStartOptions: () =>
+          this.buildControlPlaneHeartbeatStartOptions(),
+        activateDistributedTransactionRecoveryOnWriterActivation: false,
+        activateDistributedTransactionRecovery: () => {
+          const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine;
+          if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
+            TYPEOF.FUNCTION) {
+            return;
+          }
+          void sqlQueryEngine.activateDistributedTransactionRecovery();
+        },
+        flushDeferredCreateSelfHostedMetadata: () => {
+          if (typeof this.createMessageGroupPhase
+            ?.flushDeferredCreateSelfHostedMetadata !== TYPEOF.FUNCTION) {
+            return;
+          }
+          void this.createMessageGroupPhase
+            .flushDeferredCreateSelfHostedMetadata()
+            .catch((error) => {
+              this.logger.warn(
+                'Deferred CREATE_SELF_HOSTED message-group metadata publication failed',
+                {
+                  nodeId: this.nodeId,
+                  error: error?.message || String(error),
+                },
+              );
+            });
+        },
+        startLatencyTopologyLifecycle: () => {
+          const topologyOwners = assertCritical(
+            this.latencyTopology,
+            JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+          );
+          LatencyTopologySetup.start(topologyOwners);
+          this.logger.info(JOINING_LOG_MSG.LATENCY_TOPOLOGY_STARTED, {
+            nodeId: this.nodeId,
+            owner: 'LatencyTopologySetup',
+          });
+        },
+        onControlPlaneBackgroundWritersActivated: () => {
+          this.logger.info(JOINING_LOG_MSG.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
+            nodeId: this.nodeId,
+          });
+        },
+      },
     });
     this.joiningPhaseOwners = createJoiningPhaseOwners(this);
 
@@ -496,6 +640,7 @@ class NodeJoiningService extends EventEmitter {
       delegates: {
         getSeedNodeAddress: () => this.seedNodeAddress,
         getNodeAddress: () => this.nodeAddress,
+        getJoinStartupMode: () => this.startupMode,
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getNow: () => this.now,
@@ -618,6 +763,7 @@ class NodeJoiningService extends EventEmitter {
         },
         getLifecycleStateMachine: () =>
           this.lifecycleStateMachine,
+        getSeedNodeId: () => this.seedNodeId,
         getMessageRouter: () => this.messageRouter,
         getCdcIntegrationService: () =>
           this.cdcIntegrationService,
@@ -666,18 +812,12 @@ class NodeJoiningService extends EventEmitter {
           this.registerNodeInCluster(),
         sendControlPlaneNodeStateUpdate: (options) =>
           this.sendControlPlaneNodeStateUpdate(options),
-        setJoinMembershipPublished: (value) => {
-          this.joinMembershipPublished = value === true;
-        },
-        getJoinMembershipPublished: () =>
-          this.joinMembershipPublished,
+        getJoinLifecycleIntentType: () =>
+          resolveMembershipJoinIntentType(this.startupMode),
         getJoinStartupMode: () =>
           this.startupMode,
         getNodeCapabilities: () =>
           this.getNodeCapabilities(),
-        setMessageGroupServiceEndpointsPublished: (value) => {
-          this.messageGroupServiceEndpointsPublished = value === true;
-        },
         subscribeToCDCEvents: () =>
           this.subscribeToCDCEvents(),
         createCdcPipelineReadinessGate: (cache) =>
@@ -777,8 +917,8 @@ class NodeJoiningService extends EventEmitter {
       });
 
     // Join message group phase (extracted helper)
-    this.joinMessageGroupPhase =
-      new JoinMessageGroupPhase({
+    this.joinMessageGroupRuntimeOwner =
+      new JoinMessageGroupRuntimeOwner({
         nodeId: this.nodeId,
         delegates: {
           getLogger: () => this.logger,
@@ -1040,11 +1180,17 @@ class NodeJoiningService extends EventEmitter {
       },
 
       // -- Membership state --
-      getJoinMembershipPublished: () =>
-        self.joinMembershipPublished,
-      setJoinMembershipPublished: (value) => {
-        self.joinMembershipPublished = value === true;
+      getRegisteredJoinNodeId: () => {
+        const systemTableCache =
+          NodeService.getInstance().getSystemTableCache();
+        const nodeRow = systemTableCache?.get?.(
+          TABLES.NODES,
+          self.nodeId,
+        );
+        return nodeRow ? self.nodeId : null;
       },
+      getJoinLifecycleIntentType: () =>
+        resolveMembershipJoinIntentType(self.startupMode),
 
       // -- Resource teardown helpers --
       getCdcIntegrationService: () =>
@@ -1177,7 +1323,6 @@ class NodeJoiningService extends EventEmitter {
     this.ensureLatencyTopologyOwners();
     this.initializeReplicaHandler();
     this.initializeMessageGroupServiceHandler();
-    this.messageGroupServiceHandlerRegistered = true;
     await this.initializeControlPlaneService();
     this.initializeRuntimeServiceHandler();
     this.openExternalTransportAdmission();
@@ -1249,10 +1394,13 @@ class NodeJoiningService extends EventEmitter {
         messageGroupService.completeJoinConvergence();
       }
     }
-    this.activateControlPlaneBackgroundWriters();
-    this.flushDeferredCreateSelfHostedMetadata();
-    this.activateDistributedTransactionRecovery();
-    this.startLatencyTopologyLifecycle();
+    activateSteadyStateRuntimeHandoff({
+      owner: this.runtimeHandoffOwner,
+      activateControlPlaneBackgroundWriters: true,
+      flushDeferredCreateSelfHostedMetadata: true,
+      activateDistributedTransactionRecovery: true,
+      startLatencyTopologyLifecycle: true,
+    });
     this.phase = JoiningPhase.COMPLETE;
     const duration = this.now() - this.startTime;
 
@@ -1326,8 +1474,9 @@ class NodeJoiningService extends EventEmitter {
         phase: JOIN_SESSION_PHASE.READY_LEASE_ASSIGNED,
         segment: JOIN_PLAN_SEGMENT.READINESS,
         run: async () => {
-          await this.joinReadinessEvaluator
-            .waitForCanonicalJoinReadinessConvergence();
+          await startupPipelineRunner.run({
+            phases: joinPlan.segments[JOIN_PLAN_SEGMENT.READINESS],
+          });
           await this.signalReadyForReplicas();
         },
       },
@@ -1338,7 +1487,7 @@ class NodeJoiningService extends EventEmitter {
         shouldRerun: () => {
           return this.phase !== JoiningPhase.COMPLETE ||
             this.lifecycleStateMachine.getState() !== NodeState.READY ||
-            this.controlPlaneBackgroundWritersActivated !== true;
+            this.hasActiveControlPlaneBackgroundWriters() !== true;
         },
         run: async () => {
           this.completeSuccessfulJoin();
@@ -1354,6 +1503,17 @@ class NodeJoiningService extends EventEmitter {
    */
   async join() {
     this.startTime = this.now();
+    const membershipLifecycleIntent =
+      await this.membershipLifecycleController.submitJoinIntent({
+        nodeId: this.nodeId,
+        joinSessionId: this.joinSessionId,
+        nodeAddress: this.nodeAddress,
+        seedNodeAddress: this.seedNodeAddress,
+        startupMode: this.startupMode,
+      });
+    const membershipLifecycleIntentType =
+      membershipLifecycleIntent?.intentType ||
+      resolveMembershipJoinIntentType(this.startupMode);
 
     this.logger.info(JOINING_LOG_MSG.STARTING, {
       nodeId: this.nodeId,
@@ -1361,6 +1521,7 @@ class NodeJoiningService extends EventEmitter {
       seedNodeAddress: this.seedNodeAddress,
       lifecycleState: this.lifecycleStateMachine.getState(),
       joinSessionId: this.joinSessionId,
+      membershipLifecycleIntentType,
     });
 
     const resumePolicy = this.resolveRetryableJoinResumePolicy();
@@ -1643,10 +1804,6 @@ class NodeJoiningService extends EventEmitter {
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       try {
         await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
-        this.controlPlaneHeartbeatStartOptions = {
-          getStats: () => nodeService.getNodeStats(),
-          capabilities,
-        };
 
         this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
           nodeId: this.nodeId,
@@ -1741,10 +1898,35 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   disableSteadyStateControlPlaneReporter() {
+    if (this.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN) {
+      return;
+    }
     if (typeof this.heartbeatService?.setNodeStateReporter !== TYPEOF.FUNCTION) {
       return;
     }
     this.heartbeatService.setNodeStateReporter(null);
+  }
+
+  resolveControlPlaneNodeStateUpdateTimeoutMs(options = {}) {
+    const explicitTimeoutMs = Number(options.timeoutMs);
+    if (Number.isFinite(explicitTimeoutMs) && explicitTimeoutMs > NUM.ZERO) {
+      return Math.floor(explicitTimeoutMs);
+    }
+
+    const leadershipWaitTimeoutMs = Number(
+      this.config?.leadershipWaitTimeoutMs,
+    );
+    if (Number.isFinite(leadershipWaitTimeoutMs) &&
+        leadershipWaitTimeoutMs > NUM.ZERO) {
+      return Math.floor(leadershipWaitTimeoutMs);
+    }
+
+    const httpTimeoutMs = Number(this.config?.httpTimeoutMs);
+    if (Number.isFinite(httpTimeoutMs) && httpTimeoutMs > NUM.ZERO) {
+      return Math.floor(httpTimeoutMs);
+    }
+
+    return null;
   }
 
   /**
@@ -1754,27 +1936,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   activateControlPlaneBackgroundWriters() {
-    if (this.controlPlaneBackgroundWritersActivated) {
-      return;
-    }
-
-    if (typeof this.heartbeatService
-      ?.setVerifyReporterVisibilityOnSuccess === TYPEOF.FUNCTION) {
-      this.heartbeatService.setVerifyReporterVisibilityOnSuccess(false);
-    }
-
-    if (this.leaseService) {
-      this.leaseService.start();
-    }
-
-    if (this.heartbeatService && this.controlPlaneHeartbeatStartOptions) {
-      this.heartbeatService.start(this.controlPlaneHeartbeatStartOptions);
-    }
-
-    this.controlPlaneBackgroundWritersActivated = true;
-    this.logger.info(JOINING_LOG_MSG.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
-      nodeId: this.nodeId,
-    });
+    return this.runtimeHandoffOwner.activateControlPlaneBackgroundWriters();
   }
 
   /**
@@ -1787,12 +1949,18 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   activateDistributedTransactionRecovery() {
-    const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine;
-    if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
-      TYPEOF.FUNCTION) {
-      return;
-    }
-    void sqlQueryEngine.activateDistributedTransactionRecovery();
+    return this.runtimeHandoffOwner.activateDistributedTransactionRecovery();
+  }
+
+  hasActiveControlPlaneBackgroundWriters() {
+    return this.runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters();
+  }
+
+  buildControlPlaneHeartbeatStartOptions() {
+    return {
+      getStats: () => NodeService.getInstance().getNodeStats(),
+      capabilities: this.getNodeCapabilities(),
+    };
   }
 
   /**
@@ -1803,21 +1971,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   flushDeferredCreateSelfHostedMetadata() {
-    if (typeof this.createMessageGroupPhase
-      ?.flushDeferredCreateSelfHostedMetadata !== TYPEOF.FUNCTION) {
-      return;
-    }
-    void this.createMessageGroupPhase
-      .flushDeferredCreateSelfHostedMetadata()
-      .catch((error) => {
-        this.logger.warn(
-          'Deferred CREATE_SELF_HOSTED message-group metadata publication failed',
-          {
-            nodeId: this.nodeId,
-            error: error?.message || String(error),
-          },
-        );
-      });
+    return this.runtimeHandoffOwner.flushDeferredCreateSelfHostedMetadata();
   }
 
   /**
@@ -2438,7 +2592,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   assertReplicaStartupOwnership(replicaId) {
-    return this.joinMessageGroupPhase
+    return this.joinMessageGroupRuntimeOwner
       .assertReplicaStartupOwnership(replicaId);
   }
 
@@ -2450,7 +2604,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseJoinExistingMessageGroup(assignment) {
-    return this.joinMessageGroupPhase
+    return this.joinMessageGroupRuntimeOwner
       .phaseJoinExistingMessageGroup(assignment);
   }
 
@@ -2473,6 +2627,28 @@ class NodeJoiningService extends EventEmitter {
       );
   }
 
+  hasPublishedLocalServiceEndpoints() {
+    const systemTableCache =
+      NodeService.getInstance().getSystemTableCache();
+    const localEndpointRows = systemTableCache?.filter?.(
+      TABLES.SERVICE_ENDPOINTS,
+      (row) => row?.[COLUMN.NODE_ID] === this.nodeId,
+    ) ||
+      (systemTableCache?.getAll?.(TABLES.SERVICE_ENDPOINTS) || [])
+        .filter((row) => row?.[COLUMN.NODE_ID] === this.nodeId);
+    return localEndpointRows.length > 0;
+  }
+
+  getRegisteredJoinNodeId() {
+    const systemTableCache =
+      NodeService.getInstance().getSystemTableCache();
+    const nodeRow = systemTableCache?.get?.(
+      TABLES.NODES,
+      this.nodeId,
+    );
+    return nodeRow ? this.nodeId : null;
+  }
+
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
@@ -2485,8 +2661,8 @@ class NodeJoiningService extends EventEmitter {
         );
       },
       messageRouter: this.messageRouter,
-      handlerRegistered: this.messageGroupServiceHandlerRegistered,
-      endpointsPublished: this.messageGroupServiceEndpointsPublished,
+      messageGroupServiceHandler: this.messageGroupServiceHandler,
+      endpointsPublished: this.hasPublishedLocalServiceEndpoints(),
       messageGroupServices: this.messageGroupServices,
     });
   }
@@ -2678,10 +2854,15 @@ class NodeJoiningService extends EventEmitter {
       };
 
       try {
+        const deliveryTimeoutMs =
+          this.resolveControlPlaneNodeStateUpdateTimeoutMs(options);
         const deliveryResult = await this.messageRouter.deliver(
           targetAddress,
           message,
-          {deliveryPriority: 'critical'},
+          {
+            deliveryPriority: 'critical',
+            timeoutMs: deliveryTimeoutMs,
+          },
         );
         if (deliveryResult?.acknowledged !== true) {
           throw new Error(
@@ -3432,6 +3613,7 @@ class NodeJoiningService extends EventEmitter {
         options.deliveryPriority.length > NUM.ZERO ?
           options.deliveryPriority :
           (blocking ? 'critical' : 'background'),
+      queryTimeoutMs: this.resolveAuthoritativeBackfillQueryTimeoutMs(options),
       preferBootstrapSnapshot:
         typeof options.preferBootstrapSnapshot === TYPEOF.BOOLEAN ?
           options.preferBootstrapSnapshot :
@@ -3445,6 +3627,31 @@ class NodeJoiningService extends EventEmitter {
       pressureReason: pressureDecision?.reason || null,
       pressureSummary: pressureDecision?.summary || null,
     };
+  }
+
+  /**
+   * Resolve the timeout budget for authoritative join backfill reads.
+   * Backfill runs inside the querying_state phase and should inherit the
+   * broader join-readiness budget rather than the shorter seed-contact HTTP
+   * timeout.
+   * @param {Object} [options={}]
+   * @return {number}
+   * @private
+   */
+  resolveAuthoritativeBackfillQueryTimeoutMs(options = {}) {
+    if (Number.isFinite(options.queryTimeoutMs) &&
+        options.queryTimeoutMs > NUM.ZERO) {
+      return Math.floor(options.queryTimeoutMs);
+    }
+    if (Number.isFinite(this.config?.leadershipWaitTimeoutMs) &&
+        this.config.leadershipWaitTimeoutMs > NUM.ZERO) {
+      return Math.floor(this.config.leadershipWaitTimeoutMs);
+    }
+    if (Number.isFinite(this.config?.httpTimeoutMs) &&
+        this.config.httpTimeoutMs > NUM.ZERO) {
+      return Math.floor(this.config.httpTimeoutMs);
+    }
+    return JOINING_DEFAULT.leadershipWaitTimeoutMs;
   }
 
   /**
@@ -3483,7 +3690,10 @@ class NodeJoiningService extends EventEmitter {
     const routedResult = await sqlQueryEngine.executeQuery(
       sql,
       [],
-      {deliveryPriority: options.deliveryPriority},
+      {
+        deliveryPriority: options.deliveryPriority,
+        timeoutMs: options.queryTimeoutMs,
+      },
     );
     if (routedResult?.success) {
       rowSets.push(Array.isArray(routedResult.rows) ? routedResult.rows : []);
@@ -3687,13 +3897,16 @@ class NodeJoiningService extends EventEmitter {
     for (const rowSet of rowSets) {
       const rows = Array.isArray(rowSet) ? rowSet : [];
       for (const row of rows) {
-        const key = row?.[keyField] ?? row?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
+        const canonicalRow = canonicalizeSystemTableRow(tableName, row);
+        const key =
+          canonicalRow?.[keyField] ??
+          canonicalRow?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
         if (typeof key === TYPEOF.UNDEFINED || key === null) {
           continue;
         }
         const existing = mergedRows.get(key);
-        if (!existing || this.isBackfillRowNewer(row, existing)) {
-          mergedRows.set(key, row);
+        if (!existing || this.isBackfillRowNewer(canonicalRow, existing)) {
+          mergedRows.set(key, canonicalRow);
         }
       }
     }
@@ -4647,7 +4860,6 @@ class NodeJoiningService extends EventEmitter {
 
     if (result) {
       this.messageGroupServiceHandler = result.messageGroupServiceHandler;
-      this.messageGroupServiceHandlerRegistered = true;
     }
   }
 
@@ -4713,7 +4925,7 @@ class NodeJoiningService extends EventEmitter {
       controlPlaneReadinessService:
         this.rebalanceCoordinator?.controlPlaneReadinessService || null,
       defaultRoutingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       migrationAutoWire: false,
       autoStartDistributedTransactionRecovery: false,
     });
@@ -4788,15 +5000,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   startLatencyTopologyLifecycle() {
-    const topologyOwners = assertCritical(
-      this.latencyTopology,
-      JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
-    );
-    LatencyTopologySetup.start(topologyOwners);
-    this.logger.info(JOINING_LOG_MSG.LATENCY_TOPOLOGY_STARTED, {
-      nodeId: this.nodeId,
-      owner: 'LatencyTopologySetup',
-    });
+    return this.runtimeHandoffOwner.startLatencyTopologyLifecycle();
   }
 
   /**

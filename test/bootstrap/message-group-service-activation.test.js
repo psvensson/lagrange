@@ -16,7 +16,7 @@ test('activateMessageGroupServiceRows requires endpoint publication',
         messageRouter: {
           isRegistered: () => true,
         },
-        handlerRegistered: true,
+        messageGroupServiceHandler: {},
         endpointsPublished: false,
         messageGroupServices: new Map([
           ['mg-1-r1', {groupId: 'mg-1'}],
@@ -40,7 +40,7 @@ test('activateMessageGroupServiceRows requires per-replica handler registration'
           isRegistered: (address) =>
             address === 'node-a/message-group/mg-1-r1',
         },
-        handlerRegistered: true,
+        messageGroupServiceHandler: {},
         endpointsPublished: true,
         messageGroupServices: new Map([
           ['mg-1-r1', {groupId: 'mg-1'}],
@@ -77,7 +77,7 @@ test('activateMessageGroupServiceRows can defer transient writer failures',
         messageRouter: {
           isRegistered: () => true,
         },
-        handlerRegistered: true,
+        messageGroupServiceHandler: {},
         endpointsPublished: true,
         deferTransientFailures: true,
         onDeferredActivation: (details) => deferred.push(details),
@@ -109,7 +109,7 @@ test('activateMessageGroupServiceRows supports callback activator path',
         messageRouter: {
           isRegistered: () => true,
         },
-        handlerRegistered: true,
+        messageGroupServiceHandler: {},
         endpointsPublished: true,
         messageGroupServices: new Map([
           ['mg-1-r1', {groupId: 'mg-1'}],

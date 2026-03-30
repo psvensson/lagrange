@@ -9,6 +9,7 @@ import {
   SYSTEM_TABLES,
   CDC_OPERATIONS,
 } from '../../src/cache/system-table-cache.js';
+import {TABLES} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
@@ -127,6 +128,25 @@ test('SystemTableCache - getAll returns all records', async (t) => {
   t.equal(results.length, 2, 'Should return 2 records');
   t.ok(results.some((r) => r.id === 'node-1'), 'Should include node-1');
   t.ok(results.some((r) => r.id === 'node-2'), 'Should include node-2');
+});
+
+test('SystemTableCache - control plane publications is a valid cached table', async (t) => {
+  const cache = new SystemTableCache();
+
+  cache.applySystemTableChange(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    CDC_OPERATIONS.INSERT,
+    {
+      publication_id: 'publication-1',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 1,
+      status: 'ACK_PENDING',
+    },
+  );
+
+  const results = cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS);
+  t.equal(results.length, 1, 'Should cache control-plane publication rows');
+  t.equal(results[0].publication_id, 'publication-1');
 });
 
 test('SystemTableCache - find returns first matching record', async (t) => {
@@ -320,6 +340,105 @@ test(
       'newer field values must not be overwritten by stale rows');
   },
 );
+
+test('SystemTableCache - control plane publications newer updates preserve acknowledgement unions',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATIONS.INSERT,
+      {
+        publication_id: 'publication-merge-1',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 1,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2'],
+        updated_at: 200,
+        created_at: 100,
+      },
+    );
+
+    cache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATIONS.UPDATE,
+      {
+        publication_id: 'publication-merge-1',
+        status: 'ACK_PENDING',
+        acknowledged_node_ids: ['node-1', 'node-3'],
+        updated_at: 300,
+      },
+    );
+
+    const publicationRow = cache.get(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'publication-merge-1',
+    );
+    t.same(
+      publicationRow.acknowledged_node_ids,
+      ['node-1', 'node-2', 'node-3'],
+      'newer partial updates should not discard previously observed acknowledgements',
+    );
+    t.equal(
+      publicationRow.status,
+      'PUBLISHED',
+      'the cache should promote publication status once the merged ack set is complete',
+    );
+  });
+
+test('SystemTableCache - stale control plane publication updates still union acknowledgements',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATIONS.INSERT,
+      {
+        publication_id: 'publication-merge-2',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 2,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-3'],
+        updated_at: 300,
+        created_at: 100,
+      },
+    );
+
+    cache.applySystemTableChange(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      CDC_OPERATIONS.UPDATE,
+      {
+        publication_id: 'publication-merge-2',
+        status: 'ACK_PENDING',
+        acknowledged_node_ids: ['node-1', 'node-2'],
+        updated_at: 200,
+      },
+    );
+
+    const publicationRow = cache.get(
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+      'publication-merge-2',
+    );
+    t.same(
+      publicationRow.acknowledged_node_ids,
+      ['node-1', 'node-2', 'node-3'],
+      'stale publication updates should still contribute missing acknowledgements',
+    );
+    t.equal(
+      publicationRow.updated_at,
+      300,
+      'stale publication merges must preserve the newer timestamp',
+    );
+    t.equal(
+      publicationRow.status,
+      'PUBLISHED',
+      'stale publication merges should still advance status when the union completes',
+    );
+  });
 
 test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   const cache = new SystemTableCache();

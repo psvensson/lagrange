@@ -588,6 +588,8 @@ class MessageRouter extends EventEmitter {
     this.messageCount = TRANSPORT_NUM.ZERO;
     this.isShuttingDown = false;
     this.inProcessTransport = false;
+    this.externalAdmissionEnabled =
+      options.externalAdmissionEnabled !== false;
 
     // Per-node outbound delivery queues
     this.outboundQueues = new Map();
@@ -620,6 +622,25 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Toggle whether remote incoming node connections are admitted.
+   * Self-connection remains allowed so local routing can initialize
+   * before bootstrap/join ownership opens external transport.
+   * @param {boolean} enabled
+   * @return {void}
+   */
+  setExternalAdmissionEnabled(enabled) {
+    this.externalAdmissionEnabled = enabled !== false;
+  }
+
+  /**
+   * Return whether remote incoming node connections are currently admitted.
+   * @return {boolean}
+   */
+  isExternalAdmissionEnabled() {
+    return this.externalAdmissionEnabled === true;
+  }
+
+  /**
    * Initialize the message router.
    * Starts WebSocket server and establishes self-connection for uniform routing.
    * Requirements: 2.2, 8.2
@@ -628,7 +649,24 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<void>}
    */
   async initialize(options = {}) {
+    const shouldStartServer = options.startServer === true && this.wsPort;
     if (this.initialized) {
+      let startedServerNow = false;
+      if (shouldStartServer && !this.server) {
+        await this.startServer();
+        startedServerNow = true;
+      }
+      if (shouldStartServer && !this.hasSelfConnection()) {
+        try {
+          await this.connectToSelf();
+        } catch (error) {
+          if (startedServerNow && this.server) {
+            await new Promise((resolve) => this.server.close(resolve));
+            this.server = null;
+          }
+          throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
+        }
+      }
       return;
     }
     this.isShuttingDown = false;
@@ -641,7 +679,7 @@ class MessageRouter extends EventEmitter {
     });
 
     // Start WebSocket server if port specified
-    if (options.startServer && this.wsPort) {
+    if (shouldStartServer) {
       await this.startServer();
 
       // Establish self-connection for uniform message routing
@@ -1437,6 +1475,29 @@ class MessageRouter extends EventEmitter {
     // Update connection with node ID
     const connection = this.nodeConnections.get(connectionId);
     if (connection && connection.isIncoming) {
+      if (!this.externalAdmissionEnabled && nodeId !== this.nodeId) {
+        connection.state = ConnectionState.CLOSED;
+        this.retireConnection(connection);
+        this.nodeConnections.delete(connectionId);
+        this.logger.info(
+          'Rejecting incoming connection while external admission is closed',
+          {
+            connectionId,
+            remoteNodeId: nodeId,
+            localNodeId: this.nodeId,
+          },
+        );
+        try {
+          ws.close();
+        } catch (error) {
+          this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
+            connectionId,
+            error: error.message,
+          });
+        }
+        return;
+      }
+
       const normalizedAddress =
         normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
@@ -2615,6 +2676,11 @@ class MessageRouter extends EventEmitter {
       await this.initialize();
     }
 
+    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) &&
+      options.timeoutMs > TRANSPORT_NUM.ZERO ?
+      Math.floor(options.timeoutMs) :
+      this.messageTimeoutMs;
+
     const messageId = message.messageId || uuidv4();
     const correlationId = message.correlationId || messageId;
     const requestId = resolveRequestIdFromMessage(message);
@@ -2675,6 +2741,7 @@ class MessageRouter extends EventEmitter {
         targetNodeId, correlationId, {
           ...options,
           deliverySource,
+          timeoutMs: deliveryTimeoutMs,
         },
       );
     }
@@ -2739,6 +2806,10 @@ class MessageRouter extends EventEmitter {
     correlationId,
     options = {},
   ) {
+    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) &&
+      options.timeoutMs > TRANSPORT_NUM.ZERO ?
+      Math.floor(options.timeoutMs) :
+      this.messageTimeoutMs;
     // Register pending response before send to avoid races where the
     // SERVICE_RESPONSE arrives immediately after ACK.
     const responsePromise = this.registerPendingResponse(
@@ -2777,6 +2848,7 @@ class MessageRouter extends EventEmitter {
               payload,
               targetNodeId,
               correlationId,
+              deliveryTimeoutMs,
             );
           }
         }
@@ -2810,6 +2882,7 @@ class MessageRouter extends EventEmitter {
           payload,
           targetNodeId,
           correlationId,
+          deliveryTimeoutMs,
         );
       }, {
         deliveryPriority: options.deliveryPriority,
@@ -2872,7 +2945,7 @@ class MessageRouter extends EventEmitter {
     }
 
     // Start response timeout only after ACK succeeded.
-    this.armPendingResponseTimeout(messageId, this.messageTimeoutMs);
+    this.armPendingResponseTimeout(messageId, deliveryTimeoutMs);
 
     try {
       if (earlyResponseError) {
@@ -3484,6 +3557,7 @@ class MessageRouter extends EventEmitter {
     payload,
     targetNodeId,
     correlationId,
+    timeoutMs = null,
   ) {
     const connection = await this.ensureNodeConnection(
       targetNodeId,
@@ -3527,6 +3601,7 @@ class MessageRouter extends EventEmitter {
       payload,
       targetNodeId,
       correlationId,
+      timeoutMs,
     );
   }
 
@@ -3698,7 +3773,15 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Send result.
    * @private
    */
-  sendMessage(connection, targetAddress, messageId, payload, targetNodeId, correlationId) {
+  sendMessage(
+    connection,
+    targetAddress,
+    messageId,
+    payload,
+    targetNodeId,
+    correlationId,
+    timeoutMs = null,
+  ) {
     return new Promise((resolve, reject) => {
       const message = {
         type: RouterMessageType.SERVICE_MESSAGE,
@@ -3709,6 +3792,11 @@ class MessageRouter extends EventEmitter {
         payload,
         timestamp: Date.now(),
       };
+
+      const deliveryTimeoutMs = Number.isFinite(timeoutMs) &&
+        timeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(timeoutMs) :
+        this.messageTimeoutMs;
 
       const failBeforeSend = () => {
         const activeConnection = this.nodeConnections.get(targetNodeId) || connection;
@@ -3762,7 +3850,7 @@ class MessageRouter extends EventEmitter {
             ),
           },
         ));
-      }, this.messageTimeoutMs);
+      }, deliveryTimeoutMs);
 
       // Track pending message
       this.pendingMessages.set(messageId, {

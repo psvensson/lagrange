@@ -99,7 +99,8 @@ function createTrackedJoiningService(cleanupContext) {
   service.sendControlPlaneNodeStateUpdate = async (options) => {
     tracking.nodeStateUpdates.push(options);
   };
-  service.joinMembershipPublished = Boolean(cleanupContext.registeredNodeId);
+  service.joinCleanupHandler.delegates.getRegisteredJoinNodeId = () =>
+    cleanupContext.registeredNodeId;
 
   // Mock message group services
   const messageGroupServices = new Map();

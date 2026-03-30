@@ -8,22 +8,37 @@
 import {v4 as uuidv4, v5 as uuidv5} from 'uuid';
 import {createHash} from 'node:crypto';
 import http from 'node:http';
+import {promises as fs} from 'node:fs';
+import {dirname, resolve as resolvePath} from 'node:path';
 import {DockerProvider} from './docker-provider.js';
 import {ChaosPrimitives} from './chaos.js';
 import {LoadGenerator} from './load-generator.js';
 import {buildServiceDiscoverySql} from './node-client.js';
 import {ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
+import {TABLES} from '../../../src/constants/index.js';
+import {INVARIANT_SEVERITY} from '../../../src/invariants/invariant-catalog.js';
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON,
+  PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
+  PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+  PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
+  PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
   waitForConvergence,
   assertConsistency,
   waitForConsistencyConvergence,
   assertDataIntegrity,
 } from './assertions.js';
+import {summarizeInvariantBreaches} from './invariant-breaches.js';
 import {LogCollector} from './log-collector.js';
 import {LogAnalyzer} from './log-analyzer.js';
 import {PlaybackRecorder} from './playback-recorder.js';
 import {TraceArtifactRecorder} from './trace-artifact-recorder.js';
+import {classifyActiveGateClosureWitness} from './active-gate-closure-classification.js';
 import {
+  BENCHMARK_DEFAULTS,
   PORTS,
   TIMEOUTS,
   LABELS,
@@ -45,6 +60,7 @@ import {
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
+const RESTART_POLL_INTERVAL_MS = 500;
 const LOAD_READINESS_STABLE_WINDOW_MS = 5000;
 const LOAD_READINESS_STABILITY_TIMEOUT_MS = 30000;
 const BOOTSTRAP_PROGRESS_TIMEOUT_MAX_MULTIPLIER = 3;
@@ -59,11 +75,14 @@ const UNKNOWN_PHASE = 'unknown';
 const UNKNOWN_REASON = 'unknown';
 const DATA_DIR_PATH = '/data';
 const ZERO = 0;
+const ONE = 1;
 const MIN_TIMEOUT_MS = 1;
 const HTTP_OK_LOWER = 200;
 const HTTP_OK_UPPER = 299;
 const FETCH_TIMEOUT_MS = 1000;
 const CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 3000;
+const CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS = 500;
+const CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS = 3000;
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
 const BOOTSTRAP_READY_STABLE_WINDOW_MS = 2000;
 const ADMIN_QUERY_TIMEOUT_MS = 15000;
@@ -100,6 +119,11 @@ const CDC_EVENT_MESSAGE_TYPE = 'cdc_event';
 const LIVE_QUERY_EVENT_MESSAGE_TYPE = 'live_query_event';
 const LIVE_QUERY_INITIAL_MESSAGE_TYPE = 'live_query_initial';
 const LOGS_TABLE_NAME = 'logs';
+const QUIESCENCE_REASON_IN_FLIGHT_PREFIX = 'replica_operations_in_flight=';
+const QUIESCENCE_REASON_LEADERSHIP_PREFIX = 'leadership_unstable=';
+const QUIESCENCE_REASON_SNAPSHOT_ERROR_PREFIX = 'snapshot_query_error=';
+const QUIESCENCE_REASON_CRITICAL_SYSTEM_SPREAD_PREFIX =
+  'critical_system_spread_gap=';
 const REACHABILITY_PROBE_SQL = 'SELECT node_id FROM nodes LIMIT 1';
 const REACHABILITY_SOURCE_BOOTSTRAP_HEALTH = 'bootstrap_health';
 const REACHABILITY_SOURCE_ADMIN_HEALTH = 'admin_health';
@@ -109,6 +133,68 @@ const REACHABILITY_STATUS_HTTP = 'http_status_';
 const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
 const ACTIVE_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
 const ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX = 'admin_probe_error=';
+const ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING =
+  'publication_convergence_missing';
+const ACTIVE_PROBE_REASON_PUBLICATION_NOT_PUBLISHED_PREFIX =
+  'publication_not_published=';
+const ACTIVE_PROBE_REASON_PUBLICATION_PENDING_ACK_PREFIX =
+  'publication_pending_ack=';
+const ACTIVE_PROBE_REASON_PUBLICATION_MISSING_ACTIVE_NODE_PREFIX =
+  'publication_missing_active_node=';
+const ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING =
+  'priority_control_plane_spread_pending';
+const ACTIVE_PROBE_REASON_PRIORITY_RECOVERY_PENDING =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const ACTIVE_PROBE_REASON_CONTROL_PLANE_DEPENDENCY_UNAVAILABLE =
+  'CONTROL_PLANE_DEPENDENCY_UNAVAILABLE';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS = 'status';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY = 'status_query';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK =
+  'status_query_fallback';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS = 'bootstrap_readiness';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS = 'traffic_readiness';
+const ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION =
+  'startup_admin_projection';
+const ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX =
+  'readiness_probe_timeout_fallback=';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_BOOTSTRAP_JOIN_DURING_RECOVERY =
+  'priority_recovery_bootstrap_ready_allows_join_during_priority_recovery';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_TRAFFIC_GATE_DURING_PRIORITY_RECOVERY =
+  'priority_recovery_readyz_closed_during_priority_recovery';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_CLUSTER_ACTIVE_REQUIRES_CONVERGENCE =
+  'priority_recovery_cluster_active_requires_publication_convergence_and_priority_spread';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_BOOTSTRAP_JOIN_DURING_RECOVERY =
+  'priority_recovery_bootstrap_join_not_admitted_during_recovery';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_TRAFFIC_GATE_DURING_RECOVERY =
+  'priority_recovery_readyz_not_closed_during_priority_recovery';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_CLUSTER_ACTIVE_REQUIRES_CONVERGENCE =
+  'priority_recovery_cluster_marked_active_without_convergence';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_SCOPE_CLUSTER = 'cluster';
+const ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM =
+  'distributed_harness_cluster_active_gate';
+const ACTIVE_WAIT_NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
+const ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE =
+  'priority_recovery_invariant_breach';
+const ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX = 'error:';
+const ACTIVE_WAIT_INACTIVE_SUMMARY_STATE_PREFIX = 'state:';
+const ACTIVE_WAIT_BLOCKER_INACTIVE_NODES_PREFIX = 'inactive_nodes=';
+const ACTIVE_WAIT_BLOCKER_SNAPSHOT_COVERAGE_PREFIX = 'snapshot_coverage=';
+const ACTIVE_WAIT_BLOCKER_SNAPSHOT_ERROR = 'snapshot_error';
+const ACTIVE_WAIT_BLOCKER_PUBLICATION_GATE_PREFIX = 'publication_gate=';
+const ACTIVE_WAIT_BLOCKER_PRIORITY_RECOVERY_PROGRESS_CLASS_PREFIX =
+  'priority_recovery_progress_class=';
+const ACTIVE_WAIT_BLOCKER_READY = 'ready';
+const ACTIVE_WAIT_BLOCKER_NONE = 'none';
+const ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+const ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
+const ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHING = 'PUBLISHING';
+const ACTIVE_WAIT_PUBLICATION_STATUS_PREPARED = 'PREPARED';
+const ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX =
+  'active_wait_no_progress_coordinator_cycles=';
+const ACTIVE_WAIT_STALLED_MESSAGE_PREFIX =
+  'Cluster ACTIVE wait stalled with no meaningful progress ';
+const ACTIVE_WAIT_INVARIANT_BREACH_MESSAGE_PREFIX =
+  'Cluster ACTIVE wait invariant breach ';
 const STATUS_ACTIVE_LOWER = ACTIVE_STATE.toLowerCase();
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CONNECTING = 0;
@@ -120,6 +206,8 @@ const PLAYBACK_ENTITY_CLUSTER = 'cluster';
 const LOAD_RUN_ENTITY = 'load-run';
 const LOAD_PROGRESS_INTERVAL_MS = 1000;
 const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
+const CONTROL_SNAPSHOT_READINESS_DIMENSION_CLUSTER_MEMBER_HEALTHY =
+  'clusterMemberHealthy';
 const SERVICE_DISCOVERY_SERVICES_FIELD = 'services';
 const SERVICE_DISCOVERY_SERVICE_PROTOCOL_FIELD = 'protocol';
 const SERVICE_DISCOVERY_SERVICE_IDS_FIELD = 'serviceIds';
@@ -157,7 +245,19 @@ const STARTUP_GATE_STATE = Object.freeze({
   SEED_JOIN_READY: STARTUP_GATE_STATE_SEED_JOIN_READY,
   CLUSTER_ACTIVE: STARTUP_GATE_STATE_CLUSTER_ACTIVE,
 });
+const CLUSTER_READINESS_MODE_STARTUP = 'startup';
+const CLUSTER_READINESS_MODE_LOAD = 'load';
 const STARTUP_GATE_WAITING_EVENT_INTERVAL = 20;
+const ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES = 12;
+const ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS = Object.freeze({
+  ELIGIBLE_NO_OPERATION: PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
+  OPERATION_NO_TRANSITIONS:
+    PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
+  LEARNER_NEVER_PROMOTABLE:
+    PRIORITY_RECOVERY_BLOCKER_REASON.LEARNER_NEVER_PROMOTABLE,
+  RECOVERY_ELIGIBLE_EXCLUDED:
+    PRIORITY_RECOVERY_BLOCKER_REASON.RECOVERY_ELIGIBLE_EXCLUDED,
+});
 const READINESS_PHASE_RANK = Object.freeze({
   INIT: 0,
   CONTROL_READY: 1,
@@ -169,6 +269,13 @@ const STARTUP_ACTIVE_PROJECTION_REASON = Object.freeze(new Set([
   'local_query_transport_not_ready',
   'readiness_stable_window_pending',
 ]));
+const STARTUP_RECOVERY_STAGE_RANK_CONTROL_PLANE_RECOVERY_READY = 2;
+const CONTROL_PLANE_QUIESCENCE_CRITICAL_TABLES = Object.freeze([
+  TABLES.REPLICA_OPERATIONS,
+  TABLES.SQL_TRANSACTIONS,
+  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+  TABLES.SQL_WRITE_OPERATIONS,
+]);
 const CHAOS_FAULT_STATUS_INJECTED = 'injected';
 const CHAOS_FAULT_STATUS_RECOVERED = 'recovered';
 const CHAOS_RECOVERY_ACTIONS = new Set([
@@ -297,9 +404,19 @@ const REUSE_NODE_ID_PREFIX = 'reuse-node-';
 const REUSE_NODE_ID_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 const REUSE_CONTAINER_NAME_PREFIX = 'ddb-test-reuse';
 const REUSE_ENTRYPOINT = Object.freeze(['sh', '-lc']);
+const REUSE_CONTROL_DIRNAME = 'reuse-control';
+const REUSE_CONTROL_MOUNT_PATH = '/harness-control';
+const REUSE_RESET_FLAG_FILENAME = 'reset-data-on-start';
 const REUSE_START_COMMAND =
-  'rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js';
+  'if [ -f ' + REUSE_CONTROL_MOUNT_PATH + '/' + REUSE_RESET_FLAG_FILENAME +
+  ' ]; then rm -rf /data/* && rm -f ' +
+  REUSE_CONTROL_MOUNT_PATH + '/' + REUSE_RESET_FLAG_FILENAME +
+  '; fi; exec node --max-old-space-size=1536 /app/src/index.js';
 const REUSE_START_COMMAND_ARGS = Object.freeze([REUSE_START_COMMAND]);
+const REUSE_LEASE_DIRNAME = '.tmp';
+const REUSE_LEASE_FILE_PREFIX = 'distributed-harness-reuse';
+const REUSE_LEASE_POLL_INTERVAL_MS = 250;
+const REUSE_LEASE_MIN_TIMEOUT_MS = 5000;
 const CONTAINER_STOP_NOT_RUNNING_PATTERN = 'is not running';
 const CONTAINER_STOP_NOT_FOUND_PATTERN = 'no such container';
 const ADMIN_SOCKET_LANE_DEFAULT = 'default';
@@ -352,6 +469,18 @@ function httpRequest(options = {}) {
       if (!includeBody) {
         res.resume();
         resolve(res.statusCode);
+        return;
+      }
+
+      if (typeof res.setEncoding !== 'function' ||
+          typeof res.on !== 'function') {
+        if (typeof res.resume === 'function') {
+          res.resume();
+        }
+        resolve({
+          status: res.statusCode,
+          body: null,
+        });
         return;
       }
 
@@ -523,6 +652,52 @@ function formatSnapshotCoverage(snapshotCoverage) {
   ) ?
     Math.floor(snapshotCoverage.selectedCapturedAtMs) :
     null;
+  const selectedAdminReady = snapshotCoverage.selectedAdminReady === true ?
+    true :
+    (snapshotCoverage.selectedAdminReady === false ? false : null);
+  const selectedReachableBy =
+    typeof snapshotCoverage.selectedReachableBy === 'string' &&
+      snapshotCoverage.selectedReachableBy.length > ZERO ?
+      snapshotCoverage.selectedReachableBy :
+      null;
+  const selectedReachabilityError =
+    typeof snapshotCoverage.selectedReachabilityError === 'string' &&
+      snapshotCoverage.selectedReachabilityError.length > ZERO ?
+      snapshotCoverage.selectedReachabilityError :
+      null;
+  const selectedPublicationConvergence =
+    snapshotCoverage.selectedPublicationConvergence &&
+      typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
+      snapshotCoverage.selectedPublicationConvergence :
+      null;
+  const publicationEpoch = Number.isFinite(
+    selectedPublicationConvergence?.publicationEpoch,
+  ) ?
+    Math.floor(selectedPublicationConvergence.publicationEpoch) :
+    null;
+  const publicationStatus = typeof selectedPublicationConvergence
+    ?.publicationStatus === 'string' ?
+    selectedPublicationConvergence.publicationStatus.toUpperCase() :
+    null;
+  const pendingAckCount = Array.isArray(
+    selectedPublicationConvergence?.pendingAckNodeIds,
+  ) ?
+    selectedPublicationConvergence.pendingAckNodeIds.length :
+    ZERO;
+  const missingPublishedCount = Array.isArray(
+    snapshotCoverage?.selectedMissingPublishedNodeIds,
+  ) ?
+    snapshotCoverage.selectedMissingPublishedNodeIds.length :
+    ZERO;
+  const prioritySpreadSatisfied =
+    selectedPublicationConvergence?.priorityPartitionSummary &&
+      typeof selectedPublicationConvergence.priorityPartitionSummary ===
+        'object' ?
+      selectedPublicationConvergence.priorityPartitionSummary.satisfied :
+      null;
+  const priorityRecoveryProgressClassCount = summarizePriorityRecoveryProgressClasses(
+    snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots || null,
+  ).unresolvedClassCount;
   return String(bestCoverageNodeCount) +
     '/' +
     String(expectedNodeCount) +
@@ -531,7 +706,1196 @@ function formatSnapshotCoverage(snapshotCoverage) {
       '') +
     (selectedCapturedAtMs !== null ?
       '#ts=' + String(selectedCapturedAtMs) :
+      '') +
+    (selectedAdminReady !== null ?
+      '#adminReady=' + String(selectedAdminReady) :
+      '') +
+    (selectedReachableBy ?
+      '#via=' + selectedReachableBy :
+      '') +
+    (selectedReachabilityError ?
+      '#adminError=' + selectedReachabilityError :
+      '') +
+    (publicationEpoch !== null ?
+      '#epoch=' + String(publicationEpoch) :
+      '') +
+    (publicationStatus ?
+      '#pub=' + publicationStatus :
+      '') +
+    (pendingAckCount > ZERO ?
+      '#pendingAck=' + String(pendingAckCount) :
+      '') +
+    (missingPublishedCount > ZERO ?
+      '#missingPublished=' + String(missingPublishedCount) :
+      '') +
+    (prioritySpreadSatisfied === false ?
+      '#prioritySpread=pending' :
+      (prioritySpreadSatisfied === true ?
+        '#prioritySpread=ready' :
+        '')) +
+    (Number.isInteger(priorityRecoveryProgressClassCount) &&
+      priorityRecoveryProgressClassCount > ZERO ?
+      '#priorityRecovery=' + String(priorityRecoveryProgressClassCount) :
       '');
+}
+
+/**
+ * Evaluate whether load-mode startup can trust published membership convergence.
+ * @param {Object|null} snapshotCoverage
+ * @param {string[]} expectedNodeIds
+ * @returns {Object}
+ */
+function evaluateLoadPublishedConvergence(snapshotCoverage, expectedNodeIds = []) {
+  const expectedPublishedNodeIds = normalizeDistinctStringArray(expectedNodeIds);
+  const publicationConvergence =
+    snapshotCoverage?.selectedPublicationConvergence &&
+      typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
+      snapshotCoverage.selectedPublicationConvergence :
+      null;
+  const publicationStatus = typeof publicationConvergence?.publicationStatus ===
+    'string' ?
+    publicationConvergence.publicationStatus.toUpperCase() :
+    null;
+  const publishedActiveNodeIds = normalizeDistinctStringArray(
+    publicationConvergence?.publishedActiveNodeIds,
+  );
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    publicationConvergence?.pendingAckNodeIds,
+  );
+  const priorityPartitionSummary =
+    publicationConvergence?.priorityPartitionSummary &&
+      typeof publicationConvergence.priorityPartitionSummary === 'object' ?
+      publicationConvergence.priorityPartitionSummary :
+      null;
+  const reasons = [];
+
+  if (!publicationConvergence) {
+    reasons.push(ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING);
+  }
+  if (publicationStatus !== 'PUBLISHED') {
+    reasons.push(
+      ACTIVE_PROBE_REASON_PUBLICATION_NOT_PUBLISHED_PREFIX +
+      String(publicationStatus || 'unknown'),
+    );
+  }
+  if (pendingAckNodeIds.length > ZERO) {
+    reasons.push(
+      ACTIVE_PROBE_REASON_PUBLICATION_PENDING_ACK_PREFIX +
+      String(pendingAckNodeIds.length),
+    );
+  }
+  const missingPublishedNodeIds = expectedPublishedNodeIds.filter((nodeId) => {
+    return !publishedActiveNodeIds.includes(nodeId);
+  });
+  for (const nodeId of missingPublishedNodeIds) {
+    reasons.push(
+      ACTIVE_PROBE_REASON_PUBLICATION_MISSING_ACTIVE_NODE_PREFIX +
+      nodeId,
+    );
+  }
+  if (priorityPartitionSummary?.satisfied === false) {
+    reasons.push(ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING);
+  }
+
+  return {
+    ready: reasons.length === ZERO,
+    reasons: Object.freeze(reasons),
+    publicationStatus,
+    pendingAckNodeIds,
+    missingPublishedNodeIds,
+    priorityPartitionSummary,
+  };
+}
+
+function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
+  const readinessMode = options.readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+    CLUSTER_READINESS_MODE_LOAD :
+    CLUSTER_READINESS_MODE_STARTUP;
+  const publicationConvergenceGate =
+    options.publicationConvergenceGate &&
+      typeof options.publicationConvergenceGate === 'object' ?
+      options.publicationConvergenceGate :
+      {ready: true, reasons: []};
+  const gateReasons = normalizeDistinctStringArray(
+    publicationConvergenceGate.reasons,
+  );
+  const nodeDiagnostics = Array.isArray(options.nodeDiagnostics) ?
+    options.nodeDiagnostics :
+    [];
+  const prioritySpreadPending = gateReasons.includes(
+    ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING,
+  );
+  const bootstrapAdmittedNodeIds = nodeDiagnostics
+    .filter((diagnostic) =>
+      diagnostic?.active === true &&
+      diagnostic?.activitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
+    )
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const trafficBlockedNodeIds = nodeDiagnostics
+    .filter((diagnostic) =>
+      diagnostic?.activitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
+      diagnostic?.active === false,
+    )
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const trafficPriorityRecoveryBlockedNodeIds = nodeDiagnostics
+    .filter((diagnostic) => {
+      if (diagnostic?.activitySource !==
+            ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS ||
+          diagnostic?.active !== false) {
+        return false;
+      }
+      const reasons = normalizeDistinctStringArray(diagnostic?.reasons);
+      return reasons.includes(ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING) ||
+        reasons.includes(ACTIVE_PROBE_REASON_PRIORITY_RECOVERY_PENDING) ||
+        reasons.includes(
+          ACTIVE_PROBE_REASON_CONTROL_PLANE_DEPENDENCY_UNAVAILABLE,
+        );
+    })
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const trafficAdmittedNodeIds = nodeDiagnostics
+    .filter((diagnostic) =>
+      diagnostic?.activitySource ===
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS &&
+      diagnostic?.active === true,
+    )
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const nonTrafficAdmittedNodeIds = nodeDiagnostics
+    .filter((diagnostic) =>
+      diagnostic?.active === true &&
+      diagnostic?.activitySource !==
+        ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
+    )
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const admittedNodeIds = normalizeDistinctStringArray([
+    ...trafficAdmittedNodeIds,
+    ...nonTrafficAdmittedNodeIds,
+  ]);
+  const readinessTimeoutFallbackAdmittedNodeIds = nodeDiagnostics
+    .filter((diagnostic) => {
+      if (diagnostic?.active !== true ||
+          diagnostic?.activitySource !==
+            ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK) {
+        return false;
+      }
+      const reasons = normalizeDistinctStringArray(diagnostic?.reasons);
+      return reasons.some((reason) => reason.startsWith(
+        ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX,
+      ));
+    })
+    .map((diagnostic) => String(diagnostic.nodeId || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+  const deferredAdmittedNodeIds =
+    readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      prioritySpreadPending ?
+      readinessTimeoutFallbackAdmittedNodeIds :
+      [];
+  const deferredAdmittedNodeIdSet = new Set(deferredAdmittedNodeIds);
+  const effectiveAdmittedNodeIds = admittedNodeIds.filter((nodeId) => {
+    return !deferredAdmittedNodeIdSet.has(nodeId);
+  });
+  const expectedBlockedNodeCount = nodeDiagnostics.length;
+  const observedBlockedNodeCount = Math.max(
+    ZERO,
+    expectedBlockedNodeCount - effectiveAdmittedNodeIds.length,
+  );
+  const invariants = [];
+
+  const bootstrapJoinDuringRecoveryPassed =
+    readinessMode === CLUSTER_READINESS_MODE_STARTUP ?
+      (!prioritySpreadPending || bootstrapAdmittedNodeIds.length > ZERO) :
+      true;
+  invariants.push({
+    id: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_BOOTSTRAP_JOIN_DURING_RECOVERY,
+    invariantId:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_BOOTSTRAP_JOIN_DURING_RECOVERY,
+    reasonCode:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_BOOTSTRAP_JOIN_DURING_RECOVERY,
+    severity: INVARIANT_SEVERITY.ERROR,
+    scope: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_SCOPE_CLUSTER,
+    owningSubsystem:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM,
+    passed: bootstrapJoinDuringRecoveryPassed,
+    details: {
+      mode: readinessMode,
+      prioritySpreadPending,
+      bootstrapAdmittedNodeIds,
+    },
+  });
+
+  const trafficGateDuringRecoveryPassed =
+    readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+      (!prioritySpreadPending ||
+        (expectedBlockedNodeCount > ZERO &&
+          effectiveAdmittedNodeIds.length === ZERO)) :
+      true;
+  invariants.push({
+    id: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_TRAFFIC_GATE_DURING_PRIORITY_RECOVERY,
+    invariantId:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_TRAFFIC_GATE_DURING_PRIORITY_RECOVERY,
+    reasonCode:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_TRAFFIC_GATE_DURING_RECOVERY,
+    severity: INVARIANT_SEVERITY.ERROR,
+    scope: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_SCOPE_CLUSTER,
+    owningSubsystem:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM,
+    passed: trafficGateDuringRecoveryPassed,
+    details: {
+      mode: readinessMode,
+      prioritySpreadPending,
+      expectedBlockedNodeCount,
+      observedBlockedNodeCount,
+      trafficBlockedNodeIds,
+      trafficPriorityRecoveryBlockedNodeIds,
+      trafficAdmittedNodeIds,
+      nonTrafficAdmittedNodeIds,
+      observedAdmittedNodeIds: admittedNodeIds,
+      deferredAdmittedNodeIds,
+      violatingNodeIds: effectiveAdmittedNodeIds,
+    },
+  });
+
+  const clusterActiveRequiresConvergencePassed =
+    options.allActive === true ?
+      publicationConvergenceGate.ready === true :
+      true;
+  invariants.push({
+    id: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_CLUSTER_ACTIVE_REQUIRES_CONVERGENCE,
+    invariantId:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_ID_CLUSTER_ACTIVE_REQUIRES_CONVERGENCE,
+    reasonCode:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_REASON_CLUSTER_ACTIVE_REQUIRES_CONVERGENCE,
+    severity: INVARIANT_SEVERITY.ERROR,
+    scope: ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_SCOPE_CLUSTER,
+    owningSubsystem:
+      ACTIVE_WAIT_PRIORITY_RECOVERY_INVARIANT_OWNING_SUBSYSTEM,
+    passed: clusterActiveRequiresConvergencePassed,
+    details: {
+      mode: readinessMode,
+      allActive: options.allActive === true,
+      publicationConvergenceReady: publicationConvergenceGate.ready === true,
+      publicationConvergenceReasons: gateReasons,
+    },
+  });
+
+  const failingInvariantIds = invariants
+    .filter((invariant) => invariant.passed !== true)
+    .map((invariant) => invariant.id);
+  const failingInvariantReasonCodes = invariants
+    .filter((invariant) => invariant.passed !== true)
+    .map((invariant) => invariant.reasonCode)
+    .filter((reasonCode) => typeof reasonCode === 'string' &&
+      reasonCode.length > ZERO);
+  return {
+    invariants: Object.freeze(invariants.map((invariant) =>
+      Object.freeze({
+        ...invariant,
+        details: Object.freeze({...invariant.details}),
+      }))),
+    failingInvariantIds: Object.freeze(failingInvariantIds),
+    failingInvariantReasonCodes:
+      Object.freeze(failingInvariantReasonCodes),
+    passed: failingInvariantIds.length === ZERO,
+  };
+}
+
+function formatPublicationConvergenceGate(publicationConvergenceGate) {
+  if (!publicationConvergenceGate ||
+      typeof publicationConvergenceGate !== 'object') {
+    return 'none';
+  }
+  if (publicationConvergenceGate.ready === true) {
+    return 'ready';
+  }
+  const reasons = Array.isArray(publicationConvergenceGate.reasons) ?
+    publicationConvergenceGate.reasons :
+    [];
+  if (reasons.length > ZERO) {
+    return reasons.join(',');
+  }
+  return 'blocked';
+}
+
+function normalizeActiveWaitPublicationStatus(status) {
+  if (typeof status !== 'string') {
+    return null;
+  }
+  const normalized = status.trim().toUpperCase();
+  return normalized.length > ZERO ? normalized : null;
+}
+
+function resolveActiveWaitPublicationStatusRank(status) {
+  const normalizedStatus = normalizeActiveWaitPublicationStatus(status);
+  if (normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED) {
+    return 3;
+  }
+  if (normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING) {
+    return 2;
+  }
+  if (normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHING ||
+      normalizedStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PREPARED) {
+    return 1;
+  }
+  return ZERO;
+}
+
+function buildActiveWaitProgressSnapshot(
+  probeResult = {},
+  expectedNodeCount = ZERO,
+) {
+  const nodeDiagnostics = Array.isArray(probeResult?.nodeDiagnostics) ?
+    probeResult.nodeDiagnostics :
+    [];
+  const activeNodeCount = nodeDiagnostics.filter(
+    (diagnostic) => diagnostic?.active === true,
+  ).length;
+  const inactiveNodeCount = Math.max(ZERO, nodeDiagnostics.length - activeNodeCount);
+
+  const snapshotCoverage =
+    probeResult?.snapshotCoverage && typeof probeResult.snapshotCoverage === 'object' ?
+      probeResult.snapshotCoverage :
+      null;
+  const normalizedExpectedNodeCount = Number.isInteger(snapshotCoverage?.expectedNodeCount) &&
+    snapshotCoverage.expectedNodeCount > ZERO ?
+    snapshotCoverage.expectedNodeCount :
+    Math.max(ZERO, expectedNodeCount);
+  const snapshotCoverageNodeCount =
+    Number.isInteger(snapshotCoverage?.bestCoverageNodeCount) &&
+      snapshotCoverage.bestCoverageNodeCount > ZERO ?
+      snapshotCoverage.bestCoverageNodeCount :
+      ZERO;
+  const snapshotCoverageComplete = snapshotCoverage?.completeCoverage === true;
+
+  const publicationConvergence = snapshotCoverage?.selectedPublicationConvergence &&
+    typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
+    snapshotCoverage.selectedPublicationConvergence :
+    null;
+  const publicationConvergenceGate =
+    probeResult?.publicationConvergenceGate &&
+      typeof probeResult.publicationConvergenceGate === 'object' ?
+      probeResult.publicationConvergenceGate :
+      null;
+  const publicationStatus = normalizeActiveWaitPublicationStatus(
+    publicationConvergenceGate?.publicationStatus ||
+      publicationConvergence?.publicationStatus,
+  );
+  const publicationEpoch =
+    Number.isFinite(publicationConvergence?.publicationEpoch) ?
+      Math.floor(publicationConvergence.publicationEpoch) :
+      null;
+  const selectedSnapshotNodeId =
+    typeof snapshotCoverage?.selectedNodeId === 'string' &&
+      snapshotCoverage.selectedNodeId.length > ZERO ?
+      snapshotCoverage.selectedNodeId :
+      null;
+  const selectedSnapshotAdminReady =
+    snapshotCoverage?.selectedAdminReady === true ?
+      true :
+      (snapshotCoverage?.selectedAdminReady === false ? false : null);
+  const selectedSnapshotReachableBy =
+    typeof snapshotCoverage?.selectedReachableBy === 'string' &&
+      snapshotCoverage.selectedReachableBy.length > ZERO ?
+      snapshotCoverage.selectedReachableBy :
+      null;
+  const selectedSnapshotError =
+    typeof snapshotCoverage?.selectedError === 'string' &&
+      snapshotCoverage.selectedError.length > ZERO ?
+      snapshotCoverage.selectedError :
+      null;
+  const selectedSnapshotReachabilityError =
+    typeof snapshotCoverage?.selectedReachabilityError === 'string' &&
+      snapshotCoverage.selectedReachabilityError.length > ZERO ?
+      snapshotCoverage.selectedReachabilityError :
+      null;
+  const selectedControlPlaneOwnerQueueDepth =
+    snapshotCoverage?.selectedControlPlaneOwnerQueueDepth &&
+      typeof snapshotCoverage.selectedControlPlaneOwnerQueueDepth ===
+        'object' ?
+      snapshotCoverage.selectedControlPlaneOwnerQueueDepth :
+      null;
+  const selectedCdcReplayLag =
+    snapshotCoverage?.selectedCdcReplayLag &&
+      typeof snapshotCoverage.selectedCdcReplayLag === 'object' ?
+      snapshotCoverage.selectedCdcReplayLag :
+      null;
+  const perNodePublicationDisagreementSet =
+    snapshotCoverage?.publicationDisagreementByNodeId &&
+      typeof snapshotCoverage.publicationDisagreementByNodeId === 'object' ?
+      Object.fromEntries(
+        Object.entries(snapshotCoverage.publicationDisagreementByNodeId)
+          .map(([nodeId, missingNodeIds]) => {
+            const normalizedNodeId = String(nodeId || '').trim();
+            return [
+              normalizedNodeId,
+              normalizeDistinctStringArray(missingNodeIds),
+            ];
+          })
+          .filter(([nodeId]) => nodeId.length > ZERO),
+      ) :
+      {};
+  const selectedPublishedActiveNodeIds = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedPublishedActiveNodeIds ||
+      publicationConvergence?.publishedActiveNodeIds,
+  );
+  const pendingAckNodeIds = normalizeDistinctStringArray(
+    snapshotCoverage?.selectedPendingAckNodeIds ||
+      publicationConvergenceGate?.pendingAckNodeIds ||
+      publicationConvergence?.pendingAckNodeIds,
+  );
+  const missingPublishedNodeIds = normalizeDistinctStringArray([
+    ...(Array.isArray(snapshotCoverage?.selectedMissingPublishedNodeIds) ?
+      snapshotCoverage.selectedMissingPublishedNodeIds :
+      []),
+    ...(Array.isArray(publicationConvergenceGate?.missingPublishedNodeIds) ?
+      publicationConvergenceGate.missingPublishedNodeIds :
+      []),
+  ]);
+  const gateReasons = normalizeDistinctStringArray(
+    publicationConvergenceGate?.reasons,
+  ).sort();
+  const priorityPartitionSummary =
+    publicationConvergenceGate?.priorityPartitionSummary &&
+      typeof publicationConvergenceGate.priorityPartitionSummary === 'object' ?
+      publicationConvergenceGate.priorityPartitionSummary :
+      (publicationConvergence?.priorityPartitionSummary &&
+      typeof publicationConvergence.priorityPartitionSummary === 'object' ?
+        publicationConvergence.priorityPartitionSummary :
+        null);
+  const prioritySpreadSatisfied =
+    priorityPartitionSummary?.satisfied === true ?
+      true :
+      (priorityPartitionSummary?.satisfied === false ? false : null);
+  const prioritySpreadGap = Number.isInteger(priorityPartitionSummary?.totalSpreadGap) &&
+    priorityPartitionSummary.totalSpreadGap >= ZERO ?
+    priorityPartitionSummary.totalSpreadGap :
+    null;
+  const priorityBlockedPartitionCount =
+    Number.isInteger(priorityPartitionSummary?.blockedPartitionCount) &&
+      priorityPartitionSummary.blockedPartitionCount >= ZERO ?
+      priorityPartitionSummary.blockedPartitionCount :
+      null;
+  const priorityRecoveryDecisionSnapshots =
+    snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
+      typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots === 'object' ?
+      snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots :
+      null;
+  const priorityRecoveryProgressClasses = summarizePriorityRecoveryProgressClasses(
+    priorityRecoveryDecisionSnapshots,
+  );
+  const priorityRecoveryUnresolvedClassCount =
+    priorityRecoveryProgressClasses.unresolvedClassCount;
+  const priorityRecoveryUnresolvedSemanticStateCount =
+    priorityRecoveryProgressClasses.unresolvedSemanticStateCount;
+  const priorityRecoveryBlockedPartitionCount =
+    priorityRecoveryProgressClasses.blockedPartitionCount;
+
+  const blockers = [];
+  if (inactiveNodeCount > ZERO) {
+    blockers.push(
+      ACTIVE_WAIT_BLOCKER_INACTIVE_NODES_PREFIX + String(inactiveNodeCount),
+    );
+  }
+  if (!snapshotCoverageComplete) {
+    blockers.push(
+      ACTIVE_WAIT_BLOCKER_SNAPSHOT_COVERAGE_PREFIX +
+      String(snapshotCoverageNodeCount) +
+      '/' +
+      String(normalizedExpectedNodeCount),
+    );
+  }
+  if (typeof snapshotCoverage?.selectedError === 'string' &&
+      snapshotCoverage.selectedError.length > ZERO) {
+    blockers.push(ACTIVE_WAIT_BLOCKER_SNAPSHOT_ERROR);
+  }
+  for (const reason of gateReasons) {
+    blockers.push(ACTIVE_WAIT_BLOCKER_PUBLICATION_GATE_PREFIX + reason);
+  }
+  for (const progressClass of priorityRecoveryProgressClasses.unresolvedClassIds) {
+    blockers.push(
+      ACTIVE_WAIT_BLOCKER_PRIORITY_RECOVERY_PROGRESS_CLASS_PREFIX +
+      progressClass,
+    );
+  }
+  if (blockers.length === ZERO && probeResult?.allActive === true) {
+    blockers.push(ACTIVE_WAIT_BLOCKER_READY);
+  }
+
+  const closureWitness = classifyActiveGateClosureWitness({
+    progressSnapshot: {
+      snapshotCoverageComplete,
+      publicationStatus,
+      pendingAckCount: pendingAckNodeIds.length,
+      missingPublishedCount: missingPublishedNodeIds.length,
+      gateReasons,
+      prioritySpreadSatisfied,
+    },
+    publicationConvergence,
+    publicationConvergenceGate,
+  });
+
+  return {
+    expectedNodeCount: normalizedExpectedNodeCount,
+    activeNodeCount,
+    inactiveNodeCount,
+    snapshotCoverageNodeCount,
+    snapshotCoverageComplete,
+    publicationStatus,
+    publicationStatusRank:
+      resolveActiveWaitPublicationStatusRank(publicationStatus),
+    publicationEpoch,
+    selectedSnapshotNodeId,
+    selectedSnapshotAdminReady,
+    selectedSnapshotReachableBy,
+    selectedSnapshotError,
+    selectedSnapshotReachabilityError,
+    selectedControlPlaneOwnerQueueDepth,
+    selectedCdcReplayLag,
+    perNodePublicationDisagreementSet,
+    selectedPublishedActiveNodeIds,
+    selectedPublishedActiveCount: selectedPublishedActiveNodeIds.length,
+    selectedMissingPublishedNodeIds: missingPublishedNodeIds,
+    pendingAckCount: pendingAckNodeIds.length,
+    missingPublishedCount: missingPublishedNodeIds.length,
+    gateReasonCount: gateReasons.length,
+    gateReasons,
+    prioritySpreadSatisfied,
+    prioritySpreadGap,
+    priorityBlockedPartitionCount,
+    priorityRecoveryProgressClasses,
+    priorityRecoveryUnresolvedClassCount,
+    priorityRecoveryUnresolvedSemanticStateCount,
+    priorityRecoveryBlockedPartitionCount,
+    closureRecordId: closureWitness?.closureRecordId || null,
+    closureWitnessClass: closureWitness?.closureWitnessClass || null,
+    blockers,
+    blockerSignature: blockers.join('|'),
+  };
+}
+
+function normalizePriorityRecoverySemanticStateId(semanticState) {
+  const normalizedSemanticState = String(semanticState || '').trim();
+  if (normalizedSemanticState.length === ZERO) {
+    return null;
+  }
+  return PRIORITY_RECOVERY_SEMANTIC_STATE_IDS.includes(
+    normalizedSemanticState,
+  ) ?
+    normalizedSemanticState :
+    null;
+}
+
+function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
+  for (const blockerReason of PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE) {
+    if (!blockerReasons.includes(blockerReason)) {
+      continue;
+    }
+    return PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE[blockerReason] ||
+      PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
+  }
+  if (snapshot?.planner?.ready === true) {
+    return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
+  }
+  if (Number(snapshot?.coordinator?.operationCount) > ZERO ||
+      (typeof snapshot?.operationId === 'string' &&
+      snapshot.operationId.length > ZERO)) {
+    return PRIORITY_RECOVERY_SEMANTIC_STATE.RECOVERING_IN_FLIGHT;
+  }
+  return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
+}
+
+function summarizePriorityRecoveryProgressClasses(priorityRecoveryDecisionSnapshots = null) {
+  const snapshots = Array.isArray(priorityRecoveryDecisionSnapshots?.snapshots) ?
+    priorityRecoveryDecisionSnapshots.snapshots :
+    [];
+  const partitionIdsByClass = {
+    [ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.ELIGIBLE_NO_OPERATION]: new Set(),
+    [ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.OPERATION_NO_TRANSITIONS]: new Set(),
+    [ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.LEARNER_NEVER_PROMOTABLE]: new Set(),
+    [ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.RECOVERY_ELIGIBLE_EXCLUDED]: new Set(),
+  };
+  const partitionIdsBySemanticState = {};
+  for (const semanticState of PRIORITY_RECOVERY_SEMANTIC_STATE_IDS) {
+    partitionIdsBySemanticState[semanticState] = new Set();
+  }
+  for (const snapshot of snapshots) {
+    if (!snapshot || typeof snapshot !== 'object') {
+      continue;
+    }
+    const partitionId = String(snapshot.partitionId || '').trim();
+    if (partitionId.length === ZERO) {
+      continue;
+    }
+    const blockerReasons = normalizeDistinctStringArray(snapshot.blockerReasons);
+    for (const blockerReason of blockerReasons) {
+      if (!Object.hasOwn(partitionIdsByClass, blockerReason)) {
+        continue;
+      }
+      partitionIdsByClass[blockerReason].add(partitionId);
+    }
+    const semanticState =
+      normalizePriorityRecoverySemanticStateId(snapshot.semanticState) ||
+      inferPriorityRecoverySemanticState(snapshot, blockerReasons);
+    if (partitionIdsBySemanticState[semanticState] instanceof Set) {
+      partitionIdsBySemanticState[semanticState].add(partitionId);
+    }
+  }
+
+  const normalizedPartitionIdsByClass = {};
+  for (const [progressClass, partitionIds] of Object.entries(
+    partitionIdsByClass,
+  )) {
+    normalizedPartitionIdsByClass[progressClass] = [...partitionIds].sort();
+  }
+  const unresolvedClassIds = Object.entries(normalizedPartitionIdsByClass)
+    .filter(([, partitionIds]) => partitionIds.length > ZERO)
+    .map(([progressClass]) => progressClass)
+    .sort();
+  const blockedPartitionIds = normalizeDistinctStringArray(
+    unresolvedClassIds.flatMap((progressClass) =>
+      normalizedPartitionIdsByClass[progressClass] || [],
+    ),
+  );
+  const normalizedPartitionIdsBySemanticState = {};
+  for (const [semanticState, partitionIds] of Object.entries(
+    partitionIdsBySemanticState,
+  )) {
+    normalizedPartitionIdsBySemanticState[semanticState] = [...partitionIds].sort();
+  }
+  const unresolvedSemanticStateIds =
+    PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS
+      .filter((semanticState) =>
+        normalizedPartitionIdsBySemanticState[semanticState].length > ZERO,
+      );
+  const semanticBlockedPartitionIds = normalizeDistinctStringArray(
+    unresolvedSemanticStateIds.flatMap((semanticState) =>
+      normalizedPartitionIdsBySemanticState[semanticState] || [],
+    ),
+  );
+  const effectiveBlockedPartitionIds =
+    semanticBlockedPartitionIds.length > ZERO ?
+      semanticBlockedPartitionIds :
+      blockedPartitionIds;
+
+  return {
+    partitionIdsByClass: normalizedPartitionIdsByClass,
+    unresolvedClassIds,
+    unresolvedClassCount: unresolvedClassIds.length,
+    partitionIdsBySemanticState: normalizedPartitionIdsBySemanticState,
+    unresolvedSemanticStateIds,
+    unresolvedSemanticStateCount: unresolvedSemanticStateIds.length,
+    blockedPartitionIds: effectiveBlockedPartitionIds,
+    blockedPartitionCount: effectiveBlockedPartitionIds.length,
+  };
+}
+
+function scoreActiveWaitProgress(progressSnapshot) {
+  if (!progressSnapshot || typeof progressSnapshot !== 'object') {
+    return Number.NEGATIVE_INFINITY;
+  }
+  const expectedNodeCount = Number.isInteger(progressSnapshot.expectedNodeCount) &&
+    progressSnapshot.expectedNodeCount > ZERO ?
+    progressSnapshot.expectedNodeCount :
+    ZERO;
+  const pendingAckResolved = Math.max(
+    ZERO,
+    expectedNodeCount - Math.max(ZERO, progressSnapshot.pendingAckCount || ZERO),
+  );
+  const missingPublishedResolved = Math.max(
+    ZERO,
+    expectedNodeCount - Math.max(ZERO, progressSnapshot.missingPublishedCount || ZERO),
+  );
+  const gateReasonCount = Math.max(ZERO, progressSnapshot.gateReasonCount || ZERO);
+  const prioritySpreadRank =
+    progressSnapshot.prioritySpreadSatisfied === true ?
+      2 :
+      (progressSnapshot.prioritySpreadSatisfied === false ? ZERO : ONE);
+  const prioritySpreadGapScore = Number.isInteger(progressSnapshot.prioritySpreadGap) &&
+    progressSnapshot.prioritySpreadGap >= ZERO ?
+    Math.max(ZERO, 100 - Math.min(100, progressSnapshot.prioritySpreadGap)) :
+    50;
+  const unresolvedSemanticStateCount =
+    Number(progressSnapshot.priorityRecoveryUnresolvedSemanticStateCount);
+  const unresolvedPriorityRecoveryCount = Number.isFinite(
+    unresolvedSemanticStateCount,
+  ) ?
+    unresolvedSemanticStateCount :
+    (Number(progressSnapshot.priorityRecoveryUnresolvedClassCount) || ZERO);
+  const priorityRecoveryProgressBonus = Math.max(
+    ZERO,
+    8 - Math.min(8, unresolvedPriorityRecoveryCount),
+  );
+  const priorityRecoveryBlockedPartitionBonus = Math.max(
+    ZERO,
+    8 - Math.min(8, Number(progressSnapshot.priorityRecoveryBlockedPartitionCount) || ZERO),
+  );
+
+  return (
+    (Math.max(ZERO, progressSnapshot.activeNodeCount || ZERO) * 1_000_000) +
+    (Math.max(ZERO, progressSnapshot.snapshotCoverageNodeCount || ZERO) * 10_000) +
+    (progressSnapshot.snapshotCoverageComplete === true ? 1_000 : ZERO) +
+    (Math.max(ZERO, progressSnapshot.publicationStatusRank || ZERO) * 100) +
+    (pendingAckResolved * 10) +
+    (missingPublishedResolved * 5) +
+    (prioritySpreadRank * 3) +
+    Math.max(ZERO, 3 - Math.min(3, gateReasonCount)) +
+    priorityRecoveryProgressBonus +
+    priorityRecoveryBlockedPartitionBonus +
+    Math.floor(prioritySpreadGapScore / 50)
+  );
+}
+
+function formatActiveWaitProgressSnapshot(progressSnapshot) {
+  if (!progressSnapshot || typeof progressSnapshot !== 'object') {
+    return 'none';
+  }
+  const gateReasons = Array.isArray(progressSnapshot.gateReasons) ?
+    progressSnapshot.gateReasons :
+    [];
+  const priorityRecoveryProgressClasses = Array.isArray(
+    progressSnapshot?.priorityRecoveryProgressClasses?.unresolvedClassIds,
+  ) ? progressSnapshot.priorityRecoveryProgressClasses.unresolvedClassIds : [];
+  const priorityRecoverySemanticStates = Array.isArray(
+    progressSnapshot?.priorityRecoveryProgressClasses?.unresolvedSemanticStateIds,
+  ) ? progressSnapshot.priorityRecoveryProgressClasses.unresolvedSemanticStateIds : [];
+  const selectedMissingPublishedNodeIds = Array.isArray(
+    progressSnapshot?.selectedMissingPublishedNodeIds,
+  ) ?
+    progressSnapshot.selectedMissingPublishedNodeIds :
+    [];
+  const ownerQueuePendingWrites = Number.isFinite(
+    progressSnapshot?.selectedControlPlaneOwnerQueueDepth?.pendingWrites,
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(progressSnapshot.selectedControlPlaneOwnerQueueDepth.pendingWrites),
+    ) :
+    null;
+  const cdcBufferedEvents = Number.isFinite(
+    progressSnapshot?.selectedCdcReplayLag?.bufferedEvents,
+  ) ?
+    Math.max(
+      ZERO,
+      Math.floor(progressSnapshot.selectedCdcReplayLag.bufferedEvents),
+    ) :
+    null;
+  const perNodePublicationDisagreementSet =
+    progressSnapshot?.perNodePublicationDisagreementSet &&
+      typeof progressSnapshot.perNodePublicationDisagreementSet === 'object' ?
+      progressSnapshot.perNodePublicationDisagreementSet :
+      {};
+  const disagreementNodeCount = Object.values(
+    perNodePublicationDisagreementSet,
+  ).filter((missingNodeIds) => {
+    return Array.isArray(missingNodeIds) &&
+      missingNodeIds.length > ZERO;
+  }).length;
+  return (
+    'active=' +
+    String(progressSnapshot.activeNodeCount ?? ZERO) +
+    '/' +
+    String(progressSnapshot.expectedNodeCount ?? ZERO) +
+    ',coverage=' +
+    String(progressSnapshot.snapshotCoverageNodeCount ?? ZERO) +
+    '/' +
+    String(progressSnapshot.expectedNodeCount ?? ZERO) +
+    (progressSnapshot.snapshotCoverageComplete === true ? '#complete' : '') +
+    ',publication=' +
+    String(progressSnapshot.publicationStatus || 'unknown') +
+    ',snapshotNode=' +
+    String(progressSnapshot.selectedSnapshotNodeId || 'none') +
+    (progressSnapshot.selectedSnapshotAdminReady === true ?
+      '#adminReady=true' :
+      (progressSnapshot.selectedSnapshotAdminReady === false ?
+        '#adminReady=false' :
+        '')) +
+    (progressSnapshot.selectedSnapshotReachableBy ?
+      '#via=' + progressSnapshot.selectedSnapshotReachableBy :
+      '') +
+    (progressSnapshot.selectedSnapshotError ?
+      '#snapshotError' :
+      '') +
+    (progressSnapshot.selectedSnapshotReachabilityError ?
+      '#adminError' :
+      '') +
+    ',epoch=' +
+    String(progressSnapshot.publicationEpoch ?? 'unknown') +
+    ',publishedActive=' +
+    String(progressSnapshot.selectedPublishedActiveCount ?? ZERO) +
+    '/' +
+    String(progressSnapshot.expectedNodeCount ?? ZERO) +
+    ',pendingAck=' +
+    String(progressSnapshot.pendingAckCount ?? ZERO) +
+    ',missingPublished=' +
+    String(progressSnapshot.missingPublishedCount ?? ZERO) +
+    ',missingPublishedIds=' +
+    (selectedMissingPublishedNodeIds.length > ZERO ?
+      selectedMissingPublishedNodeIds.join('|') :
+      'none') +
+    ',ownerQueue=' +
+    String(ownerQueuePendingWrites ?? 'unknown') +
+    ',cdcLag=' +
+    String(cdcBufferedEvents ?? 'unknown') +
+    ',disagreementNodes=' +
+    String(disagreementNodeCount) +
+    ',prioritySpread=' +
+    (progressSnapshot.prioritySpreadSatisfied === true ?
+      'ready' :
+      (progressSnapshot.prioritySpreadSatisfied === false ? 'pending' : 'unknown')) +
+    (Number.isInteger(progressSnapshot.prioritySpreadGap) ?
+      '#gap=' + String(progressSnapshot.prioritySpreadGap) :
+      '') +
+    ',priorityRecovery=' +
+    (priorityRecoveryProgressClasses.length > ZERO ?
+      priorityRecoveryProgressClasses.join('|') :
+      'none') +
+    ',priorityRecoveryState=' +
+    (priorityRecoverySemanticStates.length > ZERO ?
+      priorityRecoverySemanticStates.join('|') :
+      'none') +
+    ',closure=' +
+    String(progressSnapshot.closureRecordId || 'none') +
+    (progressSnapshot.closureWitnessClass ?
+      '#' + progressSnapshot.closureWitnessClass :
+      '') +
+    ',gateReasons=' +
+    (gateReasons.length > ZERO ? gateReasons.join('|') : 'none')
+  );
+}
+
+function upsertActiveWaitBlockerHistory(
+  blockerHistoryBySignature,
+  progressSnapshot,
+  attempt,
+  elapsedMs,
+) {
+  if (!(blockerHistoryBySignature instanceof Map)) {
+    return;
+  }
+  const blockers = Array.isArray(progressSnapshot?.blockers) &&
+    progressSnapshot.blockers.length > ZERO ?
+    progressSnapshot.blockers :
+    [ACTIVE_WAIT_BLOCKER_NONE];
+  const signature = blockers.join('|');
+  let entry = blockerHistoryBySignature.get(signature) || null;
+  if (!entry) {
+    if (blockerHistoryBySignature.size >= ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES) {
+      let evictionKey = null;
+      let evictionEntry = null;
+      for (const [candidateKey, candidateEntry] of blockerHistoryBySignature.entries()) {
+        if (!evictionEntry) {
+          evictionKey = candidateKey;
+          evictionEntry = candidateEntry;
+          continue;
+        }
+        if (candidateEntry.count < evictionEntry.count ||
+            (candidateEntry.count === evictionEntry.count &&
+            candidateEntry.lastAttempt < evictionEntry.lastAttempt)) {
+          evictionKey = candidateKey;
+          evictionEntry = candidateEntry;
+        }
+      }
+      if (evictionKey) {
+        blockerHistoryBySignature.delete(evictionKey);
+      }
+    }
+    entry = {
+      signature,
+      blockers: [...blockers],
+      count: ZERO,
+      firstAttempt: attempt,
+      firstElapsedMs: elapsedMs,
+      lastAttempt: attempt,
+      lastElapsedMs: elapsedMs,
+    };
+    blockerHistoryBySignature.set(signature, entry);
+  }
+  entry.count += ONE;
+  entry.lastAttempt = attempt;
+  entry.lastElapsedMs = elapsedMs;
+}
+
+function summarizeActiveWaitBlockerHistory(blockerHistoryBySignature) {
+  if (!(blockerHistoryBySignature instanceof Map) ||
+      blockerHistoryBySignature.size === ZERO) {
+    return [];
+  }
+  return Array.from(blockerHistoryBySignature.values())
+    .sort((left, right) => {
+      if (left.count !== right.count) {
+        return right.count - left.count;
+      }
+      return right.lastAttempt - left.lastAttempt;
+    })
+    .slice(ZERO, ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES)
+    .map((entry) => ({
+      blockers: entry.blockers,
+      signature: entry.signature,
+      count: entry.count,
+      firstAttempt: entry.firstAttempt,
+      firstElapsedMs: entry.firstElapsedMs,
+      lastAttempt: entry.lastAttempt,
+      lastElapsedMs: entry.lastElapsedMs,
+    }));
+}
+
+function normalizeReplicaOperationPartitionGroupInFlight(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  const normalized = {};
+  for (const [groupId, count] of Object.entries(value)) {
+    const parsedCount = Number(count);
+    if (!Number.isInteger(parsedCount) || parsedCount < ZERO) {
+      continue;
+    }
+    normalized[String(groupId)] = parsedCount;
+  }
+  return normalized;
+}
+
+function buildReplicaOperationTimelineSignature(operationTimelineById = {}) {
+  if (!operationTimelineById ||
+      typeof operationTimelineById !== 'object' ||
+      Array.isArray(operationTimelineById)) {
+    return null;
+  }
+  const signatures = [];
+  for (const operationId of Object.keys(operationTimelineById).sort()) {
+    const timeline = Array.isArray(operationTimelineById[operationId]) ?
+      operationTimelineById[operationId] :
+      [];
+    const lastEntry = timeline.length > ZERO ?
+      timeline[timeline.length - 1] :
+      null;
+    signatures.push(
+      String(operationId) +
+      '=' +
+      String(timeline.length) +
+      ':' +
+      String(lastEntry?.eventType || '') +
+      ':' +
+      String(lastEntry?.step || '') +
+      ':' +
+      String(lastEntry?.status || '') +
+      ':' +
+      (lastEntry?.inFlight === true ? '1' : '0'),
+    );
+  }
+  if (signatures.length === ZERO) {
+    return null;
+  }
+  return signatures.join('|');
+}
+
+function isBetterControlSnapshotCandidate(candidate, selected) {
+  if (!selected) {
+    return true;
+  }
+  const candidateCapturedAtMs = Number.isFinite(candidate?.capturedAtMs) ?
+    candidate.capturedAtMs :
+    null;
+  const selectedCapturedAtMs = Number.isFinite(selected?.capturedAtMs) ?
+    selected.capturedAtMs :
+    null;
+  if (candidateCapturedAtMs !== null && selectedCapturedAtMs !== null &&
+      candidateCapturedAtMs !== selectedCapturedAtMs) {
+    return candidateCapturedAtMs > selectedCapturedAtMs;
+  }
+  if (candidateCapturedAtMs !== null && selectedCapturedAtMs === null) {
+    return true;
+  }
+  if (candidateCapturedAtMs === null && selectedCapturedAtMs !== null) {
+    return false;
+  }
+  if (candidate?.inFlightCount !== selected?.inFlightCount) {
+    return Number(candidate?.inFlightCount) < Number(selected?.inFlightCount);
+  }
+  return String(candidate?.nodeId || '').localeCompare(
+    String(selected?.nodeId || ''),
+  ) < ZERO;
+}
+
+function normalizeDistinctStringArray(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return [...new Set(values
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length > ZERO))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function parseJsonArrayField(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value !== 'string') {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseFiniteNumberField(value) {
+  if (Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value !== 'string' || value.trim().length === ZERO) {
+    return null;
+  }
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
+}
+
+function extractCriticalSystemDiscoverySummary(discoverySnapshot) {
+  const rows = Array.isArray(discoverySnapshot?.rows) ?
+    discoverySnapshot.rows :
+    [];
+  const firstRow = rows.length > ZERO &&
+    rows[ZERO] &&
+    typeof rows[ZERO] === 'object' ?
+    rows[ZERO] :
+    null;
+  if (!firstRow) {
+    return {
+      capturedAtMs: null,
+      readyNodeIds: [],
+      readyDistinctNodeCount: ZERO,
+      readyReplicaCount: ZERO,
+      totalReplicaCount: ZERO,
+    };
+  }
+  const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]) ?
+    firstRow[SERVICE_DISCOVERY_SERVICES_FIELD] :
+    [];
+  const readyNodeIds = [];
+  let readyReplicaCount = ZERO;
+  let totalReplicaCount = ZERO;
+
+  for (const service of services) {
+    if (!service || typeof service !== 'object') {
+      continue;
+    }
+    const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD]) ?
+      service[SERVICE_DISCOVERY_REPLICAS_FIELD] :
+      [];
+    for (const replica of replicas) {
+      if (!replica || typeof replica !== 'object') {
+        continue;
+      }
+      totalReplicaCount += ONE;
+      const nodeId = String(
+        replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || '',
+      ).trim();
+      if (nodeId.length === ZERO) {
+        continue;
+      }
+      const readiness = replica[SERVICE_DISCOVERY_REPLICA_READINESS_FIELD];
+      if (!readiness || typeof readiness !== 'object' ||
+          readiness[SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD] !== true) {
+        continue;
+      }
+      readyReplicaCount += ONE;
+      readyNodeIds.push(nodeId);
+    }
+  }
+
+  const distinctReadyNodeIds = normalizeDistinctStringArray(readyNodeIds);
+  return {
+    capturedAtMs: Number.isFinite(firstRow?.capturedAt) ?
+      Math.floor(firstRow.capturedAt) :
+      null,
+    readyNodeIds: distinctReadyNodeIds,
+    readyDistinctNodeCount: distinctReadyNodeIds.length,
+    readyReplicaCount,
+    totalReplicaCount,
+  };
+}
+
+function isBetterCriticalSystemDiscoveryCandidate(candidate, selected) {
+  if (!selected) {
+    return true;
+  }
+  if (candidate.readyDistinctNodeCount !== selected.readyDistinctNodeCount) {
+    return candidate.readyDistinctNodeCount > selected.readyDistinctNodeCount;
+  }
+  if (candidate.readyReplicaCount !== selected.readyReplicaCount) {
+    return candidate.readyReplicaCount > selected.readyReplicaCount;
+  }
+  const candidateCapturedAtMs = Number.isFinite(candidate?.selectedCapturedAtMs) ?
+    candidate.selectedCapturedAtMs :
+    null;
+  const selectedCapturedAtMs = Number.isFinite(selected?.selectedCapturedAtMs) ?
+    selected.selectedCapturedAtMs :
+    null;
+  if (candidateCapturedAtMs !== null && selectedCapturedAtMs !== null &&
+      candidateCapturedAtMs !== selectedCapturedAtMs) {
+    return candidateCapturedAtMs > selectedCapturedAtMs;
+  }
+  if (candidateCapturedAtMs !== null && selectedCapturedAtMs === null) {
+    return true;
+  }
+  if (candidateCapturedAtMs === null && selectedCapturedAtMs !== null) {
+    return false;
+  }
+  if (candidate.totalReplicaCount !== selected.totalReplicaCount) {
+    return candidate.totalReplicaCount > selected.totalReplicaCount;
+  }
+  return String(candidate?.selectedNodeId || '').localeCompare(
+    String(selected?.selectedNodeId || ''),
+  ) < ZERO;
+}
+
+function formatCriticalSystemDistributionSummary(summary) {
+  if (!summary || typeof summary !== 'object' || summary.enabled !== true) {
+    return 'disabled';
+  }
+  const tables = Array.isArray(summary.tables) ?
+    summary.tables :
+    [];
+  if (tables.length === ZERO) {
+    return 'none';
+  }
+  return tables.map((table) => {
+    const tableName = String(table?.tableName || 'unknown_table');
+    const readyDistinctNodeCount = Number.isInteger(
+      table?.readyDistinctNodeCount,
+    ) ?
+      table.readyDistinctNodeCount :
+      ZERO;
+    const requiredDistinctNodeCount = Number.isInteger(
+      table?.requiredDistinctNodeCount,
+    ) ?
+      table.requiredDistinctNodeCount :
+      ZERO;
+    const readyNodeIds = normalizeDistinctStringArray(table?.readyNodeIds);
+    const selectedNodeId = String(table?.selectedNodeId || '').trim();
+    const error = String(table?.error || '').trim();
+    return tableName +
+      ':' +
+      String(readyDistinctNodeCount) +
+      '/' +
+      String(requiredDistinctNodeCount) +
+      (readyNodeIds.length > ZERO ?
+        '@' + readyNodeIds.join('|') :
+        '') +
+      (selectedNodeId.length > ZERO ?
+        '#src=' + selectedNodeId :
+        '') +
+      (error.length > ZERO ?
+        '#err=' + error :
+        '');
+  }).join(', ');
 }
 
 /**
@@ -660,6 +2024,20 @@ function normalizeProbeError(error) {
 }
 
 /**
+ * Determine whether one probe error string is timeout-shaped.
+ * @param {*} error
+ * @returns {boolean}
+ */
+function isTimeoutShapedProbeError(error) {
+  const normalizedError = String(normalizeProbeError(error)).toLowerCase();
+  if (normalizedError.length === ZERO) {
+    return false;
+  }
+  return normalizedError.includes(ERROR_MESSAGE_TIMEOUT_FRAGMENT) ||
+    normalizedError.includes('timeout');
+}
+
+/**
  * Read one environment value from docker inspect payload.
  * @param {Object} inspect
  * @param {string} key
@@ -746,6 +2124,13 @@ function normalizeReadinessProbeResult(probeResponse) {
     stableSinceMs: null,
     readinessEpoch: null,
     timestamp: null,
+    controlPlaneRecoveryReady: null,
+    metadataPublicationReady: null,
+    backgroundWorkReady: null,
+    recoveryBlocked: null,
+    recoveryStage: null,
+    recoveryStageRank: null,
+    publishedControlPlaneEpoch: null,
   };
 
   if (typeof probeResponse === 'number') {
@@ -794,6 +2179,32 @@ function normalizeReadinessProbeResult(probeResponse) {
   normalized.timestamp = Number.isFinite(body.timestamp) ?
     Math.floor(body.timestamp) :
     null;
+  normalized.controlPlaneRecoveryReady =
+    typeof body.controlPlaneRecoveryReady === 'boolean' ?
+      body.controlPlaneRecoveryReady :
+      null;
+  normalized.metadataPublicationReady =
+    typeof body.metadataPublicationReady === 'boolean' ?
+      body.metadataPublicationReady :
+      null;
+  normalized.backgroundWorkReady =
+    typeof body.backgroundWorkReady === 'boolean' ?
+      body.backgroundWorkReady :
+      null;
+  normalized.recoveryBlocked =
+    typeof body.recoveryBlocked === 'boolean' ?
+      body.recoveryBlocked :
+      null;
+  normalized.recoveryStage = typeof body.recoveryStage === 'string' ?
+    body.recoveryStage :
+    null;
+  normalized.recoveryStageRank = Number.isFinite(body.recoveryStageRank) ?
+    Math.max(ZERO, Math.floor(body.recoveryStageRank)) :
+    null;
+  normalized.publishedControlPlaneEpoch =
+    Number.isFinite(body.publishedControlPlaneEpoch) ?
+      Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch)) :
+      null;
   return normalized;
 }
 
@@ -908,6 +2319,25 @@ function canProjectStartupActiveFromReadiness(readiness, adminDiagnostics) {
       String(reason || '').toLowerCase(),
     ),
   );
+}
+
+function isControlPlaneRecoveryReadyProbe(readiness) {
+  if (!readiness || typeof readiness !== 'object') {
+    return false;
+  }
+  if (readiness.controlPlaneRecoveryReady === true) {
+    return true;
+  }
+  if (Number.isFinite(readiness.recoveryStageRank)) {
+    return readiness.recoveryStageRank >=
+      STARTUP_RECOVERY_STAGE_RANK_CONTROL_PLANE_RECOVERY_READY;
+  }
+  const success = Number.isFinite(readiness.status) &&
+    readiness.status >= HTTP_OK_LOWER &&
+    readiness.status <= HTTP_OK_UPPER;
+  return success &&
+    resolveReadinessPhaseRank(readiness.phase) >=
+      READINESS_PHASE_RANK.CONTROL_READY;
 }
 
 /**
@@ -1698,6 +3128,31 @@ class NodeHandle {
     );
   }
 
+  /** Get structured control-plane diagnostics directly from the snapshot lane. */
+  async getControlPlaneLedgerSnapshot(options = {}) {
+    const result = await this.getControlSnapshot(options);
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    const firstRow = rows.length > 0 &&
+      rows[0] &&
+      typeof rows[0] === 'object' ?
+      rows[0] :
+      null;
+    const controlPlaneDiagnostics =
+      firstRow?.controlPlaneDiagnostics &&
+        typeof firstRow.controlPlaneDiagnostics === 'object' ?
+        JSON.parse(JSON.stringify(firstRow.controlPlaneDiagnostics)) :
+        null;
+    return {
+      nodeId: this.id,
+      capturedAt:
+        typeof firstRow?.capturedAt === 'string' ? firstRow.capturedAt : null,
+      capturedAtMs:
+        Number.isFinite(firstRow?.capturedAtMs) ? firstRow.capturedAtMs :
+          (Number.isFinite(firstRow?.capturedAt) ? firstRow.capturedAt : null),
+      controlPlaneDiagnostics,
+    };
+  }
+
   /**
    * Probe lightweight bootstrap readiness.
    * @param {Object} [options]
@@ -1830,9 +3285,14 @@ class NodeHandle {
       reachable: false,
       reachableBy: null,
       adminReady: false,
+      controlPlaneRecoveryReady: false,
+      publishedControlPlaneEpoch: null,
+      recoveryStage: null,
+      recoveryStageRank: null,
       bootstrapHealth: createProbeResult({
         url: bootstrapUrl,
       }),
+      bootstrapReadiness: null,
       adminHealth: createProbeResult({
         url: adminUrl,
       }),
@@ -1859,6 +3319,32 @@ class NodeHandle {
       diagnostics.lastError = null;
     } else {
       diagnostics.lastError = diagnostics.bootstrapHealth.error;
+    }
+
+    try {
+      const bootstrapReadiness = await this.probeBootstrapReadiness({
+        timeoutMs: remainingProbeBudgetMs(),
+      });
+      diagnostics.bootstrapReadiness = bootstrapReadiness;
+      diagnostics.controlPlaneRecoveryReady =
+        isControlPlaneRecoveryReadyProbe(bootstrapReadiness);
+      diagnostics.publishedControlPlaneEpoch =
+        Number.isFinite(bootstrapReadiness?.publishedControlPlaneEpoch) ?
+          Math.max(
+            ZERO,
+            Math.floor(bootstrapReadiness.publishedControlPlaneEpoch),
+          ) :
+          null;
+      diagnostics.recoveryStage =
+        typeof bootstrapReadiness?.recoveryStage === 'string' ?
+          bootstrapReadiness.recoveryStage :
+          null;
+      diagnostics.recoveryStageRank =
+        Number.isFinite(bootstrapReadiness?.recoveryStageRank) ?
+          Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank)) :
+          null;
+    } catch (_error) {
+      diagnostics.bootstrapReadiness = null;
     }
 
     const adminStatus = await httpGet(
@@ -2051,7 +3537,9 @@ class StartupGate {
         startupGateState: this._state,
       },
     );
-    await this._cluster._waitForAllActive();
+    await this._cluster._waitForAllActive({
+      mode: CLUSTER_READINESS_MODE_STARTUP,
+    });
     this._state = STARTUP_GATE_STATE.CLUSTER_ACTIVE;
     this._cluster._recordClusterStage(
       CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE,
@@ -2094,6 +3582,8 @@ class Cluster {
     this._traceManifest = null;
     this._traceStartWarning = null;
     this._cleanupUnregister = null;
+    this._reuseLeaseRelease = null;
+    this._reuseLeasePath = null;
     this._httpGet = httpGet;
     this._httpRequest = httpRequest;
     this._activeLoadRuns = new Set();
@@ -2115,6 +3605,63 @@ class Cluster {
       REUSE_NETWORK_NAME_SUFFIX +
       '-' +
       String(this._config.size);
+  }
+
+  _resolveReusableLeasePath() {
+    return resolvePath(
+      process.cwd(),
+      REUSE_LEASE_DIRNAME,
+      REUSE_LEASE_FILE_PREFIX +
+        '-' +
+        String(this._config.size) +
+        '.lock',
+    );
+  }
+
+  _resolveReusableLeaseTimeoutMs() {
+    const startupTimeout = this._config.timeouts?.nodeStartup ||
+      TIMEOUTS.NODE_STARTUP;
+    return Math.max(
+      REUSE_LEASE_MIN_TIMEOUT_MS,
+      startupTimeout,
+    );
+  }
+
+  async _acquireReusableClusterLease() {
+    if (!this._isContainerReuseEnabled() ||
+        typeof this._reuseLeaseRelease === 'function') {
+      return;
+    }
+
+    const lease = await acquireReusableClusterLease({
+      lockPath: this._resolveReusableLeasePath(),
+      metadata: {
+        pid: process.pid,
+        clusterId: this._clusterId,
+        scenarioName: this._scenarioName,
+        clusterSize: this._config.size,
+        networkName: this._buildReusableNetworkName(),
+        cwd: process.cwd(),
+        acquiredAtMs: Date.now(),
+      },
+      timeoutMs: this._resolveReusableLeaseTimeoutMs(),
+      pollIntervalMs: REUSE_LEASE_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+    });
+    this._reuseLeaseRelease = lease.release;
+    this._reuseLeasePath = lease.lockPath;
+  }
+
+  async _releaseReusableClusterLease() {
+    if (typeof this._reuseLeaseRelease !== 'function') {
+      this._reuseLeasePath = null;
+      return;
+    }
+
+    const release = this._reuseLeaseRelease;
+    this._reuseLeaseRelease = null;
+    this._reuseLeasePath = null;
+    await release();
   }
 
   _buildNodeId(nodeIndex) {
@@ -2245,6 +3792,30 @@ class Cluster {
     return false;
   }
 
+  _getReusableControlDir(containerName) {
+    return resolvePath(
+      REUSE_LEASE_DIRNAME,
+      REUSE_CONTROL_DIRNAME,
+      containerName,
+    );
+  }
+
+  _getReusableControlBind(containerName) {
+    return this._getReusableControlDir(containerName) +
+      ':' +
+      REUSE_CONTROL_MOUNT_PATH;
+  }
+
+  async _markReusableContainerForDataReset(containerName) {
+    const controlDir = this._getReusableControlDir(containerName);
+    await fs.mkdir(controlDir, {recursive: true});
+    await fs.writeFile(
+      resolvePath(controlDir, REUSE_RESET_FLAG_FILENAME),
+      '',
+      'utf8',
+    );
+  }
+
   async _quiesceReusableContainers() {
     if (!this._isContainerReuseEnabled()) {
       return;
@@ -2328,6 +3899,9 @@ class Cluster {
         this._providers[this._hostAssignment[0]],
         this._clusterId,
       );
+    }
+    if (this._isContainerReuseEnabled()) {
+      await this._acquireReusableClusterLease();
     }
 
     try {
@@ -2531,151 +4105,162 @@ class Cluster {
   async stop() {
     const errors = [];
     const reuseContainers = this._isContainerReuseEnabled();
-    if (typeof this._playbackRecorder.beginShutdown === 'function') {
-      await this._playbackRecorder.beginShutdown({
-        awaitInFlightCaptures: true,
-      });
-    } else {
-      this._playbackRecorder.suspendPolling();
-    }
-    this._recordClusterStage(
-      CLUSTER_STAGE_TEARDOWN_STARTING,
-      {
-        nodeCount: this._nodes.size,
-      },
-    );
-    await this._cancelActiveLoadRuns();
-
-    // Collect final log snapshot and run analysis before teardown
     try {
-      const seedNode = this._nodes.values().next().value;
-      if (seedNode) {
-        await this._logCollector.collectFinalSnapshot(seedNode);
+      if (typeof this._playbackRecorder.beginShutdown === 'function') {
+        await this._playbackRecorder.beginShutdown({
+          awaitInFlightCaptures: true,
+        });
+      } else {
+        this._playbackRecorder.suspendPolling();
       }
-    } catch (_err) {
-      // Best-effort log collection
-    }
-
-    try {
-      await this._logCollector.stopSubscription();
-    } catch (_err) {
-      // Best-effort cleanup
-    }
-
-    if (this._traceRecorder) {
-      try {
-        this._traceManifest = await this._traceRecorder.stop();
-      } catch (err) {
-        this._traceManifest = {
-          warning: 'Failed to finalize trace artifacts: ' + err.message,
-        };
-      }
-    }
-
-    for (const [nodeId, node] of this._nodes) {
-      try {
-        node.closeQueryConnection();
-      } catch (_err) {
-        // Best-effort stop
-      }
-      await this._stopNodeContainerForTeardown(nodeId, node, errors);
-      if (!reuseContainers) {
-        try {
-          await node._dockerProvider.removeContainer(
-            node.containerId,
-          );
-          this._recordPlaybackEvent(
-            PLAYBACK_EVENT_TYPE.NODE_REMOVED,
-            PLAYBACK_SCOPE_NODE,
-            nodeId,
-            {
-              containerId: node.containerId,
-            },
-          );
-        } catch (err) {
-          errors.push(
-            'Failed to remove container for ' +
-            nodeId + ': ' + err.message,
-          );
-        }
-      }
-    }
-
-    if (this._networkId && !reuseContainers) {
-      try {
-        const provider =
-          this._providers[this._hostAssignment[0]];
-        this._recordClusterStage(
-          CLUSTER_STAGE_TEARDOWN_NETWORK_REMOVING,
-          {
-            networkId: this._networkId,
-            networkName: this._networkName,
-          },
-        );
-        await provider.removeNetwork(this._networkId);
-        this._recordClusterStage(
-          CLUSTER_STAGE_TEARDOWN_NETWORK_REMOVED,
-          {
-            networkId: this._networkId,
-            networkName: this._networkName,
-          },
-        );
-      } catch (err) {
-        errors.push(
-          'Failed to remove network: ' + err.message,
-        );
-      }
-      this._networkId = null;
-    } else if (this._networkId && reuseContainers) {
-      this._networkId = null;
-    }
-
-    try {
       this._recordClusterStage(
-        CLUSTER_STAGE_TEARDOWN_COMPLETE,
+        CLUSTER_STAGE_TEARDOWN_STARTING,
         {
           nodeCount: this._nodes.size,
         },
       );
-      this._recordClusterStage(
-        CLUSTER_STAGE_TEARDOWN_CAPTURE_FINALIZING,
-        {},
-      );
-      this._playbackManifest = await this._playbackRecorder.stop({
-        clusterId: this._clusterId,
-        nodeCount: this._nodes.size,
-      }, {
-        skipFinalCapture: true,
-      });
-      if (this._traceManifest && this._playbackManifest) {
-        this._playbackManifest.trace = this._traceManifest;
-      }
-      if (this._playbackStartWarning && this._playbackManifest) {
-        this._playbackManifest.warning = this._playbackStartWarning;
-      } else if (this._playbackStartWarning &&
-                 !this._playbackManifest) {
-        this._playbackManifest = {
-          warning: this._playbackStartWarning,
-        };
-      }
-      if (this._traceStartWarning && this._playbackManifest) {
-        this._playbackManifest.traceWarning = this._traceStartWarning;
-      }
-    } catch (err) {
-      errors.push(
-        'Failed to finalize playback artifacts: ' + err.message,
-      );
-    }
+      await this._cancelActiveLoadRuns();
 
-    this._nodes.clear();
+      // Collect final log snapshot and run analysis before teardown
+      try {
+        const seedNode = this._nodes.values().next().value;
+        if (seedNode) {
+          await this._logCollector.collectFinalSnapshot(seedNode);
+        }
+      } catch (_err) {
+        // Best-effort log collection
+      }
 
-    this._started = false;
-    this._unregisterCleanup();
-    if (errors.length > 0) {
-      process.stderr.write(
-        'Cluster stop warnings:\n' +
-        errors.join('\n') + '\n',
-      );
+      try {
+        await this._logCollector.stopSubscription();
+      } catch (_err) {
+        // Best-effort cleanup
+      }
+
+      if (this._traceRecorder) {
+        try {
+          this._traceManifest = await this._traceRecorder.stop();
+        } catch (err) {
+          this._traceManifest = {
+            warning: 'Failed to finalize trace artifacts: ' + err.message,
+          };
+        }
+      }
+
+      for (const [nodeId, node] of this._nodes) {
+        try {
+          node.closeQueryConnection();
+        } catch (_err) {
+          // Best-effort stop
+        }
+        await this._stopNodeContainerForTeardown(nodeId, node, errors);
+        if (!reuseContainers) {
+          try {
+            await node._dockerProvider.removeContainer(
+              node.containerId,
+            );
+            this._recordPlaybackEvent(
+              PLAYBACK_EVENT_TYPE.NODE_REMOVED,
+              PLAYBACK_SCOPE_NODE,
+              nodeId,
+              {
+                containerId: node.containerId,
+              },
+            );
+          } catch (err) {
+            errors.push(
+              'Failed to remove container for ' +
+              nodeId + ': ' + err.message,
+            );
+          }
+        }
+      }
+
+      if (this._networkId && !reuseContainers) {
+        try {
+          const provider =
+            this._providers[this._hostAssignment[0]];
+          this._recordClusterStage(
+            CLUSTER_STAGE_TEARDOWN_NETWORK_REMOVING,
+            {
+              networkId: this._networkId,
+              networkName: this._networkName,
+            },
+          );
+          await provider.removeNetwork(this._networkId);
+          this._recordClusterStage(
+            CLUSTER_STAGE_TEARDOWN_NETWORK_REMOVED,
+            {
+              networkId: this._networkId,
+              networkName: this._networkName,
+            },
+          );
+        } catch (err) {
+          errors.push(
+            'Failed to remove network: ' + err.message,
+          );
+        }
+        this._networkId = null;
+      } else if (this._networkId && reuseContainers) {
+        this._networkId = null;
+      }
+
+      try {
+        this._recordClusterStage(
+          CLUSTER_STAGE_TEARDOWN_COMPLETE,
+          {
+            nodeCount: this._nodes.size,
+          },
+        );
+        this._recordClusterStage(
+          CLUSTER_STAGE_TEARDOWN_CAPTURE_FINALIZING,
+          {},
+        );
+        this._playbackManifest = await this._playbackRecorder.stop({
+          clusterId: this._clusterId,
+          nodeCount: this._nodes.size,
+        }, {
+          skipFinalCapture: true,
+        });
+        if (this._traceManifest && this._playbackManifest) {
+          this._playbackManifest.trace = this._traceManifest;
+        }
+        if (this._playbackStartWarning && this._playbackManifest) {
+          this._playbackManifest.warning = this._playbackStartWarning;
+        } else if (this._playbackStartWarning &&
+                   !this._playbackManifest) {
+          this._playbackManifest = {
+            warning: this._playbackStartWarning,
+          };
+        }
+        if (this._traceStartWarning && this._playbackManifest) {
+          this._playbackManifest.traceWarning = this._traceStartWarning;
+        }
+      } catch (err) {
+        errors.push(
+          'Failed to finalize playback artifacts: ' + err.message,
+        );
+      }
+
+      this._nodes.clear();
+
+      this._started = false;
+      this._unregisterCleanup();
+    } finally {
+      try {
+        await this._releaseReusableClusterLease();
+      } catch (error) {
+        errors.push(
+          'Failed to release reusable cluster lease: ' +
+          String(error?.message || error),
+        );
+      }
+      if (errors.length > 0) {
+        process.stderr.write(
+          'Cluster stop warnings:\n' +
+          errors.join('\n') + '\n',
+        );
+      }
     }
   }
 
@@ -2782,7 +4367,7 @@ class Cluster {
   }
 
   /** Add one joiner node to an already running cluster. */
-  async addNode() {
+  async addNode(options = {}) {
     if (!this._started) {
       throw new Error('Cluster must be started before adding nodes');
     }
@@ -2835,7 +4420,9 @@ class Cluster {
         ordinal: nodeIndex,
       },
     );
-    await this._waitForAllActive();
+    if (options.waitForActive !== false) {
+      await this._waitForAllActive();
+    }
     return joinerNode;
   }
 
@@ -2854,11 +4441,14 @@ class Cluster {
 
   async waitForConvergence(options) {
     const nodes = Array.from(this._nodes.values());
-    return waitForConvergence(nodes, options);
+    return waitForConvergence(nodes, {
+      ignoreStaleInFlightReplicaOperations: true,
+      ...(options || {}),
+    });
   }
 
-  async waitForAllActive() {
-    return this._waitForAllActive();
+  async waitForAllActive(options = {}) {
+    return this._waitForAllActive(options);
   }
 
   async assertConsistency() {
@@ -2900,9 +4490,424 @@ class Cluster {
     );
   }
 
-  async restartNode(id) {
-    return this._runChaosAction('restartNode', id, null, () =>
-      this._chaos.restartNode(id),
+  async restartNode(id, options = {}) {
+    return this._runChaosAction('restartNode', id, options, () =>
+      this._restartNodeWithObservation(id, options),
+    );
+  }
+
+  async _restartNodeWithObservation(id, options = {}) {
+    const node = this._nodes.get(id) || null;
+    if (typeof node?.closeQueryConnection === 'function') {
+      node.closeQueryConnection();
+    }
+    await this._recordRestartBoundarySnapshot(id, 'before_stop');
+    await this._chaos.stopNode(id);
+    await this._waitForRestartShutdownBoundary(id);
+    await this._chaos.startNode(id);
+    if (typeof node?.closeQueryConnection === 'function') {
+      node.closeQueryConnection();
+    }
+    await this._waitForNodeAdminReadiness(id, options);
+    await this._recordRestartBoundarySnapshot(id, 'after_ready');
+  }
+
+  _resolveRestartShutdownObservationTimeoutMs() {
+    const startupTimeout = this._config.timeouts?.nodeStartup ||
+      TIMEOUTS.NODE_STARTUP;
+    return Math.max(startupTimeout, ACTIVE_POLL_INTERVAL_MS * 2);
+  }
+
+  _resolveRestartAdminReadinessTimeoutMs() {
+    return this._config.timeouts?.nodeStartup ||
+      TIMEOUTS.NODE_STARTUP;
+  }
+
+  _formatRestartShutdownBoundary(observation) {
+    if (!observation) {
+      return 'none';
+    }
+    const activeNodeIds = Array.isArray(observation.peerActiveNodeIds) &&
+      observation.peerActiveNodeIds.length > ZERO ?
+      observation.peerActiveNodeIds.join('|') :
+      'none';
+    return (
+      'containerState=' + String(observation.containerState || 'unknown') +
+      ', containerRunning=' + String(observation.containerRunning ?? 'unknown') +
+      ', reachable=' + String(observation.reachable ?? 'unknown') +
+      ', adminReady=' + String(observation.adminReady ?? 'unknown') +
+      ', reachableBy=' + String(observation.reachableBy || 'none') +
+      ', peerObserved=' + String(observation.peerObserved ?? 'unknown') +
+      ', peerObserver=' + String(observation.peerObserverNodeId || 'none') +
+      ', peerCapturedAtMs=' + String(observation.peerCapturedAtMs ?? 'none') +
+      ', peerActiveNodeIds=' + activeNodeIds +
+      ', peerServeEligible=' + String(observation.peerServeEligible ?? 'unknown') +
+      ', peerRepairEligible=' + String(observation.peerRepairEligible ?? 'unknown') +
+      ', error=' + String(observation.error || 'none') +
+      ', peerError=' + String(observation.peerError || 'none')
+    );
+  }
+
+  _formatRestartShutdownObservation(observation) {
+    if (!observation) {
+      return 'none';
+    }
+    const activeNodeIds = Array.isArray(observation.activeNodeIds) &&
+      observation.activeNodeIds.length > ZERO ?
+      observation.activeNodeIds.join('|') :
+      'none';
+    return (
+      'observer=' + String(observation.observerNodeId || 'none') +
+      ', capturedAtMs=' + String(observation.capturedAtMs ?? 'none') +
+      ', activeNodeIds=' + activeNodeIds +
+      ', serveEligible=' + String(observation.serveEligible ?? 'unknown') +
+      ', repairEligible=' + String(observation.repairEligible ?? 'unknown') +
+      ', reachable=' + String(observation.reachable ?? 'unknown') +
+      ', reachableBy=' + String(observation.reachableBy || 'none') +
+      ', error=' + String(observation.error || 'none')
+    );
+  }
+
+  _isNewerRestartShutdownObservation(candidate, current) {
+    if (!candidate) {
+      return false;
+    }
+    if (!current) {
+      return true;
+    }
+    const candidateCapturedAtMs = Number.isFinite(candidate.capturedAtMs) ?
+      candidate.capturedAtMs :
+      -1;
+    const currentCapturedAtMs = Number.isFinite(current.capturedAtMs) ?
+      current.capturedAtMs :
+      -1;
+    if (candidateCapturedAtMs !== currentCapturedAtMs) {
+      return candidateCapturedAtMs > currentCapturedAtMs;
+    }
+    if (candidate.error && !current.error) {
+      return false;
+    }
+    if (!candidate.error && current.error) {
+      return true;
+    }
+    return false;
+  }
+
+  async _probeRestartShutdownBoundary(targetNodeId, deadline) {
+    const targetNode = this._nodes.get(targetNodeId) || null;
+    if (!targetNode) {
+      return {
+        observed: false,
+        containerState: null,
+        containerRunning: null,
+        reachable: null,
+        adminReady: null,
+        reachableBy: null,
+        peerObserved: null,
+        peerObserverNodeId: null,
+        peerCapturedAtMs: null,
+        peerActiveNodeIds: [],
+        peerServeEligible: null,
+        peerRepairEligible: null,
+        error: 'Node "' + targetNodeId + '" not found in cluster',
+        peerError: null,
+      };
+    }
+
+    let containerState = null;
+    let containerRunning = null;
+    let error = null;
+
+    if (this._dockerProvider &&
+        typeof this._dockerProvider.inspectContainer === 'function' &&
+        typeof targetNode.containerId === 'string' &&
+        targetNode.containerId.length > ZERO) {
+      try {
+        const inspect = await this._dockerProvider.inspectContainer(
+          targetNode.containerId,
+        );
+        containerState = typeof inspect?.State?.Status === 'string' &&
+          inspect.State.Status.length > ZERO ?
+          inspect.State.Status :
+          UNKNOWN_STATE;
+        containerRunning = containerState === CONTAINER_RUNNING_STATUS;
+      } catch (inspectError) {
+        error = normalizeProbeError(inspectError);
+        containerState = 'inspect_error';
+      }
+    }
+
+    let diagnostics = null;
+    try {
+      diagnostics = await targetNode.getReachabilityDiagnostics({
+        timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
+      });
+    } catch (probeError) {
+      if (!error) {
+        error = normalizeProbeError(probeError);
+      }
+    }
+
+    const reachable = diagnostics?.reachable === true;
+    const adminReady = diagnostics?.adminReady === true;
+    const observed = (containerRunning === false || containerRunning === null) &&
+      reachable !== true &&
+      adminReady !== true &&
+      !error;
+
+    return {
+      observed,
+      containerState,
+      containerRunning,
+      reachable,
+      adminReady,
+      reachableBy: diagnostics?.reachableBy || null,
+      peerObserved: null,
+      peerObserverNodeId: null,
+      peerCapturedAtMs: null,
+      peerActiveNodeIds: [],
+      peerServeEligible: null,
+      peerRepairEligible: null,
+      error: error || diagnostics?.lastError || null,
+      peerError: null,
+    };
+  }
+
+  async _probeRestartShutdownObservation(targetNodeId, deadline) {
+    const peerNodes = [...this._nodes.values()].filter((node) =>
+      node?.id !== targetNodeId,
+    );
+    let bestObservation = null;
+    let lastError = null;
+
+    for (const peerNode of peerNodes) {
+      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
+      const timeoutMs = Math.min(CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS, remainingMs);
+      try {
+        const snapshotResult = await peerNode.getControlSnapshot({
+          timeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+        });
+        const snapshotPayload =
+          this._extractControlSnapshotPayload(snapshotResult) || {};
+        const snapshotSummary =
+          this._extractControlSnapshotSummary(snapshotResult);
+        const readinessByNodeId =
+          snapshotPayload?.controlPlaneDiagnostics?.readinessByNodeId &&
+          typeof snapshotPayload.controlPlaneDiagnostics.readinessByNodeId ===
+            'object' ?
+            snapshotPayload.controlPlaneDiagnostics.readinessByNodeId :
+            {};
+        const readiness = readinessByNodeId[targetNodeId] || null;
+        const activeNodeIds = Array.isArray(snapshotSummary.nodes) ?
+          snapshotSummary.nodes :
+          [];
+        const observed = !activeNodeIds.includes(targetNodeId) ||
+          (readiness && readiness.serveEligible !== true);
+        const observation = {
+          observed,
+          observerNodeId: peerNode.id,
+          capturedAtMs: snapshotSummary.capturedAtMs,
+          activeNodeIds,
+          serveEligible: readiness?.serveEligible ?? null,
+          repairEligible: readiness?.repairEligible ?? null,
+          error: null,
+        };
+        if (observation.observed) {
+          return observation;
+        }
+        if (this._isNewerRestartShutdownObservation(
+          observation,
+          bestObservation,
+        )) {
+          bestObservation = observation;
+        }
+      } catch (error) {
+        lastError = normalizeProbeError(error);
+      }
+    }
+
+    const targetNode = this._nodes.get(targetNodeId) || null;
+    if (peerNodes.length === ZERO && targetNode &&
+        typeof targetNode.getReachabilityDiagnostics === 'function') {
+      try {
+        const diagnostics = await targetNode.getReachabilityDiagnostics({
+          timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
+        });
+        return {
+          observed: diagnostics?.reachable !== true,
+          observerNodeId: targetNodeId,
+          capturedAtMs: null,
+          activeNodeIds: [],
+          serveEligible: null,
+          repairEligible: null,
+          reachable: diagnostics?.reachable === true,
+          reachableBy: diagnostics?.reachableBy || null,
+          error: diagnostics?.lastError || null,
+        };
+      } catch (error) {
+        lastError = normalizeProbeError(error);
+      }
+    }
+
+    return bestObservation || {
+      observed: false,
+      observerNodeId: null,
+      capturedAtMs: null,
+      activeNodeIds: [],
+      serveEligible: null,
+      repairEligible: null,
+      reachable: null,
+      reachableBy: null,
+      error: lastError || 'restart_shutdown_not_observed',
+    };
+  }
+
+  async _waitForRestartShutdownBoundary(targetNodeId) {
+    const timeoutMs = this._resolveRestartShutdownObservationTimeoutMs();
+    const deadline = Date.now() + timeoutMs;
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: RESTART_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: () => this._probeRestartShutdownBoundary(
+        targetNodeId,
+        deadline,
+      ),
+      isSuccess: (result) => result?.observed === true,
+    });
+
+    if (pollResult.success) {
+      return;
+    }
+
+    let peerObservation = null;
+    try {
+      peerObservation = await this._probeRestartShutdownObservation(
+        targetNodeId,
+        Date.now() + CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+      );
+    } catch (peerObservationError) {
+      peerObservation = {
+        observed: false,
+        observerNodeId: null,
+        capturedAtMs: null,
+        activeNodeIds: [],
+        serveEligible: null,
+        repairEligible: null,
+        error: normalizeProbeError(peerObservationError),
+      };
+    }
+
+    const lastResult = {
+      ...(pollResult.lastResult || {}),
+      peerObserved: peerObservation?.observed === true,
+      peerObserverNodeId: peerObservation?.observerNodeId || null,
+      peerCapturedAtMs: peerObservation?.capturedAtMs ?? null,
+      peerActiveNodeIds: Array.isArray(peerObservation?.activeNodeIds) ?
+        peerObservation.activeNodeIds :
+        [],
+      peerServeEligible: peerObservation?.serveEligible ?? null,
+      peerRepairEligible: peerObservation?.repairEligible ?? null,
+      peerError: peerObservation?.error || null,
+    };
+
+    await this._collectFailureLogs();
+    throw new Error(
+      'Restart shutdown boundary was not observed within ' +
+      timeoutMs +
+      'ms for node ' +
+      targetNodeId +
+      ' (' +
+      this._formatRestartShutdownBoundary(lastResult) +
+      ')',
+    );
+  }
+
+  async _waitForNodeAdminReadiness(targetNodeId, options = {}) {
+    const node = this._nodes.get(targetNodeId);
+    if (!node) {
+      throw new Error('Node "' + targetNodeId + '" not found in cluster');
+    }
+    const timeoutOverrideMs = Number(options?.readinessTimeoutMs);
+    const timeoutMs = Number.isFinite(timeoutOverrideMs) &&
+      timeoutOverrideMs > ZERO ?
+      Math.max(MIN_TIMEOUT_MS, Math.floor(timeoutOverrideMs)) :
+      this._resolveRestartAdminReadinessTimeoutMs();
+    const expectedPublicationEpoch = Number.isInteger(
+      options?.expectedPublicationEpoch,
+    ) && options.expectedPublicationEpoch > ZERO ?
+      options.expectedPublicationEpoch :
+      null;
+    const deadline = Date.now() + timeoutMs;
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: RESTART_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: async () => {
+        try {
+          const diagnostics = await node.getReachabilityDiagnostics({
+            timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
+          });
+          return {
+            ...diagnostics,
+            ready:
+              (
+                diagnostics?.adminReady === true ||
+                diagnostics?.controlPlaneRecoveryReady === true
+              ) && (
+                expectedPublicationEpoch === null ||
+                Number(diagnostics?.publishedControlPlaneEpoch) ===
+                  expectedPublicationEpoch
+              ),
+          };
+        } catch (error) {
+          return {
+            nodeId: targetNodeId,
+            ready: false,
+            adminReady: false,
+            controlPlaneRecoveryReady: false,
+            recoveryStage: null,
+            recoveryStageRank: null,
+            reachable: false,
+            reachableBy: null,
+            lastError: normalizeProbeError(error),
+          };
+        }
+      },
+      isSuccess: (result) => result?.ready === true,
+    });
+
+    if (pollResult.success) {
+      return;
+    }
+
+    await this._collectFailureLogs();
+    const lastResult = pollResult.lastResult || {};
+    throw new Error(
+      'Restarted node did not become recovery-ready within ' +
+      timeoutMs +
+      'ms for node ' +
+      targetNodeId +
+      ' (reachable=' +
+      String(lastResult.reachable === true) +
+      ', ready=' +
+      String(lastResult.ready === true) +
+      ', adminReady=' +
+      String(lastResult.adminReady === true) +
+      ', controlPlaneRecoveryReady=' +
+      String(lastResult.controlPlaneRecoveryReady === true) +
+      ', publishedControlPlaneEpoch=' +
+      String(lastResult.publishedControlPlaneEpoch ?? 'unknown') +
+      ', expectedPublicationEpoch=' +
+      String(expectedPublicationEpoch ?? 'none') +
+      ', recoveryStage=' +
+      String(lastResult.recoveryStage || 'unknown') +
+      ', reachableBy=' +
+      String(lastResult.reachableBy || 'none') +
+      ', lastError=' +
+      String(lastResult.lastError || 'none') +
+      ')',
     );
   }
 
@@ -2976,6 +4981,11 @@ class Cluster {
       tableName: options?.tableName,
       tableId: options?.tableId,
     });
+    const requiredPublicationEpoch = Number.isInteger(
+      options?.requiredPublicationEpoch,
+    ) && options.requiredPublicationEpoch > ZERO ?
+      options.requiredPublicationEpoch :
+      null;
     const readyNodes = [];
 
     for (const node of nodes) {
@@ -2998,7 +5008,30 @@ class Cluster {
           discoverySnapshot,
           node.id,
         );
-        if (readyNodeId === String(node.id || '')) {
+        if (readyNodeId !== String(node.id || '')) {
+          continue;
+        }
+        let diagnostics = null;
+        if (typeof node.getReachabilityDiagnostics === 'function') {
+          try {
+            diagnostics = await node.getReachabilityDiagnostics({
+              timeoutMs,
+            });
+          } catch (_error) {
+            diagnostics = null;
+          }
+        }
+        if (!diagnostics ||
+            diagnostics.adminReady === true ||
+            diagnostics.controlPlaneRecoveryReady === true) {
+          if (requiredPublicationEpoch !== null) {
+            const publishedControlPlaneEpoch = Number(
+              diagnostics?.publishedControlPlaneEpoch,
+            );
+            if (publishedControlPlaneEpoch !== requiredPublicationEpoch) {
+              continue;
+            }
+          }
           readyNodes.push(node);
         }
       } catch (_error) {
@@ -3078,6 +5111,234 @@ class Cluster {
     );
   }
 
+  async waitForControlPlaneQuiescence(options = {}) {
+    const stableWindowMs =
+      this._resolveControlPlaneQuiescenceStableWindowMs(options);
+    const timeoutMs = this._resolveControlPlaneQuiescenceTimeoutMs(options);
+    const noProgressTimeoutMs =
+      this._resolveControlPlaneQuiescenceNoProgressTimeoutMs(options);
+    const maxInFlightCount =
+      this._resolveControlPlaneQuiescenceMaxInFlightCount(options);
+    const deadline = Date.now() + timeoutMs;
+    const instabilitySummaryCounts = new Map();
+    let lastLeaderSignature = null;
+    let lastLeaderChangeAtMs = Date.now();
+    let stableWindowStartedAtMs = null;
+    let lastProgressAtMs = Date.now();
+    let lowestInFlightCount = Number.POSITIVE_INFINITY;
+    let maxLeaderQuietElapsedMs = ZERO;
+    let lowestCriticalSystemSpreadGap = Number.POSITIVE_INFINITY;
+    let highestCriticalSystemReadyTableCount = ZERO;
+    let lastOperationTimelineSignature = null;
+
+    let pollResult;
+    try {
+      pollResult = await pollUntilCondition({
+        deadline,
+        intervalMs: ACTIVE_POLL_INTERVAL_MS,
+        sleep: (ms) => this._sleep(ms),
+        probe: async () => {
+          const snapshotProbe = await this._probeControlPlaneQuiescenceSnapshot(
+            deadline,
+          );
+          const nowMs = Date.now();
+          if (snapshotProbe.error) {
+            stableWindowStartedAtMs = null;
+            return {
+              ...snapshotProbe,
+              ready: false,
+              reasons: [
+                QUIESCENCE_REASON_SNAPSHOT_ERROR_PREFIX +
+                snapshotProbe.error,
+              ],
+              stableElapsedMs: ZERO,
+              leaderQuietElapsedMs: ZERO,
+            };
+          }
+
+          if (lastLeaderSignature === null ||
+              lastLeaderSignature !== snapshotProbe.leaderSignature) {
+            lastLeaderSignature = snapshotProbe.leaderSignature;
+            lastLeaderChangeAtMs = nowMs;
+          }
+
+          const leaderQuietElapsedMs = nowMs - lastLeaderChangeAtMs;
+          const leadershipStable = snapshotProbe.leaderCount > ZERO &&
+            leaderQuietElapsedMs >= stableWindowMs;
+          const criticalSystemTopology =
+            await this._probeCriticalSystemTopology(deadline, options);
+          const reasons = [];
+
+          if (snapshotProbe.inFlightCount > maxInFlightCount) {
+            reasons.push(
+              QUIESCENCE_REASON_IN_FLIGHT_PREFIX +
+              String(snapshotProbe.inFlightCount),
+            );
+          }
+          if (!leadershipStable) {
+            reasons.push(
+              QUIESCENCE_REASON_LEADERSHIP_PREFIX +
+              String(leaderQuietElapsedMs),
+            );
+          }
+          if (criticalSystemTopology.enabled === true &&
+              criticalSystemTopology.ready !== true) {
+            reasons.push(
+              QUIESCENCE_REASON_CRITICAL_SYSTEM_SPREAD_PREFIX +
+              String(criticalSystemTopology.totalSpreadGap),
+            );
+          }
+
+          const ready = reasons.length === ZERO;
+          if (ready) {
+            if (stableWindowStartedAtMs === null) {
+              stableWindowStartedAtMs = nowMs;
+            }
+          } else {
+            stableWindowStartedAtMs = null;
+          }
+
+          let progressObserved = false;
+          if (snapshotProbe.inFlightCount < lowestInFlightCount) {
+            lowestInFlightCount = snapshotProbe.inFlightCount;
+            progressObserved = true;
+          }
+          if (snapshotProbe.operationTimelineSignature !== null &&
+              snapshotProbe.operationTimelineSignature !==
+                lastOperationTimelineSignature) {
+            lastOperationTimelineSignature =
+              snapshotProbe.operationTimelineSignature;
+            progressObserved = true;
+          }
+          if (snapshotProbe.inFlightCount <= maxInFlightCount &&
+              leaderQuietElapsedMs > maxLeaderQuietElapsedMs) {
+            maxLeaderQuietElapsedMs = leaderQuietElapsedMs;
+            progressObserved = true;
+          }
+          if (criticalSystemTopology.enabled === true) {
+            if (criticalSystemTopology.totalSpreadGap <
+                lowestCriticalSystemSpreadGap) {
+              lowestCriticalSystemSpreadGap =
+                criticalSystemTopology.totalSpreadGap;
+              progressObserved = true;
+            }
+            if (criticalSystemTopology.readyTableCount >
+                highestCriticalSystemReadyTableCount) {
+              highestCriticalSystemReadyTableCount =
+                criticalSystemTopology.readyTableCount;
+              progressObserved = true;
+            }
+          }
+          if (progressObserved) {
+            lastProgressAtMs = nowMs;
+          }
+
+          if (Number.isInteger(noProgressTimeoutMs) &&
+              noProgressTimeoutMs > ZERO &&
+              nowMs - lastProgressAtMs >= noProgressTimeoutMs) {
+            const stalledError = new Error(
+              'Control plane quiescence stalled for ' +
+              String(nowMs - lastProgressAtMs) +
+              'ms (inFlightCount=' +
+              String(snapshotProbe.inFlightCount) +
+              ', leaderQuietElapsedMs=' +
+              String(leaderQuietElapsedMs) +
+              ', nodeId=' +
+              String(snapshotProbe.nodeId || 'unknown') +
+              ')',
+            );
+            stalledError.quiescence = {
+              nodeId: snapshotProbe.nodeId || null,
+              inFlightCount: snapshotProbe.inFlightCount,
+              reasons,
+              stableElapsedMs: stableWindowStartedAtMs === null ?
+                ZERO :
+                nowMs - stableWindowStartedAtMs,
+              leaderQuietElapsedMs,
+              criticalSystemDistribution:
+                criticalSystemTopology.enabled === true ?
+                  formatCriticalSystemDistributionSummary(
+                    criticalSystemTopology,
+                  ) :
+                  null,
+            };
+            throw stalledError;
+          }
+
+          return {
+            ...snapshotProbe,
+            criticalSystemTopology,
+            ready,
+            reasons,
+            stableElapsedMs: stableWindowStartedAtMs === null ?
+              ZERO :
+              nowMs - stableWindowStartedAtMs,
+            leaderQuietElapsedMs,
+          };
+        },
+        isSuccess: (result) => result.ready === true &&
+          result.stableElapsedMs >= stableWindowMs,
+        onAttempt: ({lastResult}) => {
+          for (const reason of lastResult?.reasons || []) {
+            instabilitySummaryCounts.set(
+              reason,
+              (instabilitySummaryCounts.get(reason) || ZERO) + 1,
+            );
+          }
+        },
+      });
+    } catch (error) {
+      await this._collectFailureLogs();
+      throw error;
+    }
+
+    if (pollResult.success) {
+      return {
+        attempts: pollResult.attempts,
+        elapsedMs: pollResult.elapsedMs,
+        stableElapsedMs: pollResult.lastResult?.stableElapsedMs ?? ZERO,
+        inFlightCount: pollResult.lastResult?.inFlightCount ?? null,
+        leaderQuietElapsedMs: pollResult.lastResult?.leaderQuietElapsedMs ??
+          ZERO,
+        selectedNodeId: pollResult.lastResult?.nodeId || null,
+        selectedCapturedAtMs:
+          pollResult.lastResult?.capturedAtMs ?? null,
+        partitionGroupInFlight:
+          pollResult.lastResult?.partitionGroupInFlight || {},
+        criticalSystemTopology:
+          pollResult.lastResult?.criticalSystemTopology || null,
+      };
+    }
+
+    await this._collectFailureLogs();
+    const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
+    throw new Error(
+      'Control plane did not quiesce within ' +
+      timeoutMs +
+      'ms (attempts=' +
+      pollResult.attempts +
+      ', elapsedMs=' +
+      pollResult.elapsedMs +
+      ', stableWindowMs=' +
+      stableWindowMs +
+      ', stableElapsedMs=' +
+      (pollResult.lastResult?.stableElapsedMs ?? ZERO) +
+      ', inFlightCount=' +
+      String(pollResult.lastResult?.inFlightCount ?? 'unknown') +
+      ', leaderQuietElapsedMs=' +
+      String(pollResult.lastResult?.leaderQuietElapsedMs ?? ZERO) +
+      ', selectedNodeId=' +
+      String(pollResult.lastResult?.nodeId || 'unknown') +
+      ', criticalSystemDistribution=' +
+      formatCriticalSystemDistributionSummary(
+        pollResult.lastResult?.criticalSystemTopology || null,
+      ) +
+      ', instabilitySummary=' +
+      (instabilitySummary || 'none') +
+      ')',
+    );
+  }
+
   startLoad(options) {
     const requestedOptions =
       options && typeof options === 'object' ?
@@ -3097,6 +5358,9 @@ class Cluster {
     const resolvedOptions = {
       ...requestedOptions,
     };
+    if (resolvedOptions.admissionAwareScheduling === undefined) {
+      resolvedOptions.admissionAwareScheduling = true;
+    }
     if (benchmarkConfig) {
       if (resolvedOptions.maxInFlight === undefined &&
           Number.isInteger(benchmarkConfig.loadMaxInFlight) &&
@@ -3297,6 +5561,81 @@ class Cluster {
     );
   }
 
+  _summarizeRestartBoundaryLedgerSnapshot(snapshot, nodeId) {
+    if (!snapshot || typeof snapshot !== 'object') {
+      return null;
+    }
+    const controlPlaneDiagnostics =
+      snapshot.controlPlaneDiagnostics &&
+        typeof snapshot.controlPlaneDiagnostics === 'object' ?
+        snapshot.controlPlaneDiagnostics :
+        null;
+    const localReadiness =
+      controlPlaneDiagnostics?.readinessByNodeId &&
+        typeof controlPlaneDiagnostics.readinessByNodeId === 'object' ?
+        controlPlaneDiagnostics.readinessByNodeId[nodeId] || null :
+        null;
+    return {
+      nodeId,
+      capturedAt: typeof snapshot.capturedAt === 'string' ? snapshot.capturedAt : null,
+      capturedAtMs: Number.isFinite(snapshot.capturedAtMs) ? snapshot.capturedAtMs : null,
+      publicationConvergence:
+        controlPlaneDiagnostics?.publicationConvergence || null,
+      startupRecovery: controlPlaneDiagnostics?.startupRecovery || null,
+      publicationMode: controlPlaneDiagnostics?.publicationMode || null,
+      heartbeatPublication: controlPlaneDiagnostics?.heartbeatPublication || null,
+      localReadiness: localReadiness ? {
+        nodeId: localReadiness.nodeId || nodeId,
+        dimensions:
+          localReadiness.dimensions &&
+            typeof localReadiness.dimensions === 'object' ?
+            localReadiness.dimensions :
+            null,
+        reasonCodes: Array.isArray(localReadiness.reasonCodes) ?
+          localReadiness.reasonCodes :
+          (Array.isArray(localReadiness.reasons) ?
+            localReadiness.reasons
+              .map((reason) => String(reason?.code || '').trim())
+              .filter((reason) => reason.length > ZERO) :
+            []),
+      } : null,
+    };
+  }
+
+  async _recordRestartBoundarySnapshot(nodeId, phase) {
+    const node = this._nodes.get(nodeId) || null;
+    if (typeof node?.getControlPlaneLedgerSnapshot !== 'function') {
+      return;
+    }
+    try {
+      const snapshot = await node.getControlPlaneLedgerSnapshot({
+        timeoutMs: CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+      });
+      this._recordPlaybackEvent(
+        PLAYBACK_EVENT_TYPE.NODE_RESTART_BOUNDARY,
+        PLAYBACK_SCOPE_NODE,
+        nodeId,
+        {
+          phase,
+          snapshot: this._summarizeRestartBoundaryLedgerSnapshot(
+            snapshot,
+            nodeId,
+          ),
+        },
+      );
+    } catch (error) {
+      this._recordPlaybackEvent(
+        PLAYBACK_EVENT_TYPE.NODE_RESTART_BOUNDARY,
+        PLAYBACK_SCOPE_NODE,
+        nodeId,
+        {
+          phase,
+          error: error?.message || 'restart-boundary-snapshot-failed',
+        },
+      );
+    }
+  }
+
   _recordPeriodicStartupWaitingStage(stage, attemptResult, details = {}) {
     const attempts = Number(attemptResult?.attempts) || 0;
     if (attempts % STARTUP_GATE_WAITING_EVENT_INTERVAL !== 0) {
@@ -3388,6 +5727,9 @@ class Cluster {
     const containerName = this._buildContainerName(nodeId, nodeIndex);
 
     const env = this._buildNodeEnv(nodeId, containerName, seedIp);
+    if (reuseContainers) {
+      await this._markReusableContainerForDataReset(containerName);
+    }
 
     const labels = {
       [LABELS.CLUSTER]: this._clusterId,
@@ -3398,6 +5740,9 @@ class Cluster {
       this._config.docker.binds.filter((entry) =>
         typeof entry === 'string' && entry.length > 0) :
       [];
+    if (reuseContainers) {
+      dockerBinds.push(this._getReusableControlBind(containerName));
+    }
     const hostConfigExtras = dockerBinds.length > 0 ?
       {[DOCKER_HOST_CONFIG_BINDS_KEY]: dockerBinds} :
       null;
@@ -3434,10 +5779,15 @@ class Cluster {
         try {
           const status = String(existing?.State?.Status || '').toLowerCase();
           if (status === CONTAINER_RUNNING_STATUS) {
-            await provider.restartContainer(containerId);
-          } else {
-            await provider.startContainer(containerId, startTimeout);
+            try {
+              await provider.stopContainer(containerId);
+            } catch (error) {
+              if (!isIgnorableContainerStopError(error)) {
+                throw error;
+              }
+            }
           }
+          await provider.startContainer(containerId, startTimeout);
 
           let refreshed = await provider.inspectContainer(containerId);
           const networks = refreshed?.NetworkSettings?.Networks;
@@ -3682,24 +6032,72 @@ class Cluster {
     return normalizeReadinessProbeResult(probeResponse);
   }
 
-  async _probeClusterActiveState(deadline) {
+  async _probeClusterActiveState(deadline, options = {}) {
+    const readinessMode = options.mode === CLUSTER_READINESS_MODE_LOAD ?
+      CLUSTER_READINESS_MODE_LOAD :
+      CLUSTER_READINESS_MODE_STARTUP;
     const nodes = [...this._nodes.values()];
     const nodeDiagnostics = await Promise.all(nodes.map(async (node) => {
       const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
       const probeTimeoutMs = Math.min(
         ADMIN_QUERY_TIMEOUT_MS,
+        CLUSTER_ACTIVE_NODE_PROBE_TIMEOUT_MS,
         remainingMs,
       );
+      let attemptedReadinessProbe = false;
+      const buildStatusProbeResult = async (statusReason = null,
+        activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_QUERY) => {
+        const status = await withTimeout(
+          node.getStatus({
+            timeoutMs: probeTimeoutMs,
+            lane: ADMIN_SOCKET_LANE_PROBE,
+          }),
+          probeTimeoutMs,
+          'Node status probe timed out for ' + node.id,
+        );
+        const active = this._isNodeActive(status);
+        const state = active ?
+          ACTIVE_STATE.toLowerCase() :
+          (this._extractNodeState(status) || INACTIVE_STATE);
+        return {
+          nodeId: node.id,
+          active,
+          state,
+          phase: null,
+          reasons: statusReason ? [statusReason] : [],
+          activitySource,
+          error: null,
+        };
+      };
       try {
         let active = false;
         let state = INACTIVE_STATE;
         let phase = null;
         let reasons = [];
-        let activitySource = 'status';
+        let activitySource = ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS;
 
-        if (typeof node.probeTrafficReadiness === 'function') {
-          const readiness = await withTimeout(
-            node.probeTrafficReadiness({
+        const readinessProbeOrder = readinessMode ===
+          CLUSTER_READINESS_MODE_LOAD ?
+          [
+            [ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
+              'probeTrafficReadiness'],
+            [ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
+              'probeBootstrapReadiness'],
+          ] :
+          [
+            [ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
+              'probeBootstrapReadiness'],
+            [ACTIVE_PROBE_ACTIVITY_SOURCE_TRAFFIC_READINESS,
+              'probeTrafficReadiness'],
+          ];
+        let readiness = null;
+        for (const [probeSource, probeMethod] of readinessProbeOrder) {
+          if (typeof node?.[probeMethod] !== 'function') {
+            continue;
+          }
+          attemptedReadinessProbe = true;
+          readiness = await withTimeout(
+            node[probeMethod]({
               timeoutMs: probeTimeoutMs,
             }),
             probeTimeoutMs,
@@ -3715,13 +6113,16 @@ class Cluster {
             [];
           if (active) {
             state = ACTIVE_STATE.toLowerCase();
-            activitySource = 'traffic_readiness';
           } else if (typeof readiness.state === 'string' &&
               readiness.state.length > 0) {
             state = readiness.state.toLowerCase();
           } else if (phase && phase.length > 0) {
             state = phase.toLowerCase();
           }
+          activitySource = probeSource;
+          break;
+        }
+        if (readiness) {
           if (typeof node.getReachabilityDiagnostics === 'function') {
             try {
               const adminDiagnostics = await withTimeout(
@@ -3731,7 +6132,8 @@ class Cluster {
                 probeTimeoutMs,
                 'Node admin readiness probe timed out for ' + node.id,
               );
-              if (adminDiagnostics?.adminReady === true &&
+              if (readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
+                  adminDiagnostics?.adminReady === true &&
                   !active &&
                   canProjectStartupActiveFromReadiness(
                     readiness,
@@ -3739,75 +6141,8 @@ class Cluster {
                   )) {
                 active = true;
                 state = ACTIVE_STATE.toLowerCase();
-                activitySource = 'startup_admin_projection';
-              } else if (adminDiagnostics?.adminReady !== true) {
-                active = false;
-                state = INACTIVE_STATE;
-                const adminLastError =
-                  typeof adminDiagnostics?.lastError === 'string' &&
-                    adminDiagnostics.lastError.length > 0 ?
-                    adminDiagnostics.lastError :
-                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
-                reasons = [
-                  ...reasons,
-                  ACTIVE_PROBE_REASON_ADMIN_NOT_READY +
-                    '=' +
-                    adminLastError,
-                ];
-              }
-            } catch (adminProbeError) {
-              active = false;
-              state = INACTIVE_STATE;
-              reasons = [
-                ...reasons,
-                ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
-                  normalizeProbeError(adminProbeError),
-              ];
-            }
-          }
-        } else if (typeof node.probeBootstrapReadiness === 'function') {
-          const readiness = await withTimeout(
-            node.probeBootstrapReadiness({
-              timeoutMs: probeTimeoutMs,
-            }),
-            probeTimeoutMs,
-            'Node readiness probe timed out for ' + node.id,
-          );
-          active = readiness.status >= HTTP_OK_LOWER &&
-            readiness.status <= HTTP_OK_UPPER;
-          phase = typeof readiness.phase === 'string' ?
-            readiness.phase :
-            null;
-          reasons = Array.isArray(readiness.reasons) ?
-            readiness.reasons :
-            [];
-          if (active) {
-            state = ACTIVE_STATE.toLowerCase();
-            activitySource = 'bootstrap_readiness';
-          } else if (typeof readiness.state === 'string' &&
-              readiness.state.length > 0) {
-            state = readiness.state.toLowerCase();
-          } else if (phase && phase.length > 0) {
-            state = phase.toLowerCase();
-          }
-          if (typeof node.getReachabilityDiagnostics === 'function') {
-            try {
-              const adminDiagnostics = await withTimeout(
-                node.getReachabilityDiagnostics({
-                  timeoutMs: probeTimeoutMs,
-                }),
-                probeTimeoutMs,
-                'Node admin readiness probe timed out for ' + node.id,
-              );
-              if (adminDiagnostics?.adminReady === true &&
-                  !active &&
-                  canProjectStartupActiveFromReadiness(
-                    readiness,
-                    adminDiagnostics,
-                  )) {
-                active = true;
-                state = ACTIVE_STATE.toLowerCase();
-                activitySource = 'startup_admin_projection';
+                activitySource =
+                  ACTIVE_PROBE_ACTIVITY_SOURCE_STARTUP_ADMIN_PROJECTION;
               } else if (adminDiagnostics?.adminReady !== true) {
                 active = false;
                 state = INACTIVE_STATE;
@@ -3834,19 +6169,12 @@ class Cluster {
             }
           }
         } else {
-          const status = await withTimeout(
-            node.getStatus({
-              timeoutMs: probeTimeoutMs,
-              lane: ADMIN_SOCKET_LANE_PROBE,
-            }),
-            probeTimeoutMs,
-            'Node status probe timed out for ' + node.id,
-          );
-          active = this._isNodeActive(status);
-          state = active ?
-            ACTIVE_STATE.toLowerCase() :
-            (this._extractNodeState(status) || INACTIVE_STATE);
-          activitySource = 'status_query';
+          const statusResult = await buildStatusProbeResult();
+          active = statusResult.active;
+          state = statusResult.state;
+          phase = statusResult.phase;
+          reasons = statusResult.reasons;
+          activitySource = statusResult.activitySource;
         }
 
         return {
@@ -3859,6 +6187,19 @@ class Cluster {
           error: null,
         };
       } catch (error) {
+        if (attemptedReadinessProbe === true &&
+            typeof node.getStatus === 'function' &&
+            isTimeoutShapedProbeError(error)) {
+          try {
+            return await buildStatusProbeResult(
+              ACTIVE_PROBE_REASON_READINESS_TIMEOUT_FALLBACK_PREFIX +
+                normalizeProbeError(error),
+              ACTIVE_PROBE_ACTIVITY_SOURCE_STATUS_FALLBACK,
+            );
+          } catch (_fallbackError) {
+            // Fall through to explicit error classification below.
+          }
+        }
         return {
           nodeId: node.id,
           active: false,
@@ -3873,17 +6214,64 @@ class Cluster {
     const snapshotCoverage = await this._probeControlSnapshotCoverage(
       deadline,
       nodes.map((node) => node.id),
+      {
+        forceRepair: options.forceRepair === true,
+      },
     );
+    const publicationConvergenceGate = readinessMode ===
+      CLUSTER_READINESS_MODE_LOAD ?
+      evaluateLoadPublishedConvergence(
+        snapshotCoverage,
+        nodes.map((node) => node.id),
+      ) :
+      {
+        ready: true,
+        reasons: Object.freeze([]),
+      };
+
+    const loadModeConvergedPartialCoverage =
+      readinessMode === CLUSTER_READINESS_MODE_LOAD &&
+      activeByStatus === true &&
+      publicationConvergenceGate.ready === true &&
+      snapshotCoverage.completeCoverage !== true &&
+      Number.isInteger(snapshotCoverage.bestCoverageNodeCount) &&
+      snapshotCoverage.bestCoverageNodeCount > ZERO &&
+      !(typeof snapshotCoverage.selectedError === 'string' &&
+        snapshotCoverage.selectedError.length > ZERO);
+
+    const allActive = activeByStatus &&
+      (snapshotCoverage.completeCoverage === true ||
+      loadModeConvergedPartialCoverage) &&
+      publicationConvergenceGate.ready === true;
+    const priorityRecoveryInvariants = evaluatePriorityRecoveryCrossServiceInvariants({
+      readinessMode,
+      nodeDiagnostics,
+      publicationConvergenceGate,
+      allActive,
+    });
 
     return {
-      allActive: activeByStatus && snapshotCoverage.completeCoverage === true,
+      allActive,
       nodeDiagnostics,
       snapshotCoverage,
+      publicationConvergenceGate,
+      priorityRecoveryInvariants,
     };
   }
 
   _extractControlSnapshotNodes(snapshotResult) {
     return this._extractControlSnapshotSummary(snapshotResult).nodes;
+  }
+
+  _extractControlSnapshotPayload(snapshotResult) {
+    const rows = Array.isArray(snapshotResult?.rows) ?
+      snapshotResult.rows :
+      [];
+    if (rows.length === ZERO || !rows[ZERO] ||
+        typeof rows[ZERO] !== 'object') {
+      return null;
+    }
+    return rows[ZERO];
   }
 
   _extractControlSnapshotSummary(snapshotResult) {
@@ -3897,12 +6285,11 @@ class Cluster {
       };
     }
     const row = rows[0];
-    const nodes = Array.isArray(row?.[CONTROL_SNAPSHOT_NODES_FIELD]) ?
-      row[CONTROL_SNAPSHOT_NODES_FIELD] :
-      [];
-    const capturedAtMs = Number.isFinite(row?.capturedAt) ?
-      Math.floor(row.capturedAt) :
-      null;
+    const nodes = parseJsonArrayField(
+      row?.[CONTROL_SNAPSHOT_NODES_FIELD],
+    );
+    const capturedAtMs = parseFiniteNumberField(row?.capturedAtMs) ??
+      parseFiniteNumberField(row?.capturedAt);
     return {
       nodes: nodes
         .map((nodeId) => String(nodeId))
@@ -3911,7 +6298,313 @@ class Cluster {
     };
   }
 
-  async _probeControlSnapshotCoverage(deadline, expectedNodeIds = []) {
+  _summarizeControlSnapshotPublication(publication) {
+    if (!publication || typeof publication !== 'object') {
+      return null;
+    }
+    const publishedActiveNodeIds = parseJsonArrayField(
+      publication.publishedActiveNodeIds ??
+      publication.published_active_node_ids,
+    );
+    const pendingAckNodeIds = parseJsonArrayField(
+      publication.pendingAckNodeIds ??
+      publication.pending_ack_node_ids,
+    );
+    const acknowledgedNodeIds = parseJsonArrayField(
+      publication.acknowledgedNodeIds ??
+      publication.acknowledged_node_ids,
+    );
+    const membershipLifecycleSummaryRaw =
+      publication.membershipLifecycleSummary &&
+        typeof publication.membershipLifecycleSummary === 'object' ?
+        publication.membershipLifecycleSummary :
+        (publication.membership_lifecycle_summary &&
+          typeof publication.membership_lifecycle_summary === 'object' ?
+          publication.membership_lifecycle_summary :
+          null);
+    const projectionDiagnosticsRaw =
+      publication.projectionDiagnostics &&
+        typeof publication.projectionDiagnostics === 'object' ?
+        publication.projectionDiagnostics :
+        (membershipLifecycleSummaryRaw?.projectionDiagnostics &&
+          typeof membershipLifecycleSummaryRaw.projectionDiagnostics ===
+            'object' ?
+          membershipLifecycleSummaryRaw.projectionDiagnostics :
+          null);
+    const priorityPartitionSummaryRaw =
+      publication.priorityPartitionSummary &&
+        typeof publication.priorityPartitionSummary === 'object' ?
+        publication.priorityPartitionSummary :
+        (publication.priority_partition_summary &&
+          typeof publication.priority_partition_summary === 'object' ?
+          publication.priority_partition_summary :
+          null);
+    const blockedPartitions = parseJsonArrayField(
+      priorityPartitionSummaryRaw?.blockedPartitions ??
+      priorityPartitionSummaryRaw?.blocked_partitions,
+    );
+    const missingPartitionIds = parseJsonArrayField(
+      priorityPartitionSummaryRaw?.missingPartitionIds ??
+      priorityPartitionSummaryRaw?.missing_partition_ids,
+    );
+    const totalSpreadGap = blockedPartitions.reduce((sum, partition) => {
+      const spreadGap = Number.isFinite(partition?.spreadGap) ?
+        Math.max(ZERO, Math.floor(partition.spreadGap)) :
+        ZERO;
+      return sum + spreadGap;
+    }, ZERO);
+    const largestSpreadGap = blockedPartitions.reduce((largestGap, partition) => {
+      const spreadGap = Number.isFinite(partition?.spreadGap) ?
+        Math.max(ZERO, Math.floor(partition.spreadGap)) :
+        ZERO;
+      return Math.max(largestGap, spreadGap);
+    }, ZERO);
+    const priorityPartitionSummary = priorityPartitionSummaryRaw ? {
+      satisfied:
+        priorityPartitionSummaryRaw.satisfied === true ?
+          true :
+          (priorityPartitionSummaryRaw.satisfied === false ? false : null),
+      requiredDistinctNodeCount:
+        Number.isFinite(priorityPartitionSummaryRaw.requiredDistinctNodeCount) ?
+          Math.max(
+            ZERO,
+            Math.floor(priorityPartitionSummaryRaw.requiredDistinctNodeCount),
+          ) :
+          (Number.isFinite(
+            priorityPartitionSummaryRaw.required_distinct_node_count,
+          ) ?
+            Math.max(
+              ZERO,
+              Math.floor(
+                priorityPartitionSummaryRaw.required_distinct_node_count,
+              ),
+            ) :
+            null),
+      readyEligibleNodeCount:
+        Number.isFinite(priorityPartitionSummaryRaw.readyEligibleNodeCount) ?
+          Math.max(ZERO,
+            Math.floor(priorityPartitionSummaryRaw.readyEligibleNodeCount)) :
+          (Number.isFinite(priorityPartitionSummaryRaw.ready_eligible_node_count) ?
+            Math.max(
+              ZERO,
+              Math.floor(priorityPartitionSummaryRaw.ready_eligible_node_count),
+            ) :
+            null),
+      totalPriorityPartitionCount:
+        Number.isFinite(priorityPartitionSummaryRaw.totalPriorityPartitionCount) ?
+          Math.max(
+            ZERO,
+            Math.floor(priorityPartitionSummaryRaw.totalPriorityPartitionCount),
+          ) :
+          (Number.isFinite(
+            priorityPartitionSummaryRaw.total_priority_partition_count,
+          ) ?
+            Math.max(
+              ZERO,
+              Math.floor(
+                priorityPartitionSummaryRaw.total_priority_partition_count,
+              ),
+            ) :
+            null),
+      missingPartitionIds: missingPartitionIds
+        .map((partitionId) => String(partitionId || ''))
+        .filter((partitionId) => partitionId.length > ZERO),
+      blockedPartitionCount: blockedPartitions.length,
+      largestSpreadGap,
+      totalSpreadGap,
+    } : null;
+    const projectionDiagnostics = projectionDiagnosticsRaw ? {
+      readinessDecisionMode:
+        typeof projectionDiagnosticsRaw.readinessDecisionMode === 'string' &&
+          projectionDiagnosticsRaw.readinessDecisionMode.length > ZERO ?
+          projectionDiagnosticsRaw.readinessDecisionMode :
+          null,
+      readinessDecisionDimensions: parseJsonArrayField(
+        projectionDiagnosticsRaw.readinessDecisionDimensions,
+      )
+        .map((dimension) => String(dimension || ''))
+        .filter((dimension) => dimension.length > ZERO),
+      recoveryEligibleProjectionEnabled:
+        projectionDiagnosticsRaw.recoveryEligibleProjectionEnabled === true,
+      recoveryEligibleIncludedNodeIds: parseJsonArrayField(
+        projectionDiagnosticsRaw.recoveryEligibleIncludedNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      readinessExcludedNodeIds: parseJsonArrayField(
+        projectionDiagnosticsRaw.readinessExcludedNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      clusterMemberUnhealthyExcludedNodeIds: parseJsonArrayField(
+        projectionDiagnosticsRaw.clusterMemberUnhealthyExcludedNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+    } : null;
+    const membershipLifecycleSummary = membershipLifecycleSummaryRaw ? {
+      lifecycleState:
+        typeof membershipLifecycleSummaryRaw.lifecycleState === 'string' &&
+          membershipLifecycleSummaryRaw.lifecycleState.length > ZERO ?
+          membershipLifecycleSummaryRaw.lifecycleState :
+          null,
+      epochBoundary:
+        typeof membershipLifecycleSummaryRaw.epochBoundary === 'string' &&
+          membershipLifecycleSummaryRaw.epochBoundary.length > ZERO ?
+          membershipLifecycleSummaryRaw.epochBoundary :
+          null,
+      publishedActiveNodeIds: parseJsonArrayField(
+        membershipLifecycleSummaryRaw.publishedActiveNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      projectedServingNodeIds: parseJsonArrayField(
+        membershipLifecycleSummaryRaw.projectedServingNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      locallyEligibleNodeIds: parseJsonArrayField(
+        membershipLifecycleSummaryRaw.locallyEligibleNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      suspectedOrTransitioningNodeIds: parseJsonArrayField(
+        membershipLifecycleSummaryRaw.suspectedOrTransitioningNodeIds,
+      )
+        .map((nodeId) => String(nodeId || ''))
+        .filter((nodeId) => nodeId.length > ZERO),
+      projectionDiagnostics,
+    } : null;
+    return {
+      publicationEpoch:
+        parseFiniteNumberField(
+          publication.publicationEpoch ??
+          publication.publication_epoch,
+        ) ??
+        null,
+      publicationStatus:
+        typeof publication.publicationStatus === 'string' &&
+          publication.publicationStatus.length > ZERO ?
+          publication.publicationStatus :
+          (typeof publication.status === 'string' &&
+            publication.status.length > ZERO ?
+            publication.status :
+            null),
+      publishedActiveNodeIds: publishedActiveNodeIds
+        .map((nodeId) => String(nodeId))
+        .filter((nodeId) => nodeId.length > ZERO),
+      pendingAckNodeIds: pendingAckNodeIds
+        .map((nodeId) => String(nodeId))
+        .filter((nodeId) => nodeId.length > ZERO),
+      acknowledgedNodeIds: acknowledgedNodeIds
+        .map((nodeId) => String(nodeId))
+        .filter((nodeId) => nodeId.length > ZERO),
+      priorityPartitionSummary,
+      membershipLifecycleSummary,
+      projectionDiagnostics,
+    };
+  }
+
+  _extractControlSnapshotCoverageDiagnostics(snapshotResult) {
+    const snapshotPayload =
+      this._extractControlSnapshotPayload(snapshotResult) || {};
+    const controlPlaneDiagnostics =
+      snapshotPayload?.controlPlaneDiagnostics &&
+        typeof snapshotPayload.controlPlaneDiagnostics === 'object' ?
+        snapshotPayload.controlPlaneDiagnostics :
+        null;
+    const readinessByNodeId =
+      controlPlaneDiagnostics?.readinessByNodeId &&
+        typeof controlPlaneDiagnostics.readinessByNodeId === 'object' ?
+        controlPlaneDiagnostics.readinessByNodeId :
+        {};
+    const priorityRecoveryDecisionSnapshots =
+      controlPlaneDiagnostics?.priorityRecoveryDecisionSnapshots &&
+        typeof controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots === 'object' ?
+        JSON.parse(JSON.stringify(controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots)) :
+        null;
+    const logsTable =
+      controlPlaneDiagnostics?.logsTable &&
+        typeof controlPlaneDiagnostics.logsTable === 'object' ?
+        controlPlaneDiagnostics.logsTable :
+        null;
+    const cdcReplay =
+      controlPlaneDiagnostics?.cdcReplay &&
+        typeof controlPlaneDiagnostics.cdcReplay === 'object' ?
+        controlPlaneDiagnostics.cdcReplay :
+        null;
+    const controlPlaneOwnerQueueDepth = logsTable ? {
+      pendingWrites:
+        Number.isFinite(logsTable.pendingWrites) ?
+          Math.max(ZERO, Math.floor(logsTable.pendingWrites)) :
+          ZERO,
+      pendingWriteGrowthCount:
+        Number.isFinite(logsTable.pendingWriteGrowthCount) ?
+          Math.max(ZERO, Math.floor(logsTable.pendingWriteGrowthCount)) :
+          ZERO,
+      retainedBacklogGrowthCount:
+        Number.isFinite(logsTable.retainedBacklogGrowthCount) ?
+          Math.max(ZERO, Math.floor(logsTable.retainedBacklogGrowthCount)) :
+          ZERO,
+      sharedPressureBackpressured:
+        logsTable.sharedPressureBackpressured === true,
+    } : null;
+    const cdcReplayLag = cdcReplay ? {
+      bufferedEvents:
+        Number.isFinite(cdcReplay.bufferedEvents) ?
+          Math.max(ZERO, Math.floor(cdcReplay.bufferedEvents)) :
+          ZERO,
+      replayBufferGrowthCount:
+        Number.isFinite(cdcReplay.replayBufferGrowthCount) ?
+          Math.max(ZERO, Math.floor(cdcReplay.replayBufferGrowthCount)) :
+          ZERO,
+      replayRetryDepth:
+        Number.isFinite(cdcReplay.replayRetryDepth) ?
+          Math.max(ZERO, Math.floor(cdcReplay.replayRetryDepth)) :
+          ZERO,
+      replayInFlightPartitionCount:
+        Number.isFinite(cdcReplay.replayInFlightPartitionCount) ?
+          Math.max(ZERO, Math.floor(cdcReplay.replayInFlightPartitionCount)) :
+          ZERO,
+      partitionCount:
+        Number.isFinite(cdcReplay.partitionCount) ?
+          Math.max(ZERO, Math.floor(cdcReplay.partitionCount)) :
+          ZERO,
+    } : null;
+    const healthyReadinessNodeIds = Object.entries(readinessByNodeId)
+      .filter(([, readiness]) => {
+        const dimensions =
+          readiness?.dimensions &&
+            typeof readiness.dimensions === 'object' ?
+            readiness.dimensions :
+            null;
+        return dimensions?.[
+          CONTROL_SNAPSHOT_READINESS_DIMENSION_CLUSTER_MEMBER_HEALTHY
+        ] === true;
+      })
+      .map(([nodeId]) => String(nodeId))
+      .filter((nodeId) => nodeId.length > ZERO)
+      .sort();
+    return {
+      controlPlaneDiagnosticsAvailable: Boolean(controlPlaneDiagnostics),
+      publicationConvergence: this._summarizeControlSnapshotPublication(
+        controlPlaneDiagnostics?.publicationConvergence || null,
+      ),
+      publishedMembershipObservation: this._summarizeControlSnapshotPublication(
+        controlPlaneDiagnostics?.publishedMembershipObservation || null,
+      ),
+      priorityRecoveryDecisionSnapshots,
+      controlPlaneOwnerQueueDepth,
+      cdcReplayLag,
+      healthyReadinessNodeIds,
+    };
+  }
+
+  async _probeControlSnapshotCoverage(
+    deadline,
+    expectedNodeIds = [],
+    options = {},
+  ) {
     const expectedNodeSet = new Set(
       expectedNodeIds.map((nodeId) => String(nodeId)),
     );
@@ -3932,13 +6625,69 @@ class Cluster {
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
         remainingMs,
       );
+      const reachabilityTimeoutMs = Math.min(
+        snapshotTimeoutMs,
+        CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS,
+      );
+      let reachabilityDiagnostics = null;
+      let reachabilityError = null;
+      const probeReachabilityDiagnostics = async () => {
+        if (typeof node.getReachabilityDiagnostics !== 'function') {
+          return;
+        }
+        try {
+          reachabilityDiagnostics = await withTimeout(
+            node.getReachabilityDiagnostics({
+              timeoutMs: reachabilityTimeoutMs,
+            }),
+            reachabilityTimeoutMs,
+            'Control snapshot reachability probe timed out for ' + node.id,
+          );
+        } catch (error) {
+          reachabilityError = normalizeProbeError(error);
+        }
+      };
       try {
-        const snapshotResult = await node.getControlSnapshot({
-          timeoutMs: snapshotTimeoutMs,
-          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-        });
+        let snapshotResult = null;
+        try {
+          snapshotResult = await node.getControlSnapshot({
+            timeoutMs: snapshotTimeoutMs,
+            lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+            forceRepair: options.forceRepair === true,
+          });
+        } catch (snapshotLaneError) {
+          try {
+            snapshotResult = await node.getControlSnapshot({
+              timeoutMs: snapshotTimeoutMs,
+              lane: ADMIN_SOCKET_LANE_DEFAULT,
+              forceRepair: options.forceRepair === true,
+            });
+          } catch (fallbackLaneError) {
+            throw new Error(
+              normalizeProbeError(snapshotLaneError) +
+              '; fallback lane ' + ADMIN_SOCKET_LANE_DEFAULT +
+              ' failed: ' + normalizeProbeError(fallbackLaneError),
+            );
+          }
+        }
+        await probeReachabilityDiagnostics();
         const snapshotSummary =
           this._extractControlSnapshotSummary(snapshotResult);
+        const snapshotDiagnostics =
+          this._extractControlSnapshotCoverageDiagnostics(snapshotResult);
+        const publicationConvergence =
+          snapshotDiagnostics.publicationConvergence || null;
+        const publishedActiveNodeIds = normalizeDistinctStringArray(
+          publicationConvergence?.publishedActiveNodeIds,
+        );
+        const pendingAckNodeIds = normalizeDistinctStringArray(
+          publicationConvergence?.pendingAckNodeIds,
+        );
+        const missingPublishedNodeIds = [...expectedNodeSet]
+          .filter((expectedNodeId) => {
+            return !publishedActiveNodeIds.includes(expectedNodeId);
+          })
+          .sort();
         const observedNodeIds = snapshotSummary.nodes;
         const observedNodeSet = new Set(observedNodeIds);
         let missingExpectedNodeCount = 0;
@@ -3950,20 +6699,73 @@ class Cluster {
         snapshotProbeResults.push({
           nodeId: node.id,
           error: null,
+          adminReady: reachabilityDiagnostics?.adminReady === true,
+          reachable: reachabilityDiagnostics?.reachable === true,
+          reachableBy:
+            typeof reachabilityDiagnostics?.reachableBy === 'string' &&
+              reachabilityDiagnostics.reachableBy.length > ZERO ?
+              reachabilityDiagnostics.reachableBy :
+              null,
+          reachabilityError:
+            typeof reachabilityDiagnostics?.lastError === 'string' &&
+              reachabilityDiagnostics.lastError.length > ZERO ?
+              reachabilityDiagnostics.lastError :
+              reachabilityError,
           observedNodeCount: observedNodeSet.size,
           missingExpectedNodeCount,
           capturedAtMs: snapshotSummary.capturedAtMs,
+          observedNodeIds,
+          controlPlaneDiagnosticsAvailable:
+            snapshotDiagnostics.controlPlaneDiagnosticsAvailable,
+          publicationConvergence,
+          publishedMembershipObservation:
+            snapshotDiagnostics.publishedMembershipObservation,
+          priorityRecoveryDecisionSnapshots:
+            snapshotDiagnostics.priorityRecoveryDecisionSnapshots,
+          controlPlaneOwnerQueueDepth:
+            snapshotDiagnostics.controlPlaneOwnerQueueDepth,
+          cdcReplayLag:
+            snapshotDiagnostics.cdcReplayLag,
+          healthyReadinessNodeIds:
+            snapshotDiagnostics.healthyReadinessNodeIds,
+          publishedActiveNodeIds,
+          pendingAckNodeIds,
+          missingPublishedNodeIds,
         });
         if (missingExpectedNodeCount === 0) {
           break;
         }
       } catch (error) {
+        await probeReachabilityDiagnostics();
         snapshotProbeResults.push({
           nodeId: node.id,
           error: normalizeProbeError(error),
+          adminReady: reachabilityDiagnostics?.adminReady === true,
+          reachable: reachabilityDiagnostics?.reachable === true,
+          reachableBy:
+            typeof reachabilityDiagnostics?.reachableBy === 'string' &&
+              reachabilityDiagnostics.reachableBy.length > ZERO ?
+              reachabilityDiagnostics.reachableBy :
+              null,
+          reachabilityError:
+            typeof reachabilityDiagnostics?.lastError === 'string' &&
+              reachabilityDiagnostics.lastError.length > ZERO ?
+              reachabilityDiagnostics.lastError :
+              reachabilityError,
           observedNodeCount: 0,
           missingExpectedNodeCount: expectedNodeSet.size,
           capturedAtMs: null,
+          observedNodeIds: [],
+          controlPlaneDiagnosticsAvailable: false,
+          publicationConvergence: null,
+          publishedMembershipObservation: null,
+          priorityRecoveryDecisionSnapshots: null,
+          controlPlaneOwnerQueueDepth: null,
+          cdcReplayLag: null,
+          healthyReadinessNodeIds: [],
+          publishedActiveNodeIds: [],
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
         });
       }
     }
@@ -4000,14 +6802,315 @@ class Cluster {
         selectedResult = result;
       }
     }
+    const publicationDisagreementByNodeId = {};
+    for (const result of snapshotProbeResults) {
+      publicationDisagreementByNodeId[result.nodeId] =
+        Array.isArray(result.missingPublishedNodeIds) ?
+          [...result.missingPublishedNodeIds] :
+          [];
+    }
     return {
       completeCoverage,
       expectedNodeCount: expectedNodeSet.size,
       bestCoverageNodeCount,
+      forceRepair: options.forceRepair === true,
       selectedNodeId: selectedResult?.nodeId || null,
+      selectedAdminReady: selectedResult?.adminReady === true,
+      selectedReachable: selectedResult?.reachable === true,
+      selectedReachableBy: selectedResult?.reachableBy || null,
+      selectedReachabilityError: selectedResult?.reachabilityError || null,
       selectedCapturedAtMs: Number.isFinite(selectedResult?.capturedAtMs) ?
         selectedResult.capturedAtMs :
         null,
+      selectedObservedNodeIds: Array.isArray(selectedResult?.observedNodeIds) ?
+        [...selectedResult.observedNodeIds] :
+        [],
+      selectedPublishedActiveNodeIds:
+        Array.isArray(selectedResult?.publishedActiveNodeIds) ?
+          [...selectedResult.publishedActiveNodeIds] :
+          [],
+      selectedPendingAckNodeIds:
+        Array.isArray(selectedResult?.pendingAckNodeIds) ?
+          [...selectedResult.pendingAckNodeIds] :
+          [],
+      selectedMissingPublishedNodeIds:
+        Array.isArray(selectedResult?.missingPublishedNodeIds) ?
+          [...selectedResult.missingPublishedNodeIds] :
+          [],
+      selectedControlPlaneDiagnosticsAvailable:
+        selectedResult?.controlPlaneDiagnosticsAvailable === true,
+      selectedPublicationConvergence:
+        selectedResult?.publicationConvergence || null,
+      selectedPublishedMembershipObservation:
+        selectedResult?.publishedMembershipObservation || null,
+      selectedPriorityRecoveryDecisionSnapshots:
+        selectedResult?.priorityRecoveryDecisionSnapshots || null,
+      selectedControlPlaneOwnerQueueDepth:
+        selectedResult?.controlPlaneOwnerQueueDepth || null,
+      selectedCdcReplayLag:
+        selectedResult?.cdcReplayLag || null,
+      publicationDisagreementByNodeId,
+      selectedHealthyReadinessNodeIds:
+        Array.isArray(selectedResult?.healthyReadinessNodeIds) ?
+          [...selectedResult.healthyReadinessNodeIds] :
+          [],
+      probeWitnesses: snapshotProbeResults.map((result) => {
+        return {
+          nodeId: result.nodeId,
+          snapshotQuerySucceeded: result.error === null,
+          adminReady: result.adminReady === true,
+          reachable: result.reachable === true,
+          reachableBy: result.reachableBy || null,
+          reachabilityError: result.reachabilityError || null,
+          error: result.error || null,
+          observedNodeCount: result.observedNodeCount,
+          missingExpectedNodeCount: result.missingExpectedNodeCount,
+          capturedAtMs: Number.isFinite(result.capturedAtMs) ?
+            result.capturedAtMs :
+            null,
+          publicationEpoch: Number.isFinite(
+            result?.publicationConvergence?.publicationEpoch,
+          ) ?
+            Math.floor(result.publicationConvergence.publicationEpoch) :
+            null,
+          publicationStatus:
+            typeof result?.publicationConvergence?.publicationStatus ===
+              'string' &&
+              result.publicationConvergence.publicationStatus.length > ZERO ?
+              result.publicationConvergence.publicationStatus :
+              null,
+          publishedActiveNodeIds:
+            Array.isArray(result.publishedActiveNodeIds) ?
+              [...result.publishedActiveNodeIds] :
+              [],
+          pendingAckNodeIds:
+            Array.isArray(result.pendingAckNodeIds) ?
+              [...result.pendingAckNodeIds] :
+              [],
+          missingPublishedNodeIds:
+            Array.isArray(result.missingPublishedNodeIds) ?
+              [...result.missingPublishedNodeIds] :
+              [],
+        };
+      }),
+      selectedError: selectedResult?.error || null,
+    };
+  }
+
+  async _probeControlPlaneQuiescenceSnapshot(deadline) {
+    const nodes = [...this._nodes.values()];
+    nodes.sort((left, right) => {
+      const leftRank = left.role === NODE_ROLES.SEED ? 0 : 1;
+      const rightRank = right.role === NODE_ROLES.SEED ? 0 : 1;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      return String(left.id).localeCompare(String(right.id));
+    });
+
+    let selectedSnapshot = null;
+    let lastError = null;
+    for (const node of nodes) {
+      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
+      const snapshotTimeoutMs = Math.min(
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+        remainingMs,
+      );
+      try {
+        const snapshotResult = await node.getControlSnapshot({
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+        });
+        const payload = this._extractControlSnapshotPayload(snapshotResult);
+        if (!payload) {
+          throw new Error('control snapshot missing rows');
+        }
+        const replicaOperations = payload.replicaOperations &&
+          typeof payload.replicaOperations === 'object' ?
+          payload.replicaOperations :
+          {};
+        const leaders = payload.leaders &&
+          typeof payload.leaders === 'object' ?
+          payload.leaders :
+          {};
+        const leaderEntries = Object.entries(leaders)
+          .sort((left, right) => left[0].localeCompare(right[0]));
+        const candidateSnapshot = {
+          nodeId: node.id,
+          capturedAtMs: Number.isFinite(payload.capturedAt) ?
+            Math.floor(payload.capturedAt) :
+            null,
+          inFlightCount:
+            Number.isInteger(replicaOperations.inFlightCount) &&
+              replicaOperations.inFlightCount >= ZERO ?
+              replicaOperations.inFlightCount :
+              ZERO,
+          partitionGroupInFlight:
+            normalizeReplicaOperationPartitionGroupInFlight(
+              replicaOperations.partitionGroupInFlight,
+            ),
+          leaderSignature: JSON.stringify(leaderEntries),
+          leaderCount: leaderEntries.length,
+          operationTimelineSignature:
+            buildReplicaOperationTimelineSignature(
+              replicaOperations.operationTimelineById,
+            ),
+          error: null,
+        };
+        if (isBetterControlSnapshotCandidate(
+          candidateSnapshot,
+          selectedSnapshot,
+        )) {
+          selectedSnapshot = candidateSnapshot;
+        }
+      } catch (error) {
+        lastError = normalizeProbeError(error);
+      }
+    }
+
+    if (selectedSnapshot) {
+      return selectedSnapshot;
+    }
+    return {
+      nodeId: null,
+      capturedAtMs: null,
+      inFlightCount: null,
+      partitionGroupInFlight: {},
+      leaderSignature: null,
+      leaderCount: ZERO,
+      operationTimelineSignature: null,
+      error: lastError || 'no_control_snapshot_candidates',
+    };
+  }
+
+  async _probeCriticalSystemTopology(deadline, options = {}) {
+    const enabled =
+      this._resolveControlPlaneQuiescenceRequireCriticalSystemSpread(options);
+    if (!enabled) {
+      return {
+        enabled: false,
+        ready: true,
+        readyTableCount: ZERO,
+        totalSpreadGap: ZERO,
+        tables: [],
+      };
+    }
+
+    const tableNames =
+      this._resolveControlPlaneQuiescenceCriticalSystemTableNames(options);
+    const requiredDistinctNodeCount =
+      this._resolveControlPlaneQuiescenceCriticalSystemRequiredDistinctNodeCount(
+        options,
+      );
+    const tables = [];
+    for (const tableName of tableNames) {
+      tables.push(
+        await this._probeCriticalSystemTableDistribution(
+          deadline,
+          tableName,
+          requiredDistinctNodeCount,
+        ),
+      );
+    }
+    const readyTableCount = tables.filter((table) => table.ready === true).length;
+    const totalSpreadGap = tables.reduce((sum, table) => {
+      const spreadGap = Number.isInteger(table?.spreadGap) ?
+        table.spreadGap :
+        requiredDistinctNodeCount;
+      return sum + spreadGap;
+    }, ZERO);
+    return {
+      enabled: true,
+      ready: readyTableCount === tables.length,
+      readyTableCount,
+      requiredDistinctNodeCount,
+      totalSpreadGap,
+      tables,
+    };
+  }
+
+  async _probeCriticalSystemTableDistribution(
+    deadline,
+    tableName,
+    requiredDistinctNodeCount,
+  ) {
+    const nodes = [...this._nodes.values()];
+    nodes.sort((left, right) => {
+      const leftRank = left.role === NODE_ROLES.SEED ? 0 : 1;
+      const rightRank = right.role === NODE_ROLES.SEED ? 0 : 1;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      return String(left.id).localeCompare(String(right.id));
+    });
+
+    const discoverySql = buildServiceDiscoverySql({tableName});
+    let selectedSummary = null;
+    let lastError = null;
+    for (const node of nodes) {
+      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
+      const timeoutMs = Math.min(
+        CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
+        remainingMs,
+      );
+      try {
+        const discoverySnapshot =
+          typeof node.queryWithTimeout === 'function' ?
+            await node.queryWithTimeout(
+              discoverySql,
+              [],
+              {
+                lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+                timeoutMs,
+              },
+            ) :
+            await node.query(discoverySql, []);
+        const discoverySummary =
+          extractCriticalSystemDiscoverySummary(discoverySnapshot);
+        const candidateSummary = {
+          tableName,
+          selectedNodeId: node.id,
+          selectedCapturedAtMs: discoverySummary.capturedAtMs,
+          readyNodeIds: discoverySummary.readyNodeIds,
+          readyDistinctNodeCount: discoverySummary.readyDistinctNodeCount,
+          readyReplicaCount: discoverySummary.readyReplicaCount,
+          totalReplicaCount: discoverySummary.totalReplicaCount,
+          requiredDistinctNodeCount,
+          spreadGap: Math.max(
+            ZERO,
+            requiredDistinctNodeCount - discoverySummary.readyDistinctNodeCount,
+          ),
+          ready:
+            discoverySummary.readyDistinctNodeCount >=
+            requiredDistinctNodeCount,
+          error: null,
+        };
+        if (isBetterCriticalSystemDiscoveryCandidate(
+          candidateSummary,
+          selectedSummary,
+        )) {
+          selectedSummary = candidateSummary;
+        }
+      } catch (error) {
+        lastError = normalizeProbeError(error);
+      }
+    }
+
+    if (selectedSummary) {
+      return selectedSummary;
+    }
+    return {
+      tableName,
+      selectedNodeId: null,
+      selectedCapturedAtMs: null,
+      readyNodeIds: [],
+      readyDistinctNodeCount: ZERO,
+      readyReplicaCount: ZERO,
+      totalReplicaCount: ZERO,
+      requiredDistinctNodeCount,
+      spreadGap: requiredDistinctNodeCount,
+      ready: false,
+      error: lastError || 'no_service_discovery_candidates',
     };
   }
 
@@ -4038,6 +7141,33 @@ class Cluster {
     return Math.min(scaledTimeout, maxScaledTimeout);
   }
 
+  _resolveActiveWaitNoProgressMaxAttempts(options = {}, timeoutMs = null) {
+    if (Number.isInteger(options.noProgressMaxAttempts)) {
+      return options.noProgressMaxAttempts > ZERO ?
+        options.noProgressMaxAttempts :
+        null;
+    }
+    if (Number.isInteger(this._config?.timeouts?.activeWaitNoProgressMaxAttempts)) {
+      return this._config.timeouts.activeWaitNoProgressMaxAttempts > ZERO ?
+        this._config.timeouts.activeWaitNoProgressMaxAttempts :
+        null;
+    }
+    const resolvedTimeoutMs = Number.isInteger(timeoutMs) && timeoutMs > ZERO ?
+      timeoutMs :
+      this._resolveActiveWaitTimeoutMs();
+    const estimatedAttempts = Math.max(
+      ONE,
+      Math.floor(resolvedTimeoutMs / ACTIVE_POLL_INTERVAL_MS),
+    );
+    if (estimatedAttempts < STARTUP_GATE_WAITING_EVENT_INTERVAL) {
+      return null;
+    }
+    return Math.max(
+      STARTUP_GATE_WAITING_EVENT_INTERVAL,
+      Math.floor(estimatedAttempts / 2),
+    );
+  }
+
   _resolveLoadReadinessStableWindowMs(options = {}) {
     if (Number.isFinite(options.stableWindowMs)) {
       return Math.max(ZERO, Math.floor(options.stableWindowMs));
@@ -4064,43 +7194,430 @@ class Cluster {
     return LOAD_READINESS_STABILITY_TIMEOUT_MS;
   }
 
-  async _waitForAllActive() {
-    const timeout = this._resolveActiveWaitTimeoutMs();
-    const deadline = Date.now() + timeout;
-    const inactiveSummaryCounts = new Map();
-    const pollResult = await pollUntilCondition({
-      deadline,
-      intervalMs: ACTIVE_POLL_INTERVAL_MS,
-      sleep: (ms) => this._sleep(ms),
-      probe: () => this._probeClusterActiveState(deadline),
-      isSuccess: (result) => result.allActive === true,
-      onAttempt: ({attempts, elapsedMs, lastResult}) => {
-        for (const diagnostic of lastResult.nodeDiagnostics || []) {
-          if (diagnostic.active === true) {
-            continue;
-          }
-          const summaryKey = diagnostic.error ?
-            'error:' + diagnostic.error :
-            'state:' + (diagnostic.state || UNKNOWN_STATE);
-          inactiveSummaryCounts.set(
-            summaryKey,
-            (inactiveSummaryCounts.get(summaryKey) || 0) + 1,
-          );
-        }
+  _resolveControlPlaneQuiescenceStableWindowMs(options = {}) {
+    if (Number.isFinite(options.stableWindowMs) &&
+        options.stableWindowMs >= ZERO) {
+      return Math.floor(options.stableWindowMs);
+    }
+    if (Number.isFinite(this._config?.benchmark?.quiescentStableWindowMs) &&
+        this._config.benchmark.quiescentStableWindowMs >= ZERO) {
+      return Math.floor(this._config.benchmark.quiescentStableWindowMs);
+    }
+    return BENCHMARK_DEFAULTS.quiescentStableWindowMs;
+  }
 
-        this._recordPeriodicStartupWaitingStage(
-          CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
-          {
+  _resolveControlPlaneQuiescenceTimeoutMs(options = {}) {
+    if (Number.isFinite(options.timeoutMs) && options.timeoutMs > ZERO) {
+      return Math.max(MIN_TIMEOUT_MS, Math.floor(options.timeoutMs));
+    }
+    if (Number.isFinite(this._config?.benchmark?.quiescentTimeoutMs) &&
+        this._config.benchmark.quiescentTimeoutMs > ZERO) {
+      return Math.max(
+        MIN_TIMEOUT_MS,
+        Math.floor(this._config.benchmark.quiescentTimeoutMs),
+      );
+    }
+    if (Number.isFinite(this._config?.benchmark?.readyTimeoutMs) &&
+        this._config.benchmark.readyTimeoutMs > ZERO) {
+      return Math.max(
+        MIN_TIMEOUT_MS,
+        Math.floor(this._config.benchmark.readyTimeoutMs),
+      );
+    }
+    return BENCHMARK_DEFAULTS.readyTimeoutMs;
+  }
+
+  _resolveControlPlaneQuiescenceNoProgressTimeoutMs(options = {}) {
+    if (Number.isInteger(options.noProgressTimeoutMs) &&
+        options.noProgressTimeoutMs > ZERO) {
+      return options.noProgressTimeoutMs;
+    }
+    if (Number.isInteger(this._config?.benchmark?.quiescentNoProgressTimeoutMs) &&
+        this._config.benchmark.quiescentNoProgressTimeoutMs > ZERO) {
+      return this._config.benchmark.quiescentNoProgressTimeoutMs;
+    }
+    return null;
+  }
+
+  _resolveControlPlaneQuiescenceMaxInFlightCount(options = {}) {
+    if (Number.isInteger(options.maxInFlightCount) &&
+        options.maxInFlightCount >= ZERO) {
+      return options.maxInFlightCount;
+    }
+    if (Number.isInteger(this._config?.benchmark?.preloadMaxReplicaOpsInFlight) &&
+        this._config.benchmark.preloadMaxReplicaOpsInFlight >= ZERO) {
+      return this._config.benchmark.preloadMaxReplicaOpsInFlight;
+    }
+    return ZERO;
+  }
+
+  _resolveControlPlaneQuiescenceRequireCriticalSystemSpread(options = {}) {
+    if (typeof options.requireCriticalSystemSpread === 'boolean') {
+      return options.requireCriticalSystemSpread;
+    }
+    return this._config?.benchmark?.strictPreloadReadiness === true;
+  }
+
+  _resolveControlPlaneQuiescenceCriticalSystemTableNames(options = {}) {
+    if (Array.isArray(options.criticalSystemTableNames)) {
+      const tableNames = normalizeDistinctStringArray(
+        options.criticalSystemTableNames,
+      );
+      if (tableNames.length > ZERO) {
+        return tableNames;
+      }
+    }
+    return [...CONTROL_PLANE_QUIESCENCE_CRITICAL_TABLES];
+  }
+
+  _resolveControlPlaneQuiescenceCriticalSystemRequiredDistinctNodeCount(
+    options = {},
+  ) {
+    if (Number.isInteger(options.criticalSystemRequiredDistinctNodeCount) &&
+        options.criticalSystemRequiredDistinctNodeCount > ZERO) {
+      return options.criticalSystemRequiredDistinctNodeCount;
+    }
+    const configuredReplicaCount = Number.isInteger(
+      this._config?.benchmark?.replicationFactor,
+    ) && this._config.benchmark.replicationFactor > ZERO ?
+      this._config.benchmark.replicationFactor :
+      3;
+    const clusterNodeCount = Math.max(ONE, this._nodes.size || ONE);
+    return Math.max(ONE, Math.min(configuredReplicaCount, clusterNodeCount));
+  }
+
+  async _waitForAllActive(options = {}) {
+    const readinessMode = options.mode === CLUSTER_READINESS_MODE_LOAD ?
+      CLUSTER_READINESS_MODE_LOAD :
+      CLUSTER_READINESS_MODE_STARTUP;
+    const timeoutOverrideMs = Number(options.timeoutMs);
+    const timeout = Number.isFinite(timeoutOverrideMs) &&
+      timeoutOverrideMs >= MIN_TIMEOUT_MS ?
+      Math.floor(timeoutOverrideMs) :
+      this._resolveActiveWaitTimeoutMs();
+    const deadline = Date.now() + timeout;
+    const forceRepairAfterMs = Number.isFinite(
+      this._config?.timeouts?.activeWaitForceRepairAfter,
+    ) ?
+      Math.max(ZERO, this._config.timeouts.activeWaitForceRepairAfter) :
+      TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+    const noProgressMaxAttempts = readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+      this._resolveActiveWaitNoProgressMaxAttempts(options, timeout) :
+      null;
+    const forceRepairThreshold = Date.now() + forceRepairAfterMs;
+    let forcedRepairIssued = false;
+    const inactiveSummaryCounts = new Map();
+    const blockerHistoryBySignature = new Map();
+    let bestProgressSnapshot = null;
+    let bestProgressScore = Number.NEGATIVE_INFINITY;
+    let lastMeaningfulProgressAttempt = ZERO;
+    let lastMeaningfulProgressElapsedMs = ZERO;
+    let lastMeaningfulProgressSnapshot = null;
+    let lastObservedProgressSnapshot = null;
+    let lastObservedAttempt = ZERO;
+    let lastObservedElapsedMs = ZERO;
+
+    const buildNoProgressDetails = (attempts, elapsedMs, stalled, progressSnapshot) => {
+      if (!Number.isInteger(noProgressMaxAttempts) ||
+          noProgressMaxAttempts <= ZERO) {
+        return null;
+      }
+      const coordinatorCyclesSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      return {
+        enabled: true,
+        mode: readinessMode,
+        maxAttempts: noProgressMaxAttempts,
+        maxCoordinatorCycles: noProgressMaxAttempts,
+        attemptsSinceProgress: coordinatorCyclesSinceProgress,
+        coordinatorCyclesSinceProgress,
+        stalled: stalled === true,
+        lastMeaningfulProgressAttempt:
+          lastMeaningfulProgressAttempt || null,
+        lastMeaningfulProgressElapsedMs:
+          lastMeaningfulProgressElapsedMs || null,
+        lastMeaningfulProgress:
+          lastMeaningfulProgressSnapshot || null,
+        currentProgress: progressSnapshot || null,
+        closureRecordId: progressSnapshot?.closureRecordId || null,
+        closureWitnessClass: progressSnapshot?.closureWitnessClass || null,
+      };
+    };
+
+    const buildWaitingDetails = (attempts, elapsedMs, lastResult) => {
+      const progressSnapshot = buildActiveWaitProgressSnapshot(
+        lastResult,
+        this._nodes.size,
+      );
+      const invariantBreaches = summarizeInvariantBreaches(
+        lastResult?.priorityRecoveryInvariants?.invariants,
+      );
+      const progressScore = scoreActiveWaitProgress(progressSnapshot);
+      const meaningfulProgressObserved = progressScore > bestProgressScore;
+      if (meaningfulProgressObserved) {
+        bestProgressScore = progressScore;
+        bestProgressSnapshot = progressSnapshot;
+        lastMeaningfulProgressAttempt = attempts;
+        lastMeaningfulProgressElapsedMs = elapsedMs;
+        lastMeaningfulProgressSnapshot = progressSnapshot;
+      }
+
+      upsertActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+        progressSnapshot,
+        attempts,
+        elapsedMs,
+      );
+      lastObservedProgressSnapshot = progressSnapshot;
+      lastObservedAttempt = attempts;
+      lastObservedElapsedMs = elapsedMs;
+
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      const blockerHistory = summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      );
+      const waitingDetails = {
+        nodeDiagnostics: lastResult?.nodeDiagnostics || [],
+        snapshotCoverage: lastResult?.snapshotCoverage || null,
+        publicationConvergenceGate: lastResult?.publicationConvergenceGate || null,
+        priorityRecoveryInvariants: lastResult?.priorityRecoveryInvariants || null,
+        invariantBreaches,
+        activeGateProgress: progressSnapshot,
+        activeGateBestProgress: bestProgressSnapshot || null,
+        activeGateNoProgress: buildNoProgressDetails(
+          attempts,
+          elapsedMs,
+          false,
+          progressSnapshot,
+        ),
+        activeGateBlockerHistory: blockerHistory,
+      };
+
+      return {
+        waitingDetails,
+        invariantBreaches,
+        progressSnapshot,
+        attemptsSinceProgress,
+        blockerHistory,
+      };
+    };
+
+    const isLoadModePrioritySpreadSoftSuccess = (result) => {
+      if (readinessMode !== CLUSTER_READINESS_MODE_LOAD ||
+          !result ||
+          typeof result !== 'object') {
+        return false;
+      }
+      if (result?.priorityRecoveryInvariants?.passed !== true) {
+        return false;
+      }
+      const progressSnapshot = buildActiveWaitProgressSnapshot(
+        result,
+        this._nodes.size,
+      );
+      return progressSnapshot?.closureRecordId === 'CL-003';
+    };
+
+    let pollResult;
+    try {
+      pollResult = await pollUntilCondition({
+        deadline,
+        intervalMs: ACTIVE_POLL_INTERVAL_MS,
+        sleep: (ms) => this._sleep(ms),
+        probe: () => {
+          const forceRepair =
+            forcedRepairIssued === false &&
+            Date.now() >= forceRepairThreshold;
+          if (forceRepair) {
+            forcedRepairIssued = true;
+          }
+          return this._probeClusterActiveState(deadline, {
+            mode: readinessMode,
+            forceRepair,
+          });
+        },
+        isSuccess: (result) => {
+          return result.allActive === true ||
+            isLoadModePrioritySpreadSoftSuccess(result);
+        },
+        onAttempt: ({attempts, elapsedMs, lastResult}) => {
+          for (const diagnostic of lastResult.nodeDiagnostics || []) {
+            if (diagnostic.active === true) {
+              continue;
+            }
+            const summaryKey = diagnostic.error ?
+              ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX + diagnostic.error :
+              ACTIVE_WAIT_INACTIVE_SUMMARY_STATE_PREFIX +
+                (diagnostic.state || UNKNOWN_STATE);
+            inactiveSummaryCounts.set(
+              summaryKey,
+              (inactiveSummaryCounts.get(summaryKey) || ZERO) + 1,
+            );
+          }
+
+          const waitingProgress = buildWaitingDetails(
             attempts,
             elapsedMs,
-          },
-          {
-            nodeDiagnostics: lastResult.nodeDiagnostics || [],
-            snapshotCoverage: lastResult.snapshotCoverage || null,
-          },
-        );
-      },
-    });
+            lastResult,
+          );
+
+          this._recordPeriodicStartupWaitingStage(
+            CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+            {
+              attempts,
+              elapsedMs,
+            },
+            waitingProgress.waitingDetails,
+          );
+
+          if (waitingProgress.invariantBreaches.hardCount > ZERO) {
+            const hardReasonCodes = waitingProgress.invariantBreaches.hardBreaches
+              .map((entry) => String(entry?.reasonCode || '').trim())
+              .filter((reasonCode) => reasonCode.length > ZERO);
+            const hardInvariantIds = waitingProgress.invariantBreaches.hardBreaches
+              .map((entry) => String(entry?.invariantId || '').trim())
+              .filter((invariantId) => invariantId.length > ZERO);
+            const invariantFailureDetails = {
+              reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+              mode: readinessMode,
+              attempts,
+              elapsedMs,
+              hardReasonCodes,
+              hardInvariantIds,
+              invariantBreaches: waitingProgress.invariantBreaches,
+            };
+            this._recordClusterStage(
+              CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+              {
+                attempts,
+                elapsedMs,
+                ...waitingProgress.waitingDetails,
+                invariantFailure: invariantFailureDetails,
+              },
+            );
+            const invariantError = new Error(
+              ACTIVE_WAIT_INVARIANT_BREACH_MESSAGE_PREFIX +
+              '(mode=' +
+              readinessMode +
+              ', reasonCodes=' +
+              (hardReasonCodes.length > ZERO ?
+                hardReasonCodes.join('|') :
+                UNKNOWN_REASON) +
+              ', invariantIds=' +
+              (hardInvariantIds.length > ZERO ?
+                hardInvariantIds.join('|') :
+                UNKNOWN_REASON) +
+              ')',
+            );
+            invariantError.diagnostics = {
+              reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+              invariantBreaches: waitingProgress.invariantBreaches,
+              priorityRecoveryInvariants:
+                lastResult?.priorityRecoveryInvariants || null,
+              noProgress: buildNoProgressDetails(
+                attempts,
+                elapsedMs,
+                false,
+                waitingProgress.progressSnapshot,
+              ),
+            };
+            invariantError.invariantBreaches = waitingProgress.invariantBreaches;
+            throw invariantError;
+          }
+
+          if (Number.isInteger(noProgressMaxAttempts) &&
+              noProgressMaxAttempts > ZERO &&
+              waitingProgress.attemptsSinceProgress >= noProgressMaxAttempts) {
+            const stalledCoordinatorCycles =
+              waitingProgress.attemptsSinceProgress;
+            const stalledNoProgress = {
+              ...buildNoProgressDetails(
+                attempts,
+                elapsedMs,
+                true,
+                waitingProgress.progressSnapshot,
+              ),
+              reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+              stalledReason:
+                ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+                String(stalledCoordinatorCycles),
+              failedNoProgress: {
+                phase: CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+                details: {
+                  mode: readinessMode,
+                  budgetCoordinatorCycles: noProgressMaxAttempts,
+                  budgetAttempts: noProgressMaxAttempts,
+                  attempts,
+                  elapsedMs,
+                  attemptsSinceProgress: stalledCoordinatorCycles,
+                  coordinatorCyclesSinceProgress:
+                    stalledCoordinatorCycles,
+                },
+              },
+              lastMeaningfulChange:
+                lastMeaningfulProgressSnapshot &&
+                  typeof lastMeaningfulProgressSnapshot === 'object' ?
+                  {
+                    attempt: lastMeaningfulProgressAttempt,
+                    elapsedMs: lastMeaningfulProgressElapsedMs,
+                    message: formatActiveWaitProgressSnapshot(
+                      lastMeaningfulProgressSnapshot,
+                    ),
+                  } :
+                  null,
+              lastProgressEvent: waitingProgress.progressSnapshot &&
+                typeof waitingProgress.progressSnapshot === 'object' ?
+                {
+                  attempt: attempts,
+                  elapsedMs,
+                  message: formatActiveWaitProgressSnapshot(
+                    waitingProgress.progressSnapshot,
+                  ),
+                } :
+                null,
+              activeGateBlockerHistory: waitingProgress.blockerHistory,
+            };
+            this._recordClusterStage(
+              CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+              {
+                attempts,
+                elapsedMs,
+                ...waitingProgress.waitingDetails,
+                activeGateNoProgress: stalledNoProgress,
+              },
+            );
+            const stalledError = new Error(
+              ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+              'for ' +
+              String(stalledCoordinatorCycles) +
+              ' attempts (mode=' +
+              readinessMode +
+              ', progress=' +
+              formatActiveWaitProgressSnapshot(waitingProgress.progressSnapshot) +
+              ')',
+            );
+            stalledError.diagnostics = {
+              noProgress: stalledNoProgress,
+              invariantBreaches: waitingProgress.invariantBreaches,
+              priorityRecoveryInvariants: lastResult?.priorityRecoveryInvariants || null,
+            };
+            throw stalledError;
+          }
+        },
+      });
+    } catch (error) {
+      try {
+        await this._collectFailureLogs();
+      } catch (_collectFailureLogsError) {
+        // Best effort log collection only.
+      }
+      throw error;
+    }
 
     if (pollResult.success) {
       return;
@@ -4114,16 +7631,129 @@ class Cluster {
     const snapshotCoverageSummary = formatSnapshotCoverage(
       pollResult.lastResult?.snapshotCoverage || null,
     );
-    throw new Error(
+    const publicationConvergenceSummary = formatPublicationConvergenceGate(
+      pollResult.lastResult?.publicationConvergenceGate || null,
+    );
+    const priorityRecoveryFailingInvariantIds = normalizeDistinctStringArray(
+      pollResult.lastResult?.priorityRecoveryInvariants?.failingInvariantIds,
+    );
+    const priorityRecoveryInvariantBreaches = summarizeInvariantBreaches(
+      pollResult.lastResult?.priorityRecoveryInvariants?.invariants,
+    );
+    const finalProgressSnapshot = lastObservedProgressSnapshot ||
+      buildActiveWaitProgressSnapshot(
+        pollResult.lastResult || {},
+        this._nodes.size,
+      );
+    const finalAttemptsSinceProgress = Math.max(
+      ZERO,
+      pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),
+    );
+    const finalNoProgress = buildNoProgressDetails(
+      pollResult.attempts,
+      pollResult.elapsedMs,
+      false,
+      finalProgressSnapshot,
+    );
+    if (finalNoProgress && !Array.isArray(finalNoProgress.activeGateBlockerHistory)) {
+      finalNoProgress.activeGateBlockerHistory = summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      );
+    }
+    this._recordClusterStage(
+      CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+      {
+        attempts: pollResult.attempts,
+        elapsedMs: pollResult.elapsedMs,
+        nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+        snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+        publicationConvergenceGate:
+          pollResult.lastResult?.publicationConvergenceGate || null,
+        priorityRecoveryInvariants: pollResult.lastResult?.priorityRecoveryInvariants || null,
+        invariantBreaches: priorityRecoveryInvariantBreaches,
+        activeGateProgress: finalProgressSnapshot,
+        activeGateBestProgress: bestProgressSnapshot || null,
+        activeGateNoProgress: finalNoProgress,
+        activeGateBlockerHistory: summarizeActiveWaitBlockerHistory(
+          blockerHistoryBySignature,
+        ),
+      },
+    );
+    const timeoutError = new Error(
       'Not all nodes reached ' + ACTIVE_STATE +
       ' state within ' + timeout + 'ms' +
       ' (attempts=' + pollResult.attempts +
       ', elapsedMs=' + pollResult.elapsedMs +
       ', nodeDiagnostics=' + (nodeDiagnosticsSummary || 'none') +
       ', snapshotCoverage=' + snapshotCoverageSummary +
+      ', publicationConvergence=' + publicationConvergenceSummary +
+      ', priorityRecoveryInvariants=' +
+      (priorityRecoveryFailingInvariantIds.length > ZERO ?
+        priorityRecoveryFailingInvariantIds.join('|') :
+        'passed') +
+      ', progress=' + formatActiveWaitProgressSnapshot(finalProgressSnapshot) +
+      (
+        Number.isInteger(noProgressMaxAttempts) &&
+        noProgressMaxAttempts > ZERO ?
+          ', attemptsSinceProgress=' +
+          String(finalAttemptsSinceProgress) +
+          '/' +
+          String(noProgressMaxAttempts) :
+          ''
+      ) +
       ', inactiveSummary=' + (inactiveSummary || 'none') +
       ')',
     );
+    timeoutError.diagnostics = {
+      noProgress: finalNoProgress ? {
+        ...finalNoProgress,
+        reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+        stalledReason:
+          ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+            String(finalAttemptsSinceProgress),
+        failedNoProgress: {
+          phase: CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+          details: {
+            mode: readinessMode,
+            budgetCoordinatorCycles: noProgressMaxAttempts,
+            budgetAttempts: noProgressMaxAttempts,
+            attempts: pollResult.attempts,
+            elapsedMs: pollResult.elapsedMs,
+            attemptsSinceProgress: finalAttemptsSinceProgress,
+            coordinatorCyclesSinceProgress: finalAttemptsSinceProgress,
+            timedOut: true,
+          },
+        },
+        lastMeaningfulChange:
+          lastMeaningfulProgressSnapshot &&
+            typeof lastMeaningfulProgressSnapshot === 'object' ?
+            {
+              attempt: lastMeaningfulProgressAttempt,
+              elapsedMs: lastMeaningfulProgressElapsedMs,
+              message: formatActiveWaitProgressSnapshot(
+                lastMeaningfulProgressSnapshot,
+              ),
+            } :
+            null,
+        lastProgressEvent:
+          lastObservedProgressSnapshot &&
+            typeof lastObservedProgressSnapshot === 'object' ?
+            {
+              attempt: lastObservedAttempt,
+              elapsedMs: lastObservedElapsedMs,
+              message: formatActiveWaitProgressSnapshot(
+                lastObservedProgressSnapshot,
+              ),
+            } :
+            null,
+        priorityRecoveryInvariants:
+          pollResult.lastResult?.priorityRecoveryInvariants || null,
+      } : null,
+      invariantBreaches: priorityRecoveryInvariantBreaches,
+      priorityRecoveryInvariants:
+        pollResult.lastResult?.priorityRecoveryInvariants || null,
+    };
+    throw timeoutError;
   }
 
   async waitForLoadReadinessStability(options = {}) {
@@ -4147,7 +7777,9 @@ class Cluster {
       intervalMs: ACTIVE_POLL_INTERVAL_MS,
       sleep: (ms) => this._sleep(ms),
       probe: async () => {
-        const activeProbe = await this._probeClusterActiveState(deadline);
+        const activeProbe = await this._probeClusterActiveState(deadline, {
+          mode: CLUSTER_READINESS_MODE_LOAD,
+        });
         const now = Date.now();
         if (activeProbe.allActive === true) {
           if (stableWindowStartedAtMs === null) {
@@ -4205,6 +7837,8 @@ class Cluster {
           attempts: pollResult.attempts,
           elapsedMs: pollResult.elapsedMs,
           snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+          publicationConvergenceGate:
+            pollResult.lastResult?.publicationConvergenceGate || null,
         },
       );
       return;
@@ -4217,6 +7851,9 @@ class Cluster {
     const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
     const snapshotCoverageSummary = formatSnapshotCoverage(
       pollResult.lastResult?.snapshotCoverage || null,
+    );
+    const publicationConvergenceSummary = formatPublicationConvergenceGate(
+      pollResult.lastResult?.publicationConvergenceGate || null,
     );
     throw new Error(
       'Cluster load readiness did not stabilize within ' +
@@ -4233,6 +7870,8 @@ class Cluster {
       (nodeDiagnosticsSummary || 'none') +
       ', snapshotCoverage=' +
       snapshotCoverageSummary +
+      ', publicationConvergence=' +
+      publicationConvergenceSummary +
       ', instabilitySummary=' +
       (instabilitySummary || 'none') +
       ')',
@@ -4321,6 +7960,144 @@ async function bestEffortCleanup(provider, clusterId) {
     }
   } catch (_err) {
     // Best-effort
+  }
+}
+
+function isProcessAlive(pid) {
+  const normalizedPid = Number(pid);
+  if (!Number.isInteger(normalizedPid) || normalizedPid <= ZERO) {
+    return false;
+  }
+  try {
+    process.kill(normalizedPid, ZERO);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+async function readReusableClusterLease(lockPath) {
+  try {
+    const raw = await fs.readFile(lockPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ?
+      parsed :
+      null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function tryRemoveReusableClusterLease(lockPath) {
+  try {
+    await fs.unlink(lockPath);
+    return true;
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function acquireReusableClusterLease(options = {}) {
+  const lockPath = String(options.lockPath || '');
+  if (lockPath.length === ZERO) {
+    throw new Error('Reusable cluster lease path is required');
+  }
+  const timeoutMs = Math.max(
+    REUSE_LEASE_MIN_TIMEOUT_MS,
+    Math.floor(Number(options.timeoutMs) || REUSE_LEASE_MIN_TIMEOUT_MS),
+  );
+  const pollIntervalMs = Math.max(
+    MIN_TIMEOUT_MS,
+    Math.floor(Number(options.pollIntervalMs) || REUSE_LEASE_POLL_INTERVAL_MS),
+  );
+  const sleep = typeof options.sleep === 'function' ?
+    options.sleep :
+    (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const metadata = options.metadata && typeof options.metadata === 'object' ?
+    options.metadata :
+    {};
+  const deadlineAtMs = Date.now() + timeoutMs;
+  await fs.mkdir(dirname(lockPath), {recursive: true});
+
+  while (true) {
+    let handle = null;
+    try {
+      handle = await fs.open(lockPath, 'wx');
+      await handle.writeFile(
+        JSON.stringify(
+          {
+            ...metadata,
+            pid: Number.isInteger(metadata.pid) ? metadata.pid : process.pid,
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+      let released = false;
+      return {
+        lockPath,
+        release: async () => {
+          if (released) {
+            return;
+          }
+          released = true;
+          try {
+            await handle.close();
+          } catch (_error) {
+            // Best-effort close
+          }
+          await tryRemoveReusableClusterLease(lockPath);
+        },
+      };
+    } catch (error) {
+      if (handle) {
+        try {
+          await handle.close();
+        } catch (_closeError) {
+          // Best-effort close
+        }
+      }
+      if (error?.code !== 'EEXIST') {
+        throw error;
+      }
+
+      const existingLease = await readReusableClusterLease(lockPath);
+      const holderPid = Number(existingLease?.pid) || null;
+      if (!isProcessAlive(holderPid)) {
+        await tryRemoveReusableClusterLease(lockPath);
+        continue;
+      }
+
+      const holderScenario = typeof existingLease?.scenarioName === 'string' &&
+        existingLease.scenarioName.length > ZERO ?
+        existingLease.scenarioName :
+        'unknown';
+      if (holderPid === process.pid) {
+        throw new Error(
+          'Reusable cluster lease already held in this process ' +
+          '(path=' + lockPath +
+          ', holderPid=' + holderPid +
+          ', holderScenario=' + holderScenario +
+          ')',
+        );
+      }
+
+      if (Date.now() >= deadlineAtMs) {
+        throw new Error(
+          'Timed out waiting for reusable cluster lease ' +
+          '(path=' + lockPath +
+          ', timeoutMs=' + timeoutMs +
+          ', holderPid=' + String(holderPid) +
+          ', holderScenario=' + holderScenario +
+          ')',
+        );
+      }
+      await sleep(pollIntervalMs);
+    }
   }
 }
 

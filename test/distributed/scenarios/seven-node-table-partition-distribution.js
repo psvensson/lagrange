@@ -12,8 +12,11 @@ import {
 } from '../harness/scenario-config.js';
 import {
   BENCHMARK_WORKLOAD_PROFILE,
+  createPartitioningAdaptiveDispatchGuardrail,
+  createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
   assertSplitPolicyPrecondition,
+  resolvePartitioningBenchmarkLoadOpsPerSec,
   resolvePartitioningLoadTableName,
   waitForPartitionGrowthAndSpread,
 } from './table-distribution-helpers.js';
@@ -74,18 +77,42 @@ async function run(cluster, options = {}) {
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
+  if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
+    await cluster.waitForControlPlaneQuiescence();
+  }
 
   const tablePreparation = await prepareBenchmarkPartitioningTable(
     seedNode,
-    {tableName: effectiveTableName},
+    {
+      tableName: effectiveTableName,
+      queryNodes: nodes,
+    },
   );
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-table-partition-distribution',
   });
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      queryNodes: nodes,
+    },
+  );
+  const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
+    loadOpsPerSec,
+    loadNodePlan.initialNodes.length,
+    nodes.length,
+  );
 
   const loadRun = cluster.startLoad({
-    opsPerSec: loadOpsPerSec,
+    nodes: loadNodePlan.initialNodes,
+    nodeResolver: loadNodePlan.nodeResolver,
+    opsPerSec: effectiveLoadOpsPerSec,
     duration: loadDuration,
+    adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: [LOAD_OPERATION_INSERT],
     tableName: effectiveTableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
@@ -99,10 +126,14 @@ async function run(cluster, options = {}) {
       pollIntervalMs: distributionPollIntervalMs,
       minAdditionalPartitions,
       minDistinctReplicaNodes,
+      queryNodes: nodes,
     });
   } finally {
     if (typeof loadRun.cancel === 'function') {
       loadRun.cancel();
+    }
+    if (typeof loadNodePlan.stop === 'function') {
+      loadNodePlan.stop();
     }
   }
 

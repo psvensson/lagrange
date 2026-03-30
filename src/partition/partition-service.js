@@ -27,7 +27,11 @@ import {createControlPlaneRuntimeBundle} from
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  OperationType,
+  ReplicaStatus,
+  TERMINAL_STATUSES,
+} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
@@ -65,7 +69,14 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
+  LIFECYCLE_REASON,
+} from '../bootstrap/lifecycle-controller-constants.js';
+import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   attachTrafficReadinessListener,
+  getTrafficReadinessSnapshot,
   isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
   isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
 } from '../bootstrap/traffic-readiness-utils.js';
@@ -112,6 +123,7 @@ import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
+  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
@@ -155,6 +167,10 @@ const ACTIVE_VOTER_ROLES = new Set([
   PARTITION_RAFT_ROLE.LEADER,
   PARTITION_RAFT_ROLE.FOLLOWER,
   PARTITION_RAFT_ROLE.CANDIDATE,
+]);
+const ADD_LIKE_REPLICA_OPERATION_TYPES = new Set([
+  OperationType.ADD,
+  OperationType.REPLACE,
 ]);
 const WRITE_PHASE_FIELD_ENTRY_BUILD_MS = 'entryBuildMs';
 const WRITE_PHASE_FIELD_LOG_APPEND_MS = 'logAppendMs';
@@ -308,6 +324,7 @@ class PartitionService extends EventEmitter {
       new CDCPipelineMetrics();
     // Optional CDC confirmation tracker for awaitable CDC delivery
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
+    this.pendingCDCEventDeliveries = new Set();
 
     // CDC delivery helper (subscriber management, buffering, replay)
     this.cdcDelivery = new PartitionCDCDelivery(this);
@@ -433,6 +450,9 @@ class PartitionService extends EventEmitter {
     this.peerAddresses = options.peerAddresses || [];
     this.learnerPromotionDelayMs = options.learnerPromotionDelayMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
+    this.learnerPromotionPriorityRecoveryDelayMs =
+      options.learnerPromotionPriorityRecoveryDelayMs ||
+      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS;
     this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
     this.learnerPromotionTimer = null;
@@ -599,6 +619,7 @@ class PartitionService extends EventEmitter {
   isBackgroundWorkReady() {
     return isBackgroundWorkLifecycleReady(
       this.metadataPublicationReadinessState,
+      {partitionId: this.partitionId},
     );
   }
 
@@ -707,7 +728,7 @@ class PartitionService extends EventEmitter {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
         allowPressureDefer: true,
         routingReadinessDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          this.getMetadataPublicationReadinessDimension(),
       }),
       buildExpectedCacheFields: (role) => ({
         raft_role: role,
@@ -759,7 +780,7 @@ class PartitionService extends EventEmitter {
       buildUpdateOptions: () => ({
         deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
         routingReadinessDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          this.getMetadataPublicationReadinessDimension(),
       }),
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
@@ -1453,7 +1474,9 @@ class PartitionService extends EventEmitter {
         promotionDelayMs: this.learnerPromotionDelayMs,
       });
       // Schedule promotion check after minimum delay
-      this.scheduleLearnerPromotion();
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
+      );
     }
 
     wireReplicaLifecycleEvents(this, {
@@ -2558,12 +2581,17 @@ class PartitionService extends EventEmitter {
           // The leader already emits CDC in applyWrite(); followers
           // must not duplicate those events.
           if (this.isLeader) {
-            this.generateCDCEvent(command).catch((err) => {
-              this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
-                partitionId: this.partitionId,
-                error: err.message,
-              });
-            });
+            this.trackPendingCDCEvent(
+              this.generateCDCEvent(command).catch((err) => {
+                if (this.isShutdown) {
+                  return;
+                }
+                this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
+                  partitionId: this.partitionId,
+                  error: err.message,
+                });
+              }),
+            );
           }
         } catch (error) {
           if (this.isIdempotentInsertReplayConstraint(error, command)) {
@@ -4121,12 +4149,17 @@ class PartitionService extends EventEmitter {
       this.trackAppliedEntryKey(entryKey);
 
       // Generate CDC event asynchronously to avoid blocking write acknowledgments.
-      this.generateCDCEvent({...entry, changes: info.changes}).catch((error) => {
-        this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
-          partitionId: this.partitionId,
-          error: error.message,
-        });
-      });
+      this.trackPendingCDCEvent(
+        this.generateCDCEvent({...entry, changes: info.changes}).catch((error) => {
+          if (this.isShutdown) {
+            return;
+          }
+          this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
+            partitionId: this.partitionId,
+            error: error.message,
+          });
+        }),
+      );
 
       await this.handleSplitReplicationAfterWrite({
         ...entry,
@@ -4194,6 +4227,10 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async generateCDCEvent(entry) {
+    if (this.isShutdown) {
+      return;
+    }
+
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
       partitionId: this.partitionId,
       entryType: entry.type,
@@ -4415,6 +4452,23 @@ class PartitionService extends EventEmitter {
 
     this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
     this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
+  }
+
+  /**
+   * Track fire-and-forget CDC delivery so shutdown can await it.
+   * @param {Promise<*>} promise
+   * @return {Promise<*>}
+   */
+  trackPendingCDCEvent(promise) {
+    if (!promise || typeof promise.finally !== 'function') {
+      return promise;
+    }
+
+    this.pendingCDCEventDeliveries.add(promise);
+    promise.finally(() => {
+      this.pendingCDCEventDeliveries.delete(promise);
+    });
+    return promise;
   }
 
   /**
@@ -6054,6 +6108,11 @@ class PartitionService extends EventEmitter {
       'background';
   }
 
+  getMetadataPublicationReadinessDimension() {
+    return CONTROL_PLANE_READINESS_DIMENSION
+      .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+  }
+
   /**
    * Trigger an immediate rebalance check.
    * Called when a significant cluster event occurs (e.g., node join).
@@ -6213,7 +6272,10 @@ class PartitionService extends EventEmitter {
    * This prevents new replicas from disrupting existing leadership.
    * @private
    */
-  scheduleLearnerPromotion() {
+  scheduleLearnerPromotion(
+    scheduleReason =
+      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+  ) {
     if (this.learnerPromotionTimer) {
       return;
     }
@@ -6226,15 +6288,51 @@ class PartitionService extends EventEmitter {
       return;
     }
 
+    const delayMs = this.resolveLearnerPromotionDelayMs(scheduleReason);
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
-      delayMs: this.learnerPromotionDelayMs,
+      delayMs,
+      scheduleReason,
     });
 
     this.learnerPromotionTimer = setTimeout(() => {
       this.checkLearnerPromotion();
-    }, this.learnerPromotionDelayMs);
+    }, delayMs);
+  }
+
+  isPriorityRecoveryPendingForLearnerPromotion() {
+    if (!isPriorityControlPlanePartition({partitionId: this.partitionId})) {
+      return false;
+    }
+    const readinessSnapshot = getTrafficReadinessSnapshot(
+      this.metadataPublicationReadinessState,
+    );
+    if (!readinessSnapshot || readinessSnapshot.draining === true) {
+      return false;
+    }
+    const reasons = Array.isArray(readinessSnapshot.reasons) ?
+      readinessSnapshot.reasons :
+      [];
+    return reasons.includes(
+      LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+    );
+  }
+
+  resolveLearnerPromotionDelayMs(scheduleReason) {
+    if (
+      scheduleReason ===
+      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY
+    ) {
+      if (this.isPriorityRecoveryPendingForLearnerPromotion()) {
+        return Math.min(
+          this.learnerPromotionDelayMs,
+          this.learnerPromotionPriorityRecoveryDelayMs,
+        );
+      }
+      return this.learnerPromotionDelayMs;
+    }
+    return this.learnerCatchUpCheckIntervalMs;
   }
 
   /**
@@ -6270,7 +6368,9 @@ class PartitionService extends EventEmitter {
         partitionId: this.partitionId,
         reason: 'leader_not_discovered',
       });
-      this.scheduleLearnerPromotion();
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
       return;
     }
 
@@ -6337,7 +6437,9 @@ class PartitionService extends EventEmitter {
         votersAfterAllLearners,
         reason: 'would_exceed_target_replica_count',
       });
-      this.scheduleLearnerPromotion();
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
       return;
     }
 
@@ -6366,7 +6468,9 @@ class PartitionService extends EventEmitter {
           'would_exceed_target_replica_count' :
           'would_cause_even_voter_count',
       });
-      this.scheduleLearnerPromotion();
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
       return;
     }
 
@@ -6385,16 +6489,83 @@ class PartitionService extends EventEmitter {
     // Promote to follower - now eligible to participate in elections
     this.role = RaftRole.FOLLOWER;
     this.queueRoleUpdate(this.role);
+    const wasJoiningExistingGroup = this.isJoiningExistingGroup === true;
+    if (wasJoiningExistingGroup) {
+      this.isJoiningExistingGroup = false;
+      this.deferElection = false;
+    }
 
     this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTED_TO_FOLLOWER, {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
       leaderId: this.leaderId,
       activeVoterCount: votersAfterPromotion,
+      wasJoiningExistingGroup,
     });
 
     // Start election timer now that we're a full participant
     this.startElection();
+  }
+
+  /**
+   * Resolve add-like in-flight replica operation targets for this partition.
+   * Operation ownership is canonical for active replacement/add workflows, so
+   * stale learner service rows without active operations must not block a
+   * joining learner's promotability.
+   *
+   * @return {Set<string>|null}
+   * @private
+   */
+  getInFlightAddLikeOperationReplicaIds() {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== PARTITION_SERVICE_TYPE.FUNCTION) {
+      return null;
+    }
+
+    const operationRows = this.systemTableCache.filter(
+      TABLES.REPLICA_OPERATIONS,
+      (operationRow) => {
+        if (!operationRow ||
+            operationRow.partition_id !== this.partitionId) {
+          return false;
+        }
+        const operationType = String(
+          operationRow.type ??
+            operationRow.operation_type ??
+            operationRow.operationType ??
+            '',
+        ).toUpperCase();
+        if (!ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationType)) {
+          return false;
+        }
+        const operationStatus = String(
+          operationRow.status ??
+            operationRow.operation_status ??
+            operationRow.operationStatus ??
+            '',
+        ).toLowerCase();
+        return !TERMINAL_STATUSES.includes(operationStatus);
+      },
+    );
+
+    if (!Array.isArray(operationRows) || operationRows.length === NUM.ZERO) {
+      return null;
+    }
+
+    const inFlightReplicaIds = new Set();
+    for (const operationRow of operationRows) {
+      const replicaId = String(
+        operationRow.replica_id ??
+          operationRow.replicaId ??
+          '',
+      ).trim();
+      if (replicaId.length > NUM.ZERO) {
+        inFlightReplicaIds.add(replicaId);
+      }
+    }
+    return inFlightReplicaIds.size > NUM.ZERO ?
+      inFlightReplicaIds :
+      null;
   }
 
   /**
@@ -6408,6 +6579,8 @@ class PartitionService extends EventEmitter {
     if (!this.systemTableCache) {
       return NUM.ONE;
     }
+    const inFlightAddLikeReplicaIds =
+      this.getInFlightAddLikeOperationReplicaIds();
 
     // Query services table for replicas of this partition
     const services = this.systemTableCache.filter(TABLES.SERVICES, (service) => {
@@ -6425,6 +6598,16 @@ class PartitionService extends EventEmitter {
       if (status === ReplicaStatus.FAILED ||
           status === ReplicaStatus.REMOVING ||
           status === ReplicaStatus.REMOVED) {
+        continue;
+      }
+      const replicaId = String(
+        service.service_id ??
+          service.replica_id ??
+          '',
+      ).trim();
+      if (inFlightAddLikeReplicaIds &&
+          inFlightAddLikeReplicaIds.size > NUM.ZERO &&
+          !inFlightAddLikeReplicaIds.has(replicaId)) {
         continue;
       }
 
@@ -6628,6 +6811,13 @@ class PartitionService extends EventEmitter {
 
     await this.quiesceRebalancing();
 
+    if (this.pendingCDCEventDeliveries.size > NUM.ZERO) {
+      await Promise.allSettled([
+        ...this.pendingCDCEventDeliveries,
+      ]);
+      this.pendingCDCEventDeliveries.clear();
+    }
+
     // Unregister from transport
     if (this.transport) {
       this.transport.unregister(this.unifiedAddress);
@@ -6651,6 +6841,7 @@ class PartitionService extends EventEmitter {
     this.cdcReplayRetryDepth = NUM.ZERO;
     this.recentlyAppliedEntryKeys.clear();
     this.recentlyAppliedEntryOrder = [];
+    this.pendingCDCEventDeliveries.clear();
 
     this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,

@@ -37,6 +37,7 @@ import {
   TABLES,
   TYPEOF,
 } from '../../constants/index.js';
+import {canonicalizeSystemTableRow} from '../../control-plane/system-row-normalizers.js';
 
 const LOG_CACHE_POPULATED =
   'System cache populated from bootstrap response';
@@ -99,19 +100,23 @@ class QuerySystemStatePhase {
         getNow: () => this.delegates.getNow(),
         getSleep: () => this.delegates.getSleep?.(),
         getWsPort: () => this.delegates.getWsPort?.(),
+        getSeedNodeId: () => this.delegates.getSeedNodeId?.() || null,
+        getMessageRouter: () =>
+          this.delegates.getMessageRouter?.() || null,
         getCdcIntegrationService: () =>
           this.delegates.getCdcIntegrationService(),
         getCdcSubscriptionsActive: () =>
           this.delegates.getCdcSubscriptionsActive(),
         getNodeStorageBudgetService: () =>
           this.delegates.getNodeStorageBudgetService(),
+        getSystemTableCache: () =>
+          this.delegates.getSystemTableCache?.() || null,
+        getJoinLifecycleIntentType: () =>
+          this.delegates.getJoinLifecycleIntentType?.() || null,
+        getJoinStartupMode: () =>
+          this.delegates.getJoinStartupMode?.() || null,
         getNodeCapabilities: () =>
           this.delegates.getNodeCapabilities(),
-        setJoinMembershipPublished: (value) =>
-          this.delegates.setJoinMembershipPublished?.(value),
-        setMessageGroupServiceEndpointsPublished: (value) =>
-          this.delegates
-            .setMessageGroupServiceEndpointsPublished?.(value),
       },
     });
   }
@@ -203,6 +208,10 @@ class QuerySystemStatePhase {
       );
 
       this.delegates.ensureTablePolicyService(systemTableCache);
+      await this.delegates
+        .restoreDurableRejoinLocalPartitionServices?.(
+          systemTableCache,
+        );
       this.delegates.applySystemCacheToPartitions(
         systemTableCache,
       );
@@ -214,7 +223,10 @@ class QuerySystemStatePhase {
       // Publish canonical node admission through the control-plane owner path.
       await this.delegates.registerNodeInCluster();
 
-      // Persist CREATE_SELF_HOSTED message-group metadata.
+      // Stage CREATE_SELF_HOSTED group metadata locally and publish
+      // its per-replica service rows. The canonical message_groups row
+      // is flushed after READY so restart hydration does not block on a
+      // self-owned control-plane partition that is still coming online.
       await this.delegates.registerCreateSelfHostedMetadata();
 
       // Subscribe to CDC events to keep cache updated
@@ -476,10 +488,11 @@ class QuerySystemStatePhase {
       }
 
       for (const record of records) {
+        const canonicalRecord = canonicalizeSystemTableRow(tableName, record);
         const operation = this.getSnapshotHydrationOperation(
           systemTableCache,
           tableName,
-          record,
+          canonicalRecord,
         );
         if (!operation) {
           continue;
@@ -492,7 +505,7 @@ class QuerySystemStatePhase {
         systemTableCache.applySystemTableChange(
           tableName,
           operation,
-          record,
+          canonicalRecord,
         );
         totalRecords++;
       }
@@ -665,7 +678,6 @@ class QuerySystemStatePhase {
         return await this.nodeRegistrationOwner.registerNodeInCluster();
       } catch (error) {
         const retryable =
-          this.delegates.getJoinMembershipPublished?.() !== true &&
           isRetryableControlPlaneError(error) &&
           attempt < maxAttempts;
         if (!retryable) {
@@ -748,6 +760,22 @@ class QuerySystemStatePhase {
     const params = columns.map((column) => rowData[column]);
     return cdcIntegrationService.sqlQueryEngine
       .executeQuery(sql, params, upsertOptions);
+  }
+
+  /**
+   * Upsert one system-table row through the shared retryable join-time
+   * control-plane publication path.
+   * @param {string} tableName
+   * @param {Object} rowData
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async upsertSystemTableRowWithRetry(tableName, rowData, options = {}) {
+    return this.nodeRegistrationOwner.upsertSystemTableRowWithRetry(
+      tableName,
+      rowData,
+      options,
+    );
   }
 
   /**

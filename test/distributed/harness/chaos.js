@@ -215,10 +215,30 @@ class ChaosPrimitives {
    * @param {string} nodeId
    */
   async restartNode(nodeId) {
-    const node = this._nodes.get(nodeId);
     const containerId = this._getContainerId(nodeId);
     await this._dockerProvider.restartContainer(containerId);
+    await this._restoreRestartedNodeNetworkIdentity(nodeId, containerId);
+  }
 
+  /**
+   * Start a previously stopped node and restore its canonical network identity.
+   * @param {string} nodeId
+   */
+  async startNode(nodeId) {
+    const containerId = this._getContainerId(nodeId);
+    await this._dockerProvider.startContainer(containerId);
+    await this._restoreRestartedNodeNetworkIdentity(nodeId, containerId);
+  }
+
+  /**
+   * Restore main-network alias and node IP after one restart/start cycle.
+   * @param {string} nodeId
+   * @param {string} containerId
+   * @return {Promise<void>}
+   * @private
+   */
+  async _restoreRestartedNodeNetworkIdentity(nodeId, containerId) {
+    const node = this._nodes.get(nodeId);
     if (typeof this._dockerProvider.inspectContainer !== 'function') {
       return;
     }

@@ -164,6 +164,7 @@ const REBALANCER_LOG_MSG = Object.freeze({
   INCLUDE_CRITICAL_REMOVE: 'Including critical REMOVE moves alongside ADD moves',
   NODE_STATE_CHANGE: 'Node state change detected',
   EXECUTE_MOVE: 'Executing rebalancing move',
+  MOVE_SKIPPED: 'Rebalancing move skipped',
   SKIP_UNREADY_NODE: 'Skipping move for unready node',
   MOVE_BLOCKED_BY_SAFETY_POLICY: 'Skipping move blocked by safety policy',
   MOVE_FAILED: 'Failed to execute move',
@@ -178,13 +179,18 @@ const REBALANCER_LOG_MSG = Object.freeze({
   WAIT_STABILIZATION: 'Waiting for stabilization period to complete',
   WAIT_START_DELAY: 'Waiting for partition rebalance start delay to elapse',
   WAIT_TOPOLOGY_SETTLING:
-    'Waiting for transitional cluster membership to settle before planning critical system rebalancing',
+    'Waiting for transitional cluster membership to settle before planning ' +
+    'critical system rebalancing',
+  REVALIDATE_TOPOLOGY_BLOCKER_FAILED:
+    'Failed to revalidate topology-settling in-flight blocker',
   WAIT_LOCAL_SERVE_READINESS:
     'Waiting for local control-plane serve readiness before planning critical system rebalancing',
   WAIT_LOCAL_MUTATION_READINESS:
     'Waiting for local control-plane mutation readiness before planning background rebalancing',
   WAIT_TRAFFIC_READY:
     'Waiting for bootstrap traffic-readiness before planning critical system rebalancing',
+  WAIT_CONTROL_PLANE_PRIORITY:
+    'Deferring non-system rebalancing until priority control-plane partitions spread',
   WAIT_TRANSPORT_BACKPRESSURE:
     'Waiting for local transport backpressure to clear before planning',
   REBALANCE_ERROR: 'Error during rebalance check',
@@ -223,6 +229,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
   OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
+  OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
   OPERATION_TIMED_OUT: 'Operation timed out',
   SKIP_PERSIST_NO_CDC: 'CDC integration service not available, skipping persistence',
   PERSIST_FAILED: 'Failed to persist operation',
@@ -277,6 +284,11 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Observed replica progress transition failed',
 });
 
+const REBALANCE_COORDINATOR_DEFER_REASON = Object.freeze({
+  REPLACE_REMOVE_SAFETY_BLOCKED:
+    'replace_remove_safety_blocked',
+});
+
 const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'RebalanceCoordinator requires nodeId',
   CACHE_REQUIRED: 'RebalanceCoordinator requires systemTableCache',
@@ -301,6 +313,8 @@ const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
     'operationWorkflowCoordinator requires inFlightExecutionsByOwnerKey Map',
   EXECUTOR_OUTCOME_EMITTER_REQUIRED:
     'RebalanceCoordinator requires executorOutcomeEmitter',
+  CONFLICTING_OPERATION_IN_FLIGHT:
+    'Conflicting in-flight operation for replica',
 });
 
 const REBALANCER_ERROR_MSG = Object.freeze({
@@ -356,6 +370,8 @@ const PLACEMENT_DEGRADED_REASON = Object.freeze({
 const REBALANCER_SKIP_REASON = Object.freeze({
   BUDGET_EXCEEDED: 'budget_exceeded',
   BUDGET_QUERY_FAILED: 'budget_query_failed',
+  CONFLICTING_OPERATION_IN_FLIGHT: 'conflicting_operation_in_flight',
+  MEMBERSHIP_EPOCH_CHANGED: 'membership_epoch_changed',
   NOT_LEADER: 'not_leader',
   STABILIZING: 'stabilizing',
   NO_NODES: 'no_nodes',
@@ -430,6 +446,7 @@ export {
   STABILIZATION_RESET_TRIGGER,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCER_ERROR_MSG,
   MOVE_PLANNER_ERROR_MSG,

@@ -13,6 +13,7 @@ import {NUM, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
@@ -696,7 +697,8 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getNodes() {
-    const result = await this.getControlPlaneSystemTableGateway().readRows(
+    const result = await readAuthoritativeControlPlaneRows(
+      this.getControlPlaneSystemTableGateway(),
       SYSTEM_TABLE_NAME.NODES,
       FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
       [],
@@ -715,7 +717,8 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getPartitionReplicasOnNode(nodeId) {
-    const result = await this.getControlPlaneSystemTableGateway().readRows(
+    const result = await readAuthoritativeControlPlaneRows(
+      this.getControlPlaneSystemTableGateway(),
       SYSTEM_TABLE_NAME.SERVICES,
       FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
       [nodeId, SERVICE_TYPE.PARTITION],
@@ -734,7 +737,8 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getMessageGroupReplicasOnNode(nodeId) {
-    const result = await this.getControlPlaneSystemTableGateway().readRows(
+    const result = await readAuthoritativeControlPlaneRows(
+      this.getControlPlaneSystemTableGateway(),
       SYSTEM_TABLE_NAME.SERVICES,
       FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
       [nodeId, SERVICE_TYPE.MESSAGE_GROUP_REPLICA],

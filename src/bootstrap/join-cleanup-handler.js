@@ -95,9 +95,7 @@ class JoinCleanupHandler {
       this.delegates.getMessageGroupServices();
     const cleanupContext = {
       registeredNodeId:
-        this.delegates.getJoinMembershipPublished?.() === true ?
-          this.nodeId :
-          null,
+        this.delegates.getRegisteredJoinNodeId?.() || null,
       createdServiceIds: Array.from(messageGroupServices.keys()),
       createdMessageGroupIds: bootstrapResponse
         ?.messageGroupAssignment?.groupId ?
@@ -254,10 +252,6 @@ class JoinCleanupHandler {
               error: nodeErr.message,
             });
         }
-      }
-      if (typeof this.delegates.setJoinMembershipPublished ===
-        TYPEOF.FUNCTION) {
-        this.delegates.setJoinMembershipPublished(false);
       }
 
       logger.info(

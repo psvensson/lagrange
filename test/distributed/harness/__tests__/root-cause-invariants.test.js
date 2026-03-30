@@ -206,7 +206,7 @@ describe('root-cause invariant attribution', () => {
         'seed-1': {
           schemaVersion: 1,
           nodeId: 'seed-1',
-          capturedAt: Date.now(),
+          capturedAt: 1000,
           nodes: ['seed-1'],
           partitions: ['p1'],
           leaders: {p1: 'seed-1'},
@@ -246,6 +246,24 @@ describe('root-cause invariant attribution', () => {
         Object.prototype.hasOwnProperty.call(bundle, 'invariants'),
         false,
         'invariants should not be attached when invariant evaluation is disabled',
+      );
+      assert.deepEqual(
+        bundle.controlPlaneLedgerSnapshotsByNodeId,
+        {
+          'seed-1': {
+            nodeId: 'seed-1',
+            capturedAt: null,
+            capturedAtMs: 1000,
+            controlPlaneDiagnostics: {
+              schemaVersion: 1,
+              publicationMode: {
+                currentMode: 'grouped',
+                reasonCode: null,
+              },
+            },
+          },
+        },
+        'rootCauseBundle should retain direct control-plane ledger snapshots',
       );
     });
 });

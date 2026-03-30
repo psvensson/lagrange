@@ -10,10 +10,12 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -23,6 +25,13 @@ import {
 import {
   ReplicaOperationRepository,
 } from '../../src/rebalancer/replica-operation-repository.js';
+import {
+  READ_MODEL_DIVERGENCE_TYPE,
+  SQL_RECONCILIATION_REASON,
+} from '../../src/control-plane/read-model-contract.js';
+import {
+  REBALANCE_COORDINATOR_EVENT,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const TEST_NODE_ID = 'test-node-1';
@@ -44,9 +53,33 @@ function createTestRepository(overrides = {}) {
     error() {},
     debug() {},
   };
-  const mockGateway = overrides.controlPlaneSystemTableGateway || {
-    readRows: async () => ({success: true, rows: []}),
-    executeQuery: async () => ({success: true}),
+  const baseGateway = overrides.controlPlaneSystemTableGateway || {};
+  const mockGateway = {
+    readAuthoritativeRows: async (tableName, sql, params = [], options = {}) => {
+      if (typeof baseGateway.readAuthoritativeRows === 'function') {
+        return baseGateway.readAuthoritativeRows(tableName, sql, params, options);
+      }
+      if (typeof baseGateway.readRows === 'function') {
+        return baseGateway.readRows(tableName, sql, params, options);
+      }
+      return {success: true, rows: []};
+    },
+    readRows: async (tableName, sql, params = [], options = {}) => {
+      if (typeof baseGateway.readRows === 'function') {
+        return baseGateway.readRows(tableName, sql, params, options);
+      }
+      if (typeof baseGateway.readAuthoritativeRows === 'function') {
+        return baseGateway.readAuthoritativeRows(tableName, sql, params, options);
+      }
+      return {success: true, rows: []};
+    },
+    executeQuery: async (sql, params = [], options = {}) => {
+      if (typeof baseGateway.executeQuery === 'function') {
+        return baseGateway.executeQuery(sql, params, options);
+      }
+      return {success: true};
+    },
+    ...baseGateway,
   };
   const mockCache = overrides.systemTableCache || {
     get: () => null,
@@ -62,6 +95,10 @@ function createTestRepository(overrides = {}) {
     systemTableCache: mockCache,
     cdcIntegrationService: mockCdc,
     controlPlaneSystemTableGateway: mockGateway,
+    authoritativeVisibilityTimeoutMs:
+      overrides.authoritativeVisibilityTimeoutMs,
+    authoritativeVisibilityRetryDelayMs:
+      overrides.authoritativeVisibilityRetryDelayMs,
     controlPlaneReadinessService:
       overrides.controlPlaneReadinessService || null,
     logger: mockLogger,
@@ -345,6 +382,72 @@ test('queryIncompleteOperations uses the local-safe owner-read path when ' +
     'owner read should proceed through the local-safe gateway path');
 });
 
+test('executeReplicaOperationsRead routes authoritative owner reads through ' +
+  'control-plane recovery readiness', async (t) => {
+  const capturedReads = [];
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async (tableName, sql, params, options) => {
+        capturedReads.push({tableName, sql, params, options});
+        return {success: true, rows: []};
+      },
+    },
+  });
+
+  const result = await repo.executeReplicaOperationsRead(
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+    [TEST_OPERATION_ID],
+  );
+
+  t.equal(result.success, true,
+    'authoritative owner read should still succeed when the gateway read succeeds');
+  t.equal(capturedReads.length, 1,
+    'authoritative owner read should perform one gateway read');
+  t.equal(
+    capturedReads[0]?.options?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'replica_operations owner reads should route on control-plane recovery readiness',
+  );
+});
+
+test('buildReplicaOperationReadParticipationFailure evaluates owner reads ' +
+  'against control-plane recovery readiness', async (t) => {
+  const participationCalls = [];
+  const repo = createTestRepository({
+    controlPlaneReadinessService: {
+      getControlPlaneParticipationSync(nodeId, options = {}) {
+        participationCalls.push({nodeId, options});
+        return {
+          nodeId,
+          participationKind: options.participationKind || null,
+          eligible: true,
+          decision: 'ready',
+          reasonCode: null,
+          reasonCodes: [],
+        };
+      },
+    },
+  });
+
+  const participationFailure =
+    repo.buildReplicaOperationReadParticipationFailure();
+
+  t.equal(participationFailure, null,
+    'eligible recovery participation should not synthesize a failure');
+  t.equal(participationCalls.length, 1,
+    'owner-read readiness should be evaluated once');
+  t.equal(
+    participationCalls[0]?.options?.participationKind,
+    CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
+    'owner-read readiness should preserve the owner-read participation kind',
+  );
+  t.equal(
+    participationCalls[0]?.options?.decisionDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'owner-read readiness should target control-plane recovery eligibility',
+  );
+});
+
 test('queryIncompleteOperations ignores non-transport participation blocks for ' +
   'owner-local SQL reads', async (t) => {
   let readCalls = 0;
@@ -499,6 +602,27 @@ test('isReplaceRemovePhase detects REPLACE ACTIVE',
     }));
   });
 
+test('isReplaceRemoveDispatchPhase includes STOPPING replay for REPLACE',
+  async (t) => {
+    const repo = createTestRepository();
+    t.ok(repo.isReplaceRemoveDispatchPhase({
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+    }));
+    t.ok(repo.isReplaceRemoveDispatchPhase({
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.STOPPING,
+    }));
+    t.notOk(repo.isReplaceRemoveDispatchPhase({
+      type: OperationType.REPLACE,
+      workflowStep: WORKFLOW_STEP.SYNCING,
+    }));
+    t.notOk(repo.isReplaceRemoveDispatchPhase({
+      type: OperationType.ADD,
+      workflowStep: WORKFLOW_STEP.STOPPING,
+    }));
+  });
+
 test('getReplaceTargetReplicaId returns replicaId when different from source',
   async (t) => {
     const repo = createTestRepository();
@@ -642,21 +766,19 @@ test('queryOperationById returns null for missing operation',
 
 // ── persistNewOperation ─────────────────────────────────────────
 
-test('persistNewOperation writes via gateway and waits for CDC',
+test('persistNewOperation writes via gateway and confirms authoritatively',
   async (t) => {
     const executedQueries = [];
-    const cdcWaits = [];
+    const authoritativeReads = [];
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
-        readRows: async () => ({success: true, rows: []}),
+        readRows: async (tableName, sql, params) => {
+          authoritativeReads.push({tableName, sql, params});
+          return {success: true, rows: [makeRow()]};
+        },
         executeQuery: async (sql, params) => {
           executedQueries.push({sql, params});
           return {success: true, changes: 1};
-        },
-      },
-      cdcIntegrationService: {
-        waitForCacheUpdate: async (...args) => {
-          cdcWaits.push(args);
         },
       },
     });
@@ -670,27 +792,25 @@ test('persistNewOperation writes via gateway and waits for CDC',
       executedQueries[0].sql.includes('INSERT INTO'),
       'should execute INSERT',
     );
-    t.equal(cdcWaits.length, 1,
-      'should wait for CDC visibility');
+    t.equal(authoritativeReads.length, 1,
+      'should confirm the write through the authoritative read path');
   });
 
-test('persistNewOperation recovers from replica_operations cache ' +
-  'visibility gaps when owner-local SQL sees the row', async (t) => {
-  const readRowsCalls = [];
+test('persistNewOperation emits divergence when projection cache lags ' +
+  'a confirmed authoritative row', async (t) => {
+  const authoritativeReads = [];
+  const emittedEvents = [];
   const repo = createTestRepository({
     controlPlaneSystemTableGateway: {
       readRows: async (tableName, sql, params) => {
-        readRowsCalls.push({tableName, sql, params});
+        authoritativeReads.push({tableName, sql, params});
         return {success: true, rows: [makeRow({updated_at: 200})]};
       },
       executeQuery: async () => ({success: true, changes: 1}),
     },
-    cdcIntegrationService: {
-      waitForCacheUpdate: async () => {
-        throw new Error(
-          'Cache update not observed for replica_operations:' +
-          `${TEST_OPERATION_ID} within 1000ms`,
-        );
+    emitter: {
+      emit(eventName, payload) {
+        emittedEvents.push({eventName, payload});
       },
     },
   });
@@ -699,47 +819,111 @@ test('persistNewOperation recovers from replica_operations cache ' +
   const result = await repo.persistNewOperation(op);
 
   t.equal(result, true,
-    'owner-local SQL confirmation should recover from cache lag');
-  t.equal(readRowsCalls.length, 1,
-    'owner-local read should verify the persisted row once');
-  t.equal(readRowsCalls[0].tableName, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    'recovery read should stay scoped to replica_operations');
-  t.same(readRowsCalls[0].params, [TEST_OPERATION_ID],
-    'recovery read should target the persisted operation id');
+    'authoritative confirmation should succeed even when projection lags');
+  t.equal(authoritativeReads.length, 1,
+    'authoritative read should verify the persisted row once');
+  t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    'confirmation read should stay scoped to replica_operations');
+  t.same(authoritativeReads[0].params, [TEST_OPERATION_ID],
+    'confirmation read should target the persisted operation id');
+  t.equal(emittedEvents.length, 1,
+    'projection lag should emit a divergence event');
+  t.equal(emittedEvents[0].eventName,
+    REBALANCE_COORDINATOR_EVENT.READ_MODEL_DIVERGENCE);
+  t.equal(emittedEvents[0].payload.divergenceType,
+    READ_MODEL_DIVERGENCE_TYPE.CACHE_MISSING);
+  t.equal(emittedEvents[0].payload.reconciliationReason,
+    SQL_RECONCILIATION_REASON.RECOVERY_OPERATION_PERSIST_CONFIRMATION);
 });
 
-test('persistNewOperation preserves cache visibility errors when ' +
-  'owner-local SQL cannot confirm the row', async (t) => {
+test('persistNewOperation fails when authoritative confirmation ' +
+  'cannot observe the row', async (t) => {
   const repo = createTestRepository({
     controlPlaneSystemTableGateway: {
       readRows: async () => ({success: true, rows: []}),
       executeQuery: async () => ({success: true, changes: 1}),
     },
-    cdcIntegrationService: {
-      waitForCacheUpdate: async () => {
-        throw new Error(
-          'Cache update not observed for replica_operations:' +
-          `${TEST_OPERATION_ID} within 1000ms`,
-        );
-      },
-    },
+    authoritativeVisibilityTimeoutMs: 0,
   });
 
   const op = repo.rowToOperation(makeRow({updated_at: 200}));
 
   await t.rejects(
     repo.persistNewOperation(op),
-    /Cache update not observed/,
-    'unconfirmed cache visibility gaps should still fail hard',
+    /Authoritative replica operation not confirmed/,
+    'unconfirmed authoritative writes should still fail hard',
   );
 });
+
+test('persistNewOperation retries authoritative confirmation after an ' +
+  'initial miss', async (t) => {
+  let readRowsCalls = 0;
+  const repo = createTestRepository({
+    authoritativeVisibilityTimeoutMs: 10,
+    authoritativeVisibilityRetryDelayMs: 0,
+    controlPlaneSystemTableGateway: {
+      readRows: async () => {
+        readRowsCalls += 1;
+        if (readRowsCalls === 1) {
+          return {success: true, rows: []};
+        }
+        return {success: true, rows: [makeRow({updated_at: 200})]};
+      },
+      executeQuery: async () => ({success: true, changes: 1}),
+    },
+  });
+
+  const op = repo.rowToOperation(makeRow({updated_at: 200}));
+  const result = await repo.persistNewOperation(op);
+
+  t.equal(result, true,
+    'bounded authoritative retries should recover visibility after transient lag');
+  t.equal(readRowsCalls, 2,
+    'authoritative confirmation should retry until the row is visible');
+});
+
+test('persistNewOperation confirmation prefers owner RPC but does not require it',
+  async (t) => {
+    const readRowsCalls = [];
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        readRows: async (_tableName, _sql, _params, options = {}) => {
+          readRowsCalls.push(options);
+          if (options.requireOwnerRpcRead === true) {
+            return {
+              success: false,
+              error: 'owner-rpc-read-failed',
+              rows: [],
+            };
+          }
+          return {
+            success: true,
+            rows: [makeRow({updated_at: 200})],
+          };
+        },
+        executeQuery: async () => ({success: true, changes: 1}),
+      },
+    });
+
+    const op = repo.rowToOperation(makeRow({updated_at: 200}));
+    const result = await repo.persistNewOperation(op);
+
+    t.equal(result, true,
+      'authoritative confirmation should still succeed when owner RPC is unavailable');
+    t.equal(readRowsCalls.length, 1,
+      'confirmation should issue one authoritative read');
+    t.equal(readRowsCalls[0]?.preferOwnerRpcRead, true,
+      'confirmation should prefer owner-rpc reads');
+    t.equal(readRowsCalls[0]?.requireOwnerRpcRead, false,
+      'confirmation should not fail closed on owner-rpc unavailability');
+  });
 
 test('persistOperationUpdate writes via gateway',
   async (t) => {
     const executedQueries = [];
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
-        readRows: async () => ({success: true, rows: []}),
+        readRows: async () => ({success: true, rows: [makeRow()]}),
         executeQuery: async (sql, params) => {
           executedQueries.push({sql, params});
           return {success: true};
@@ -755,6 +939,127 @@ test('persistOperationUpdate writes via gateway',
       executedQueries[0].sql.includes('UPDATE'),
       'should execute UPDATE',
     );
+  });
+
+test('persistOperationUpdate fails when authoritative confirmation ' +
+  'does not reflect workflow step/status', async (t) => {
+  const repo = createTestRepository({
+    authoritativeVisibilityTimeoutMs: 0,
+    controlPlaneSystemTableGateway: {
+      readRows: async () => ({
+        success: true,
+        rows: [makeRow({
+          status: 'creating',
+          workflow_step: 'CREATING',
+          updated_at: 999,
+        })],
+      }),
+      executeQuery: async () => ({success: true, changes: 1}),
+    },
+  });
+
+  const op = repo.rowToOperation(makeRow({
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: 200,
+  }));
+
+  await t.rejects(
+    repo.persistOperationUpdate(op),
+    /Authoritative replica operation not confirmed/,
+    'step/status mismatches must fail persistence confirmation',
+  );
+});
+
+test('persistOperationUpdate retries stale no-handler owner handoff errors ' +
+  'and confirms the updated row authoritatively', async (t) => {
+  let executeCalls = 0;
+  let waitCalls = 0;
+  const updatedAt = Date.now() + 1000;
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readRows: async () => ({
+        success: true,
+        rows: [makeRow({
+          status: 'active',
+          workflow_step: 'ACTIVE',
+          updated_at: updatedAt,
+        })],
+      }),
+      executeQuery: async () => {
+        executeCalls += 1;
+        if (executeCalls === 1) {
+          return {
+            success: false,
+            error:
+              `${ERRORS.NO_HANDLER_FOR_ADDRESS} ` +
+              'node-1/partition/replica_operations-p1-r1',
+          };
+        }
+        return {success: true, changes: 1};
+      },
+    },
+  });
+  repo.waitForOperationPersistRetry = async () => {
+    waitCalls += 1;
+  };
+
+  const op = repo.rowToOperation(makeRow({
+    status: 'active',
+    workflow_step: 'ACTIVE',
+    updated_at: updatedAt,
+  }));
+
+  await repo.persistOperationUpdate(op);
+
+  t.equal(
+    executeCalls,
+    2,
+    'persistOperationUpdate should retry one stale no-handler owner handoff failure',
+  );
+  t.equal(
+    waitCalls,
+    1,
+    'persistOperationUpdate should wait once before the retry succeeds',
+  );
+});
+
+test('executeOperationMutationWithRetry retries no-handler owner handoff errors',
+  async (t) => {
+    let attempts = 0;
+    let waitCalls = 0;
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            return {
+              success: false,
+              error:
+                `${ERRORS.NO_HANDLER_FOR_ADDRESS} ` +
+                'node-1/partition/replica_operations-p1-r1',
+            };
+          }
+          return {success: true, changes: 1};
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async () => {
+      waitCalls += 1;
+    };
+
+    const result = await repo.executeOperationMutationWithRetry(
+      'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+      [Date.now(), TEST_OPERATION_ID],
+      {ownerId: TEST_OPERATION_ID},
+    );
+
+    t.equal(result.success, true,
+      'no-handler owner handoff errors should be retried');
+    t.equal(attempts, 2,
+      'repository should retry once after no-handler owner handoff');
+    t.equal(waitCalls, 1,
+      'retry loop should wait exactly once before succeeding');
   });
 
 // ── Coordinator delegates to repository ─────────────────────────

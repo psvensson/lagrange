@@ -15,6 +15,7 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Message timeout',
   'closed',
   'control_plane_pressure_degraded',
+  'Transaction already active on this partition',
 ]);
 
 function getControlPlaneErrorMessage(value) {

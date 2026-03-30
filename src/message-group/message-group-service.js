@@ -604,6 +604,11 @@ class MessageGroupService extends EventEmitter {
     return isMetadataPublicationLifecycleReady(this.metadataPublicationReadinessState);
   }
 
+  isMetadataPublicationConvergenceWindowOpen() {
+    return this.isMetadataPublicationReady() &&
+      !this.isBackgroundWorkReady();
+  }
+
   isBackgroundWorkReady() {
     return isBackgroundWorkLifecycleReady(
       this.metadataPublicationReadinessState,
@@ -654,7 +659,7 @@ class MessageGroupService extends EventEmitter {
         workClass: PRESSURE_WORK_CLASS.BACKGROUND,
         allowPressureDefer: true,
         routingReadinessDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          this.getMetadataPublicationReadinessDimension(),
       }),
       buildExpectedCacheFields: (role) => ({
         raft_role: role,
@@ -708,7 +713,7 @@ class MessageGroupService extends EventEmitter {
       buildUpdateOptions: () => ({
         deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
         routingReadinessDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          this.getMetadataPublicationReadinessDimension(),
       }),
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
@@ -3235,6 +3240,11 @@ class MessageGroupService extends EventEmitter {
     return this.groupId === INITIAL_MESSAGE_GROUP_ID ?
       'critical' :
       'background';
+  }
+
+  getMetadataPublicationReadinessDimension() {
+    return CONTROL_PLANE_READINESS_DIMENSION
+      .CONTROL_PLANE_RECOVERY_ELIGIBLE;
   }
 
   /**

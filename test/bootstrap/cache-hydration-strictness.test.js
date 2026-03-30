@@ -73,10 +73,9 @@ test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydratio
     const hydrationResult = createHydrationResultWithMissingRequiredTable();
 
     service.getSystemTableCache = () => systemTableCache;
-    service.seedMessageGroupsPhase
-      .getLeaderMessageGroupService = () => ({
-        applyCDCEvent: async () => {},
-      });
+    service.getLeaderMessageGroupService = () => ({
+      applyCDCEvent: async () => {},
+    });
     service.seedCacheHydrationPhase
       .hydrateFromLocalPartitions = async () => hydrationResult;
     service.seedCacheHydrationPhase

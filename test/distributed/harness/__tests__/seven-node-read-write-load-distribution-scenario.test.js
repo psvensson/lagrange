@@ -65,6 +65,7 @@ function serviceRowsForStage(stage) {
 describe('seven-node-read-write-load-distribution scenario', () => {
   it('keeps spread while mixed load runs and after load stops', async () => {
     let sampleStage = 0;
+    let loadStarted = false;
     let loadCancelled = false;
     const calls = [];
 
@@ -87,6 +88,9 @@ describe('seven-node-read-write-load-distribution scenario', () => {
           };
         }
         if (sql.includes(SQL_FROM_PARTITIONS)) {
+          if (!loadStarted) {
+            return {rows: partitionRowsForStage(1)};
+          }
           sampleStage = Math.min(sampleStage + 1, 4);
           return {rows: partitionRowsForStage(sampleStage)};
         }
@@ -111,7 +115,20 @@ describe('seven-node-read-write-load-distribution scenario', () => {
         calls.push('waitForConvergence');
         return {settledAfterMs: 1};
       },
+      waitForControlPlaneQuiescence: async () => {
+        calls.push('waitForControlPlaneQuiescence');
+      },
+      resolveBenchmarkReadyLoadNodes: async () => {
+        return [
+          seedNode,
+          {id: 'node-2', role: 'joiner'},
+          {id: 'node-3', role: 'joiner'},
+          {id: 'node-4', role: 'joiner'},
+          {id: 'node-5', role: 'joiner'},
+        ];
+      },
       startLoad: (options) => {
+        loadStarted = true;
         calls.push(['startLoad', options]);
         return {
           cancel: () => {
@@ -145,22 +162,39 @@ describe('seven-node-read-write-load-distribution scenario', () => {
     assert.equal(result.loadMetrics.total, 120);
     assert.ok(result.successRate >= 0.7);
     assert.deepEqual(calls[0], 'waitForConvergence');
-    assert.equal(calls[1][0], 'startLoad');
+    assert.deepEqual(calls[1], 'waitForControlPlaneQuiescence');
+    assert.equal(calls[2][0], 'startLoad');
     assert.deepEqual(
-      calls[1][1].operations,
+      calls[2][1].nodes.map((node) => node.id),
+      ['seed-1', 'node-2', 'node-3'],
+      'scenario should bootstrap load on the current table replica quorum',
+    );
+    assert.equal(typeof calls[2][1].nodeResolver, 'function');
+    assert.equal(
+      calls[2][1].adaptiveDispatchGuardrail?.enabled,
+      true,
+      'scenario should enable adaptive dispatch pacing for partitioning load',
+    );
+    assert.deepEqual(
+      calls[2][1].operations,
       LOAD_OPERATIONS,
       'scenario should run mixed read/write load operations',
     );
     assert.equal(
-      calls[1][1].tableName,
+      calls[2][1].opsPerSec,
+      30,
+      'scenario should scale mixed load to the bootstrap table replica quorum',
+    );
+    assert.equal(
+      calls[2][1].tableName,
       'benchmark_events',
       'scenario should default to benchmark load table',
     );
     assert.equal(
-      calls[1][1].workloadProfile,
+      calls[2][1].workloadProfile,
       'benchmark_events_mixed',
       'scenario should use benchmark workload profile',
     );
-    assert.deepEqual(calls[2], 'waitForConsistencyConvergence');
+    assert.deepEqual(calls[3], 'waitForConsistencyConvergence');
   });
 });

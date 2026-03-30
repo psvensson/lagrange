@@ -23,6 +23,9 @@ import {
   getSystemCachePrimaryKeyField,
 } from './system-cache-key-descriptor.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {
+  mergeControlPlanePublicationRows,
+} from '../control-plane/control-plane-publication-merge.js';
 
 /**
  * System table names that are cached.
@@ -483,7 +486,7 @@ class SystemTableCache {
           });
           break;
         }
-        table.set(key, {...existing, ...this.deepClone(data)});
+        table.set(key, this.mergeRecords(tableName, existing, data));
       }
       recordForNotification = table.get(key);
       break;
@@ -513,7 +516,7 @@ class SystemTableCache {
           });
           break;
         }
-        table.set(key, {...existing, ...this.deepClone(data)});
+        table.set(key, this.mergeRecords(tableName, existing, data));
       }
       recordForNotification = table.get(key);
       break;
@@ -684,6 +687,22 @@ class SystemTableCache {
    * @private
    */
   applyStaleRowBackfill(table, key, existing, incoming) {
+    if (this.shouldUsePublicationMerge(existing, incoming)) {
+      const mergedRecord = mergeControlPlanePublicationRows(existing, incoming);
+      if (JSON.stringify(mergedRecord) === JSON.stringify(existing)) {
+        return {
+          applied: false,
+          record: existing,
+          backfilledFields: [],
+        };
+      }
+      table.set(key, mergedRecord);
+      return {
+        applied: true,
+        record: mergedRecord,
+        backfilledFields: Object.keys(incoming),
+      };
+    }
     const merged = this.deepClone(existing);
     const backfilledFields = [];
 
@@ -736,6 +755,32 @@ class SystemTableCache {
     const incomingPresent = incomingValue !== null &&
       typeof incomingValue !== TYPEOF.UNDEFINED;
     return existingMissing && incomingPresent;
+  }
+
+  /**
+   * Merge records for tables that require monotonic field semantics.
+   * @param {string} tableName - Table name.
+   * @param {Object} existing - Existing cached row.
+   * @param {Object} incoming - Incoming CDC row.
+   * @return {Object}
+   * @private
+   */
+  mergeRecords(tableName, existing, incoming) {
+    if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+      return mergeControlPlanePublicationRows(incoming, existing);
+    }
+    return {...existing, ...this.deepClone(incoming)};
+  }
+
+  /**
+   * Determine whether control-plane publication merge semantics apply.
+   * @param {Object} existing - Existing cached row.
+   * @param {Object} incoming - Incoming CDC row.
+   * @return {boolean}
+   * @private
+   */
+  shouldUsePublicationMerge(existing, incoming) {
+    return Boolean(existing?.publication_id || incoming?.publication_id);
   }
 
   /**

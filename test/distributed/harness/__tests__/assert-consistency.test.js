@@ -75,6 +75,12 @@ function buildControlSnapshotNode(nodeId, snapshotOverrides = {}) {
           leaders: {
             p1: TEST_LEADER_ADDRESS,
           },
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 14,
+              publishedActiveNodeIds: ['node-1', 'node-3'],
+            },
+          },
           ...snapshotOverrides,
         }],
       };
@@ -140,12 +146,321 @@ test('assertConsistency still fails on real state disagreement', async () => {
   );
 });
 
+test('assertConsistency attaches control-plane diagnostics on mismatch errors',
+  async () => {
+    const nodeA = buildControlSnapshotNode('node-a', {
+      nodes: ['node-1', 'node-2'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          status: 'ACK_PENDING',
+        },
+      },
+    });
+    const nodeB = buildControlSnapshotNode('node-b', {
+      nodes: ['node-1', 'node-3'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          status: 'ACK_PENDING',
+        },
+      },
+    });
+
+    try {
+      await assertConsistency([nodeA, nodeB]);
+      assert.fail('expected mismatch');
+    } catch (error) {
+      assert.match(String(error?.message || ''), /Active nodes disagree/i);
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.publicationConvergence
+          ?.publicationEpoch,
+        14,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.mismatch?.reasonCode,
+        'active_nodes_disagree',
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics
+          ?.publicationConvergenceByNodeId?.['node-a']?.publicationEpoch,
+        14,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics
+          ?.publicationConvergenceByNodeId?.['node-b']?.publicationEpoch,
+        14,
+      );
+    }
+  });
+
 test('assertConsistency uses control snapshots when available', async () => {
   const nodeA = buildControlSnapshotNode('node-a');
   const nodeB = buildControlSnapshotNode('node-b');
 
   await assert.doesNotReject(async () => {
     await assertConsistency([nodeA, nodeB]);
+  });
+});
+
+test('assertConsistency prefers published membership over effective node disagreement', async () => {
+  const publishedNodes = ['node-1', 'node-2', 'node-3'];
+  const nodeA = buildControlSnapshotNode('node-a', {
+    nodes: ['node-1'],
+    publishedNodes,
+    projectedNodes: ['node-1'],
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: publishedNodes,
+      },
+      activeNodeViews: {
+        effectiveSource: 'published_membership',
+        effectiveNodeIds: publishedNodes,
+        projectedNodeIds: ['node-1'],
+        publishedNodeIds: publishedNodes,
+        publishedMembershipAvailable: true,
+      },
+    },
+  });
+  const nodeB = buildControlSnapshotNode('node-b', {
+    nodes: ['node-1', 'node-2', 'node-3'],
+    publishedNodes,
+    projectedNodes: ['node-1', 'node-2', 'node-3'],
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: publishedNodes,
+      },
+      activeNodeViews: {
+        effectiveSource: 'published_membership',
+        effectiveNodeIds: publishedNodes,
+        projectedNodeIds: ['node-1', 'node-2', 'node-3'],
+        publishedNodeIds: publishedNodes,
+        publishedMembershipAvailable: true,
+      },
+    },
+  });
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB]);
+  });
+});
+
+test('assertConsistency retries missing published membership with forced repair', async () => {
+  const publishedNodes = ['node-1', 'node-2'];
+  const nodeACalls = [];
+  const nodeA = {
+    id: 'node-a',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot(options = {}) {
+      nodeACalls.push(options);
+      if (options.forceRepair === true) {
+        return {
+          rows: [{
+            nodes: ['node-1', 'node-2'],
+            publishedNodes,
+            partitions: ['p1'],
+            leaders: {p1: TEST_LEADER_ADDRESS},
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 14,
+                publishedActiveNodeIds: publishedNodes,
+              },
+              activeNodeViews: {
+                effectiveSource: 'published_membership',
+                effectiveNodeIds: publishedNodes,
+                projectedNodeIds: ['node-1', 'node-2'],
+                publishedNodeIds: publishedNodes,
+                publishedMembershipAvailable: true,
+              },
+            },
+          }],
+        };
+      }
+      return {
+        rows: [{
+          nodes: ['node-1', 'node-2'],
+          partitions: ['p1'],
+          leaders: {p1: TEST_LEADER_ADDRESS},
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 14,
+              publishedActiveNodeIds: publishedNodes,
+            },
+            activeNodeViews: {
+              effectiveSource: 'projected',
+              effectiveNodeIds: ['node-1', 'node-2'],
+              projectedNodeIds: ['node-1', 'node-2'],
+              publishedNodeIds: [],
+              publishedMembershipAvailable: false,
+            },
+          },
+        }],
+      };
+    },
+    async query() {
+      throw new Error('raw consistency SQL should not run when control snapshot is available');
+    },
+  };
+  const nodeB = buildControlSnapshotNode('node-b', {
+    nodes: ['node-1', 'node-2'],
+    publishedNodes,
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: publishedNodes,
+      },
+      activeNodeViews: {
+        effectiveSource: 'published_membership',
+        effectiveNodeIds: publishedNodes,
+        projectedNodeIds: ['node-1', 'node-2'],
+        publishedNodeIds: publishedNodes,
+        publishedMembershipAvailable: true,
+      },
+    },
+  });
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB]);
+  });
+  assert.equal(nodeACalls.length, 2);
+  assert.equal(nodeACalls[0]?.forceRepair, false);
+  assert.equal(nodeACalls[1]?.forceRepair, true);
+});
+
+test('assertConsistency ignores bootstrap-only control-snapshot nodes', async () => {
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = buildControlSnapshotNode('node-b');
+  let fallbackQueryCalled = false;
+  const restartingNode = {
+    id: 'node-c',
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-c',
+        reachable: true,
+        adminReady: false,
+        reachableBy: 'bootstrap_health',
+        lastError: 'connect ECONNREFUSED 172.20.0.3:8081',
+      };
+    },
+    async getControlSnapshot() {
+      throw new Error('Admin API query failed: connect ECONNREFUSED');
+    },
+    async query() {
+      fallbackQueryCalled = true;
+      return {rows: []};
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB, restartingNode]);
+  });
+  assert.equal(fallbackQueryCalled, false);
+});
+
+test('assertConsistency fails on published control-plane epoch disagreement', async () => {
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = buildControlSnapshotNode('node-b', {
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 13,
+        publishedActiveNodeIds: ['node-1', 'node-3'],
+      },
+    },
+  });
+
+  await assert.rejects(
+    assertConsistency([nodeA, nodeB]),
+    /Publication epochs disagree/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots throws on published active-node mismatch', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: ['node-1', 'node-3'],
+        },
+      },
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+        },
+      },
+    },
+  ];
+
+  assert.throws(
+    () => assertConsistencyFromSnapshots(snapshots),
+    /Published active-node sets disagree/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots prefers published membership over effective node disagreement', async () => {
+  const publishedNodes = ['node-1', 'node-2'];
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1'],
+      publishedNodes,
+      projectedNodes: ['node-1'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: publishedNodes,
+        },
+        activeNodeViews: {
+          effectiveSource: 'published_membership',
+          effectiveNodeIds: publishedNodes,
+          projectedNodeIds: ['node-1'],
+          publishedNodeIds: publishedNodes,
+          publishedMembershipAvailable: true,
+        },
+      },
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes,
+      projectedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: publishedNodes,
+        },
+        activeNodeViews: {
+          effectiveSource: 'published_membership',
+          effectiveNodeIds: publishedNodes,
+          projectedNodeIds: ['node-1', 'node-2'],
+          publishedNodeIds: publishedNodes,
+          publishedMembershipAvailable: true,
+        },
+      },
+    },
+  ];
+
+  assert.doesNotThrow(() => {
+    assertConsistencyFromSnapshots(snapshots);
   });
 });
 
@@ -270,6 +585,12 @@ test('waitForConsistencyConvergence retries until nodes ' +
           nodes: ['node-1', 'node-2', 'node-3'],
           partitions: ['p1'],
           leaders: {p1: leader},
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 14,
+              publishedActiveNodeIds: ['node-1', 'node-3'],
+            },
+          },
         }],
       };
     },
@@ -306,6 +627,23 @@ test('waitForConsistencyConvergence throws last error ' +
     /Leader identities disagree/i,
   );
 });
+
+test('waitForConsistencyConvergence tolerates transient empty leader maps',
+  async () => {
+    const nodeA = buildControlSnapshotNode('node-a', {
+      leaders: {p1: TEST_LEADER_ADDRESS},
+    });
+    const nodeB = buildControlSnapshotNode('node-b', {
+      leaders: {},
+    });
+
+    await assert.doesNotReject(async () => {
+      await waitForConsistencyConvergence(
+        [nodeA, nodeB],
+        {timeoutMs: 500, pollIntervalMs: 50},
+      );
+    });
+  });
 
 test('assertConsistency derives leaders from ' +
   'replicaRoles when partitions table leaders are ' +

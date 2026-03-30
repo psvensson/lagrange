@@ -166,7 +166,7 @@ test('Bootstrap executePhase updates lifecycle sub-phases during phase execution
     };
     bootstrap.initializeReplicaHandler = () => {};
     bootstrap.initializeMessageGroupServiceHandler = () => {
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {};
     bootstrap.registerSeedNodeWithControlPlane = async () => {};
@@ -234,7 +234,7 @@ test('Bootstrap terminal sub-phase CACHE_HYDRATION auto-advances to CONNECTING',
     };
     bootstrap.initializeReplicaHandler = () => {};
     bootstrap.initializeMessageGroupServiceHandler = () => {
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {};
     bootstrap.registerSeedNodeWithControlPlane = async () => {};

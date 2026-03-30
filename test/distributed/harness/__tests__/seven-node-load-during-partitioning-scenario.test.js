@@ -67,6 +67,7 @@ describe('seven-node-load-during-partitioning scenario', () => {
   it('applies table policies and proves workload progress during splits',
     async () => {
       let sampleStage = 0;
+      let loadStarted = false;
       let loadCancelled = false;
       let metricTotal = 0;
       let tablePoliciesApplied = false;
@@ -91,6 +92,9 @@ describe('seven-node-load-during-partitioning scenario', () => {
             };
           }
           if (sql.includes(SQL_FROM_PARTITIONS)) {
+            if (!loadStarted) {
+              return {rows: partitionRowsForStage(1)};
+            }
             sampleStage = Math.min(sampleStage + 1, 4);
             return {rows: partitionRowsForStage(sampleStage)};
           }
@@ -117,7 +121,20 @@ describe('seven-node-load-during-partitioning scenario', () => {
           calls.push('waitForConvergence');
           return {settledAfterMs: 1};
         },
+        waitForControlPlaneQuiescence: async () => {
+          calls.push('waitForControlPlaneQuiescence');
+        },
+        resolveBenchmarkReadyLoadNodes: async () => {
+          return [
+            seedNode,
+            {id: 'node-2', role: 'joiner'},
+            {id: 'node-3', role: 'joiner'},
+            {id: 'node-4', role: 'joiner'},
+            {id: 'node-5', role: 'joiner'},
+          ];
+        },
         startLoad: (options) => {
+          loadStarted = true;
           calls.push(['startLoad', options]);
           return {
             getMetrics: () => {
@@ -180,13 +197,30 @@ describe('seven-node-load-during-partitioning scenario', () => {
       assert.equal(result.loadMetrics.total, 200);
       assert.ok(result.successRate >= 0.7);
       assert.deepEqual(calls[0], 'waitForConvergence');
-      assert.equal(calls[1][0], 'startLoad');
+      assert.deepEqual(calls[1], 'waitForControlPlaneQuiescence');
+      assert.equal(calls[2][0], 'startLoad');
       assert.deepEqual(
-        calls[1][1].operations,
+        calls[2][1].nodes.map((node) => node.id),
+        ['seed-1', 'node-2', 'node-3'],
+        'scenario should bootstrap load on the current table replica quorum',
+      );
+      assert.equal(typeof calls[2][1].nodeResolver, 'function');
+      assert.equal(
+        calls[2][1].adaptiveDispatchGuardrail?.enabled,
+        true,
+        'scenario should enable adaptive dispatch pacing for partitioning load',
+      );
+      assert.deepEqual(
+        calls[2][1].operations,
         LOAD_OPERATIONS,
         'scenario should begin with mixed load',
       );
-      assert.deepEqual(calls[2], 'waitForConsistencyConvergence');
+      assert.equal(
+        calls[2][1].opsPerSec,
+        30,
+        'scenario should scale partitioning load to the bootstrap node set',
+      );
+      assert.deepEqual(calls[3], 'waitForConsistencyConvergence');
     });
 
   it('fails early with structured diagnostics when split attempts never start',
@@ -234,6 +268,8 @@ describe('seven-node-load-during-partitioning scenario', () => {
             return {
               rows: [
                 {partition_id: 'logs-p1', node_id: 'seed-1', status: 'active'},
+                {partition_id: 'logs-p1', node_id: 'node-2', status: 'active'},
+                {partition_id: 'logs-p1', node_id: 'node-3', status: 'active'},
               ],
             };
           }

@@ -5,6 +5,9 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../cdc/cdc-integration-service.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
 import {
@@ -16,7 +19,8 @@ import {
 
 const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
-  SQL_QUERY_ENGINE: 'sql_query_engine',
+  OWNER_RPC_LANE: 'owner_rpc_lane',
+  SQL_QUERY_ENGINE: 'owner_rpc_lane',
   MIXED: 'mixed',
   UNAVAILABLE: 'unavailable',
 });
@@ -30,8 +34,11 @@ function normalizeReadSource(source) {
       AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA) {
     return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA;
   }
-  if (normalized === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE) {
-    return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE;
+  if (normalized === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE) {
+    return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE;
+  }
+  if (normalized === 'sql_query_engine') {
+    return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE;
   }
   return AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.UNAVAILABLE;
 }
@@ -65,12 +72,14 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
     workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
     allowPressureDegrade: options?.allowPressureDegrade !== false,
     allowPressureDefer: options?.allowPressureDefer === true,
-    allowSqlFallback: options?.allowSqlFallback !== false,
+    allowOwnerRpcFallback: options?.allowOwnerRpcFallback !== false,
+    preferOwnerRpcRead: options?.preferOwnerRpcRead === true,
+    requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
     localReadConsistency: options?.localReadConsistency ||
       AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
     routingReadinessDimension:
       queryOptions.routingReadinessDimension ||
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     timeoutMs: queryTimeoutMs,
   });
 }
@@ -243,7 +252,8 @@ class AuthoritativeControlPlaneView {
               `${tableName}:${observedAtMs}`,
         routingReadinessDimension:
           options?.queryOptions?.routingReadinessDimension ||
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE,
       };
       if (!this.canRead()) {
         return Object.freeze({
@@ -285,6 +295,13 @@ class AuthoritativeControlPlaneView {
           {
             localReadConsistency:
               AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+            replicaFallbackConsistency:
+              options?.replicaFallbackConsistency,
+            allowOwnerRpcFallback:
+              options?.allowOwnerRpcFallback !== false &&
+              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
+            preferOwnerRpcRead: options?.preferOwnerRpcRead === true,
+            requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
             allowSqlFallback:
               options?.allowSqlFallback !== false &&
               pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
@@ -317,8 +334,19 @@ class AuthoritativeControlPlaneView {
         rows,
         rowCount: rows.length,
         source,
+        localReadHit: result?.localReadHit === true,
+        localReplicaFallbackHit: result?.localReplicaFallbackHit === true,
         usedSqlFallback:
-          source === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE,
+          source === AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.OWNER_RPC_LANE,
+        queryTimeoutMs:
+          Number.isFinite(result?.queryTimeoutMs) ?
+            result.queryTimeoutMs :
+            queryTimeoutMs,
+        systemTableDiagnostics:
+          result?.systemTableDiagnostics &&
+            typeof result.systemTableDiagnostics === TYPEOF.OBJECT ?
+            Object.freeze({...result.systemTableDiagnostics}) :
+            null,
         snapshotVersion: resolveSnapshotVersion(rows),
         observedAt,
         observedAtMs,
@@ -345,18 +373,24 @@ class AuthoritativeControlPlaneView {
    */
   async readNodeSnapshot(nodeId, options = {}) {
     const normalizedNodeId = String(nodeId || '');
+    const readOptions = {
+      ...options,
+      replicaFallbackConsistency:
+        options?.replicaFallbackConsistency ||
+        LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+    };
     const [nodeRead, serviceRead] = await Promise.all([
       this.readRows(
         TABLES.NODES,
         `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
         [normalizedNodeId],
-        options,
+        readOptions,
       ),
       this.readRows(
         TABLES.SERVICES,
         `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.NODE_ID} = ?`,
         [normalizedNodeId],
-        options,
+        readOptions,
       ),
     ]);
     const nodeRows = nodeRead.rows;

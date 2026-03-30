@@ -15,6 +15,9 @@ import {
 } from '../bootstrap-constants.js';
 import {JOINING_ERROR_MSG} from '../node-joining-constants.js';
 
+const READINESS_CONVERGENCE_PHASE =
+  'joining:readiness-convergence';
+
 /**
  * Create the join startup plan with named phase segments.
  *
@@ -27,8 +30,7 @@ import {JOINING_ERROR_MSG} from '../node-joining-constants.js';
  *   seedContact    — seed node contact
  *   infrastructure — websocket, message-group, leadership setup
  *   membership     — system state query and membership write
- *   readiness      — readiness convergence anchor (shares query
- *                     state phase with membership)
+ *   readiness      — readiness convergence before READY signaling
  *
  * @param {Object} service - NodeJoiningService instance.
  * @return {{phases: Array, segments: Object}} Join startup plan.
@@ -91,12 +93,22 @@ function createJoinStartupPlan(service) {
     ),
   };
 
+  const readinessConvergencePhase = {
+    name: READINESS_CONVERGENCE_PHASE,
+    run: () => service.executePhase(
+      READINESS_CONVERGENCE_PHASE,
+      () => service.joinReadinessEvaluator
+        .waitForCanonicalJoinReadinessConvergence(),
+    ),
+  };
+
   const phases = [
     contactSeedPhase,
     connectWebSocketPhase,
     messageGroupAssignmentPhase,
     waitLeadershipPhase,
     queryStatePhase,
+    readinessConvergencePhase,
   ];
 
   return {
@@ -109,7 +121,7 @@ function createJoinStartupPlan(service) {
         waitLeadershipPhase,
       ],
       [Segment.MEMBERSHIP]: [queryStatePhase],
-      [Segment.READINESS]: [queryStatePhase],
+      [Segment.READINESS]: [readinessConvergencePhase],
     },
   };
 }
@@ -156,4 +168,8 @@ function assertJoinPlanSegments(plan) {
   }
 }
 
-export {createJoinStartupPlan, assertJoinPlanSegments};
+export {
+  READINESS_CONVERGENCE_PHASE,
+  createJoinStartupPlan,
+  assertJoinPlanSegments,
+};

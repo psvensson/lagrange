@@ -25,6 +25,91 @@ function createBootstrapResponseWithPeerEndpoints(...nodeIds) {
 }
 
 test(
+  'ConnectWebSocketPhase creates the router with external admission closed',
+  async () => {
+    const originalCreate = MessageRouterSetup.create;
+    const createCalls = [];
+    const router = {
+      nodeConnections: new Map(),
+      async connectToNode(nodeId) {
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      getConnectedNodes() {
+        return Array.from(this.nodeConnections.keys());
+      },
+      hasSelfConnection() {
+        return true;
+      },
+      setQueryMessageGroupServiceResolver() {},
+    };
+
+    MessageRouterSetup.create = async (options) => {
+      createCalls.push(options);
+      return router;
+    };
+
+    try {
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'joining-node-1',
+        delegates: {
+          getWsPort: () => 9090,
+          getIdentifyPayload: () => ({role: 'joining'}),
+          getNodeAddress: () => 'joining-node-1:8080',
+          getLogger: () => ({
+            info() {},
+            warn() {},
+            error(message) {
+              throw new Error(`unexpected error log: ${message}`);
+            },
+            debug() {},
+          }),
+          getMessageRouter: () => router,
+          setMessageRouter() {},
+          setTransport() {},
+          initializeJoiningLifecycleOwners: async () => {},
+          triggerJoinReconciler: async () => {},
+          getSeedNodeWsAddress: () => 'ws://seed-node:8082',
+          getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints('joining-node-1'),
+          getNodeCapabilities: () => ({pgwire: true}),
+          sendControlPlaneNodeStateUpdate: async () => {},
+          resolveMeshConnectivityNodeRows: () => ({
+            source: 'cache',
+            rows: [
+              {
+                node_id: 'joining-node-1',
+                node_address: 'joining-node-1:8080',
+              },
+              {
+                node_id: 'seed-node',
+                node_address: 'seed-node:8080',
+              },
+            ],
+          }),
+          buildClusterMeshSignature: () => 'seed-node|joining-node-1',
+          setLastClusterMeshSignature() {},
+        },
+      });
+
+      await phase.phaseConnectWebSocket();
+
+      assert.equal(createCalls.length, 1);
+      assert.equal(
+        createCalls[0]?.externalAdmissionEnabled,
+        false,
+        'join websocket phase should keep external admission closed until join infrastructure is ready',
+      );
+    } finally {
+      MessageRouterSetup.create = originalCreate;
+    }
+  },
+);
+
+test(
   'ConnectWebSocketPhase retries transient seed websocket connect failures',
   async () => {
     const originalCreate = MessageRouterSetup.create;

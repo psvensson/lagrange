@@ -39,6 +39,7 @@ import {
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
+  COLUMN,
   ENTITY_TYPE,
   TABLES,
   METRICS_LOG_TAG,
@@ -138,6 +139,11 @@ const NATIVE_CALLBACK_MODULE_ARG = 'module';
 const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
 const DEFAULT_CODE_VERSION = '1';
 const ZERO_SHA256_DIGEST = 'sha256:' + '0'.repeat(64);
+const BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES = new Set([
+  TABLES.SQL_TRANSACTIONS,
+  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+  TABLES.SQL_WRITE_OPERATIONS,
+]);
 const EXPLAIN_DISTRIBUTED_PREFIX_REGEX = /^\s*EXPLAIN\s+DISTRIBUTED\s+/i;
 const STATUS_ACTIVE = 'active';
 const CONNECTION_STATE_CONNECTED = String(STATE.CONNECTED).toLowerCase();
@@ -182,6 +188,9 @@ class SQLQueryEngine {
    * @param {Object} options.cdcIntegrationService - CDC integration service.
    * @param {string} options.nodeId - Node ID.
    * @param {Object} options.rebalanceCoordinator - Rebalance coordinator.
+   * @param {boolean} [options.autoStartDistributedTransactionRecovery=true] -
+   *   Whether recovered distributed transactions should start replaying as soon
+   *   as the engine is constructed or rehydrated with a cache.
    * @param {Function} options.tablePartitionProvisioner - Initial partition
    *   provisioning callback for CREATE TABLE.
    */
@@ -208,7 +217,19 @@ class SQLQueryEngine {
       options.defaultRoutingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
     this.routingMetadataOverlay = options.routingMetadataOverlay || null;
+    this.authoritativeRoutingOverlayEntries = new Map();
     this.bootstrapRoutingOverlayEntries = new Map();
+    this.authoritativeRoutingOverlay = {
+      getPartitionById: (partitionId) =>
+        this.getAuthoritativeRoutingOverlayPartition(partitionId),
+      getServicesForPartition: (partitionId) =>
+        this.getAuthoritativeRoutingOverlayServices(partitionId),
+      refreshPartitionRouting: async (partitionId, overlayOptions = {}) =>
+        this.refreshAuthoritativeRoutingOverlay(
+          partitionId,
+          overlayOptions,
+        ),
+    };
     this.lastWriteSplitEvaluationByTable = new Map();
     this.bootstrapRoutingOverlay = {
       getPartitionById: (partitionId) =>
@@ -262,7 +283,10 @@ class SQLQueryEngine {
     this.queryExecutor.setRoutingMetadataOverlay(
       this.composeRoutingMetadataOverlay(
         this.routingMetadataOverlay,
-        this.bootstrapRoutingOverlay,
+        this.composeRoutingMetadataOverlay(
+          this.authoritativeRoutingOverlay,
+          this.bootstrapRoutingOverlay,
+        ),
       ),
     );
     this.distributedWriteCoordinator = options.distributedWriteCoordinator ||
@@ -368,7 +392,14 @@ class SQLQueryEngine {
         resolveProvisionTargetNodeIds: (replicaCount) =>
           this.resolveProvisionTargetNodeIds(replicaCount),
         getRoutablePartitionServiceNodeIds: (partitionId) =>
-          this.getRoutablePartitionServiceNodeIds(partitionId),
+          this.getRoutablePartitionServiceNodeIds(
+            partitionId,
+            CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          ),
+        isCriticalSystemPartition: (partitionId) =>
+          this.rebalanceCoordinator?.isCriticalSystemPartition(partitionId) ===
+          true,
         captureTopologySnapshot: (context) =>
           this.captureManagedSplitTopologySnapshot(context),
         calculateQuorumReplicaCount: (replicaCount) =>
@@ -433,10 +464,10 @@ class SQLQueryEngine {
     this.transactionRecoveryReplayPromise = null;
     this.lastTransactionRecoveryReplayResult =
       createEmptyTransactionRecoveryReplaySummary();
-    this.recoverDistributedTransactionStateFromCache();
-    void this.resumeRecoveredDistributedTransactions();
-    if (typeof this.transactionCoordinator.startRecoverySweep === 'function') {
-      this.transactionCoordinator.startRecoverySweep();
+    this.distributedTransactionRecoveryActivated =
+      options.autoStartDistributedTransactionRecovery !== false;
+    if (this.distributedTransactionRecoveryActivated) {
+      void this.activateDistributedTransactionRecovery();
     }
   }
 
@@ -483,9 +514,34 @@ class SQLQueryEngine {
         });
       }
     }
-    this.transactionStateRecovered = false;
+    if (this.distributedTransactionRecoveryActivated) {
+      void this.activateDistributedTransactionRecovery({
+        resetRecoveryState: true,
+      });
+    }
+  }
+
+  /**
+   * Activate distributed transaction recovery replay and periodic sweeps.
+   * Joining nodes use this to defer replay until the READY cutover completes.
+   *
+   * @param {Object} [options]
+   * @param {boolean} [options.resetRecoveryState=true] - When true, reload the
+   *   recovered coordinator view from the latest system-cache snapshot.
+   * @return {Promise<Object>} Replay summary.
+   */
+  activateDistributedTransactionRecovery(options = {}) {
+    this.distributedTransactionRecoveryActivated = true;
+    const resetRecoveryState = options.resetRecoveryState !== false;
+    if (resetRecoveryState) {
+      this.transactionStateRecovered = false;
+    }
     this.recoverDistributedTransactionStateFromCache();
-    void this.resumeRecoveredDistributedTransactions();
+    const replayPromise = this.resumeRecoveredDistributedTransactions();
+    if (typeof this.transactionCoordinator.startRecoverySweep === 'function') {
+      this.transactionCoordinator.startRecoverySweep();
+    }
+    return replayPromise;
   }
 
   /**
@@ -3259,7 +3315,112 @@ class SQLQueryEngine {
           null;
       },
       getServicesForPartition: (partitionId) => mergeServices(partitionId),
+      refreshPartitionRouting: async (partitionId, options = {}) => {
+        for (const overlay of [primaryOverlay, secondaryOverlay]) {
+          if (!overlay ||
+              typeof overlay.refreshPartitionRouting !== 'function') {
+            continue;
+          }
+          const refreshed = await overlay.refreshPartitionRouting(
+            partitionId,
+            options,
+          );
+          if (refreshed === true) {
+            return true;
+          }
+        }
+        return false;
+      },
     };
+  }
+
+  /**
+   * Resolve authoritative overlay partition metadata by ID.
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  getAuthoritativeRoutingOverlayPartition(partitionId) {
+    return this.authoritativeRoutingOverlayEntries.get(partitionId)?.partition || null;
+  }
+
+  /**
+   * Resolve authoritative overlay service rows by partition ID.
+   * @param {string} partitionId
+   * @return {Array<Object>}
+   * @private
+   */
+  getAuthoritativeRoutingOverlayServices(partitionId) {
+    return this.authoritativeRoutingOverlayEntries.get(partitionId)?.services || [];
+  }
+
+  /**
+   * Refresh one partition's routing metadata through the authoritative
+   * control-plane view so stale cache service rows can be bypassed after a
+   * runtime no-handler witness.
+   * @param {string} partitionId
+   * @param {Object} [options]
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async refreshAuthoritativeRoutingOverlay(partitionId, options = {}) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
+      return false;
+    }
+
+    const authoritativeControlPlaneView =
+      this.getAuthoritativeControlPlaneView();
+    if (!authoritativeControlPlaneView) {
+      return false;
+    }
+
+    const queryTimeoutMs =
+      Number.isFinite(options.queryTimeoutMs) &&
+        options.queryTimeoutMs > 0 ?
+        options.queryTimeoutMs :
+        this.queryTimeoutMs;
+
+    const [partitionResult, serviceResult] = await Promise.all([
+      authoritativeControlPlaneView.readRows(
+        TABLES.PARTITIONS,
+        `SELECT * FROM ${TABLES.PARTITIONS} WHERE ${COLUMN.PARTITION_ID} = ?`,
+        [partitionId],
+        {
+          allowSqlFallback: false,
+          queryTimeoutMs,
+        },
+      ),
+      authoritativeControlPlaneView.readRows(
+        TABLES.SERVICES,
+        `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.PARTITION_ID} = ? AND ${COLUMN.SERVICE_TYPE} = ?`,
+        [partitionId, SERVICE_TYPE.PARTITION],
+        {
+          allowSqlFallback: false,
+          queryTimeoutMs,
+        },
+      ),
+    ]);
+
+    const partitionRows = Array.isArray(partitionResult?.rows) ?
+      partitionResult.rows :
+      [];
+    const serviceRows = Array.isArray(serviceResult?.rows) ?
+      serviceResult.rows.filter((service) =>
+        service?.service_type === SERVICE_TYPE.PARTITION,
+      ) :
+      [];
+
+    if (partitionRows.length === 0 && serviceRows.length === 0) {
+      this.authoritativeRoutingOverlayEntries.delete(partitionId);
+      return false;
+    }
+
+    this.authoritativeRoutingOverlayEntries.set(partitionId, {
+      partition: partitionRows[0] || null,
+      services: serviceRows,
+    });
+
+    return true;
   }
 
   /**
@@ -5392,7 +5553,12 @@ class SQLQueryEngine {
       },
     }, {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: 'critical',
+      // Distributed transaction bookkeeping is durable recovery metadata, but
+      // it should not consume the same reserved transport lane used for
+      // replica operations and topology settlement under load.
+      deliveryPriority: this.resolveRoutedDeliveryPriority(
+        TABLES.SQL_TRANSACTIONS,
+      ),
     });
   }
 
@@ -5420,7 +5586,9 @@ class SQLQueryEngine {
       },
     }, {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: 'critical',
+      deliveryPriority: this.resolveRoutedDeliveryPriority(
+        TABLES.SQL_TRANSACTION_PARTICIPANTS,
+      ),
     });
   }
 
@@ -5452,7 +5620,9 @@ class SQLQueryEngine {
       },
     }, {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: 'critical',
+      deliveryPriority: this.resolveRoutedDeliveryPriority(
+        TABLES.SQL_WRITE_OPERATIONS,
+      ),
     });
   }
 
@@ -6122,8 +6292,9 @@ class SQLQueryEngine {
 
   /**
    * Resolve router delivery priority for one routed table operation.
-   * System-table traffic defaults to the critical lane unless a caller
-   * explicitly chooses a different priority.
+   * Topology/control-plane tables default to the critical lane. High-volume
+   * transaction bookkeeping tables use the background lane so they cannot
+   * starve replica operations or startup/rebalance progress.
    * @param {string|null} tableName
    * @param {string|undefined|null} deliveryPriority
    * @return {string|undefined}
@@ -6134,7 +6305,12 @@ class SQLQueryEngine {
         deliveryPriority.length > 0) {
       return deliveryPriority;
     }
-    return this.isSystemTable(tableName) ? 'critical' : undefined;
+    if (!this.isSystemTable(tableName)) {
+      return undefined;
+    }
+    return BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES.has(tableName) ?
+      'background' :
+      'critical';
   }
 
   /**

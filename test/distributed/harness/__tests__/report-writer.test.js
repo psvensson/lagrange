@@ -87,6 +87,9 @@ describe('ReportWriter', () => {
       assert.equal(entry.cleanlinessAssertion, null);
       assert.equal(entry.memoryLeak, null);
       assert.equal(entry.memoryLeakAssertion, null);
+      assert.equal(entry.failureClassification, null);
+      assert.equal(entry.publicationConvergence, null);
+      assert.equal(entry.decisionArtifactsByNodeId, null);
       assert.deepEqual(entry.performanceMeasurement, {
         available: false,
         validForComparison: false,

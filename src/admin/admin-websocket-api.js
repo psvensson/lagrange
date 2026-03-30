@@ -41,6 +41,10 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {getRegisteredControlPlaneSystemTableGateway} from
   '../control-plane/control-plane-gateway-registry.js';
 import {
@@ -141,6 +145,17 @@ const ADMIN_STREAM_LANE_SNAPSHOT = 'snapshot';
 const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
 const LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS = 250;
 const LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS = 250;
+const LOAD_LANE_QUERY_TIMEOUT_CAP_MS = 3000;
+const LOAD_LANE_SOFT_ADMISSION_REASON_CODES =
+  new Set([
+    'schema_partition_unavailable',
+    'leadership_unstable',
+  ]);
+const LOAD_LANE_VOTER_READY_REPLICA_ROLES =
+  new Set([
+    'leader',
+    'follower',
+  ]);
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
@@ -153,6 +168,16 @@ const ADMIN_CACHE_OBSERVATION_TABLES =
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
+
+/**
+ * Resolve control-plane readiness service from one SQL engine bundle.
+ * @param {Object|null} sqlQueryEngine
+ * @return {Object|null}
+ */
+function resolveSqlEngineControlPlaneReadinessService(sqlQueryEngine) {
+  return sqlQueryEngine?.rebalanceCoordinator?.storageAdmissionService
+    ?.controlPlaneReadinessService || null;
+}
 
 
 /**
@@ -267,8 +292,7 @@ class AdminWebSocketAPI {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
-      this.sqlQueryEngine?.rebalanceCoordinator?.storageAdmissionService
-        ?.controlPlaneReadinessService ||
+      resolveSqlEngineControlPlaneReadinessService(this.sqlQueryEngine) ||
       null;
     this.heartbeatService = options.heartbeatService || null;
     this.loadLaneReadinessCacheMaxAgeMs =
@@ -284,6 +308,11 @@ class AdminWebSocketAPI {
           this.loadLaneReadinessCacheMaxAgeMs,
           LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
         );
+    this.loadLaneQueryTimeoutCapMs =
+      Number.isFinite(options.loadLaneQueryTimeoutCapMs) &&
+        options.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+        Math.floor(options.loadLaneQueryTimeoutCapMs) :
+        LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
     this.loadLaneTableAdmissionCache = new Map();
     this.enableAdminStream = options.enableAdminStream !== false;
 
@@ -314,7 +343,10 @@ class AdminWebSocketAPI {
       sqlQueryEngine: this.sqlQueryEngine,
       messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
+      controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
+      startupRecoveryCoordinator: options.startupRecoveryCoordinator || null,
+      bootstrapReadinessState: options.bootstrapReadinessState || null,
       heartbeatService: this.heartbeatService,
       ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
         this.serviceDiscovery
@@ -1188,8 +1220,8 @@ class AdminWebSocketAPI {
     if (forceAuthoritativeRepair) {
       return {
         allowAuthoritativeRepair: true,
-        allowAuthoritativeReadinessRefresh: true,
-        allowStaleReadinessOnCacheChange: false,
+        allowAuthoritativeReadinessRefresh: false,
+        allowStaleReadinessOnCacheChange: true,
       };
     }
 
@@ -1329,12 +1361,53 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Determine whether transient schema/leadership drift can be treated as
+   * soft blockers for local load-lane admission.
+   * @param {Object|null} benchmarkAdmission
+   * @param {Array<string>} reasonCodes
+   * @return {boolean}
+   * @private
+   */
+  shouldAdmitLoadLaneSoftBenchmarkBlockers(
+    benchmarkAdmission,
+    reasonCodes,
+  ) {
+    if (!benchmarkAdmission ||
+        typeof benchmarkAdmission !== TYPEOF.OBJECT) {
+      return false;
+    }
+    if (!Array.isArray(reasonCodes) ||
+        reasonCodes.length <= NUM.ZERO) {
+      return false;
+    }
+    if (!reasonCodes.every((code) =>
+      LOAD_LANE_SOFT_ADMISSION_REASON_CODES.has(code))) {
+      return false;
+    }
+
+    const routingReady = benchmarkAdmission.routingReady === true;
+    const localReplicaRole =
+      String(benchmarkAdmission.localReplicaRole || EMPTY_STRING)
+        .toLowerCase();
+    const localReplicaVoterReady =
+      LOAD_LANE_VOTER_READY_REPLICA_ROLES.has(localReplicaRole);
+    const degradedByOperationIds =
+      Array.isArray(benchmarkAdmission.degradedByOperationIds) ?
+        benchmarkAdmission.degradedByOperationIds :
+        ADMIN_CACHE_DUMP.EMPTY;
+
+    return routingReady &&
+      localReplicaVoterReady &&
+      degradedByOperationIds.length <= NUM.ZERO;
+  }
+
+  /**
    * Resolve local benchmark admission for one routed load-lane table.
    * @param {string} tableName
    * @return {Object|null}
    * @private
    */
-  resolveLoadLaneTableAdmissionState(tableName) {
+  async resolveLoadLaneTableAdmissionState(tableName) {
     const normalizedTableName = normalizeIdentifier(tableName);
     if (!normalizedTableName) {
       return null;
@@ -1350,10 +1423,11 @@ class AdminWebSocketAPI {
       return cachedEntry.state;
     }
 
-    const snapshot = this.serviceDiscovery.buildLocalServiceDiscoverySnapshot({
+    const snapshot = await this.serviceDiscovery.resolveServiceDiscoverySnapshot({
       tableName: normalizedTableName,
       serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
       protocolAllowlist: [WASM_SERVICE_PROTOCOL.POSTGRESQL],
+      allowAuthoritativeRepair: true,
     });
     const services = Array.isArray(snapshot?.services) ?
       snapshot.services :
@@ -1387,10 +1461,18 @@ class AdminWebSocketAPI {
               benchmarkAdmission.reasons,
               'benchmark_admission_blocked',
             );
+          const softBlockerAdmitted =
+            !benchmarkAdmissionReady &&
+            this.shouldAdmitLoadLaneSoftBenchmarkBlockers(
+              benchmarkAdmission,
+              reasonCodes,
+            );
           resolvedState = {
-            ready: benchmarkAdmissionReady && reasonCodes.length === NUM.ZERO,
+            ready:
+              (benchmarkAdmissionReady && reasonCodes.length === NUM.ZERO) ||
+              softBlockerAdmitted,
             tableName: normalizedTableName,
-            reasonCodes,
+            reasonCodes: softBlockerAdmitted ? [] : reasonCodes,
           };
           break;
         }
@@ -1443,7 +1525,7 @@ class AdminWebSocketAPI {
     if (!tableName) {
       return;
     }
-    const admissionState = this.resolveLoadLaneTableAdmissionState(tableName);
+    const admissionState = await this.resolveLoadLaneTableAdmissionState(tableName);
     if (admissionState?.ready === true) {
       return;
     }
@@ -1460,6 +1542,87 @@ class AdminWebSocketAPI {
         reasonCodes.join(',') +
         ')',
     );
+  }
+
+  /**
+   * Resolve bounded query timeout for one execution context.
+   * Load-lane traffic should fail fast under pressure so retries can
+   * redistribute work instead of occupying long timeout budgets.
+   * @param {number|null} requestedTimeoutMs
+   * @param {Object} executionContext
+   * @return {number|null}
+   * @private
+   */
+  resolveExecutionQueryTimeoutMs(requestedTimeoutMs, executionContext = {}) {
+    const normalizedTimeoutMs =
+      resolveRequestedQueryTimeoutMs(requestedTimeoutMs);
+    if (!this.isLoadLaneExecution(executionContext)) {
+      return normalizedTimeoutMs;
+    }
+
+    const boundedTimeoutMs =
+      Number.isFinite(this.loadLaneQueryTimeoutCapMs) &&
+        this.loadLaneQueryTimeoutCapMs > NUM.ZERO ?
+        Math.floor(this.loadLaneQueryTimeoutCapMs) :
+        LOAD_LANE_QUERY_TIMEOUT_CAP_MS;
+    if (normalizedTimeoutMs === null) {
+      return boundedTimeoutMs;
+    }
+    return Math.max(NUM.ONE, Math.min(normalizedTimeoutMs, boundedTimeoutMs));
+  }
+
+  /**
+   * Resolve retry-after metadata for one retryable load-lane failure.
+   * @param {Object} value
+   * @return {number}
+   * @private
+   */
+  resolveLoadLaneRetryAfterMs(value = null) {
+    const classifiedRetryAfterMs = getControlPlaneRetryAfterMs(value);
+    if (classifiedRetryAfterMs > NUM.ZERO) {
+      return classifiedRetryAfterMs;
+    }
+    const retryAfterMs = Number(value?.retryAfterMs);
+    if (Number.isFinite(retryAfterMs) &&
+        retryAfterMs > NUM.ZERO) {
+      return Math.floor(retryAfterMs);
+    }
+    return LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
+  }
+
+  /**
+   * Return true when one load-lane SQL failure should be surfaced as
+   * bounded retry pressure instead of a hard failure.
+   * @param {Object} value
+   * @return {boolean}
+   * @private
+   */
+  isRetryableLoadLaneExecutionFailure(value = null) {
+    if (!value || typeof value !== TYPEOF.OBJECT) {
+      return false;
+    }
+    if (value.deferRetry === true) {
+      return true;
+    }
+    if (getControlPlaneRetryAfterMs(value) > NUM.ZERO) {
+      return true;
+    }
+    if (isRetryableControlPlaneError(value)) {
+      return true;
+    }
+
+    const errorCode = String(
+      value?.errorCode || value?.code || EMPTY_STRING,
+    ).toLowerCase();
+    if (errorCode === String(ErrorCode.TIMEOUT).toLowerCase()) {
+      return true;
+    }
+    const message = String(
+      value?.message || value?.error || EMPTY_STRING,
+    ).toLowerCase();
+    return message.includes('timeout') ||
+      message.includes('timed out') ||
+      message.includes('deadline exceeded');
   }
 
   /**
@@ -2029,7 +2192,11 @@ class AdminWebSocketAPI {
     const queryId = payload?.queryId || null;
     const sql = payload?.sql;
     const params = payload?.params || [];
-    const timeoutMs = resolveRequestedQueryTimeoutMs(payload?.timeoutMs);
+    const timeoutMs = this.resolveExecutionQueryTimeoutMs(
+      payload?.timeoutMs,
+      executionContext,
+    );
+    const loadLaneExecution = this.isLoadLaneExecution(executionContext);
 
     if (!queryId) {
       throw createAdminOperationError(
@@ -2109,12 +2276,37 @@ class AdminWebSocketAPI {
       );
     }
 
-    const result = await this.executeQueryWithTimeout(
-      routed.sql,
-      routed.params || [],
-      queryId,
-      timeoutMs,
-    );
+    let result;
+    try {
+      result = await this.executeQueryWithTimeout(
+        routed.sql,
+        routed.params || [],
+        queryId,
+        timeoutMs,
+      );
+    } catch (error) {
+      if (loadLaneExecution &&
+          this.isRetryableLoadLaneExecutionFailure(error)) {
+        throw createRetryableAdminOperationError(
+          this.getErrorCode(error),
+          String(error?.message || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE),
+          {
+            retryAfterMs: this.resolveLoadLaneRetryAfterMs(error),
+          },
+        );
+      }
+      throw error;
+    }
+
+    if (loadLaneExecution &&
+        result?.success === false &&
+        this.isRetryableLoadLaneExecutionFailure(result)) {
+      result = {
+        ...result,
+        deferRetry: true,
+        retryAfterMs: this.resolveLoadLaneRetryAfterMs(result),
+      };
+    }
     if (routed.warning) {
       result.warning = routed.warning;
     }
@@ -3308,6 +3500,24 @@ class AdminWebSocketAPI {
    */
   setSQLQueryEngine(engine) {
     this.sqlQueryEngine = engine;
+    this.controlPlaneReadinessService =
+      this.controlPlaneReadinessService ||
+      resolveSqlEngineControlPlaneReadinessService(engine);
+    if (this.controlSnapshot) {
+      this.controlSnapshot.sqlQueryEngine = engine || null;
+      this.controlSnapshot.controlPlaneReadinessService =
+        this.controlSnapshot.controlPlaneReadinessService ||
+        this.controlPlaneReadinessService;
+    }
+    if (this.preflightSnapshot) {
+      this.preflightSnapshot.sqlQueryEngine = engine || null;
+    }
+    if (this.liveQueryManager &&
+      typeof this.liveQueryManager.initialize === TYPEOF.FUNCTION) {
+      this.liveQueryManager.initialize({
+        sqlQueryEngine: engine,
+      });
+    }
     if (this.debugMetadataStore &&
       typeof this.debugMetadataStore.setSqlQueryEngine === TYPEOF.FUNCTION) {
       this.debugMetadataStore.setSqlQueryEngine(engine);

@@ -40,11 +40,16 @@ class BootstrapClusterViewOwner {
     return this.delegates.getControlPlaneReadinessService?.() || null;
   }
 
+  getPublicationRows() {
+    const systemTableCache = this.getSystemTableCache();
+    return systemTableCache?.getAll?.(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+  }
+
   getEpochManager() {
     return this.delegates.getEpochManager?.() || null;
   }
 
-  getReadyNodes() {
+  getReadyNodes(options = {}) {
     const systemTableCache = assertCritical(
       this.getSystemTableCache(),
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
@@ -87,10 +92,14 @@ class BootstrapClusterViewOwner {
       nodeRows,
       serviceRows,
       nodeEndpointRows,
+      publicationRows: this.getPublicationRows(),
+      requirePublishedMembership: options.requirePublishedMembership === true,
       readinessByNodeId,
     });
 
-    if (this.getSeedNodeId() && !readyNodes.includes(this.getSeedNodeId())) {
+    if (options.requirePublishedMembership !== true &&
+        this.getSeedNodeId() &&
+        !readyNodes.includes(this.getSeedNodeId())) {
       readyNodes.push(this.getSeedNodeId());
     }
 
@@ -152,7 +161,9 @@ class BootstrapClusterViewOwner {
   getClusterState() {
     const nodes = [];
     const messageGroups = [];
-    const activeNodeIds = new Set(this.getReadyNodes());
+    const activeNodeIds = new Set(this.getReadyNodes({
+      requirePublishedMembership: true,
+    }));
 
     nodes.push({
       nodeId: this.getSeedNodeId(),

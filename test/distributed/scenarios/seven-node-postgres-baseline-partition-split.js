@@ -105,7 +105,12 @@ function buildScenarioBenchmarkConfig(currentBenchmarkConfig, scenarioConfig) {
   };
 }
 
-async function waitForSplitEvidence(seedNode, baselineDistribution, config) {
+async function waitForSplitEvidence(
+  seedNode,
+  baselineDistribution,
+  config,
+  queryNodes = [],
+) {
   const deadline = Date.now() + config.partitionObservationTimeoutMs;
   let sampleCount = ZERO;
   let latest = baselineDistribution;
@@ -114,6 +119,7 @@ async function waitForSplitEvidence(seedNode, baselineDistribution, config) {
     sampleCount += 1;
     latest = await queryTableDistribution(seedNode, {
       tableName: config.tableName,
+      queryNodes,
     });
     const additionalPartitionCount = Math.max(
       ZERO,
@@ -229,6 +235,7 @@ async function run(cluster) {
 
   const baselineDistribution = await queryTableDistribution(seedNode, {
     tableName: scenarioConfig.tableName,
+    queryNodes: nodes,
   });
   const originalConfig = cluster?._config || {};
   const nextBenchmarkConfig = buildScenarioBenchmarkConfig(
@@ -255,6 +262,7 @@ async function run(cluster) {
     seedNode,
     baselineDistribution,
     scenarioConfig,
+    nodes,
   );
   const partitioningRebalanceAssessment =
     buildPartitioningRebalanceAssessment(baselineResult, splitEvidence);

@@ -22,10 +22,17 @@ import {
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
+import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {runRetryableControlPlaneWrite} from
   './retryable-control-plane-write.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+  resolveMembershipJoinIntentType,
+} from '../../control-plane/membership-lifecycle-controller.js';
+import {AuthoritativeControlPlaneView} from
+  '../../control-plane/authoritative-control-plane-view.js';
 
 const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
@@ -33,9 +40,16 @@ const LOG_NODE_REGISTER_ERROR_PREFIX =
   'Failed to register node: ';
 const LOG_JOIN_ADMISSION_WRITE_RETRY =
   'Retrying join admission system-table write after retryable failure';
+const LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP =
+  'Reusing existing canonical membership for durable rejoin';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.TWO;
+const DURABLE_REJOIN_REQUIRED_SERVICE_IDS = Object.freeze([
+  META_SERVICE_ID.POSTGRES_WIRE,
+]);
 
 const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
+const normalizeString = (value) =>
+  typeof value === TYPEOF.STRING ? value.trim() : '';
 
 class NodeRegistrationOwner {
   constructor(options = {}) {
@@ -43,6 +57,7 @@ class NodeRegistrationOwner {
     this.nodeAddress = options.nodeAddress;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
+    this.authoritativeControlPlaneView = null;
   }
 
   async registerNodeInCluster() {
@@ -62,6 +77,24 @@ class NodeRegistrationOwner {
     const nodeRow = this.buildNodeRegistrationRow(now);
 
     try {
+      const existingMembership =
+        await this.resolveExistingDurableRejoinMembership(now);
+      if (existingMembership) {
+        await this.refreshExistingDurableRejoinMembership(
+          existingMembership,
+        );
+        this.activateExistingDurableRejoinMembership(
+          existingMembership,
+        );
+        logger.info(LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP, {
+          nodeId: this.nodeId,
+          nodeAddress: this.nodeAddress,
+          reusedEndpointCount:
+            NUM.ONE + existingMembership.metaEndpointRows.length,
+        });
+        return existingMembership;
+      }
+
       const budgetService =
         this.delegates.getNodeStorageBudgetService();
       const {budgetRow, resolution} =
@@ -82,7 +115,6 @@ class NodeRegistrationOwner {
         );
       }
 
-      this.delegates.setJoinMembershipPublished?.(true);
       this.seedJoinTimeCacheRow(TABLES.NODES, {
         ...budgetRow,
         [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
@@ -115,9 +147,6 @@ class NodeRegistrationOwner {
           metaEndpointRow,
         );
       }
-
-      this.delegates
-        .setMessageGroupServiceEndpointsPublished?.(true);
 
       return {
         nodeRow: budgetRow,
@@ -182,6 +211,215 @@ class NodeRegistrationOwner {
     };
   }
 
+  async resolveExistingDurableRejoinMembership(now) {
+    if (this.getJoinLifecycleIntentType() !==
+      MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY) {
+      return null;
+    }
+
+    const authoritativeNodeRow =
+      await this.readAuthoritativeDurableRejoinNodeRow();
+    if (!authoritativeNodeRow) {
+      return null;
+    }
+
+    const cachedNodeAddress = normalizeString(
+      authoritativeNodeRow[COLUMN.NODE_ADDRESS],
+    );
+    const currentNodeAddress = normalizeString(this.nodeAddress);
+    if (cachedNodeAddress.length > NUM.ZERO &&
+      currentNodeAddress.length > NUM.ZERO &&
+      cachedNodeAddress !== currentNodeAddress) {
+      return null;
+    }
+
+    const authoritativeEndpointRow =
+      await this.readAuthoritativeNodeEndpointRow();
+    if (!authoritativeEndpointRow) {
+      return null;
+    }
+
+    const metaEndpointRows =
+      await this.readAuthoritativeMetaEndpointRows();
+    if (metaEndpointRows.length !==
+      DURABLE_REJOIN_REQUIRED_SERVICE_IDS.length) {
+      return null;
+    }
+
+    const reusedNodeRow = {
+      ...authoritativeNodeRow,
+      [COLUMN.STATUS]:
+        authoritativeNodeRow[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    };
+    return {
+      nodeRow: reusedNodeRow,
+      endpointRow: authoritativeEndpointRow,
+      metaEndpointRows,
+      resolution: {
+        source: 'durable_rejoin_existing_membership',
+      },
+      reusedExistingMembership: true,
+    };
+  }
+
+  async refreshExistingDurableRejoinMembership(existingMembership) {
+    const nodeRow = existingMembership?.nodeRow || null;
+    const refreshResult = await this.upsertSystemTableRowWithRetry(
+      TABLES.NODES,
+      nodeRow,
+      {
+        admissionTarget: 'durable rejoin membership refresh',
+      },
+    );
+    if (!refreshResult?.success) {
+      throw new Error(
+        `Failed to refresh durable rejoin membership: ` +
+        `${refreshResult?.error}`,
+      );
+    }
+    return refreshResult;
+  }
+
+  activateExistingDurableRejoinMembership(existingMembership) {
+    if (!existingMembership || typeof existingMembership !== TYPEOF.OBJECT) {
+      return;
+    }
+    this.seedJoinTimeCacheRow(TABLES.NODES, existingMembership.nodeRow);
+    this.seedJoinTimeCacheRow(
+      TABLES.NODE_ENDPOINTS,
+      existingMembership.endpointRow,
+    );
+    for (const metaEndpointRow of existingMembership.metaEndpointRows || []) {
+      this.seedJoinTimeCacheRow(
+        TABLES.SERVICE_ENDPOINTS,
+        metaEndpointRow,
+      );
+    }
+  }
+
+  getJoinLifecycleIntentType() {
+    const joinLifecycleIntentType =
+      this.delegates.getJoinLifecycleIntentType?.();
+    if (typeof joinLifecycleIntentType === TYPEOF.STRING &&
+        joinLifecycleIntentType.length > NUM.ZERO) {
+      return joinLifecycleIntentType;
+    }
+    return resolveMembershipJoinIntentType(
+      this.delegates.getJoinStartupMode?.(),
+    );
+  }
+
+  getAuthoritativeControlPlaneView() {
+    if (this.authoritativeControlPlaneView) {
+      this.authoritativeControlPlaneView.syncOwnerDependencies({
+        cdcIntegrationService: this.delegates.getCdcIntegrationService?.(),
+        messageRouter: this.delegates.getMessageRouter?.() || null,
+      });
+      return this.authoritativeControlPlaneView;
+    }
+
+    const cdcIntegrationService =
+      this.delegates.getCdcIntegrationService?.() || null;
+    if (!cdcIntegrationService) {
+      return null;
+    }
+
+    this.authoritativeControlPlaneView =
+      new AuthoritativeControlPlaneView({
+        nodeId: this.delegates.getSeedNodeId?.() || this.nodeId,
+        cdcIntegrationService,
+        messageRouter: this.delegates.getMessageRouter?.() || null,
+      });
+    return this.authoritativeControlPlaneView;
+  }
+
+  async readAuthoritativeRows(tableName, sql, params = []) {
+    const view = this.getAuthoritativeControlPlaneView();
+    if (!view?.canRead()) {
+      return [];
+    }
+    try {
+      const result = await view.readRows(tableName, sql, params);
+      return result?.success === true && Array.isArray(result.rows) ?
+        result.rows :
+        [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  async readAuthoritativeDurableRejoinNodeRow() {
+    const rows = await this.readAuthoritativeRows(
+      TABLES.NODES,
+      `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
+      [this.nodeId],
+    );
+    return rows.find((row) =>
+      normalizeString(row?.[COLUMN.NODE_ID]) === this.nodeId,
+    ) || null;
+  }
+
+  async readAuthoritativeNodeEndpointRow() {
+    const expectedWsAddress = normalizeString(
+      this.resolveCanonicalWsAddress(),
+    );
+    const rows = await this.readAuthoritativeRows(
+      TABLES.NODE_ENDPOINTS,
+      `SELECT * FROM ${TABLES.NODE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
+      [this.nodeId],
+    );
+    return rows.find((row) => {
+      const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
+      const transportType = normalizeString(
+        row?.[COLUMN.TRANSPORT_TYPE],
+      ).toLowerCase();
+      const status = normalizeString(
+        row?.[COLUMN.STATUS],
+      ).toLowerCase();
+      const address = normalizeString(row?.[COLUMN.ADDRESS]);
+      return nodeId === this.nodeId &&
+        transportType ===
+          String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
+        status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
+        address === expectedWsAddress;
+    }) || null;
+  }
+
+  async readAuthoritativeMetaEndpointRows() {
+    const rows = await this.readAuthoritativeRows(
+      TABLES.SERVICE_ENDPOINTS,
+      `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
+      [this.nodeId],
+    );
+    const rowsByServiceId = new Map();
+    for (const row of rows) {
+      const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
+      const serviceId = normalizeString(row?.[COLUMN.SERVICE_ID]);
+      if (nodeId !== this.nodeId ||
+        !DURABLE_REJOIN_REQUIRED_SERVICE_IDS.includes(serviceId) ||
+        rowsByServiceId.has(serviceId)) {
+        continue;
+      }
+      rowsByServiceId.set(serviceId, row);
+    }
+
+    return DURABLE_REJOIN_REQUIRED_SERVICE_IDS
+      .map((serviceId) => rowsByServiceId.get(serviceId) || null)
+      .filter(Boolean);
+  }
+
+  resolveCanonicalWsAddress() {
+    return this.advertisedNodeWsAddress ||
+      resolveAdvertisedWebSocketAddress({
+        nodeAddress: this.nodeAddress,
+        wsPort: this.delegates.getWsPort?.() || null,
+      }) ||
+      this.nodeAddress;
+  }
+
   async registerNodeEndpoint(now) {
     const logger = this.delegates.getLogger();
 
@@ -192,12 +430,7 @@ class NodeRegistrationOwner {
 
     const endpointId = `ep-${this.nodeId}-ws`;
     const canonicalWsAddress =
-      this.advertisedNodeWsAddress ||
-      resolveAdvertisedWebSocketAddress({
-        nodeAddress: this.nodeAddress,
-        wsPort: this.delegates.getWsPort?.() || null,
-      }) ||
-      this.nodeAddress;
+      this.resolveCanonicalWsAddress();
 
     const endpointData = {
       [COLUMN.ENDPOINT_ID]: endpointId,

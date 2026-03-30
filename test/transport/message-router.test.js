@@ -2540,6 +2540,62 @@ t.test('MessageRouter unit tests', async (t) => {
       );
     });
 
+  t.test('delivery timeout override bounds ACK waits per call', async (t) => {
+    cleanupTestEnvironment();
+    const config = ConfigurationManager.getInstance();
+    config.initialize({
+      node: {id: 'node-a'},
+      logging: {level: 'error'},
+      transport: {
+        messageTimeoutMs: 100,
+        reconnectIntervalMs: 100,
+      },
+    });
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    const router = new MessageRouter({nodeId: 'node-a'});
+    await router.initialize({startServer: false});
+    t.teardown(async () => {
+      await router.shutdown().catch(() => {});
+    });
+
+    router.nodeConnections.set('node-b', {
+      nodeId: 'node-b',
+      nodeAddress: 'ws://node-b:9999',
+      connectionId: 'node-b-timeout-override',
+      ws: {
+        readyState: 1,
+        send: () => {},
+      },
+      state: ConnectionState.CONNECTED,
+      isIncoming: false,
+      reconnectAttempts: 0,
+      reconnectTimeout: null,
+      pingInterval: null,
+      address: 'ws://node-b:9999',
+      isSelfConnection: false,
+      ackTimeoutStreak: 0,
+      lastAckAt: null,
+      lastAckTimeoutAt: null,
+    });
+
+    const startMs = Date.now();
+    const result = await router.deliver(
+      'node-b/service/no-ack',
+      {type: 'TEST'},
+      {timeoutMs: 20},
+    );
+    const elapsedMs = Date.now() - startMs;
+
+    t.equal(result.acknowledged, false,
+      'delivery should still fail when the ACK times out');
+    t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+      'timeout override should preserve the deferred timeout error code');
+    t.ok(elapsedMs < 80,
+      'delivery should honor the per-call timeout override instead of the router default');
+  });
+
   t.test('ack timeout quarantines stale remote connection so the next delivery can reconnect',
     async (t) => {
       cleanupTestEnvironment();

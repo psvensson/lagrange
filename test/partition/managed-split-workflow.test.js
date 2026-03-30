@@ -120,6 +120,9 @@ function buildWorkflow(options = {}) {
     getRoutablePartitionServiceNodeIds:
       options.getRoutablePartitionServiceNodeIds ||
       (() => ['node-a', 'node-b']),
+    isCriticalSystemPartition:
+      options.isCriticalSystemPartition ||
+      (() => false),
     captureTopologySnapshot:
       options.captureTopologySnapshot || null,
     storageAdmissionService:
@@ -259,6 +262,53 @@ test('ManagedSplitWorkflow persists admission_pending before planning and ' +
     },
     'workflow should wait for the transition fields to become visible in cache',
   );
+});
+
+test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
+  'partition split recovery', async (t) => {
+  const {
+    workflow,
+    admissionCalls,
+  } = buildWorkflow({
+    getPartitionInfo: () => ({
+      partition_id: 'control_plane_publications-p1',
+      table_id: 'tbl-control-plane-publications',
+      table_name: 'control_plane_publications',
+      partition_key_start: null,
+      partition_key_end: null,
+      replica_count: 5,
+      leader_node_id: 'node-a',
+      size_bytes: 128,
+    }),
+    getTableInfo: () => ({
+      table_id: 'tbl-control-plane-publications',
+      table_name: 'control_plane_publications',
+      partition_key: 'publication_id',
+      active_partition_version: 1,
+      partition_transition_state: null,
+      partition_transition_metadata: null,
+    }),
+    calculateQuorumReplicaCount: () => 3,
+    getRoutablePartitionServiceNodeIds: () => ['node-a'],
+    isCriticalSystemPartition: (partitionId) =>
+      partitionId === 'control_plane_publications-p1',
+  });
+
+  await workflow.execute('control_plane_publications-p1');
+
+  t.equal(admissionCalls.length, 1);
+  t.equal(
+    admissionCalls[0].requiredReplicaCount,
+    3,
+    'target quorum stays unchanged for critical split planning',
+  );
+  t.equal(
+    admissionCalls[0].minimumRoutableSourceCount,
+    1,
+    'critical split admission must require one routable source to avoid ' +
+    'priority-recovery deadlock',
+  );
+  t.same(admissionCalls[0].sourceRoutableNodeIds, ['node-a']);
 });
 
 test('ManagedSplitWorkflow accepts and persists async source ' +

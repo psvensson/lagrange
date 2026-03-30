@@ -80,6 +80,57 @@ describe('MessageRouterSetup', () => {
       assert.strictEqual(router.hasSelfConnection(), true);
     });
 
+    it('keeps external transport admission closed until explicitly enabled',
+      async () => {
+        const gatedPort = ports.getPort();
+        const peerPort = ports.getPort();
+        const gatedRouter = await MessageRouterSetup.create({
+          nodeId: 'gated-node',
+          nodeAddress: `ws://localhost:${gatedPort}`,
+          wsPort: gatedPort,
+          externalAdmissionEnabled: false,
+        });
+        const peerRouter = await MessageRouterSetup.create({
+          nodeId: 'peer-node',
+          nodeAddress: `ws://localhost:${peerPort}`,
+          wsPort: peerPort,
+        });
+        createdRouters.push(gatedRouter, peerRouter);
+
+        await peerRouter.connectToNode(
+          'gated-node',
+          `ws://localhost:${gatedPort}`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        assert.ok(
+          !gatedRouter.getConnectedNodes().includes('peer-node'),
+          'gated router should reject remote connections until admission opens',
+        );
+        assert.notStrictEqual(
+          peerRouter.getConnectionState('gated-node'),
+          'connected',
+          'peer connection should not remain established while admission is closed',
+        );
+
+        gatedRouter.setExternalAdmissionEnabled(true);
+        await peerRouter.connectToNode(
+          'gated-node',
+          `ws://localhost:${gatedPort}`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        assert.ok(
+          gatedRouter.getConnectedNodes().includes('peer-node'),
+          'gated router should accept remote connections after admission opens',
+        );
+        assert.strictEqual(
+          peerRouter.getConnectionState('gated-node'),
+          'connected',
+          'peer connection should establish once admission is enabled',
+        );
+      });
+
     it('should configure service node resolver', async () => {
       const router = await MessageRouterSetup.create({
         nodeId: 'resolver-test-node',

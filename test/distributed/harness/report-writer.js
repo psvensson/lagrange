@@ -159,6 +159,9 @@ function buildScenarioEntry(scenarioName, result) {
     performanceDiagnostics: result.performanceDiagnostics || null,
     details: normalizedDetails,
     invariantBreaches: resolveScenarioInvariantBreaches(result, normalizedDetails),
+    failureClassification: result.failureClassification || null,
+    publicationConvergence: result.publicationConvergence || null,
+    decisionArtifactsByNodeId: result.decisionArtifactsByNodeId || null,
   };
 
   if (result.exampleResults) {

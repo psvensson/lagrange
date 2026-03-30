@@ -14,6 +14,7 @@ import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
+import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
 
 /**
  * CDC event structure.
@@ -51,7 +52,8 @@ class CDCEvent {
    */
   getKey() {
     const keyField = getSystemCachePrimaryKeyFieldOrFallback(this.tableName);
-    return this.data?.[keyField] || this.data?.id;
+    const canonicalData = canonicalizeSystemTableRow(this.tableName, this.data);
+    return canonicalData?.[keyField] || canonicalData?.id;
   }
 
   /**
@@ -76,17 +78,21 @@ function normalizeCDCEventData(event) {
       null;
 
   if (event?.operation === CDC_OPERATIONS.DELETE) {
-    return whereClause ? {...whereClause} : data;
+    const normalizedDeleteData = whereClause ? {...whereClause} : data;
+    return canonicalizeSystemTableRow(event?.tableName, normalizedDeleteData);
   }
 
   if (event?.operation === CDC_OPERATIONS.UPDATE) {
     if (whereClause && data) {
-      return {...whereClause, ...data};
+      return canonicalizeSystemTableRow(event?.tableName, {
+        ...whereClause,
+        ...data,
+      });
     }
-    return data || whereClause;
+    return canonicalizeSystemTableRow(event?.tableName, data || whereClause);
   }
 
-  return data;
+  return canonicalizeSystemTableRow(event?.tableName, data);
 }
 
 /**

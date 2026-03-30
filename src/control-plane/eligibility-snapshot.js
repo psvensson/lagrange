@@ -39,6 +39,9 @@ function createEligibilitySnapshot(snapshot = {}) {
     nodeId: snapshot.nodeId || null,
     lifecycleState: snapshot.lifecycleState || null,
     publication: freezeObject(snapshot.publication),
+    membershipPublication: freezeObject(snapshot.membershipPublication),
+    priorityControlPlaneRecovery:
+      freezeObject(snapshot.priorityControlPlaneRecovery),
     capacity: freezeObject(snapshot.capacity),
     nodeEvidence: freezeObject(snapshot.nodeEvidence),
     observedAt: snapshot.observedAt || null,

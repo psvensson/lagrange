@@ -89,4 +89,47 @@ describe('examples-catalog scenario', () => {
       /requires at least one active node/,
     );
   });
+
+  it('prefers non-seed callback routes when the seed is degraded', async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
+    let seedPartitionCalls = 0;
+
+    try {
+      const seedNode = {
+        id: 'seed-node',
+        query: async () => ({rows: []}),
+        partitionCallback: async () => {
+          seedPartitionCalls += 1;
+          throw new Error('seed callback unavailable');
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-node',
+        query: async () => ({ok: true, rows: []}),
+        partitionCallback: async (payload) => ({
+          hostResult: {
+            partitionResults: [{
+              rows: buildCallbackRows(payload.callbackModuleRef),
+            }],
+          },
+        }),
+      };
+      const cluster = {
+        _config: {outputDir},
+        _scenarioOverrides: {
+          examplesCatalog: {
+            expectedNodeCount: 2,
+            localReplicaRouting: true,
+          },
+        },
+        getNodes: () => [seedNode, joinerNode],
+      };
+
+      const result = await run(cluster);
+      assert.equal(result.exampleResults.requiredFailed, 0);
+      assert.equal(seedPartitionCalls, 0);
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
 });

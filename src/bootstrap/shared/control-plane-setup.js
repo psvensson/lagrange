@@ -36,6 +36,10 @@ import {
   ControlPlaneReadinessService,
 } from '../../control-plane/control-plane-readiness-service.js';
 import {
+  MembershipPublicationCoordinator,
+} from '../../control-plane/membership-publication-coordinator.js';
+import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
+import {
   RebalanceCoordinator,
 } from '../../rebalancer/rebalance-coordinator.js';
 import {
@@ -240,6 +244,12 @@ class ControlPlaneSetup {
       });
     }
 
+    const startupRecoveryCoordinator =
+      rebalanceCoordinator?.startupRecoveryCoordinator ||
+      new StartupRecoveryCoordinator({
+        readinessState: bootstrapReadinessState || null,
+      });
+
     if (!rebalanceCoordinator) {
       const executorOutcomeEmitter = new ExecutorOutcomeEmitter({
         logger,
@@ -258,6 +268,7 @@ class ControlPlaneSetup {
         controlPlaneReadinessService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
         bootstrapReadinessState: bootstrapReadinessState || null,
+        startupRecoveryCoordinator,
         controlPlaneSystemTableGateway,
         executorOutcomeEmitter,
       });
@@ -284,6 +295,15 @@ class ControlPlaneSetup {
         bootstrapReadinessState) {
       rebalanceCoordinator.bootstrapReadinessState = bootstrapReadinessState;
     }
+    if (!rebalanceCoordinator.startupRecoveryCoordinator) {
+      rebalanceCoordinator.startupRecoveryCoordinator =
+        startupRecoveryCoordinator;
+    } else if (typeof rebalanceCoordinator.startupRecoveryCoordinator
+      .syncOwnerDependencies === 'function') {
+      rebalanceCoordinator.startupRecoveryCoordinator.syncOwnerDependencies({
+        readinessState: bootstrapReadinessState || null,
+      });
+    }
     if (!rebalanceCoordinator.cdcGroupPropagationService &&
         cdcGroupPropagationService) {
       rebalanceCoordinator.cdcGroupPropagationService =
@@ -297,6 +317,15 @@ class ControlPlaneSetup {
       controlPlaneSystemTableGateway,
       systemTableCache,
     });
+    const membershipPublicationService =
+      new MembershipPublicationCoordinator({
+        nodeId,
+        systemTableCache,
+        cdcIntegrationService,
+        controlPlaneReadinessService,
+        controlPlanePublicationsOwner:
+          systemMetadataOwners.controlPlanePublicationsOwner,
+      });
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
     }
@@ -310,6 +339,7 @@ class ControlPlaneSetup {
         cacheMutationTarget: systemTableCache,
         messageRouter,
         cdcIntegrationService,
+        membershipPublicationService,
       });
     }
 
@@ -386,6 +416,7 @@ class ControlPlaneSetup {
       endpointService,
       dispatchService,
       rebalanceCoordinator,
+      membershipPublicationService,
       systemMetadataOwners,
     };
   }

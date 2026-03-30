@@ -1,4 +1,9 @@
-import {COLUMN} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
+
+const CONTROL_PLANE_PUBLICATION_DEFAULT = Object.freeze({
+  KIND: 'cluster_membership',
+  STATUS: 'OPEN',
+});
 
 function readText(...values) {
   for (const value of values) {
@@ -17,6 +22,54 @@ function readText(...values) {
 
 function readLowerText(...values) {
   return readText(...values).toLowerCase();
+}
+
+function readInteger(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') {
+      continue;
+    }
+    const normalized = Number(value);
+    if (Number.isFinite(normalized)) {
+      return Math.trunc(normalized);
+    }
+  }
+  return null;
+}
+
+function readJsonValue(value, fallbackValue) {
+  if (value === null || value === undefined) {
+    return fallbackValue;
+  }
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallbackValue;
+    }
+  }
+  return value;
+}
+
+function readArrayValue(...values) {
+  for (const value of values) {
+    const normalized = readJsonValue(value, null);
+    if (Array.isArray(normalized)) {
+      return normalized;
+    }
+  }
+  return [];
+}
+
+function readObjectValue(...values) {
+  for (const value of values) {
+    const normalized = readJsonValue(value, null);
+    if (normalized && typeof normalized === 'object' &&
+        !Array.isArray(normalized)) {
+      return normalized;
+    }
+  }
+  return null;
 }
 
 function normalizeNodeRow(row) {
@@ -131,9 +184,178 @@ function normalizeServiceEndpointRow(row) {
   };
 }
 
+function normalizeControlPlanePublicationRow(row) {
+  return {
+    publicationId: readText(
+      row?.publication_id,
+      row?.publicationId,
+    ),
+    publicationKind: readLowerText(
+      row?.publication_kind,
+      row?.publicationKind,
+    ),
+    publicationEpoch: readInteger(
+      row?.publication_epoch,
+      row?.publicationEpoch,
+    ),
+    publisherNodeId: readText(
+      row?.publisher_node_id,
+      row?.publisherNodeId,
+    ),
+    sourceTopologyEpoch: readInteger(
+      row?.source_topology_epoch,
+      row?.sourceTopologyEpoch,
+    ),
+    sourceSnapshotVersion: readInteger(
+      row?.source_snapshot_version,
+      row?.sourceSnapshotVersion,
+    ),
+    status: readUpperText(
+      row?.status,
+    ),
+    reasonCode: readText(
+      row?.reason_code,
+      row?.reasonCode,
+    ),
+    publishedActiveNodeIds: readArrayValue(
+      row?.published_active_node_ids,
+      row?.publishedActiveNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    requiredAckNodeIds: readArrayValue(
+      row?.required_ack_node_ids,
+      row?.requiredAckNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    acknowledgedNodeIds: readArrayValue(
+      row?.acknowledged_node_ids,
+      row?.acknowledgedNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    priorityPartitionSummary: readObjectValue(
+      row?.priority_partition_summary,
+      row?.priorityPartitionSummary,
+    ),
+    membershipLifecycleSummary: readObjectValue(
+      row?.membership_lifecycle_summary,
+      row?.membershipLifecycleSummary,
+    ),
+    transitionHistory: readArrayValue(
+      row?.transition_history,
+      row?.transitionHistory,
+    ),
+  };
+}
+
+function serializeControlPlanePublicationRow(row) {
+  const normalizedRow = normalizeControlPlanePublicationRow(row);
+  return {
+    publication_id: readText(
+      normalizedRow.publicationId,
+      row?.publication_id,
+      row?.publicationId,
+    ),
+    publication_kind: readText(
+      normalizedRow.publicationKind,
+      row?.publication_kind,
+      row?.publicationKind,
+      CONTROL_PLANE_PUBLICATION_DEFAULT.KIND,
+    ),
+    publication_epoch: readInteger(
+      normalizedRow.publicationEpoch,
+      row?.publication_epoch,
+      row?.publicationEpoch,
+      1,
+    ),
+    publisher_node_id: readText(
+      normalizedRow.publisherNodeId,
+      row?.publisher_node_id,
+      row?.publisherNodeId,
+    ),
+    source_topology_epoch: readInteger(
+      normalizedRow.sourceTopologyEpoch,
+      row?.source_topology_epoch,
+      row?.sourceTopologyEpoch,
+    ),
+    source_snapshot_version: readInteger(
+      normalizedRow.sourceSnapshotVersion,
+      row?.source_snapshot_version,
+      row?.sourceSnapshotVersion,
+    ),
+    published_active_node_ids: readArrayValue(
+      normalizedRow.publishedActiveNodeIds,
+      row?.published_active_node_ids,
+      row?.publishedActiveNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    required_ack_node_ids: readArrayValue(
+      normalizedRow.requiredAckNodeIds,
+      row?.required_ack_node_ids,
+      row?.requiredAckNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    acknowledged_node_ids: readArrayValue(
+      normalizedRow.acknowledgedNodeIds,
+      row?.acknowledged_node_ids,
+      row?.acknowledgedNodeIds,
+    ).map((value) => readText(value)).filter(Boolean),
+    priority_partition_summary: readObjectValue(
+      normalizedRow.priorityPartitionSummary,
+      row?.priority_partition_summary,
+      row?.priorityPartitionSummary,
+    ),
+    membership_lifecycle_summary: readObjectValue(
+      normalizedRow.membershipLifecycleSummary,
+      row?.membership_lifecycle_summary,
+      row?.membershipLifecycleSummary,
+    ),
+    status: readUpperText(
+      normalizedRow.status,
+      row?.status,
+      CONTROL_PLANE_PUBLICATION_DEFAULT.STATUS,
+    ),
+    reason_code: readText(
+      normalizedRow.reasonCode,
+      row?.reason_code,
+      row?.reasonCode,
+    ),
+    created_at: readInteger(
+      row?.created_at,
+      row?.createdAt,
+    ),
+    updated_at: readInteger(
+      row?.updated_at,
+      row?.updatedAt,
+      Date.now(),
+    ),
+    published_at: readInteger(
+      row?.published_at,
+      row?.publishedAt,
+    ),
+    closed_at: readInteger(
+      row?.closed_at,
+      row?.closedAt,
+    ),
+    transition_history: readArrayValue(
+      row?.transition_history,
+      row?.transitionHistory,
+      normalizedRow.transitionHistory,
+    ),
+  };
+}
+
+function canonicalizeSystemTableRow(tableName, row) {
+  if (tableName === TABLES.CONTROL_PLANE_PUBLICATIONS) {
+    return serializeControlPlanePublicationRow(row);
+  }
+  return row;
+}
+
+function readUpperText(...values) {
+  return readText(...values).toUpperCase();
+}
+
 export {
+  canonicalizeSystemTableRow,
+  normalizeControlPlanePublicationRow,
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   normalizeServiceEndpointRow,
   normalizeServiceRow,
+  serializeControlPlanePublicationRow,
 };

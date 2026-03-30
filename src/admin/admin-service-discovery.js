@@ -1057,7 +1057,8 @@ class AdminServiceDiscovery {
             `${String(options.reason || 'repair')}` +
             `:${tableName}:${now}`,
           routingReadinessDimension:
-            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+            CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE,
         },
       );
     if (queryResult?.success !== true) {

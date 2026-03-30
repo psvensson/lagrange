@@ -36,6 +36,7 @@ test(
 
     const originalCreate = MessageRouterSetup.create;
     let installedResolver = null;
+    let createOptions = null;
     const leaderServiceCalls = [];
     const leaderService = {
       initialized: false,
@@ -45,14 +46,17 @@ test(
       ControlPlaneMessageType.NODE_STATE_UPDATE,
     );
 
-    MessageRouterSetup.create = async () => ({
+    MessageRouterSetup.create = async (options) => {
+      createOptions = options;
+      return {
       hasSelfConnection() {
         return true;
       },
       setQueryMessageGroupServiceResolver(resolver) {
         installedResolver = resolver;
       },
-    });
+      };
+    };
 
     let nodeId = 'seed-phase-test-node';
     let nodeAddress = 'ws://localhost:12020';
@@ -125,6 +129,11 @@ test(
         leaderServiceCalls[1],
         {requiredTables},
         'seed query transport resolver should keep required-table selection stable',
+      );
+      assert.strictEqual(
+        createOptions?.externalAdmissionEnabled,
+        false,
+        'seed infrastructure should keep external transport admission closed until bootstrap completes',
       );
     } finally {
       MessageRouterSetup.create = originalCreate;

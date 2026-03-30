@@ -359,16 +359,33 @@ class CreateMessageGroupPhase {
       config.replicaStaggerDelayMs;
 
     const replicaIds = [];
-    for (let i = NUM.ZERO; i < replicaCount; i++) {
-      replicaIds.push(`${groupId}${MESSAGE_GROUP_REPLICA_ID_INFIX}${i}`);
+    const startupReplicaIds = Array.isArray(assignment.startupReplicaIds) ?
+      assignment.startupReplicaIds.filter((replicaId) =>
+        typeof replicaId === 'string' && replicaId.length > NUM.ZERO,
+      ) :
+      [];
+    if (startupReplicaIds.length > NUM.ZERO) {
+      replicaIds.push(...startupReplicaIds);
+    } else {
+      for (let i = NUM.ZERO; i < replicaCount; i++) {
+        replicaIds.push(`${groupId}${MESSAGE_GROUP_REPLICA_ID_INFIX}${i}`);
+      }
     }
 
-    const peerAddresses = replicaIds.map(
-      (replicaId) =>
-        `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${replicaId}`,
-    );
+    const allReplicaIds = Array.isArray(assignment.existingPeerIds) &&
+      assignment.existingPeerIds.length > NUM.ZERO ?
+      assignment.existingPeerIds :
+      replicaIds;
+
+    const peerAddresses = Array.isArray(assignment.peerAddresses) &&
+      assignment.peerAddresses.length > NUM.ZERO ?
+      assignment.peerAddresses :
+      allReplicaIds.map(
+        (replicaId) =>
+          `${this.nodeId}${ADDRESS.SEPARATOR}` +
+          `${ENTITY_TYPE.MESSAGE_GROUP}` +
+          `${ADDRESS.SEPARATOR}${replicaId}`,
+      );
 
     this.delegates.resetJoinMessageGroupReplicas();
     for (
@@ -377,6 +394,7 @@ class CreateMessageGroupPhase {
       index++
     ) {
       const replicaId = replicaIds[index];
+      const replicaIndex = allReplicaIds.indexOf(replicaId);
       this.delegates.assertReplicaStartupOwnership(replicaId);
       this.delegates.queueJoinServiceReplica(
         this.delegates.createJoinServiceDescriptor(
@@ -387,11 +405,12 @@ class CreateMessageGroupPhase {
           serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
           groupId,
           replicaId,
-          replicaIds,
-          replicaIndex: index,
+          replicaIds: allReplicaIds,
+          replicaIndex: replicaIndex >= NUM.ZERO ? replicaIndex : index,
           peerAddresses,
           deferElection: true,
-          deferElectionUntilJoinConvergence: index > NUM.ZERO,
+          deferElectionUntilJoinConvergence:
+            (replicaIndex >= NUM.ZERO ? replicaIndex : index) > NUM.ZERO,
           publishRoleMetadata: false,
           publishLeaderNodeMetadata: false,
           createDelayMs: index > NUM.ZERO ?

@@ -7,6 +7,7 @@ import {
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
 import {STATE} from '../../src/constants/index.js';
+import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -36,8 +37,8 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
     });
 
     service.messageRouter = {
-      deliver: async (targetAddress, message) => {
-        deliveries.push({targetAddress, message});
+      deliver: async (targetAddress, message, options) => {
+        deliveries.push({targetAddress, message, options});
         return {acknowledged: true};
       },
     };
@@ -75,9 +76,53 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
       'should attach the full node-row heartbeat payload',
     );
     t.equal(
+      deliveries[0].options?.timeoutMs,
+      30000,
+      'should use the broader control-plane delivery timeout budget',
+    );
+    t.equal(
       service.controlPlaneTargetAddress,
       'seed-node/message-group/mg-1-r1',
       'should cache the resolved control-plane target',
+    );
+  });
+
+test('NodeJoiningService keeps steady-state control-plane reporter enabled during durable rejoin',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let clearedReporter = false;
+    let heartbeatStarted = false;
+    const service = new NodeJoiningService({
+      nodeId: 'joiner-node',
+      nodeAddress: 'ddb-test-reuse-3-6:8080',
+      seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+
+    service.heartbeatService = {
+      state: 'stopped',
+      setNodeStateReporter(reporter) {
+        if (reporter === null) {
+          clearedReporter = true;
+        }
+      },
+      start() {
+        heartbeatStarted = true;
+      },
+    };
+
+    await service.activateControlPlaneBackgroundWriters();
+
+    t.equal(
+      clearedReporter,
+      false,
+      'should keep the reporter path active for durable rejoin steady-state heartbeats',
+    );
+    t.equal(
+      heartbeatStarted,
+      true,
+      'should still activate steady-state heartbeat writers',
     );
   });
 

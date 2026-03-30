@@ -52,6 +52,9 @@ import {
   SERVICE_STATUS,
   SERVICE_TYPE,
 } from '../../constants/index.js';
+import {
+  SeedRegistrationRuntimeOwner,
+} from '../owners/seed-registration-runtime-owner.js';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 
@@ -66,6 +69,9 @@ class SeedRegistrationPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.runtimeOwner = new SeedRegistrationRuntimeOwner({
+      delegates: this.delegates,
+    });
   }
 
   /**
@@ -273,6 +279,7 @@ class SeedRegistrationPhase {
           await systemTableWriter.upsertSystemTableRow(
             tableName, row,
           );
+          this.projectBootstrapRowToCache(tableName, row);
         },
         nodeId: d.getNodeId(),
         nodeAddress: d.getNodeAddress(),
@@ -284,6 +291,28 @@ class SeedRegistrationPhase {
       metaServices,
       metaEndpoints,
     });
+  }
+
+  /**
+   * Project bootstrap-time system-table rows into the local cache when a
+   * writable cache is available so later bootstrap steps observe the same
+   * canonical metadata without waiting on cache convergence.
+   * @param {string} tableName
+   * @param {Object} row
+   * @return {void}
+   */
+  projectBootstrapRowToCache(tableName, row) {
+    const systemTableCache =
+      this.delegates.getSystemTableCache?.();
+    if (!systemTableCache ||
+      typeof systemTableCache.applySystemTableChange !== 'function') {
+      return;
+    }
+    systemTableCache.applySystemTableChange(
+      tableName,
+      'INSERT',
+      row,
+    );
   }
 
   /**
@@ -425,7 +454,7 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
 
     const configPartition =
-      this.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
+      this.runtimeOwner.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
     if (!configPartition || !configPartition.isLeader) {
       logger.warn(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING);
       return;
@@ -489,7 +518,7 @@ class SeedRegistrationPhase {
     }
 
     const configPartition =
-      this.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
+      this.runtimeOwner.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
     if (!configPartition || !configPartition.isLeader) {
       throw new Error(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING);
     }
@@ -568,30 +597,6 @@ class SeedRegistrationPhase {
     );
     newWriter.enable();
     d.setSystemTableWriter(newWriter);
-  }
-
-  /**
-   * Get the leader partition for a system table.
-   * @param {string} tableName
-   * @return {PartitionService|null}
-   */
-  getLeaderPartition(tableName) {
-    const d = this.delegates;
-    const replicaIds = INITIAL_REPLICA_IDS[tableName];
-    assertCritical(
-      replicaIds,
-      BOOTSTRAP_ERROR.PARTITION_REPLICAS_MISSING,
-    );
-
-    for (const replicaId of replicaIds) {
-      const partition =
-        d.getPartitionServices().get(replicaId);
-      if (partition && partition.isLeader) {
-        return partition;
-      }
-    }
-
-    throw new Error(BOOTSTRAP_ERROR.PARTITION_LEADER_MISSING);
   }
 }
 

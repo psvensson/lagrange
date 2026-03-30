@@ -44,6 +44,8 @@ class MessageGroupAssignment {
    *   temporarily unavailable for MOVE_REPLICA selection.
    * @param {Set<string>} [options.excludedSourceNodeIds] - Source nodes that
    *   must not be selected for MOVE_REPLICA assignments.
+    * @param {boolean} [options.allowRejoinSingleOwnedGroup=false] - When true,
+    *   a durable rejoin may reuse a single existing non-canonical owned group.
    * @return {Object} Assignment instructions.
    */
   determineAssignment(newNodeId, messageGroups, options = {}) {
@@ -61,9 +63,18 @@ class MessageGroupAssignment {
     // to CREATE_SELF_HOSTED so it rejoins its existing group
     // with the same deterministic group ID.
     const existingMembershipGroupId =
-      this.findExistingMembershipGroupId(newNodeId, messageGroups);
+      this.findExistingMembershipGroupId(newNodeId, messageGroups, options);
     if (existingMembershipGroupId) {
       const newGroupId = existingMembershipGroupId;
+      const existingGroup = messageGroups.find((group) =>
+        group?.group_id === newGroupId,
+      ) || null;
+      const existingReplicas = Array.isArray(existingGroup?.replicas) ?
+        existingGroup.replicas :
+        [];
+      const startupReplicaIds = existingReplicas.filter((replica) =>
+        replica?.node_id === newNodeId,
+      ).map((replica) => replica.replica_id);
 
       this.logger.info(
         MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.EXISTING_MEMBERSHIP_DETECTED,
@@ -73,7 +84,11 @@ class MessageGroupAssignment {
       return {
         strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
         groupId: newGroupId,
-        replicaCount: MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
+        replicaCount: existingReplicas.length > NUM.ZERO ?
+          existingReplicas.length :
+          MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
+        reuseExistingGroup: true,
+        startupReplicaIds,
       };
     }
 
@@ -132,25 +147,30 @@ class MessageGroupAssignment {
    * assignment for a different group.
    *
    * Returns true when the node already owns a canonical restart group.
-   * This is normally the node-ID-derived self-hosted group, but the original
-   * seed node also canonically owns the initial control-plane group `mg-1`.
-   * Nodes that only host a moved replica on behalf of some other group remain
-   * eligible for MOVE_REPLICA.
+   * This is normally the node-ID-derived self-hosted group, but durable
+   * restart ownership can also be an existing replicated control-plane group
+   * when the caller explicitly opts into that behavior.
    * @param {string} nodeId - Joining node ID.
    * @param {Array<Object>} messageGroups - Existing message groups.
+   * @param {Object} [options={}] - Membership detection options.
    * @return {boolean} True when the node's canonical group exists.
    */
-  hasExistingMembership(nodeId, messageGroups) {
-    return this.findExistingMembershipGroupId(nodeId, messageGroups) !== null;
+  hasExistingMembership(nodeId, messageGroups, options = {}) {
+    return this.findExistingMembershipGroupId(
+      nodeId,
+      messageGroups,
+      options,
+    ) !== null;
   }
 
   /**
    * Resolve the canonical restart group already owned by the joining node.
    * @param {string} nodeId - Joining node ID.
    * @param {Array<Object>} messageGroups - Existing message groups.
+   * @param {Object} [options={}] - Membership detection options.
    * @return {string|null} Existing canonical group ID or null.
    */
-  findExistingMembershipGroupId(nodeId, messageGroups) {
+  findExistingMembershipGroupId(nodeId, messageGroups, options = {}) {
     if (typeof nodeId !== 'string' || nodeId.length === NUM.ZERO) {
       return null;
     }
@@ -161,14 +181,28 @@ class MessageGroupAssignment {
       }
     }
 
+    const ownedGroupIds = [];
+    const fullyOwnedGroupIds = [];
     for (const group of messageGroups) {
       const replicas = Array.isArray(group?.replicas) ? group.replicas : [];
       const ownedReplicaCount = replicas.filter((replica) =>
         replica?.node_id === nodeId,
       ).length;
-      if (ownedReplicaCount >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
-        return group.group_id || null;
+      if (ownedReplicaCount > NUM.ZERO) {
+        ownedGroupIds.push(group.group_id || null);
       }
+      if (ownedReplicaCount >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
+        fullyOwnedGroupIds.push(group.group_id || null);
+      }
+    }
+
+    if (fullyOwnedGroupIds.length > NUM.ZERO) {
+      return fullyOwnedGroupIds[NUM.ZERO];
+    }
+
+    if (options.allowRejoinSingleOwnedGroup === true &&
+        ownedGroupIds.length === NUM.ONE) {
+      return ownedGroupIds[NUM.ZERO];
     }
 
     return null;

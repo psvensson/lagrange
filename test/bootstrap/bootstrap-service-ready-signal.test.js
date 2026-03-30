@@ -37,8 +37,6 @@ test('BootstrapService waits for local query transport readiness before publishi
     });
     service.seedCacheHydrationPhase.waitForSystemServiceLeadersInCache =
       async () => {};
-    service.seedCacheHydrationPhase.waitForReadyNodeInCache =
-      async () => {};
     service.messageRouter = {
       getQueryDataPlaneTransportReadiness() {
         return transportReady ?
@@ -94,26 +92,30 @@ test('BootstrapService waits for local query transport readiness before publishi
       'seed ready heartbeat should be published once the local query transport becomes ready');
     t.same(sleepDelays, [1],
       'seed ready publication should back off before the first heartbeat when local query transport is deferred');
-    t.equal(service.messageGroupServiceEndpointsPublished, true,
-      'seed registration should still complete after local query transport readiness is satisfied');
   });
 
-test('BootstrapService waits for lifecycle traffic readiness before starting steady-state control-plane writers',
+test('BootstrapService waits for lifecycle metadata publication readiness before starting steady-state control-plane writers',
   async (t) => {
     initializeTestEnvironment();
 
-    let trafficReady = false;
+    let metadataPublicationReady = false;
     const sleepDelays = [];
     let leaseStarts = 0;
     let heartbeatStarts = 0;
+    let recoveryStarts = 0;
 
     const service = new BootstrapService({
       nodeId: 'seed-background-writer-gate',
       nodeAddress: 'ws://localhost:19094',
     });
+    service.sqlQueryEngine = {
+      activateDistributedTransactionRecovery() {
+        recoveryStarts += 1;
+      },
+    };
     service.bootstrapReadinessState = {
       getSnapshot() {
-        return trafficReady ?
+        return metadataPublicationReady ?
           {
             ready: true,
             phase: 'TRAFFIC_READY',
@@ -125,9 +127,9 @@ test('BootstrapService waits for lifecycle traffic readiness before starting ste
           } :
           {
             ready: false,
-            phase: 'JOIN_READY',
-            state: 'warming',
-            reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+            phase: 'DISCOVERING',
+            state: 'discovering',
+            reasons: ['local_query_transport_not_ready'],
             retryAfterMs: 1,
             stableWindowMs: 1,
             stableElapsedMs: 0,
@@ -136,7 +138,7 @@ test('BootstrapService waits for lifecycle traffic readiness before starting ste
     };
     service.sleep = async (delayMs) => {
       sleepDelays.push(delayMs);
-      trafficReady = true;
+      metadataPublicationReady = true;
     };
     service.leaseService = {
       start() {
@@ -152,9 +154,171 @@ test('BootstrapService waits for lifecycle traffic readiness before starting ste
     await service.activateControlPlaneBackgroundWriters();
 
     t.same(sleepDelays, [1],
-      'steady-state writers should wait through the lifecycle stable window');
+      'steady-state writers should wait until metadata publication readiness is satisfied');
     t.equal(leaseStarts, 1,
-      'lease writer should start once lifecycle traffic readiness is satisfied');
+      'lease writer should start once lifecycle metadata publication readiness is satisfied');
     t.equal(heartbeatStarts, 1,
-      'heartbeat writer should start once lifecycle traffic readiness is satisfied');
+      'heartbeat writer should start once lifecycle metadata publication readiness is satisfied');
+    t.equal(recoveryStarts, 1,
+      'deferred transaction recovery should arm once steady-state writers become active');
+  });
+
+test('BootstrapService does not start deferred steady-state writers after shutdown begins',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let metadataPublicationReady = false;
+    let leaseStarts = 0;
+    let heartbeatStarts = 0;
+    let recoveryStarts = 0;
+
+    const service = new BootstrapService({
+      nodeId: 'seed-background-writer-shutdown-race',
+      nodeAddress: 'ws://localhost:19095',
+    });
+    service.sqlQueryEngine = {
+      activateDistributedTransactionRecovery() {
+        recoveryStarts += 1;
+      },
+    };
+    service.bootstrapReadinessState = {
+      getSnapshot() {
+        return metadataPublicationReady ?
+          {
+            ready: true,
+            phase: 'TRAFFIC_READY',
+            state: 'join_ready',
+            reasons: [],
+            retryAfterMs: 0,
+            stableWindowMs: 1,
+            stableElapsedMs: 1,
+          } :
+          {
+            ready: false,
+            phase: 'DISCOVERING',
+            state: 'discovering',
+            reasons: ['local_query_transport_not_ready'],
+            retryAfterMs: 1,
+            stableWindowMs: 1,
+            stableElapsedMs: 0,
+          };
+      },
+    };
+    service.sleep = async () => {
+      service.isShuttingDown = true;
+      metadataPublicationReady = true;
+    };
+    service.leaseService = {
+      start() {
+        leaseStarts += 1;
+      },
+    };
+    service.heartbeatService = {
+      start() {
+        heartbeatStarts += 1;
+      },
+    };
+
+    await service.activateControlPlaneBackgroundWriters();
+
+    t.equal(leaseStarts, 0,
+      'lease writer should not start once shutdown has begun');
+    t.equal(heartbeatStarts, 0,
+      'heartbeat writer should not start once shutdown has begun');
+    t.equal(recoveryStarts, 0,
+      'deferred recovery should not start once shutdown has begun');
+  });
+
+test('BootstrapService cancels deferred latency topology startup when shutdown begins',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-latency-topology-shutdown-race',
+      nodeAddress: 'ws://localhost:19096',
+    });
+
+    let topologyStarts = 0;
+    service.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {
+      topologyStarts += 1;
+    };
+
+    service.deferredLatencyTopologyStartKind = 'timeout';
+    service.deferredLatencyTopologyStartHandle = setTimeout(() => {
+      service.seedCacheHydrationPhase.startLatencyTopologyLifecycle();
+    }, 50);
+
+    await service.shutdown();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    t.equal(topologyStarts, 0,
+      'deferred latency topology startup should not run after shutdown begins');
+  });
+
+test('BootstrapService shutdown gates already-queued deferred latency topology startup',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-latency-topology-immediate-shutdown-race',
+      nodeAddress: 'ws://localhost:19098',
+    });
+
+    let topologyStarts = 0;
+    service.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {
+      topologyStarts += 1;
+    };
+
+    service.deferredLatencyTopologyStartKind = 'immediate';
+    service.deferredLatencyTopologyStartHandle = setImmediate(() => {
+      service.deferredLatencyTopologyStartHandle = null;
+      service.deferredLatencyTopologyStartKind = null;
+      if (service.isShuttingDown === true) {
+        return;
+      }
+      service.seedCacheHydrationPhase.startLatencyTopologyLifecycle();
+    });
+
+    await service.shutdown();
+
+    t.equal(topologyStarts, 0,
+      'already-queued deferred topology startup should observe shutdown gating');
+  });
+
+test('BootstrapService shutdown tears down runtime service handler before infrastructure cleanup',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-runtime-handler-shutdown',
+      nodeAddress: 'ws://localhost:19097',
+    });
+
+    const callOrder = [];
+    service.runtimeServiceHandler = {
+      unregisterFromRouter: () => {
+        callOrder.push('runtime-handler-unregister');
+      },
+      shutdown: async () => {
+        callOrder.push('runtime-handler-shutdown');
+      },
+    };
+    service.messageRouter = {
+      unregister() {},
+      shutdown: async () => {
+        callOrder.push('message-router-shutdown');
+      },
+    };
+    service.transport = service.messageRouter;
+
+    await service.shutdown();
+
+    t.same(callOrder, [
+      'runtime-handler-unregister',
+      'runtime-handler-shutdown',
+      'message-router-shutdown',
+    ],
+    'shutdown should unregister and stop the runtime handler before router shutdown');
+    t.equal(service.runtimeServiceHandler, null,
+      'shutdown should clear the runtime service handler reference');
   });

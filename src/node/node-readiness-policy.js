@@ -20,6 +20,21 @@ function getFiniteNumber(value) {
   return Number.isFinite(normalized) ? normalized : null;
 }
 
+function hasOwnField(target, fieldName) {
+  return Boolean(
+    target &&
+    typeof target === TYPEOF.OBJECT &&
+    Object.prototype.hasOwnProperty.call(target, fieldName),
+  );
+}
+
+function hasExplicitReadyLeaseField(nodeRow) {
+  return hasOwnField(nodeRow, 'ready_lease_expires_at') ||
+    hasOwnField(nodeRow, 'readyLeaseExpiresAt') ||
+    hasOwnField(nodeRow, 'readyLeaseExpiresAtMs') ||
+    hasOwnField(nodeRow, 'readyLeaseExpires');
+}
+
 function getNodeHeartbeatWatermark(nodeRow) {
   if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
     return null;
@@ -163,6 +178,39 @@ function wasNodeRecordReadyWhenWritten(nodeRow, options = {}) {
 }
 
 /**
+ * Check whether a node row carries an explicit owner-authored "not ready yet"
+ * watermark by clearing the ready lease field entirely.
+ *
+ * This is distinct from an expired finite lease:
+ * - expired finite leases can be stale cache evidence during topology change
+ * - an explicit null/cleared lease is a fresh owner signal that readiness was
+ *   intentionally revoked and must not be overridden by transport grace
+ *
+ * @param {Object} nodeRow - Node row from the nodes table.
+ * @param {Object} options - Readiness options.
+ * @param {boolean} options.requireActiveStatus - Require status=active.
+ * @return {boolean} True when the owner explicitly cleared the ready lease.
+ */
+function isNodeReadyLeaseExplicitlyCleared(nodeRow, options = {}) {
+  if (!nodeRow || !hasExplicitReadyLeaseField(nodeRow)) {
+    return false;
+  }
+
+  const requireActiveStatus =
+    options.requireActiveStatus ?? REQUIRE_ACTIVE_STATUS_DEFAULT;
+  if (requireActiveStatus && nodeRow.status !== SERVICE_STATUS.ACTIVE) {
+    return false;
+  }
+
+  return !Number.isFinite(Number(
+    nodeRow.ready_lease_expires_at ??
+    nodeRow.readyLeaseExpiresAt ??
+    nodeRow.readyLeaseExpiresAtMs ??
+    nodeRow.readyLeaseExpires,
+  ));
+}
+
+/**
  * Check node readiness using nodes table + router connection state.
  * @param {Object} options - Readiness options.
  * @param {string} options.nodeId - Node ID.
@@ -235,6 +283,7 @@ export {
   getNodeHeartbeatWatermark,
   isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
+  isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
   wasNodeRecordReadyWhenWritten,

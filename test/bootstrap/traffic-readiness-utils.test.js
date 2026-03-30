@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   getTrafficReadinessSnapshot,
+  isBackgroundWorkReady,
   isMetadataPublicationReady,
   isTrafficReady,
   waitForMetadataPublicationReadiness,
@@ -9,6 +10,8 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {INITIAL_PARTITION_IDS, SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 
 function createReadinessState(snapshot) {
   return {
@@ -56,6 +59,48 @@ test('traffic-readiness-utils - metadata publication opens for control-ready lea
     );
   });
 
+test('traffic-readiness-utils - metadata publication stays open during priority control-plane recovery pending',
+  async (t) => {
+    const readinessState = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.CONTROL_READY,
+      reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+    });
+
+    t.equal(
+      isMetadataPublicationReady(readinessState),
+      true,
+      'metadata publication should stay open while only priority recovery remains pending',
+    );
+    t.equal(
+      isBackgroundWorkReady(readinessState, {
+        partitionId:
+          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+      }),
+      true,
+      'priority control-plane partitions should continue background recovery work while traffic is gated',
+    );
+  });
+
+test('traffic-readiness-utils - metadata publication stays open for degraded tolerated blockers',
+  async (t) => {
+    const readinessState = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.DEGRADED,
+      reasons: [
+        LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ],
+    });
+
+    t.equal(
+      isMetadataPublicationReady(readinessState),
+      true,
+      'metadata publication should remain open for degraded snapshots ' +
+        'containing only tolerated recovery blockers',
+    );
+  });
+
 test('traffic-readiness-utils - metadata publication wait resolves immediately for control-ready leader lag',
   async (t) => {
     let slept = false;
@@ -100,6 +145,48 @@ test('traffic-readiness-utils - metadata publication opens for join-ready stable
     );
   });
 
+test('traffic-readiness-utils - priority control-plane background work opens for metadata publication readiness',
+  async (t) => {
+    const readinessState = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.JOIN_READY,
+      reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+    });
+
+    t.equal(
+      isBackgroundWorkReady(readinessState, {
+        partitionId:
+          INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+      }),
+      true,
+      'priority control-plane background work should open once metadata publication is allowed',
+    );
+    t.equal(
+      isBackgroundWorkReady(readinessState, {
+        partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+      }),
+      false,
+      'non-priority system partitions should still wait for full traffic readiness',
+    );
+  });
+
+test('traffic-readiness-utils - split child priority partitions inherit metadata-publication bypass',
+  async (t) => {
+    const readinessState = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.JOIN_READY,
+      reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+    });
+
+    t.equal(
+      isBackgroundWorkReady(readinessState, {
+        partitionId: 'replica_operations_p_deadbeef_left',
+      }),
+      true,
+      'split child priority partitions should keep the metadata-publication bypass open',
+    );
+  });
+
 test('traffic-readiness-utils - metadata publication stays blocked for hard runtime blockers',
   async (t) => {
     const bootstrapIncomplete = createReadinessState({
@@ -112,6 +199,14 @@ test('traffic-readiness-utils - metadata publication stays blocked for hard runt
       phase: LIFECYCLE_PHASE.CONTROL_READY,
       reasons: [LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE],
     });
+    const mixedRuntimeBlocked = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.CONTROL_READY,
+      reasons: [
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        LIFECYCLE_REASON.RUNTIME_WIRING_INCOMPLETE,
+      ],
+    });
 
     t.equal(
       isMetadataPublicationReady(bootstrapIncomplete),
@@ -122,5 +217,10 @@ test('traffic-readiness-utils - metadata publication stays blocked for hard runt
       isMetadataPublicationReady(runtimeBlocked),
       false,
       'metadata publication must stay blocked on non-leader hard blockers',
+    );
+    t.equal(
+      isMetadataPublicationReady(mixedRuntimeBlocked),
+      false,
+      'metadata publication must stay blocked when priority recovery pending is mixed with hard runtime blockers',
     );
   });

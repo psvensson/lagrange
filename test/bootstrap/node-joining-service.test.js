@@ -31,6 +31,12 @@ import {
   JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
 import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+} from '../../src/control-plane/membership-lifecycle-controller.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   JOIN_PLAN_SEGMENT,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
@@ -87,6 +93,38 @@ test('NodeJoiningService - initialization', async (t) => {
   t.equal(service.nodeAddress, 'ws://localhost:9090');
   t.equal(service.seedNodeAddress, 'http://localhost:8080');
 });
+
+test('NodeJoiningService - runtime owner exposes control-plane readiness service',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-runtime-owner-readiness',
+      nodeAddress: 'ws://localhost:9099',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    t.equal(
+      service.runtimeDependencyOwner.controlPlaneReadinessService,
+      null,
+      'runtime owner should report no readiness service before coordinator wiring',
+    );
+
+    const controlPlaneReadinessService = {
+      getMembershipPublicationDiagnosticsSync() {
+        return null;
+      },
+    };
+    service.rebalanceCoordinator = {
+      controlPlaneReadinessService,
+    };
+
+    t.equal(
+      service.runtimeDependencyOwner.controlPlaneReadinessService,
+      controlPlaneReadinessService,
+      'runtime owner should expose the coordinator readiness service for bootstrap probes',
+    );
+  });
 
 test('NodeJoiningService - initializeJoinInfrastructure opens external transport admission after handlers are ready',
   async (t) => {
@@ -2255,6 +2293,50 @@ test('NodeJoiningService - fails without seed node address', async (t) => {
   t.equal(service.getPhase(), JoiningPhase.FAILED);
 });
 
+test('NodeJoiningService - submits join and durable rejoin intent through membership lifecycle controller',
+  async (t) => {
+    initializeTestEnvironment();
+
+    for (const startupMode of [
+      STARTUP_JOIN_MODE.FRESH_JOIN,
+      STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    ]) {
+      const intents = [];
+      const service = new NodeJoiningService({
+        nodeId: `test-node-${startupMode}`,
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+        startupMode,
+        membershipLifecycleController: {
+          async submitJoinIntent(intent) {
+            intents.push(intent);
+            return {
+              intentType:
+                startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN ?
+                  MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY :
+                  MEMBERSHIP_LIFECYCLE_INTENT.JOIN_ADMISSION,
+            };
+          },
+        },
+      });
+      service.buildJoinCheckpointSteps = () => [];
+      service.joinCoordinator.run = async () => {};
+
+      const result = await service.join();
+
+      t.equal(result.success, true,
+        `${startupMode} should still complete the delegated join wrapper`);
+      t.equal(intents.length, 1,
+        `${startupMode} should submit exactly one lifecycle intent`);
+      t.match(intents[0], {
+        nodeId: `test-node-${startupMode}`,
+        startupMode,
+        joinSessionId: service.joinSessionId,
+        seedNodeAddress: 'http://localhost:8080',
+      });
+    }
+  });
+
 test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
   initializeTestEnvironment();
 
@@ -2342,7 +2424,16 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
 
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
-      this.messageGroupServiceEndpointsPublished = true;
+      NodeService.getInstance().getSystemTableCache()
+        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+          service_id: META_SERVICE_ID.POSTGRES_WIRE,
+          node_id: this.nodeId,
+          protocol: 'tcp',
+          address: this.nodeId,
+          port: 5432,
+          metadata: '{}',
+        });
     };
     service.initializeReplicaHandler = function() {
       // Skip replica handler initialization
@@ -2418,9 +2509,11 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   const reporterAssignments = [];
   service.heartbeatService = {
     stop() {},
+    start() {},
     setNodeStateReporter(reporter) {
       reporterAssignments.push(reporter);
     },
+    setVerifyReporterVisibilityOnSuccess() {},
   };
 
   // Mock getLeaderMessageGroupService to return a mock service
@@ -2488,15 +2581,15 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   t.same(
     reporterAssignments,
     [],
-    'should preserve the join reporter for steady-state heartbeats',
+    'should keep the reporter path active when steady-state heartbeats take over',
   );
 });
 
-test('NodeJoiningService disables reporter visibility verification before steady-state heartbeats start',
+test('NodeJoiningService keeps the join-time reporter during steady-state heartbeat start',
   async (t) => {
     initializeTestEnvironment();
 
-    const verificationFlags = [];
+    const reporterAssignments = [];
     const heartbeatStartOptions = [];
     const service = new NodeJoiningService({
       nodeId: 'joiner-heartbeat-owner-cutover',
@@ -2505,35 +2598,31 @@ test('NodeJoiningService disables reporter visibility verification before steady
     });
 
     service.heartbeatService = {
-      setVerifyReporterVisibilityOnSuccess(enabled) {
-        verificationFlags.push(enabled);
+      setNodeStateReporter(reporter) {
+        reporterAssignments.push(reporter);
       },
       start(options) {
         heartbeatStartOptions.push(options);
       },
     };
-    service.controlPlaneHeartbeatStartOptions = {
-      getStats: async () => ({}),
-      capabilities: ['partition_replica'],
-    };
+    service.getNodeCapabilities = () => ['partition_replica'];
 
     service.activateControlPlaneBackgroundWriters();
 
     t.same(
-      verificationFlags,
-      [false],
-      'steady-state cutover should disable reporter readback verification',
+      reporterAssignments,
+      [],
+      'steady-state cutover should keep the join-time reporter active',
     );
     t.equal(
       heartbeatStartOptions.length,
       1,
       'steady-state heartbeat loop should start once after cutover',
     );
-    t.same(
-      heartbeatStartOptions[0],
-      service.controlPlaneHeartbeatStartOptions,
-      'steady-state heartbeat loop should use the prepared options',
-    );
+    t.equal(typeof heartbeatStartOptions[0]?.getStats, 'function',
+      'steady-state heartbeat loop should derive stats access when cutover occurs');
+    t.same(heartbeatStartOptions[0]?.capabilities, ['partition_replica'],
+      'steady-state heartbeat loop should derive capabilities when cutover occurs');
   });
 
 test('NodeJoiningService - join-time CDC engine defers distributed transaction ' +
@@ -2572,6 +2661,11 @@ async (t) => {
 
   const cdcIntegrationService = service.createCdcIntegrationService();
   const sqlQueryEngine = cdcIntegrationService.sqlQueryEngine;
+  t.equal(
+    sqlQueryEngine.defaultRoutingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'join-time CDC query routing should remain recovery-eligible while readiness converges',
+  );
   const replay = await sqlQueryEngine.waitForDistributedTransactionRecoveryReplay();
 
   t.equal(
@@ -2708,7 +2802,7 @@ test('NodeJoiningService - activates message-group rows after membership write',
     service.ensureLatencyTopologyOwners = () => {};
     service.initializeReplicaHandler = () => {};
     service.initializeMessageGroupServiceHandler = () => {
-      service.messageGroupServiceHandlerRegistered = true;
+      service.messageGroupServiceHandler = {};
     };
     service.initializeControlPlaneService = async () => {
       service.heartbeatService = {ready: true};
@@ -3107,7 +3201,7 @@ test(
     service.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
     service.initializeMessageGroupServiceHandler = () => {
-      service.messageGroupServiceHandlerRegistered = true;
+      service.messageGroupServiceHandler = {};
     };
     service.initializeControlPlaneService = async () => {};
     service.createCdcIntegrationService = () => {
@@ -3123,7 +3217,16 @@ test(
     };
     service.initializeRuntimeServiceHandler = () => {};
     service.phaseQuerySystemState = async () => {
-      service.messageGroupServiceEndpointsPublished = true;
+      NodeService.getInstance().getSystemTableCache()
+        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+          endpoint_id: `postgres-wire-endpoint-${service.nodeId}`,
+          service_id: META_SERVICE_ID.POSTGRES_WIRE,
+          node_id: service.nodeId,
+          protocol: 'tcp',
+          address: service.nodeId,
+          port: 5432,
+          metadata: '{}',
+        });
     };
     service.signalReadyForReplicas = async () => {};
     service.activateMessageGroupServiceRows = async () => {};
@@ -3956,6 +4059,88 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
     }
   });
 
+test('NodeJoiningService - authoritative backfill canonicalizes ' +
+  'control-plane publication rows before cache apply',
+async (t) => {
+  initializeTestEnvironment();
+
+  const cache = new SystemTableCache();
+  const originalGetNodeService = NodeService.getInstance;
+
+  try {
+    NodeService.getInstance = () => ({
+      getSystemTableCache() {
+        return cache;
+      },
+    });
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-publication-backfill',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (sql === `SELECT * FROM ${TABLES.CONTROL_PLANE_PUBLICATIONS}`) {
+            return {
+              success: true,
+              rows: [{
+                publicationId: 'publication-backfill-1',
+                publicationKind: 'cluster_membership',
+                publicationEpoch: 9,
+                publisherNodeId: 'seed-node',
+                publishedActiveNodeIds: ['node-a', 'node-b'],
+                requiredAckNodeIds: ['node-a', 'node-b'],
+                acknowledgedNodeIds: ['node-a'],
+                status: 'ack_pending',
+                updatedAt: 25,
+              }],
+            };
+          }
+          return {success: true, rows: []};
+        },
+        getTablePartitions() {
+          return [];
+        },
+        queryExecutor: {},
+      },
+    };
+
+    await service.backfillPropagatedCacheTablesFromAuthoritativeState([
+      TABLES.CONTROL_PLANE_PUBLICATIONS,
+    ]);
+
+    t.same(
+      cache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS),
+      [{
+        publication_id: 'publication-backfill-1',
+        publication_kind: 'cluster_membership',
+        publication_epoch: 9,
+        publisher_node_id: 'seed-node',
+        source_topology_epoch: null,
+        source_snapshot_version: null,
+        published_active_node_ids: ['node-a', 'node-b'],
+        required_ack_node_ids: ['node-a', 'node-b'],
+        acknowledged_node_ids: ['node-a'],
+        priority_partition_summary: null,
+        membership_lifecycle_summary: null,
+        status: 'ACK_PENDING',
+        reason_code: '',
+        created_at: null,
+        updated_at: 25,
+        published_at: null,
+        closed_at: null,
+        transition_history: [],
+      }],
+      'authoritative backfill should persist publication rows in canonical cache shape',
+    );
+  } finally {
+    NodeService.getInstance = originalGetNodeService;
+  }
+});
+
 test(
   'NodeJoiningService - authoritative backfill preserves bootstrap snapshot rows',
   async (t) => {
@@ -4300,6 +4485,11 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
         'critical',
         'blocking backfill should route the authoritative SQL read with critical delivery priority',
       );
+      t.equal(
+        routedQueryOptions[0]?.timeoutMs,
+        30000,
+        'blocking backfill should use the join leadership timeout budget for authoritative reads',
+      );
       t.same(
         replicaDeliveries.map(({options}) => options?.deliveryPriority),
         ['critical', 'critical'],
@@ -4467,11 +4657,8 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         cache.get(TABLES.NODE_ENDPOINTS, 'ep-join-cache-seed-node-ws'),
         'join should seed the local node_endpoints cache row',
       );
-      t.equal(
-        service.messageGroupServiceEndpointsPublished,
-        true,
-        'join should mark endpoint publication complete for later activation',
-      );
+      t.equal(service.hasPublishedLocalServiceEndpoints(), true,
+        'join should expose local endpoint publication from cached service_endpoints rows');
       t.same(
         cache.filter(TABLES.SERVICE_ENDPOINTS, (row) =>
           row[COLUMN.NODE_ID] === 'join-cache-seed-node').map((row) =>
@@ -4499,6 +4686,66 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     electionTimeoutMaxMs: 50,
     heartbeatIntervalMs: 10,
   };
+
+test('NodeJoiningService - activates message-group rows from cache-visible endpoint publication without phase flag truth',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const originalGetNodeService = NodeService.getInstance;
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'postgres-wire-endpoint-join-activation-node',
+      service_id: META_SERVICE_ID.POSTGRES_WIRE,
+      node_id: 'join-activation-node',
+      protocol: 'tcp',
+      address: 'join-activation-node',
+      port: 5432,
+      metadata: '{}',
+    });
+    NodeService.getInstance = () => ({
+      getSystemTableCache() {
+        return cache;
+      },
+    });
+
+    try {
+      const service = new NodeJoiningService({
+        nodeId: 'join-activation-node',
+        nodeAddress: 'ws://localhost:9191',
+        seedNodeAddress: 'ws://seed:8000',
+      });
+      const activated = [];
+
+      service.messageGroupServiceHandler = {};
+      service.messageRouter = {
+        isRegistered: () => true,
+      };
+      service.messageGroupServices.set('mg-cache-r1', {
+        groupId: 'mg-cache',
+        unifiedAddress: 'join-activation-node/message-group/mg-cache-r1',
+      });
+      service.registerMessageGroupService = async (
+        groupId,
+        replicaId,
+        replicaService,
+        options,
+      ) => {
+        activated.push({groupId, replicaId, replicaService, options});
+      };
+
+      const activatedCount =
+        await service.activateMessageGroupServiceRows();
+
+      t.equal(activatedCount, 1,
+        'activation should proceed once local service_endpoints rows are visible in cache');
+      t.equal(activated.length, 1,
+        'activation should register the visible replica');
+      t.same(activated[0]?.options, {status: SERVICE_STATUS.ACTIVE},
+        'activation should mark the replica service row active');
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
 
   // Create system table cache with message group data
   // This triggers MOVE_REPLICA strategy when there are 2+ replicas on same node
@@ -4765,7 +5012,16 @@ test('NodeJoiningService - emits events', async (t) => {
 
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
-      this.messageGroupServiceEndpointsPublished = true;
+      NodeService.getInstance().getSystemTableCache()
+        .applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+          endpoint_id: `postgres-wire-endpoint-${this.nodeId}`,
+          service_id: META_SERVICE_ID.POSTGRES_WIRE,
+          node_id: this.nodeId,
+          protocol: 'tcp',
+          address: this.nodeId,
+          port: 5432,
+          metadata: '{}',
+        });
     };
     service.initializeReplicaHandler = function() {};
     service.createCdcIntegrationService = function() {

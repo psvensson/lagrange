@@ -19,10 +19,16 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // They receive log entries but don't vote until caught up
   // This prevents new replicas from disrupting existing leadership
   LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
+  LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+});
+
+const PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON = Object.freeze({
+  INITIAL_DELAY: 'initial_delay',
+  DEFERRED_RECHECK: 'deferred_recheck',
 });
 
 const PARTITION_SERVICE_SQL = Object.freeze({
@@ -456,6 +462,7 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 });
 
 export {
+  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,

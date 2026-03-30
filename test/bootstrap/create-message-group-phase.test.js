@@ -159,3 +159,76 @@ test(
     );
   },
 );
+
+test(
+  'CreateMessageGroupPhase - durable rejoin existing group only queues owned replicas',
+  async (t) => {
+    const queuedReplicas = [];
+    const joinReplicas = [];
+    const messageGroupServices = new Map();
+    const phase = new CreateMessageGroupPhase({
+      nodeId: 'join-node-r2',
+      delegates: {
+        getLogger: () => silentLogger,
+        getConfig: () => ({replicaStaggerDelayMs: 5}),
+        getSleep: () => async () => {},
+        getMessageRouter: () => ({}),
+        resetJoinMessageGroupReplicas: () => {
+          joinReplicas.length = 0;
+        },
+        assertReplicaStartupOwnership: () => {},
+        queueJoinServiceReplica: (descriptor, options) => {
+          queuedReplicas.push({descriptor, options});
+        },
+        createJoinServiceDescriptor: (serviceType, serviceId) => ({
+          serviceType,
+          serviceId,
+        }),
+        triggerJoinReconciler: async () => {
+          const replica = {
+            deferElectionUntilJoinConvergence: true,
+            startElection: () => {},
+          };
+          messageGroupServices.set('mg-1-r2', {
+            groupId: 'mg-1',
+            replicaId: 'mg-1-r2',
+          });
+          joinReplicas.push(replica);
+        },
+        getMessageGroupServices: () => messageGroupServices,
+        getJoinMessageGroupReplicas: () => joinReplicas,
+      },
+    });
+
+    await phase.phaseCreateSelfHostedMessageGroup({
+      strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+      groupId: 'mg-1',
+      replicaCount: 3,
+      startupReplicaIds: ['mg-1-r2'],
+      existingPeerIds: ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'],
+      peerAddresses: [
+        'seed-node/message-group/mg-1-r1',
+        'join-node-r2/message-group/mg-1-r2',
+        'node-3/message-group/mg-1-r3',
+      ],
+    });
+
+    t.equal(queuedReplicas.length, 1, 'should only queue the locally owned replica');
+    t.equal(queuedReplicas[0].descriptor.serviceId, 'mg-1-r2');
+    t.same(
+      queuedReplicas[0].options.replicaIds,
+      ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'],
+      'should preserve the full group replica ordering for raft startup',
+    );
+    t.equal(
+      queuedReplicas[0].options.replicaIndex,
+      1,
+      'owned replica should retain its original index within the group',
+    );
+    t.equal(
+      queuedReplicas[0].options.deferElectionUntilJoinConvergence,
+      true,
+      'non-leader durable rejoin replicas should keep elections suppressed',
+    );
+  },
+);

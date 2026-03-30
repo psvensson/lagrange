@@ -219,6 +219,51 @@ test('shutdown is idempotent for timer cleanup', async (t) => {
   }
 });
 
+test('shutdown waits for tracked in-flight CDC delivery', async (t) => {
+  const partition = createTestPartition();
+  await partition.initialize();
+
+  let releaseDelivery;
+  const deliveryStarted = new Promise((resolve) => {
+    partition.cdcSubscribers.add(async () => {
+      resolve();
+      await new Promise((innerResolve) => {
+        releaseDelivery = innerResolve;
+      });
+    });
+  });
+
+  const trackedDelivery = partition.trackPendingCDCEvent(
+    partition.generateCDCEvent({
+      type: 'INSERT',
+      tableName: TEST_TABLE_NAME,
+      data: {node_id: 'node-in-flight', status: 'active'},
+      timestamp: '1000000000999',
+    }),
+  );
+
+  await deliveryStarted;
+
+  let shutdownResolved = false;
+  const shutdownPromise = partition.shutdown().then(() => {
+    shutdownResolved = true;
+  });
+
+  await Promise.resolve();
+
+  t.equal(shutdownResolved, false,
+    'shutdown should wait while tracked CDC delivery is still in flight');
+
+  releaseDelivery();
+  await trackedDelivery;
+  await shutdownPromise;
+
+  t.equal(shutdownResolved, true,
+    'shutdown should resolve after tracked CDC delivery completes');
+  t.equal(partition.pendingCDCEventDeliveries.size, NUM.ZERO,
+    'tracked CDC deliveries should be cleared after shutdown');
+});
+
 test('cleanup partition service shutdown timer tests', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

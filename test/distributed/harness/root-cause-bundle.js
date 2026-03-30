@@ -62,6 +62,22 @@ function buildMissingSnapshotEntry(node, error) {
   };
 }
 
+function extractControlPlaneLedgerSnapshot(snapshot = {}, nodeId = UNKNOWN_NODE_ID) {
+  const diagnostics = snapshot?.controlPlaneDiagnostics;
+  if (!diagnostics || typeof diagnostics !== 'object' || Array.isArray(diagnostics)) {
+    return null;
+  }
+  return {
+    nodeId,
+    capturedAt:
+      typeof snapshot?.capturedAt === 'string' ? snapshot.capturedAt : null,
+    capturedAtMs:
+      Number.isFinite(snapshot?.capturedAtMs) ? snapshot.capturedAtMs :
+        (Number.isFinite(snapshot?.capturedAt) ? snapshot.capturedAt : null),
+    controlPlaneDiagnostics: JSON.parse(JSON.stringify(diagnostics)),
+  };
+}
+
 export async function collectPreflightCriticalPathSnapshots({
   nodeClient,
   nodes,
@@ -69,6 +85,7 @@ export async function collectPreflightCriticalPathSnapshots({
 }) {
   const snapshotNodes = Array.isArray(nodes) ? nodes : [];
   const snapshotsByNodeId = {};
+  const controlPlaneLedgerSnapshotsByNodeId = {};
 
   await Promise.all(snapshotNodes.map(async (node) => {
     const nodeId = normalizeNodeId(node);
@@ -102,6 +119,7 @@ export async function collectFailureControlSnapshots({
 }) {
   const snapshotNodes = Array.isArray(nodes) ? nodes : [];
   const snapshotsByNodeId = {};
+  const controlPlaneLedgerSnapshotsByNodeId = {};
 
   await Promise.all(snapshotNodes.map(async (node) => {
     const nodeId = normalizeNodeId(node);
@@ -117,17 +135,28 @@ export async function collectFailureControlSnapshots({
           snapshot.address :
           normalizeNodeAddress(node),
       };
+      const ledgerSnapshot = extractControlPlaneLedgerSnapshot(
+        snapshotsByNodeId[nodeId],
+        nodeId,
+      );
+      if (ledgerSnapshot) {
+        controlPlaneLedgerSnapshotsByNodeId[nodeId] = ledgerSnapshot;
+      }
     } catch (error) {
       snapshotsByNodeId[nodeId] = buildMissingSnapshotEntry(node, error);
     }
   }));
 
-  return snapshotsByNodeId;
+  return {
+    snapshotsByNodeId,
+    controlPlaneLedgerSnapshotsByNodeId,
+  };
 }
 
 export function buildRootCauseBundle({
   failureArtifact,
   snapshotsByNodeId,
+  controlPlaneLedgerSnapshotsByNodeId = null,
   playback,
   adminQueryTraceByNodeId,
   snapshotKind = null,
@@ -173,6 +202,24 @@ export function buildRootCauseBundle({
     bundle.snapshotKind =
       snapshotKind ||
       ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH;
+  }
+  const directLedgerSnapshots =
+    controlPlaneLedgerSnapshotsByNodeId &&
+      typeof controlPlaneLedgerSnapshotsByNodeId === 'object' ?
+      controlPlaneLedgerSnapshotsByNodeId :
+      (snapshotsByNodeId && typeof snapshotsByNodeId === 'object' ?
+        Object.entries(snapshotsByNodeId).reduce((accumulator, [nodeId, snapshot]) => {
+          const ledgerSnapshot = extractControlPlaneLedgerSnapshot(snapshot, nodeId);
+          if (ledgerSnapshot) {
+            accumulator[nodeId] = ledgerSnapshot;
+          }
+          return accumulator;
+        }, {}) :
+        null);
+  if (directLedgerSnapshots &&
+      typeof directLedgerSnapshots === 'object' &&
+      Object.keys(directLedgerSnapshots).length > 0) {
+    bundle.controlPlaneLedgerSnapshotsByNodeId = directLedgerSnapshots;
   }
   if (invariantEvaluation) {
     bundle.invariants = invariantEvaluation.invariants;

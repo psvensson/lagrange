@@ -9,6 +9,7 @@ import {SystemTableCache, CDC_OPERATIONS} from '../../src/cache/system-table-cac
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
+import {TABLES} from '../../src/constants/index.js';
 
 let cache;
 let hlcClock;
@@ -370,6 +371,57 @@ test('CDCHandler - applyImmediate preserves causeId in apply telemetry', async (
     appliedEvents[0].causeId,
     causeId,
     'Should include the initiating causeId on cache apply telemetry',
+  );
+
+  handler.shutdown();
+});
+
+test('CDCHandler - applyImmediate canonicalizes control-plane publication ' +
+  'rows before cache apply', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe(TABLES.CONTROL_PLANE_PUBLICATIONS);
+
+  handler.applyImmediate({
+    tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
+    operation: CDC_OPERATIONS.UPSERT,
+    data: {
+      publicationId: 'publication-cdc-1',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 3,
+      publisherNodeId: 'node-a',
+      publishedActiveNodeIds: ['node-a', 'node-b'],
+      requiredAckNodeIds: ['node-a', 'node-b'],
+      acknowledgedNodeIds: ['node-a'],
+      status: 'open',
+      updatedAt: 42,
+    },
+    timestamp: hlcClock.now().toString(),
+  });
+
+  t.same(
+    cache.get(TABLES.CONTROL_PLANE_PUBLICATIONS, 'publication-cdc-1'),
+    {
+      publication_id: 'publication-cdc-1',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 3,
+      publisher_node_id: 'node-a',
+      source_topology_epoch: null,
+      source_snapshot_version: null,
+      published_active_node_ids: ['node-a', 'node-b'],
+      required_ack_node_ids: ['node-a', 'node-b'],
+      acknowledged_node_ids: ['node-a'],
+      priority_partition_summary: null,
+      membership_lifecycle_summary: null,
+      status: 'OPEN',
+      reason_code: '',
+      created_at: null,
+      updated_at: 42,
+      published_at: null,
+      closed_at: null,
+      transition_history: [],
+    },
+    'steady-state CDC apply should persist publication rows in canonical cache shape',
   );
 
   handler.shutdown();

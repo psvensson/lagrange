@@ -3,6 +3,11 @@
 Use the admin diagnostics endpoint to inspect process memory/CPU/disk-write
 trends and subsystem growth signals on a running node.
 
+These diagnostics are an operational projection. They summarize node-local
+resource behavior and owner-path telemetry, but they do not replace canonical
+owner rows or readiness reason codes when diagnosing placement or serving
+state.
+
 ## Endpoint
 
 `GET /api/admin/diagnostics/services`
@@ -15,6 +20,18 @@ The response now includes:
 - `diagnostics.resources.trend`
   - RSS and heap growth rates over recent samples.
   - Top-growing numeric component signals (`topGrowingSignals`).
+
+Interpretation rules:
+
+- Use this endpoint to answer whether a node is accumulating local pressure or
+  a subsystem is growing abnormally.
+- Use readiness probes and readiness diagnostics to answer whether the node may
+  admit traffic.
+- Use canonical owner rows plus service diagnostics to answer placement,
+  leader, and replica-role questions.
+- Treat `messageRouter` and related transport metrics as health evidence that
+  can explain readiness changes while cache propagation catches up, not as an
+  alternate ownership source.
 
 ## Example Polling Command
 

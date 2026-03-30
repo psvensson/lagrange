@@ -17,6 +17,9 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  isPriorityControlPlanePartition as isPriorityControlPlanePartitionTable,
+} from '../bootstrap/system-partition-classification.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -25,6 +28,10 @@ import {
 import {
   createControlPlaneRuntimeBundle,
 } from '../control-plane/control-plane-runtime-bundle.js';
+import {
+  readAuthoritativeControlPlaneRows,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
@@ -134,6 +141,12 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
+  SELECT_PARTITION_SERVICES_BY_ENTITY: `SELECT * FROM services
+    WHERE service_type = ? AND partition_id = ?`,
+  SELECT_MESSAGE_GROUP_SERVICES_BY_ENTITY: `SELECT * FROM services
+    WHERE service_type = ? AND group_id = ?`,
+  SELECT_RUNTIME_SERVICES_BY_ENTITY: `SELECT * FROM services
+    WHERE service_type = ? AND service_id = ?`,
   INSERT_RESERVATION: `INSERT INTO storage_reservations (
     reservation_id, operation_id, entity_type, entity_id,
     partition_id, target_node_id, estimated_bytes,
@@ -164,7 +177,23 @@ const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
   routingReadinessDimension:
-    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+});
+const STORAGE_RESERVATION_READ_QUERY_OPTIONS = Object.freeze({
+  ...CONTROL_PLANE_QUERY_OPTIONS,
+  // Reservation cleanup is an internal recovery path. When the routed
+  // authoritative owner is temporarily unavailable, fall back to the local
+  // SQL-backed view instead of leaving stale reservations behind.
+  allowSqlFallback: true,
+});
+const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
+  readOptions: {
+    preferOwnerRpcRead: true,
+    requireOwnerRpcRead: true,
+    allowOwnerRpcFallback: true,
+    allowSqlFallback: false,
+  },
+  allowCacheFallbackOnReadFailure: false,
 });
 
 /**
@@ -261,6 +290,11 @@ class RebalanceCoordinator extends EventEmitter {
       options.cdcGroupPropagationService || null;
     this.bootstrapReadinessState =
       options.bootstrapReadinessState || null;
+    this.startupRecoveryCoordinator =
+      options.startupRecoveryCoordinator ||
+      new StartupRecoveryCoordinator({
+        readinessState: this.bootstrapReadinessState,
+      });
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
       new ControlPlaneReadinessService({
@@ -422,6 +456,8 @@ class RebalanceCoordinator extends EventEmitter {
             this.storageAdmissionService,
           getStorageAccountingService: () =>
             this.storageAccountingService,
+          isCriticalSystemPartition: (partitionId) =>
+            this.isCriticalSystemPartition(partitionId),
           normalizeMoveType: (moveType) =>
             this.normalizeMoveType(moveType),
         },
@@ -470,6 +506,17 @@ class RebalanceCoordinator extends EventEmitter {
     if (Object.hasOwn(options, 'bootstrapReadinessState')) {
       this.bootstrapReadinessState =
         options.bootstrapReadinessState || null;
+      if (this.startupRecoveryCoordinator &&
+          typeof this.startupRecoveryCoordinator.syncOwnerDependencies ===
+            'function') {
+        this.startupRecoveryCoordinator.syncOwnerDependencies({
+          readinessState: this.bootstrapReadinessState,
+        });
+      }
+    }
+    if (Object.hasOwn(options, 'startupRecoveryCoordinator')) {
+      this.startupRecoveryCoordinator =
+        options.startupRecoveryCoordinator || null;
     }
     if (Object.hasOwn(options, 'controlPlaneReadinessService')) {
       this.controlPlaneReadinessService =
@@ -645,6 +692,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @readModel COORDINATOR_TIMEOUT_QUERY — READ_MODEL_SOURCE.RECOVERY_SQL
    * @param {Object} [options={}]
    * @param {boolean} [options.skipSqlFallbackWhenCacheEmpty]
+   * @param {boolean} [options.preferAuthoritativeRead]
    * @return {Promise<Array<Object>>} Array of incomplete operations.
    * @private
    */
@@ -653,8 +701,11 @@ class RebalanceCoordinator extends EventEmitter {
       typeof options.skipSqlFallbackWhenCacheEmpty === 'boolean' ?
         options.skipSqlFallbackWhenCacheEmpty :
         this.isLocalRouterBackpressured();
+    const preferAuthoritativeRead =
+      options.preferAuthoritativeRead === true;
     return this.repository.queryIncompleteOperations({
       skipSqlFallbackWhenCacheEmpty,
+      preferAuthoritativeRead,
     });
   }
 
@@ -676,6 +727,7 @@ class RebalanceCoordinator extends EventEmitter {
     entityType,
     entityId,
     move,
+    options = {},
   ) {
     return this.repository.queryExistingInFlightOperation(
       partitionId,
@@ -684,6 +736,7 @@ class RebalanceCoordinator extends EventEmitter {
       entityId,
       move,
       this.operationMatchesMoveIntent.bind(this),
+      options,
     );
   }
 
@@ -755,6 +808,17 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Check whether a REPLACE operation is dispatching/reconciling source
+   * removal (ACTIVE/STOPPING).
+   * @param {Object} operation - Operation payload.
+   * @return {boolean} True when REPLACE is in source-removal dispatch phase.
+   * @private
+   */
+  isReplaceRemoveDispatchPhase(operation) {
+    return this.repository.isReplaceRemoveDispatchPhase(operation);
+  }
+
+  /**
    * Resolve target replica ID for REPLACE operations.
    * @param {Object} operation - Operation record.
    * @return {string|null} Target replacement replica ID.
@@ -781,6 +845,50 @@ class RebalanceCoordinator extends EventEmitter {
     return this.repository.getEntityServiceRows(
       {partitionId, entityType, entityId},
     );
+  }
+
+  /**
+   * Read entity service rows from the authoritative services owner path.
+   * Falls back to an empty list when the authoritative read is unavailable.
+   * @readModel COORDINATOR_ENTITY_SERVICES_AUTHORITATIVE —
+   *   READ_MODEL_SOURCE.AUTHORITATIVE_SQL
+   * @param {Object} params
+   * @param {string} params.partitionId
+   * @param {string} params.entityType
+   * @param {string} params.entityId
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async getAuthoritativeEntityServiceRows({
+    partitionId,
+    entityType,
+    entityId,
+  }) {
+    let sql = SQL.SELECT_PARTITION_SERVICES_BY_ENTITY;
+    let params = [
+      entityType || SERVICE_TYPE.PARTITION,
+      partitionId || entityId,
+    ];
+
+    if (entityType === SERVICE_TYPE.MESSAGE_GROUP) {
+      sql = SQL.SELECT_MESSAGE_GROUP_SERVICES_BY_ENTITY;
+      params = [entityType, entityId];
+    } else if (entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE) {
+      sql = SQL.SELECT_RUNTIME_SERVICES_BY_ENTITY;
+      params = [entityType, entityId];
+    }
+
+    const result = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
+      SYSTEM_TABLE_NAME.SERVICES,
+      sql,
+      params,
+      CONTROL_PLANE_QUERY_OPTIONS,
+    );
+    if (!result.success || !Array.isArray(result.rows)) {
+      return [];
+    }
+    return result.rows;
   }
 
   /**
@@ -924,6 +1032,12 @@ class RebalanceCoordinator extends EventEmitter {
       entityType,
       entityId,
     });
+    const authoritativeServiceRows =
+      await this.getAuthoritativeEntityServiceRows({
+        partitionId,
+        entityType,
+        entityId,
+      });
     const inFlightReplicaIds = await this.getEntityInFlightReplicaIds({
       partitionId,
       entityType,
@@ -931,6 +1045,13 @@ class RebalanceCoordinator extends EventEmitter {
     });
 
     for (const row of serviceRows) {
+      const replicaId = row?.service_id || row?.replica_id;
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
+        usedReplicaIds.add(replicaId);
+      }
+    }
+
+    for (const row of authoritativeServiceRows) {
       const replicaId = row?.service_id || row?.replica_id;
       if (typeof replicaId === 'string' && replicaId.length > 0) {
         usedReplicaIds.add(replicaId);
@@ -1042,7 +1163,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Object|null} Cached operation or null.
    * @private
    */
-  getRecentOperationIntent(dedupeKey) {
+  async getRecentOperationIntent(dedupeKey) {
     const cached = this.recentOperationIntents.get(dedupeKey);
     if (!cached) {
       return null;
@@ -1051,7 +1172,32 @@ class RebalanceCoordinator extends EventEmitter {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
-    return cached.operation;
+    const cachedOperation = cached.operation;
+    if (!cachedOperation ||
+        this.isOperationTerminal(cachedOperation)) {
+      this.recentOperationIntents.delete(dedupeKey);
+      return null;
+    }
+
+    const cachedOperationId = cachedOperation.operationId;
+    if (typeof cachedOperationId !== 'string' ||
+        cachedOperationId.length === NUM.ZERO) {
+      this.recentOperationIntents.delete(dedupeKey);
+      return null;
+    }
+    const authoritativeOperation =
+      await this.repository.queryAuthoritativeOperationById(
+        cachedOperationId,
+        {requireOwnerRpcRead: true},
+      );
+    if (!authoritativeOperation ||
+        this.isOperationTerminal(authoritativeOperation)) {
+      this.recentOperationIntents.delete(dedupeKey);
+      return null;
+    }
+
+    this.rememberOperationIntent(dedupeKey, authoritativeOperation);
+    return authoritativeOperation;
   }
 
   /**
@@ -1212,6 +1358,74 @@ class RebalanceCoordinator extends EventEmitter {
       .assertLocalControlPlaneMutationReady(move);
   }
 
+  /**
+   * Resolve the current published membership epoch, when available.
+   * @return {number|null}
+   * @private
+   */
+  getCurrentPublishedMembershipEpoch() {
+    const diagnostics =
+      this.controlPlaneReadinessService &&
+      typeof this.controlPlaneReadinessService
+        .getMembershipPublicationDiagnosticsSync === 'function' ?
+        this.controlPlaneReadinessService
+          .getMembershipPublicationDiagnosticsSync(this.nodeId, Date.now()) :
+        null;
+    const publicationEpoch = Number(diagnostics?.publicationEpoch);
+    const publicationStatus = String(
+      diagnostics?.status ?? diagnostics?.publicationStatus ?? '',
+    ).toUpperCase();
+    if (publicationStatus === 'PUBLISHED' && Number.isInteger(publicationEpoch)) {
+      return publicationEpoch;
+    }
+
+    const publicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService;
+    let publicationRow = null;
+    if (publicationService &&
+        typeof publicationService.getLatestClusterPublicationSync === 'function') {
+      publicationRow = publicationService.getLatestClusterPublicationSync();
+    } else if (publicationService &&
+        typeof publicationService.getLatestPublicationRowSync === 'function') {
+      publicationRow = publicationService.getLatestPublicationRowSync();
+    }
+
+    const fallbackEpoch = Number(
+      publicationRow?.publicationEpoch ?? publicationRow?.publication_epoch,
+    );
+    const fallbackStatus = String(publicationRow?.status || '').toUpperCase();
+    return fallbackStatus === 'PUBLISHED' && Number.isInteger(fallbackEpoch) ?
+      fallbackEpoch :
+      null;
+  }
+
+  /**
+   * Reject stale epoch-bound placement requests after membership cutover.
+   * @param {Object} move
+   * @return {void}
+   * @private
+   */
+  assertMembershipPublicationEpoch(move) {
+    const requestedEpoch = Number(move?.membershipPublicationEpoch);
+    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
+      return;
+    }
+
+    const currentEpoch = this.getCurrentPublishedMembershipEpoch();
+    if (!Number.isInteger(currentEpoch) || currentEpoch === requestedEpoch) {
+      return;
+    }
+
+    const error = new Error(
+      `Stale placement plan for published membership epoch ${requestedEpoch}; ` +
+      `current epoch is ${currentEpoch}`,
+    );
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_CHANGED;
+    error.requestedMembershipPublicationEpoch = requestedEpoch;
+    error.currentMembershipPublicationEpoch = currentEpoch;
+    throw error;
+  }
+
 
 
 
@@ -1245,7 +1459,7 @@ class RebalanceCoordinator extends EventEmitter {
       this.getCreateOperationSingleFlightKey(dedupeKey);
     this.pruneExpiredOperationIntents();
 
-    const recentOperation = this.getRecentOperationIntent(dedupeKey);
+    const recentOperation = await this.getRecentOperationIntent(dedupeKey);
     if (recentOperation) {
       return recentOperation;
     }
@@ -1287,6 +1501,8 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async createOperationInternal(move) {
+    this.assertMembershipPublicationEpoch(move);
+
     const normalizedMoveType = this.normalizeMoveType(move?.type);
     const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
@@ -1310,6 +1526,7 @@ class RebalanceCoordinator extends EventEmitter {
       entityType,
       entityId,
       normalizedMove,
+      STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
     );
 
     if (existing) {
@@ -1325,6 +1542,14 @@ class RebalanceCoordinator extends EventEmitter {
       return existing;
     }
 
+    await this.ensureNoConflictingInFlightReplaceForRemove({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
+
     await this.ensureCriticalPartitionCreateLaneAvailable({
       move,
       normalizedMoveType,
@@ -1336,6 +1561,11 @@ class RebalanceCoordinator extends EventEmitter {
     if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
       return this.runConcurrentCreateBudgetGate(
         normalizedMoveType,
+        {
+          partitionId,
+          entityType,
+          entityId,
+        },
         async () => this.createOperationRecordInternal({
           move,
           normalizedMove,
@@ -1503,6 +1733,7 @@ class RebalanceCoordinator extends EventEmitter {
       targetNodeId: move.nodeId,
       replicaId: operationReplicaId,
       sourceReplicaId,
+      membershipPublicationEpoch: move.membershipPublicationEpoch,
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
@@ -1529,14 +1760,20 @@ class RebalanceCoordinator extends EventEmitter {
 
     // Capture readiness snapshot for the target node at creation time
     // (Req 4.2 — persist readiness snapshot with decisions)
+    const readinessDecisionDimension =
+      this.resolveOperationReadinessDecisionDimension(partitionId);
     const targetReadiness =
       this.controlPlaneReadinessService.getNodeReadinessSync(
         move.nodeId,
+        {
+          decisionDimension:
+            readinessDecisionDimension,
+        },
       );
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        readinessDecisionDimension,
       );
     if (readinessSnapshot && operation.stepsHistory.length > NUM.ZERO) {
       operation.stepsHistory[NUM.ZERO][
@@ -1562,6 +1799,7 @@ class RebalanceCoordinator extends EventEmitter {
         entityType,
         entityId,
         normalizedMove,
+        STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
       );
       if (existingAfterInsert) {
         this.rememberOperationIntent(dedupeKey, existingAfterInsert);
@@ -1620,10 +1858,11 @@ class RebalanceCoordinator extends EventEmitter {
       return;
     }
 
-    const existingOperations = await this.getOperationsByEntity(
-      context?.entityType || SERVICE_TYPE.PARTITION,
-      context?.entityId || context?.partitionId,
-    );
+    const existingOperations =
+      await this.repository.getOperationsByEntityAuthoritative(
+        context?.entityType || SERVICE_TYPE.PARTITION,
+        context?.entityId || context?.partitionId,
+      );
     const conflictingOperation = existingOperations.find((operation) => {
       if (!operation || this.isOperationTerminal(operation)) {
         return false;
@@ -1648,13 +1887,70 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Prevent conflicting REMOVE scheduling while a REPLACE workflow already
+   * owns the same source/target replica lifecycle.
+   *
+   * This guard uses authoritative operation rows to avoid cache-staleness
+   * races where planner-side pending-move tracking can lag behind a REPLACE
+   * transition and allow an overlapping REMOVE to be created.
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureNoConflictingInFlightReplaceForRemove(context) {
+    if (context?.normalizedMoveType !== OperationType.REMOVE) {
+      return;
+    }
+    const replicaId = String(context?.move?.replicaId || '').trim();
+    if (replicaId.length === NUM.ZERO) {
+      return;
+    }
+
+    const operations =
+      await this.repository.getOperationsByEntityAuthoritative(
+        context?.entityType || SERVICE_TYPE.PARTITION,
+        context?.entityId || context?.partitionId,
+      );
+    const conflictingOperation = operations.find((operation) => {
+      if (!operation ||
+          this.isOperationTerminal(operation) ||
+          operation.type !== OperationType.REPLACE) {
+        return false;
+      }
+      if (operation.operationId === context?.move?.operationId) {
+        return false;
+      }
+      const replaceSourceReplicaId =
+        this.getReplaceSourceReplicaId(operation);
+      const replaceTargetReplicaId =
+        this.getReplaceTargetReplicaId(operation);
+      return replicaId === replaceSourceReplicaId ||
+        replicaId === replaceTargetReplicaId;
+    });
+    if (!conflictingOperation) {
+      return;
+    }
+
+    throw this.createConflictingOperationInFlightError(
+      context?.normalizedMoveType,
+      replicaId,
+      conflictingOperation,
+    );
+  }
+
+  /**
    * Serialize create admission through one add-like or remove-like budget lane.
    * @param {string|null} normalizedMoveType
+   * @param {Object} [budgetContext={}]
    * @param {Function} executionFactory
    * @return {Promise<*>}
    * @private
    */
-  async runConcurrentCreateBudgetGate(normalizedMoveType, executionFactory) {
+  async runConcurrentCreateBudgetGate(
+    normalizedMoveType,
+    budgetContext = {},
+    executionFactory,
+  ) {
     const scope = normalizedMoveType === OperationType.REMOVE ?
       CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE :
       CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
@@ -1663,6 +1959,7 @@ class RebalanceCoordinator extends EventEmitter {
       async () => {
         await this.ensureConcurrentOperationBudgetAllowed(
           normalizedMoveType,
+          budgetContext,
         );
         return executionFactory();
       },
@@ -1670,16 +1967,117 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Critical system partitions must not be starved behind the empty-cache
+   * observation backoff. The backoff guards cache freshness, but it should
+   * not suppress control-plane recovery operations that already run through
+   * the strict critical-partition create lane.
+   * @param {string|null} normalizedMoveType
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldBypassConcurrentBudgetEmptyBackoff(
+    normalizedMoveType,
+    options = {},
+  ) {
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE &&
+        normalizedMoveType !== OperationType.REMOVE) {
+      return false;
+    }
+    const partitionId = String(options.partitionId || '').trim();
+    if (partitionId.length === NUM.ZERO) {
+      return false;
+    }
+    return this.isCriticalSystemPartition(partitionId);
+  }
+
+  /**
+   * Priority control-plane partitions must re-check authoritative in-flight
+   * counts when cache-sourced budget admission is saturated.
+   * Cache lag is expected during recovery and must not strand spread progress.
+   * @param {string|null} normalizedMoveType
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldPreferAuthoritativeConcurrentBudgetCheck(
+    normalizedMoveType,
+    options = {},
+  ) {
+    if (options.preferAuthoritativeCount === true) {
+      return true;
+    }
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE &&
+        normalizedMoveType !== OperationType.REMOVE) {
+      return false;
+    }
+    const partitionId = String(options.partitionId || '').trim();
+    if (partitionId.length === NUM.ZERO) {
+      return false;
+    }
+    return this.isPriorityControlPlanePartition(partitionId);
+  }
+
+  /**
+   * Priority control-plane spread must not stall behind unrelated add/replace
+   * workflows. Keep priority add/replace operations on a dedicated count lane
+   * while preserving the configured maxConcurrentAdds bound.
+   * @param {string|null} normalizedMoveType
+   * @param {Object} [options={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldUsePriorityConcurrentAddLane(
+    normalizedMoveType,
+    options = {},
+  ) {
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE) {
+      return false;
+    }
+    const partitionId = String(options.partitionId || '').trim();
+    if (partitionId.length === NUM.ZERO) {
+      return false;
+    }
+    return this.isPriorityControlPlanePartition(partitionId);
+  }
+
+  /**
    * Enforce configured maxConcurrentAdds/maxConcurrentRemoves before persisting
    * a newly scheduled operation.
    * @param {string|null} normalizedMoveType
+   * @param {Object} [options={}]
    * @return {Promise<void>}
    * @private
    */
-  async ensureConcurrentOperationBudgetAllowed(normalizedMoveType) {
+  async ensureConcurrentOperationBudgetAllowed(normalizedMoveType, options = {}) {
+    const bypassEmptyQueryDelay = this.shouldBypassConcurrentBudgetEmptyBackoff(
+      normalizedMoveType,
+      options,
+    );
+    const preferAuthoritativeCount =
+      this.shouldPreferAuthoritativeConcurrentBudgetCheck(
+        normalizedMoveType,
+        options,
+      );
     if (normalizedMoveType === OperationType.ADD ||
         normalizedMoveType === OperationType.REPLACE) {
-      const canStart = await this.canStartAddOperation();
+      const usePriorityConcurrentAddLane =
+        this.shouldUsePriorityConcurrentAddLane(
+          normalizedMoveType,
+          options,
+        );
+      const canStart = usePriorityConcurrentAddLane ?
+        await this.canStartPriorityAddOperation({
+          bypassEmptyQueryDelay,
+          preferAuthoritativeCount,
+        }) :
+        await this.canStartAddOperation({
+          bypassEmptyQueryDelay,
+          preferAuthoritativeCount,
+        });
       if (canStart) {
         return;
       }
@@ -1690,7 +2088,10 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     if (normalizedMoveType === OperationType.REMOVE) {
-      const canStart = await this.canStartRemoveOperation();
+      const canStart = await this.canStartRemoveOperation({
+        bypassEmptyQueryDelay,
+        preferAuthoritativeCount,
+      });
       if (canStart) {
         return;
       }
@@ -1722,6 +2123,36 @@ class RebalanceCoordinator extends EventEmitter {
     if (options.conflictingOperationId) {
       error.conflictingOperationId = options.conflictingOperationId;
     }
+    return error;
+  }
+
+  /**
+   * Build a typed conflict error for overlapping operation lifecycles.
+   * @param {string|null} normalizedMoveType
+   * @param {string} replicaId
+   * @param {Object} conflictingOperation
+   * @return {Error}
+   * @private
+   */
+  createConflictingOperationInFlightError(
+    normalizedMoveType,
+    replicaId,
+    conflictingOperation,
+  ) {
+    const operationTypeText =
+      String(normalizedMoveType || 'operation').toLowerCase();
+    const error = new Error(
+      `${REBALANCE_COORDINATOR_ERROR_MSG.CONFLICTING_OPERATION_IN_FLIGHT} ` +
+      `${replicaId}: ${operationTypeText} conflicts with ` +
+      `${String(conflictingOperation?.type || 'unknown')} ` +
+      `${String(conflictingOperation?.operationId || 'unknown')}`,
+    );
+    error.rebalanceSkipReason =
+      REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT;
+    error.operationType = normalizedMoveType || null;
+    error.replicaId = replicaId;
+    error.conflictingOperationId =
+      conflictingOperation?.operationId || null;
     return error;
   }
 
@@ -2064,11 +2495,12 @@ class RebalanceCoordinator extends EventEmitter {
       return;
     }
 
-    const activeResult = await this.controlPlaneSystemTableGateway.readRows(
+    const activeResult = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
       [operation.operationId, RESERVATION_STATUS.ACTIVE],
-      CONTROL_PLANE_QUERY_OPTIONS,
+      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
     if (!activeResult.success) {
       this.logger.warn(
@@ -2139,11 +2571,12 @@ class RebalanceCoordinator extends EventEmitter {
     let orphansReleased = NUM.ZERO;
 
     // 1. Expire reservations past TTL, keyed by reservation_id.
-    const staleResult = await this.controlPlaneSystemTableGateway.readRows(
+    const staleResult = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_EXPIRED_ACTIVE_RESERVATIONS,
       [RESERVATION_STATUS.ACTIVE, now],
-      CONTROL_PLANE_QUERY_OPTIONS,
+      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
     if (staleResult.success && Array.isArray(staleResult.rows)) {
       for (const row of staleResult.rows) {
@@ -2186,11 +2619,12 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     // 2. Release orphan reservations (operation is terminal)
-    const activeResult = await this.controlPlaneSystemTableGateway.readRows(
+    const activeResult = await readAuthoritativeControlPlaneRows(
+      this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_ACTIVE_RESERVATIONS,
       [RESERVATION_STATUS.ACTIVE],
-      CONTROL_PLANE_QUERY_OPTIONS,
+      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
 
     if (activeResult.success && activeResult.rows) {
@@ -2395,6 +2829,34 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * @param {string} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isPriorityControlPlanePartition(partitionId) {
+    return isPriorityControlPlanePartitionTable({
+      partitionId,
+    });
+  }
+
+  /**
+   * Resolve the readiness dimension used for operation-scoped snapshots.
+   * Critical system partition recovery paths must remain routable while
+   * publication is converging; ordinary entities keep strict repair gating.
+   *
+   * @param {string|null} partitionId
+   * @return {string}
+   * @private
+   */
+  resolveOperationReadinessDecisionDimension(partitionId = null) {
+    if (this.isCriticalSystemPartition(partitionId)) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  /**
    * @param {Object} replicaRow
    * @return {boolean}
    * @private
@@ -2585,8 +3047,11 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {number}
    * @private
    */
-  getTimeoutForStep(step) {
-    return this.workflowOwner.getTimeoutForStep(step);
+  getTimeoutForStep(step, operation = null) {
+    return this.workflowOwner.getTimeoutForStep(
+      step,
+      operation,
+    );
   }
 
   /**
@@ -2611,6 +3076,7 @@ class RebalanceCoordinator extends EventEmitter {
 
     const stepTimeout = this.getTimeoutForStep(
       operation.workflowStep,
+      operation,
     );
     const stepAllocation = createChildTimeoutBudget(
       operationBudget,
@@ -2955,10 +3421,74 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async getConcurrentAddCount(options = {}) {
     const inFlight = await this.queryIncompleteOperations(options);
-    return inFlight.filter((operation) => {
-      return operation.type === OperationType.ADD ||
-        operation.type === OperationType.REPLACE;
-    }).length;
+    return inFlight.filter((operation) =>
+      this.isConcurrentAddBudgetOperation(operation),
+    ).length;
+  }
+
+  /**
+   * Build add/replace in-flight counts for priority and non-priority lanes.
+   * @param {Array<Object>} operations
+   * @return {{priorityCount:number, nonPriorityCount:number}}
+   * @private
+   */
+  buildConcurrentAddCountByPriorityClass(operations = []) {
+    let priorityCount = NUM.ZERO;
+    let nonPriorityCount = NUM.ZERO;
+    for (const operation of operations) {
+      if (!this.isConcurrentAddBudgetOperation(operation)) {
+        continue;
+      }
+      const partitionId = String(
+        operation.partitionId ||
+        operation.entityId ||
+        '',
+      ).trim();
+      if (partitionId.length > NUM.ZERO &&
+          this.isPriorityControlPlanePartition(partitionId)) {
+        priorityCount += NUM.ONE;
+        continue;
+      }
+      nonPriorityCount += NUM.ONE;
+    }
+    return {
+      priorityCount,
+      nonPriorityCount,
+    };
+  }
+
+  /**
+   * Resolve add/replace in-flight counts grouped by priority lane.
+   * @param {Object} [options={}]
+   * @return {Promise<{priorityCount:number, nonPriorityCount:number}>}
+   * @private
+   */
+  async getConcurrentAddCountByPriorityClass(options = {}) {
+    const inFlight = await this.queryIncompleteOperations(options);
+    return this.buildConcurrentAddCountByPriorityClass(inFlight);
+  }
+
+  /**
+   * Return true when one operation still consumes add-budget capacity.
+   * REPLACE operations in source-removal dispatch (ACTIVE/STOPPING) are
+   * remove-phase work and must not block new add/replace scheduling.
+   *
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isConcurrentAddBudgetOperation(operation) {
+    if (!operation || typeof operation !== 'object') {
+      return false;
+    }
+    const type = String(operation.type || '').toUpperCase();
+    if (type === OperationType.ADD) {
+      return true;
+    }
+    if (type !== OperationType.REPLACE) {
+      return false;
+    }
+    return !this.isReplaceRemoveDispatchPhase(operation);
   }
 
   /**
@@ -2987,9 +3517,11 @@ class RebalanceCoordinator extends EventEmitter {
   /**
    * Check if we can start a new ADD operation.
    *
+   * @param {Object} [options={}]
+   * @param {boolean} [options.preferAuthoritativeCount]
    * @return {Promise<boolean>} True if we can start a new ADD operation.
    */
-  async canStartAddOperation() {
+  async canStartAddOperation(options = {}) {
     if (this.isLocalRouterBackpressured()) {
       return false;
     }
@@ -2998,9 +3530,25 @@ class RebalanceCoordinator extends EventEmitter {
     });
     if (cachedCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
-      return cachedCount < this.config.maxConcurrentAdds;
+      if (cachedCount < this.config.maxConcurrentAdds) {
+        return true;
+      }
+      if (options?.preferAuthoritativeCount !== true) {
+        return false;
+      }
+      const authoritativeCount = await this.getConcurrentAddCount({
+        preferAuthoritativeRead: true,
+      });
+      if (authoritativeCount === NUM.ZERO) {
+        this.markEmptyIncompleteOperationQueryAt();
+      } else {
+        this.clearEmptyIncompleteOperationQueryDelay();
+      }
+      return authoritativeCount < this.config.maxConcurrentAdds;
     }
-    if (this.shouldDelayEmptyIncompleteOperationQuery()) {
+    const bypassEmptyQueryDelay = options?.bypassEmptyQueryDelay === true;
+    if (!bypassEmptyQueryDelay &&
+        this.shouldDelayEmptyIncompleteOperationQuery()) {
       return false;
     }
     const count = await this.getConcurrentAddCount();
@@ -3013,11 +3561,66 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Check whether one priority add/replace can start.
+   * Priority partitions use a dedicated count lane so unrelated non-priority
+   * workflows cannot exhaust the spread-recovery scheduling budget.
+   *
+   * @param {Object} [options={}]
+   * @param {boolean} [options.preferAuthoritativeCount]
+   * @return {Promise<boolean>}
+   */
+  async canStartPriorityAddOperation(options = {}) {
+    if (this.isLocalRouterBackpressured()) {
+      return false;
+    }
+    const cachedCounts = await this.getConcurrentAddCountByPriorityClass({
+      skipSqlFallbackWhenCacheEmpty: true,
+    });
+    const cachedTotalCount =
+      cachedCounts.priorityCount + cachedCounts.nonPriorityCount;
+    if (cachedTotalCount > NUM.ZERO) {
+      this.clearEmptyIncompleteOperationQueryDelay();
+      if (cachedCounts.priorityCount < this.config.maxConcurrentAdds) {
+        return true;
+      }
+      if (options?.preferAuthoritativeCount !== true) {
+        return false;
+      }
+      const authoritativeCounts = await this.getConcurrentAddCountByPriorityClass({
+        preferAuthoritativeRead: true,
+      });
+      const authoritativeTotalCount =
+        authoritativeCounts.priorityCount + authoritativeCounts.nonPriorityCount;
+      if (authoritativeTotalCount === NUM.ZERO) {
+        this.markEmptyIncompleteOperationQueryAt();
+      } else {
+        this.clearEmptyIncompleteOperationQueryDelay();
+      }
+      return authoritativeCounts.priorityCount < this.config.maxConcurrentAdds;
+    }
+    const bypassEmptyQueryDelay = options?.bypassEmptyQueryDelay === true;
+    if (!bypassEmptyQueryDelay &&
+        this.shouldDelayEmptyIncompleteOperationQuery()) {
+      return false;
+    }
+    const counts = await this.getConcurrentAddCountByPriorityClass();
+    const totalCount = counts.priorityCount + counts.nonPriorityCount;
+    if (totalCount === NUM.ZERO) {
+      this.markEmptyIncompleteOperationQueryAt();
+    } else {
+      this.clearEmptyIncompleteOperationQueryDelay();
+    }
+    return counts.priorityCount < this.config.maxConcurrentAdds;
+  }
+
+  /**
    * Check if we can start a new REMOVE operation.
    *
+   * @param {Object} [options={}]
+   * @param {boolean} [options.preferAuthoritativeCount]
    * @return {Promise<boolean>} True if we can start a new REMOVE operation.
    */
-  async canStartRemoveOperation() {
+  async canStartRemoveOperation(options = {}) {
     if (this.isLocalRouterBackpressured()) {
       return false;
     }
@@ -3026,9 +3629,25 @@ class RebalanceCoordinator extends EventEmitter {
     });
     if (cachedCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
-      return cachedCount < this.config.maxConcurrentRemoves;
+      if (cachedCount < this.config.maxConcurrentRemoves) {
+        return true;
+      }
+      if (options?.preferAuthoritativeCount !== true) {
+        return false;
+      }
+      const authoritativeCount = await this.getConcurrentRemoveCount({
+        preferAuthoritativeRead: true,
+      });
+      if (authoritativeCount === NUM.ZERO) {
+        this.markEmptyIncompleteOperationQueryAt();
+      } else {
+        this.clearEmptyIncompleteOperationQueryDelay();
+      }
+      return authoritativeCount < this.config.maxConcurrentRemoves;
     }
-    if (this.shouldDelayEmptyIncompleteOperationQuery()) {
+    const bypassEmptyQueryDelay = options?.bypassEmptyQueryDelay === true;
+    if (!bypassEmptyQueryDelay &&
+        this.shouldDelayEmptyIncompleteOperationQuery()) {
       return false;
     }
     const count = await this.getConcurrentRemoveCount();

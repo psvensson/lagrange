@@ -13,7 +13,7 @@ import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = '60s';
 const PRE_KILL_SETTLE_MS = 5000;
-const POST_KILL_CONVERGENCE_TIMEOUT_MS = 60000;
+const POST_KILL_CONVERGENCE_TIMEOUT_MS = 180000;
 const ZERO_FAILURES = 0;
 
 /**

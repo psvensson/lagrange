@@ -542,6 +542,7 @@ test(
     const result = assignment.determineAssignment(
       'seed-node-1',
       messageGroups,
+      {allowRejoinSingleOwnedGroup: true},
     );
 
     t.equal(
@@ -555,6 +556,72 @@ test(
       'seed restart must reuse the initial control-plane group',
     );
     t.equal(result.replicaCount, 3);
+  },
+);
+
+test(
+  'MessageGroupAssignment - restarted replica owner reuses existing mg-1 group',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment({
+      seedNodeAddress: 'ws://localhost:8080',
+    });
+
+    const restartingNodeId = 'node-2';
+    const messageGroups = [
+      {
+        group_id: 'mg-1',
+        replicas: [
+          {
+            replica_id: 'mg-1-r1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/message-group/mg-1-r1',
+          },
+          {
+            replica_id: 'mg-1-r2',
+            node_id: restartingNodeId,
+            address: 'node-2/message-group/mg-1-r2',
+          },
+          {
+            replica_id: 'mg-1-r3',
+            node_id: 'node-3',
+            address: 'node-3/message-group/mg-1-r3',
+          },
+        ],
+      },
+      {
+        group_id: 'mg-other',
+        replicas: [
+          {
+            replica_id: 'mg-other-r1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/message-group/mg-other-r1',
+          },
+          {
+            replica_id: 'mg-other-r2',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/message-group/mg-other-r2',
+          },
+          {
+            replica_id: 'mg-other-r3',
+            node_id: 'node-4',
+            address: 'node-4/message-group/mg-other-r3',
+          },
+        ],
+      },
+    ];
+
+    const result = assignment.determineAssignment(
+      restartingNodeId,
+      messageGroups,
+      {allowRejoinSingleOwnedGroup: true},
+    );
+
+    t.equal(result.strategy, AssignmentStrategy.CREATE_SELF_HOSTED);
+    t.equal(result.groupId, 'mg-1');
+    t.equal(result.replicaCount, 3);
+    t.same(result.startupReplicaIds, ['mg-1-r2']);
   },
 );
 

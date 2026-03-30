@@ -1,6 +1,14 @@
 import {NUM, TIME_MS, TYPEOF} from '../constants/index.js';
 import {LIFECYCLE_EVENT, LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
 import {LIFECYCLE_REASON} from './lifecycle-controller-constants.js';
+import {
+  isPriorityControlPlanePartition,
+} from './system-partition-classification.js';
+
+const METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS = Object.freeze([
+  LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+]);
 
 const TRAFFIC_READINESS_WAIT_DEFAULT = Object.freeze({
   MAX_ATTEMPTS: NUM.SIX,
@@ -48,11 +56,30 @@ function isTrafficReady(readinessState) {
   );
 }
 
-function isBackgroundWorkReady(readinessState) {
+function isBackgroundWorkReady(readinessState, options = {}) {
   if (!readinessState || typeof readinessState !== 'object') {
     return true;
   }
-  return isTrafficReady(readinessState);
+  return isBackgroundWorkReadySnapshot(
+    getTrafficReadinessSnapshot(readinessState),
+    options,
+  );
+}
+
+function isBackgroundWorkReadySnapshot(snapshot, options = {}) {
+  if (isTrafficReadySnapshot(snapshot)) {
+    return true;
+  }
+
+  const partitionId = typeof options?.partitionId === TYPEOF.STRING ?
+    options.partitionId :
+    null;
+  if (partitionId &&
+      isPriorityControlPlanePartition({partitionId})) {
+    return isMetadataPublicationReadySnapshot(snapshot);
+  }
+
+  return false;
 }
 
 function isMetadataPublicationReadySnapshot(snapshot) {
@@ -68,9 +95,12 @@ function isMetadataPublicationReadySnapshot(snapshot) {
     return true;
   }
 
-  if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY) {
+  if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY ||
+      snapshot.phase === LIFECYCLE_PHASE.DEGRADED) {
     return reasons.length > 0 &&
-      reasons.every((reason) => reason === LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE);
+      reasons.every((reason) =>
+        METADATA_PUBLICATION_ALLOWED_CONTROL_READY_REASONS.includes(reason),
+      );
   }
 
   if (snapshot.phase === LIFECYCLE_PHASE.JOIN_READY) {
@@ -259,8 +289,10 @@ function attachTrafficReadinessListener(readinessState, listener) {
 export {
   attachTrafficReadinessListener,
   isBackgroundWorkReady,
+  isBackgroundWorkReadySnapshot,
   getTrafficReadinessSnapshot,
   isMetadataPublicationReady,
+  isMetadataPublicationReadySnapshot,
   isTrafficReady,
   TRAFFIC_READINESS_WAIT_DEFAULT,
   waitForMetadataPublicationReadiness,

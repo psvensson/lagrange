@@ -39,6 +39,8 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
+  AUTO_REJOIN_HEALTH_PATH: '/health',
+  AUTO_REJOIN_PROBE_TIMEOUT_MS: 1000,
 });
 
 const ENTRYPOINT_SUBSYSTEM = Object.freeze({
@@ -50,6 +52,8 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   STARTING: 'Distributed Database System starting',
   DRY_RUN_COMPLETED: 'Dry run completed',
   JOINING_CLUSTER: 'Joining existing cluster',
+  AUTO_REJOINING_CLUSTER: 'Restarting node will auto-rejoin existing cluster',
+  AUTO_REJOIN_DECISION: 'Resolved startup auto-rejoin decision',
   FAILED_JOIN: 'Failed to join cluster',
   JOINED_CLUSTER: 'Successfully joined cluster',
   LOGS_TABLE_CONNECTED: 'Connected logging persistence to logs table',
@@ -63,11 +67,19 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   STARTING_SEED: 'Starting as seed node',
   BOOTSTRAP_FAILED: 'Bootstrap failed',
   BOOTSTRAP_COMPLETED: 'Bootstrap completed',
+  STARTUP_RUNTIME_HANDOFF: 'Startup runtime handoff completed',
   READINESS_TRANSITION: 'Bootstrap readiness state transitioned',
   READINESS_BLOCKED_DURATION: 'Bootstrap readiness blocker duration observed',
   READINESS_DRAINING: 'Bootstrap readiness marked draining',
   WS_STARTED: 'WebSocket server started for cross-node communication',
   WS_START_FAILED: 'Failed to start WebSocket server',
+  ADMIN_RUNTIME_STARTED: 'Admin runtime started',
+  ADMIN_RUNTIME_SQL_ENGINE_ATTACHED: 'Admin runtime SQL engine attached',
+  PROCESS_BEFORE_EXIT: 'Process beforeExit observed',
+  PROCESS_EXIT: 'Process exit observed',
+  PROCESS_UNCAUGHT_EXCEPTION: 'Process uncaught exception observed',
+  PROCESS_UNHANDLED_REJECTION: 'Process unhandled rejection observed',
+  STARTUP_LIVENESS_PULSE: 'Startup liveness pulse observed',
   NODE_READY: 'Node fully operational',
   SHUTDOWN: 'Shutting down...',
 });

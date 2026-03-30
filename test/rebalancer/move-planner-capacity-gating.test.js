@@ -139,33 +139,32 @@ test('MovePlanner capacity gating', async (t) => {
   // --- Owner dependency enforcement: fail closed when owner missing ---
 
   await t.test('fails closed when admission service owner is absent ' +
-    'for active planning',
-    async (t) => {
-      const nodes = [
-        {node_id: 'n1', cpu_usage_percent: 10},
-        {node_id: 'n2', cpu_usage_percent: 20},
-        {node_id: 'n3', cpu_usage_percent: 30},
-      ];
+    'for active planning', async (t) => {
+    const nodes = [
+      {node_id: 'n1', cpu_usage_percent: 10},
+      {node_id: 'n2', cpu_usage_percent: 20},
+      {node_id: 'n3', cpu_usage_percent: 30},
+    ];
 
-      const planner = new MovePlanner({
-        entityId: 'p1',
-        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-        moveStateProvider: makeMoveStateProvider(nodes),
-        strictOwnerDependencies: true,
-        accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
-      });
-
-      const policy = {
-        targetReplicaCount: NUM.THREE,
-        placementConstraints: {considerCpuLoad: true},
-      };
-
-      await t.rejects(
-        planner.calculateTargetState([], policy),
-        new RegExp(MOVE_PLANNER_ERROR_MSG.STORAGE_ADMISSION_REQUIRED),
-        'planner must fail closed instead of passing all nodes',
-      );
+    const planner = new MovePlanner({
+      entityId: 'p1',
+      entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+      moveStateProvider: makeMoveStateProvider(nodes),
+      strictOwnerDependencies: true,
+      accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
     });
+
+    const policy = {
+      targetReplicaCount: NUM.THREE,
+      placementConstraints: {considerCpuLoad: true},
+    };
+
+    await t.rejects(
+      planner.calculateTargetState([], policy),
+      new RegExp(MOVE_PLANNER_ERROR_MSG.STORAGE_ADMISSION_REQUIRED),
+      'planner must fail closed instead of passing all nodes',
+    );
+  });
 
   // --- Req 5.3: insufficient_capacity vs insufficient_nodes ---
 
@@ -439,6 +438,45 @@ test('MovePlanner capacity gating', async (t) => {
         result.capacityDiagnostics.rejectionsByReason.admission_error,
         NUM.ONE,
         'diagnostics should include admission_error rejection count',
+      );
+    });
+
+  await t.test('critical system partition planning propagates critical admission mode',
+    async (t) => {
+      const nodes = [
+        {node_id: 'n1', cpu_usage_percent: 10},
+      ];
+      const calls = [];
+      const planner = new MovePlanner({
+        entityId: 'control_plane_publications-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider: {
+          ...makeMoveStateProvider(nodes),
+          isCriticalSystemPartition: () => true,
+        },
+        storageAdmissionService: {
+          async checkAdd(options = {}) {
+            calls.push({...options});
+            return allowResult();
+          },
+        },
+        accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
+      });
+
+      await planner.calculateTargetState([], {
+        targetReplicaCount: NUM.ONE,
+        placementConstraints: {considerCpuLoad: true},
+      });
+
+      t.equal(
+        calls.length,
+        1,
+        'planner should evaluate one admission candidate',
+      );
+      t.equal(
+        calls[0]?.isCritical,
+        true,
+        'critical partition planning should request critical admission',
       );
     });
 

@@ -43,6 +43,8 @@ const BOOTSTRAP_API_CACHE_VISIBILITY = Object.freeze({
 const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   SQL_ENGINE_SET: 'SQL query engine set for bootstrap API',
   STARTED: 'Bootstrap API started',
+  BOOTSTRAP_JOIN_READINESS_BLOCKED:
+    'Bootstrap join-readiness projection remains blocked',
   RECEIVED_BOOTSTRAP_REQUEST: 'Received bootstrap request',
   VALIDATION_FAILED: 'Bootstrap request validation failed',
   CONFLICT_DETECTED: 'Bootstrap request conflict detected',
@@ -244,6 +246,8 @@ const BOOTSTRAP_API_PROBE_REASON = Object.freeze({
   JOIN_ADMISSION_BACKPRESSURED: 'JOIN_ADMISSION_BACKPRESSURED',
   MOVE_REPLICA_HANDOFF_STABILIZING:
     'MOVE_REPLICA_HANDOFF_STABILIZING',
+  CONTROL_PLANE_DEPENDENCY_UNAVAILABLE:
+    'CONTROL_PLANE_DEPENDENCY_UNAVAILABLE',
 });
 
 const BOOTSTRAP_API_LIVENESS = Object.freeze({

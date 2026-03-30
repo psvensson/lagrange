@@ -10,6 +10,7 @@ const TABLES = Object.freeze({
   LIVE_QUERIES: 'live_queries',
   CONTEXTS: 'contexts',
   CODE: 'code',
+  CONTROL_PLANE_PUBLICATIONS: 'control_plane_publications',
   TABLES: 'tables',
   SCHEMA_MIGRATIONS: 'schema_migrations',
   SCHEMA_MIGRATION_PARTITIONS: 'schema_migration_partitions',

@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {JoinMessageGroupPhase} from '../../src/bootstrap/phases/join-message-group-phase.js';
+import {
+  JoinMessageGroupRuntimeOwner,
+} from '../../src/bootstrap/owners/join-message-group-runtime-owner.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from '../../src/bootstrap/message-group-assignment.js';
@@ -12,12 +14,12 @@ const silentLogger = {
 };
 
 test(
-  'JoinMessageGroupPhase - MOVE_REPLICA queues join replicas with deferred elections',
+  'JoinMessageGroupRuntimeOwner queues join replicas with deferred elections',
   async (t) => {
     const queuedReplicas = [];
     const messageGroupServices = new Map();
     const registerCalls = [];
-    const phase = new JoinMessageGroupPhase({
+    const owner = new JoinMessageGroupRuntimeOwner({
       nodeId: 'joining-node-1',
       delegates: {
         getBootstrapResponse: () => ({
@@ -49,7 +51,7 @@ test(
       },
     });
 
-    await phase.phaseJoinExistingMessageGroup({
+    await owner.phaseJoinExistingMessageGroup({
       groupId: 'mg-1',
       strategy: AssignmentStrategy.MOVE_REPLICA,
       replicaToMove: 'mg-1-r2',

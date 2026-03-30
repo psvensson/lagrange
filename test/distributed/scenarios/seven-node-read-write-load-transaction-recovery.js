@@ -7,15 +7,24 @@
  */
 
 import assert from 'node:assert/strict';
+import {INITIAL_PARTITION_IDS} from
+  '../../../src/bootstrap/system-table-schemas-constants.js';
 import {TABLES} from '../../../src/constants/index.js';
-import {CONVERGENCE_DEFAULTS, TIMEOUTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  TIMEOUTS,
+} from '../harness/constants.js';
 import {
   resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
   BENCHMARK_WORKLOAD_PROFILE,
+  createPartitioningAdaptiveDispatchGuardrail,
+  createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
   assertSplitPolicyPrecondition,
+  resolvePartitioningBenchmarkLoadOpsPerSec,
   resolvePartitioningLoadTableName,
   rowsFromResult,
   sleep,
@@ -31,6 +40,14 @@ const STATUS_QUERY_TIMEOUT_MS = 30000;
 const STATUS_QUERY_LANE = 'default';
 const SEEDED_VISIBILITY_TIMEOUT_MS = 15000;
 const SEEDED_VISIBILITY_POLL_INTERVAL_MS = 250;
+const TRANSIENT_RECOVERY_READINESS_ERROR_PATTERNS = Object.freeze([
+  /admin api query failed/i,
+  /authoritative control snapshot repair/i,
+  /econnrefused|connection refused/i,
+  /control snapshot returned no rows/i,
+  /partition service not found/i,
+  /no handler registered for partition service/i,
+]);
 
 const SQL_INSERT_TRANSACTION =
   'INSERT INTO ' + TABLES.SQL_TRANSACTIONS +
@@ -39,6 +56,28 @@ const SQL_INSERT_TRANSACTION =
 const SQL_SELECT_TRANSACTION_STATUSES =
   'SELECT transaction_id, status FROM ' + TABLES.SQL_TRANSACTIONS +
   ' WHERE transaction_id IN (?, ?)';
+const RECOVERY_READY_REQUIRED_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.SERVICES,
+  TABLES.REPLICA_OPERATIONS,
+  TABLES.SQL_TRANSACTIONS,
+  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+  TABLES.SQL_WRITE_OPERATIONS,
+]);
+const RECOVERY_READY_REQUIRED_PARTITIONS = Object.freeze(
+  RECOVERY_READY_REQUIRED_TABLES.map((tableName) => {
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    assert.ok(
+      typeof partitionId === 'string' && partitionId.length > ZERO,
+      'Missing initial partition id for recovery readiness table ' +
+      String(tableName),
+    );
+    return {
+      tableName,
+      partitionId,
+    };
+  }),
+);
 
 /**
  * Execute one timeout-aware scenario control query.
@@ -62,12 +101,47 @@ async function executeScenarioQuery(node, sql, params = []) {
 }
 
 /**
+ * Query one local control snapshot for recovery gating.
+ * Transaction replay state is node-local and should not depend on
+ * cluster-wide authoritative repair fanout during restart recovery.
+ * @param {Object} node
+ * @return {Promise<Object>}
+ */
+async function executeRecoveryControlSnapshotQuery(node) {
+  if (typeof node?.getControlSnapshot === 'function') {
+    return node.getControlSnapshot({
+      timeoutMs: STATUS_QUERY_TIMEOUT_MS,
+    });
+  }
+  return executeScenarioQuery(
+    node,
+    NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  );
+}
+
+function isTransientRecoveryReadinessQueryError(error) {
+  const message = String(error || '');
+  return TRANSIENT_RECOVERY_READINESS_ERROR_PATTERNS.some((pattern) =>
+    pattern.test(message),
+  );
+}
+
+/**
  * Pick seed node with deterministic fallback.
  * @param {Array<Object>} nodes
  * @return {Object}
  */
 function getSeedNode(nodes) {
   return nodes.find((node) => node.role === 'seed') || nodes[0];
+}
+
+function getNodeById(nodes, nodeId) {
+  const normalizedNodeId = String(nodeId || '');
+  if (normalizedNodeId.length <= ZERO || !Array.isArray(nodes)) {
+    return null;
+  }
+  return nodes.find((node) => String(node?.id || '') === normalizedNodeId) ||
+    null;
 }
 
 /**
@@ -145,6 +219,235 @@ async function queryTransactionStatuses(node, seeded) {
     statuses.set(transactionId, status);
   }
   return statuses;
+}
+
+function countActiveNodeRows(nodeRows) {
+  let activeNodeCount = ZERO;
+  for (const row of nodeRows) {
+    const status = String(row?.status || row?.state || '').toLowerCase();
+    if (status === 'active') {
+      activeNodeCount += 1;
+    }
+  }
+  return activeNodeCount;
+}
+
+function collectVisiblePartitionIds(snapshot) {
+  const partitionRows = Array.isArray(snapshot?.partitions) ?
+    snapshot.partitions :
+    [];
+  const partitionIds = new Set();
+  for (const row of partitionRows) {
+    if (typeof row === 'string' && row.length > ZERO) {
+      partitionIds.add(row);
+      continue;
+    }
+    const partitionId = String(row?.partition_id || row?.partitionId || '');
+    if (partitionId.length > ZERO) {
+      partitionIds.add(partitionId);
+      continue;
+    }
+    const tableName = String(row?.table_name || row?.tableName || '');
+    if (tableName.length <= ZERO) {
+      continue;
+    }
+    const initialPartitionId = INITIAL_PARTITION_IDS[tableName];
+    if (typeof initialPartitionId === 'string' &&
+      initialPartitionId.length > ZERO) {
+      partitionIds.add(initialPartitionId);
+    }
+  }
+  return partitionIds;
+}
+
+function buildRecoveryReadinessSummary(
+  snapshot,
+  seeded,
+  expectedNodeCount,
+  nodeId,
+) {
+  const nodeRows = Array.isArray(snapshot?.nodes) ? snapshot.nodes : [];
+  const visiblePartitionIds = collectVisiblePartitionIds(snapshot);
+  const missingTables = RECOVERY_READY_REQUIRED_PARTITIONS
+    .filter(({partitionId}) => !visiblePartitionIds.has(partitionId))
+    .map(({tableName}) => tableName);
+  const clusterNodeCount = Number.isFinite(
+    Number(snapshot?.cluster?.nodeCount),
+  ) ?
+    Number(snapshot.cluster.nodeCount) :
+    nodeRows.length;
+  const activeNodeCount = Number.isFinite(
+    Number(snapshot?.cluster?.activeNodeCount),
+  ) ?
+    Number(snapshot.cluster.activeNodeCount) :
+    countActiveNodeRows(nodeRows);
+  const transactionRecovery = snapshot?.queryEngine?.transactionRecovery &&
+    typeof snapshot.queryEngine.transactionRecovery === 'object' ?
+    snapshot.queryEngine.transactionRecovery :
+    null;
+  const startupRecovery =
+    snapshot?.controlPlaneDiagnostics?.startupRecovery &&
+      typeof snapshot.controlPlaneDiagnostics.startupRecovery === 'object' ?
+      snapshot.controlPlaneDiagnostics.startupRecovery :
+      null;
+  const recoveredCount = Number.isFinite(
+    Number(transactionRecovery?.totalRecovered),
+  ) ?
+    Number(transactionRecovery.totalRecovered) :
+    ZERO;
+  const resumedCount = Number.isFinite(
+    Number(transactionRecovery?.resumed),
+  ) ?
+    Number(transactionRecovery.resumed) :
+    ZERO;
+  const failedCount = Number.isFinite(
+    Number(transactionRecovery?.failed),
+  ) ?
+    Number(transactionRecovery.failed) :
+    ZERO;
+  const requiredRecoveredCount = Array.isArray(seeded?.rows) ?
+    seeded.rows.length :
+    2;
+  const controlPlaneRecoveryReady =
+    startupRecovery === null ||
+    startupRecovery.controlPlaneRecoveryReady === true;
+  const ready =
+    missingTables.length === ZERO &&
+    transactionRecovery !== null &&
+    failedCount === ZERO &&
+    controlPlaneRecoveryReady &&
+    recoveredCount >= requiredRecoveredCount &&
+    resumedCount >= requiredRecoveredCount;
+
+  return {
+    nodeId: String(nodeId || snapshot?.nodeId || 'unknown-node'),
+    clusterNodeCount,
+    activeNodeCount,
+    missingTables,
+    recoveredCount,
+    resumedCount,
+    failedCount,
+    transactionRecovery,
+    startupRecovery,
+    controlPlaneRecoveryReady,
+    recoveryStage:
+      typeof startupRecovery?.recoveryStage === 'string' ?
+        startupRecovery.recoveryStage :
+        'unknown',
+    ready,
+  };
+}
+
+async function queryRecoveryReadiness(
+  node,
+  seeded,
+  expectedNodeCount,
+) {
+  if (!node || (typeof node.query !== 'function' &&
+    typeof node.queryWithTimeout !== 'function' &&
+    typeof node.getControlSnapshot !== 'function')) {
+    return {
+      summary: null,
+      errors: ['recovery-node unavailable'],
+    };
+  }
+  try {
+    const result = await executeRecoveryControlSnapshotQuery(node);
+    const rows = rowsFromResult(result);
+    if (rows.length <= ZERO) {
+      return {
+        summary: null,
+        errors: [
+          String(node.id || 'unknown-node') +
+          ': control snapshot returned no rows',
+        ],
+      };
+    }
+    return {
+      summary: buildRecoveryReadinessSummary(
+        rows[0],
+        seeded,
+        expectedNodeCount,
+        node.id,
+      ),
+      errors: [],
+    };
+  } catch (error) {
+    return {
+      summary: null,
+      errors: [
+        String(node.id || 'unknown-node') + ': ' +
+        String(error?.message || error),
+      ],
+    };
+  }
+}
+
+async function waitForPostRestartRecoveryReadiness(node, seeded, options) {
+  const timeoutMs = options.timeoutMs;
+  const pollIntervalMs = options.pollIntervalMs;
+  const expectedNodeCount = options.expectedNodeCount;
+  const deadline = Date.now() + timeoutMs;
+  let sampleCount = ZERO;
+  let lastSummary = null;
+  let lastErrors = [];
+
+  while (Date.now() <= deadline) {
+    sampleCount += 1;
+    const readiness = await queryRecoveryReadiness(
+      node,
+      seeded,
+      expectedNodeCount,
+    );
+    if (readiness.summary) {
+      lastSummary = readiness.summary;
+    }
+    lastErrors = readiness.errors;
+    if (readiness.summary?.ready) {
+      return {
+        sampleCount,
+        nodeId: readiness.summary.nodeId,
+        summary: readiness.summary,
+      };
+    }
+    if (!readiness.summary &&
+      lastErrors.length > ZERO &&
+      lastErrors.some((error) =>
+        !isTransientRecoveryReadinessQueryError(error),
+      )) {
+      throw new Error(
+        'Unable to query post-restart recovery readiness from any node' +
+        ': ' + lastErrors.join('; '),
+      );
+    }
+    if (Date.now() >= deadline) {
+      break;
+    }
+    await sleep(pollIntervalMs);
+  }
+
+  throw new Error(
+    'Timed out waiting for post-restart recovery readiness. ' +
+    'node=' + String(lastSummary?.nodeId || 'none') +
+    ', clusterNodeCount=' + String(lastSummary?.clusterNodeCount || ZERO) +
+    ', activeNodeCount=' + String(lastSummary?.activeNodeCount || ZERO) +
+    ', missingTables=' + String(
+      Array.isArray(lastSummary?.missingTables) &&
+      lastSummary.missingTables.length > ZERO ?
+        lastSummary.missingTables.join(',') :
+        'none',
+    ) +
+    ', recoveryStage=' + String(lastSummary?.recoveryStage || 'unknown') +
+    ', controlPlaneRecoveryReady=' +
+    String(lastSummary?.controlPlaneRecoveryReady === true) +
+    ', recovered=' + String(lastSummary?.recoveredCount || ZERO) +
+    ', resumed=' + String(lastSummary?.resumedCount || ZERO) +
+    ', failed=' + String(lastSummary?.failedCount || ZERO) +
+    ', samples=' + sampleCount +
+    ', queryErrors=' + String(
+      lastErrors.length > ZERO ? lastErrors.join('; ') : 'none',
+    ),
+  );
 }
 
 /**
@@ -364,18 +667,42 @@ async function run(cluster, options = {}) {
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
+  if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
+    await cluster.waitForControlPlaneQuiescence();
+  }
 
   const tablePreparation = await prepareBenchmarkPartitioningTable(
     seedNode,
-    {tableName: effectiveTableName},
+    {
+      tableName: effectiveTableName,
+      queryNodes: nodes,
+    },
   );
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-read-write-load-transaction-recovery',
   });
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      queryNodes: nodes,
+    },
+  );
+  const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
+    loadOpsPerSec,
+    loadNodePlan.initialNodes.length,
+    nodes.length,
+  );
 
   const loadRun = cluster.startLoad({
-    opsPerSec: loadOpsPerSec,
+    nodes: loadNodePlan.initialNodes,
+    nodeResolver: loadNodePlan.nodeResolver,
+    opsPerSec: effectiveLoadOpsPerSec,
     duration: loadDuration,
+    adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: loadOperations,
     tableName: effectiveTableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
@@ -385,7 +712,11 @@ async function run(cluster, options = {}) {
   let seededTransactions = null;
   let seededVisibility = null;
   let convergenceAfterRestart = null;
+  let recoveryReadiness = null;
   let replayValidation = null;
+  let replayValidationNodes = nodes;
+  let replayValidationSeedNode = seedNode;
+  let metrics = null;
   try {
     distribution = await waitForPartitionGrowthAndSpread(seedNode, {
       tableName: effectiveTableName,
@@ -393,9 +724,19 @@ async function run(cluster, options = {}) {
       pollIntervalMs: distributionPollIntervalMs,
       minAdditionalPartitions,
       minDistinctReplicaNodes,
+      queryNodes: nodes,
     });
 
     await sleep(preRestartDelayMs);
+    if (typeof loadRun.cancel === 'function') {
+      loadRun.cancel();
+    }
+    metrics = await loadRun.waitComplete();
+    if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
+      await cluster.waitForControlPlaneQuiescence({
+        timeoutMs: convergenceTimeoutMs,
+      });
+    }
     seededTransactions = buildSyntheticTransactions(Date.now());
     await seedSyntheticTransactions(seedNode, seededTransactions);
     seededVisibility = await waitForSeededTransactionVisibility(
@@ -415,9 +756,30 @@ async function run(cluster, options = {}) {
       'Cluster did not converge after recovery-replay restart: ' +
       convergenceAfterRestart.settledAfterMs + 'ms',
     );
+    if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
+      await cluster.waitForControlPlaneQuiescence({
+        timeoutMs: convergenceTimeoutMs,
+      });
+    }
+
+    replayValidationNodes = cluster.getNodes();
+    replayValidationSeedNode =
+      getNodeById(replayValidationNodes, seedNode.id) || seedNode;
+    recoveryReadiness = await waitForPostRestartRecoveryReadiness(
+      replayValidationSeedNode,
+      seededTransactions,
+      {
+        expectedNodeCount,
+        timeoutMs: Math.max(
+          convergenceTimeoutMs,
+          transactionReplayTimeoutMs,
+        ),
+        pollIntervalMs: transactionReplayPollIntervalMs,
+      },
+    );
 
     replayValidation = await waitForReplayTerminalStatuses(
-      nodes,
+      replayValidationNodes,
       seededTransactions,
       {
         timeoutMs: transactionReplayTimeoutMs,
@@ -428,9 +790,14 @@ async function run(cluster, options = {}) {
     if (typeof loadRun.cancel === 'function') {
       loadRun.cancel();
     }
+    if (typeof loadNodePlan.stop === 'function') {
+      loadNodePlan.stop();
+    }
   }
 
-  const metrics = await loadRun.waitComplete();
+  if (metrics === null) {
+    metrics = await loadRun.waitComplete();
+  }
   assert.ok(metrics.total > ZERO, 'Expected at least one mixed load operation');
 
   const successRate = metrics.total > ZERO ?
@@ -460,6 +827,7 @@ async function run(cluster, options = {}) {
       preparedTransactionId: seededTransactions.preparedTransactionId,
     },
     seededVisibility,
+    recoveryReadiness,
     replayValidation,
     loadMetrics: metrics,
     successRate,

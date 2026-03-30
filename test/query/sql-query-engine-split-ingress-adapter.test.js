@@ -16,6 +16,9 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
@@ -229,6 +232,55 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
     workflow.transactionCoordinator,
     engine.transactionCoordinator,
     'ManagedSplitWorkflow must use SQLQueryEngine transaction coordinator',
+  );
+
+  t.end();
+});
+
+test('split source routability helper uses control-plane recovery eligibility ' +
+  'dimension for owner-path convergence', (t) => {
+  const cache = createMockSystemCache(
+    [{
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key: 'id',
+      active_partition_version: 1,
+      partition_transition_state: null,
+      partition_transition_metadata: null,
+    }],
+    [{
+      partition_id: 'users-p1',
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_version: 1,
+      replica_count: 1,
+      leader_node_id: 'node-a',
+    }],
+  );
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: cache,
+    messageRouter: {deliver: async () => ({acknowledged: true})},
+  });
+  const observedCalls = [];
+  engine.getRoutablePartitionServiceNodeIds = (partitionId, readinessDimension) => {
+    observedCalls.push({partitionId, readinessDimension});
+    return [];
+  };
+
+  engine.managedSplitWorkflow.getRoutablePartitionServiceNodeIds('users-p1');
+
+  t.same(
+    observedCalls,
+    [{
+      partitionId: 'users-p1',
+      readinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    }],
+    'ManagedSplitWorkflow source-routability ingress must use recovery ' +
+    'dimension during control-plane convergence',
   );
 
   t.end();

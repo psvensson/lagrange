@@ -8,8 +8,8 @@ const CUTOVER_GUARD_FILE = Object.freeze({
   ADMIN_WEBSOCKET_API: 'src/admin/admin-websocket-api.js',
   CREATE_MESSAGE_GROUP_PHASE:
     'src/bootstrap/phases/create-message-group-phase.js',
-  JOIN_MESSAGE_GROUP_PHASE:
-    'src/bootstrap/phases/join-message-group-phase.js',
+  JOIN_MESSAGE_GROUP_RUNTIME_OWNER:
+    'src/bootstrap/owners/join-message-group-runtime-owner.js',
   SEED_MESSAGE_GROUPS_PHASE:
     'src/bootstrap/phases/seed-message-groups-phase.js',
   SEED_PARTITIONS_PHASE:
@@ -138,7 +138,7 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
       CUTOVER_GUARD_FILE.CREATE_MESSAGE_GROUP_PHASE,
     );
     const joinExistingSource = readFile(
-      CUTOVER_GUARD_FILE.JOIN_MESSAGE_GROUP_PHASE,
+      CUTOVER_GUARD_FILE.JOIN_MESSAGE_GROUP_RUNTIME_OWNER,
     );
     const selfHostedBody = extractMethodBody(
       selfHostedSource,

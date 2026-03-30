@@ -69,8 +69,8 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
     );
     t.equal(
       call.options.queryOptions?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'authoritative fallback should stay on repairEligible routing',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'authoritative fallback should stay on control-plane recovery routing',
     );
     t.match(
       String(call.options.queryOptions?.sessionId || ''),
@@ -79,8 +79,8 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
     );
     t.equal(
       call.options.replicaFallbackConsistency,
-      undefined,
-      'authoritative reads must not trust follower replica fallback rows',
+      'any_replica',
+      'node/service repair should retry against a local replica before routed SQL',
     );
   }
 
@@ -105,6 +105,72 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
     AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.MIXED,
     'snapshot should retain mixed-source visibility diagnostics',
   );
+});
+
+test('AuthoritativeControlPlaneView readNodeSnapshot enables bounded ' +
+  'any-replica fallback before routed SQL for node/service repair',
+async (t) => {
+  const calls = [];
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    now: () => FIXTURE_NOW_MS,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        if (options?.replicaFallbackConsistency !== 'any_replica') {
+          return {
+            success: false,
+            error: 'authoritative_row_source_unavailable',
+            rows: [],
+          };
+        }
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              node_id: FIXTURE_NODE_ID,
+              last_heartbeat: FIXTURE_LAST_HEARTBEAT_MS,
+            }],
+            source: 'local_partition_replica',
+          };
+        }
+        return {
+          success: true,
+          rows: [{
+            service_id: 'svc-1',
+            node_id: FIXTURE_NODE_ID,
+            status: 'ACTIVE',
+          }],
+          source: 'local_partition_replica',
+        };
+      },
+    },
+  });
+
+  const snapshot = await view.readNodeSnapshot(FIXTURE_NODE_ID);
+
+  t.equal(snapshot.tables.nodes.success, true,
+    'node evidence should succeed through the bounded local follower fallback');
+  t.equal(snapshot.tables.services.success, true,
+    'service evidence should succeed through the bounded local follower fallback');
+  t.equal(snapshot.tables.nodes.source,
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA,
+    'node repair should avoid routed SQL when a local replica can satisfy it');
+  t.equal(snapshot.tables.services.source,
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.LOCAL_PARTITION_REPLICA,
+    'service repair should avoid routed SQL when a local replica can satisfy it');
+  for (const call of calls) {
+    t.equal(
+      call.options?.replicaFallbackConsistency,
+      'any_replica',
+      'node/service repair should request bounded any-replica fallback before routed SQL',
+    );
+  }
 });
 
 test('AuthoritativeControlPlaneView coalesces identical in-flight table reads',

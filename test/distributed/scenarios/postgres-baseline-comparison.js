@@ -236,6 +236,12 @@ const LOAD_METRIC_UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
 const LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED = 'cancelled';
 const LOAD_METRIC_REJECTED_REASON_QUEUE_FULL = 'queueFull';
 const BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
+const PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD = 5;
+const PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_MIN_SETTLE_TIMEOUT_MS = 90000;
+const PREFLIGHT_CONVERGENCE_FORCE_REPAIR_AFTER_MS = 0;
+const PREFLIGHT_CONVERGENCE_ALLOWED_VOTER_SKEW = 1;
+const PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT = 5;
+const PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS = 0;
 const BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT = 2;
 const BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT = 250;
 const BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT = 3;
@@ -245,6 +251,7 @@ const HEARTBEAT_FRESHNESS_STATUS_OK = 'ok';
 const HEARTBEAT_FRESHNESS_STATUS_FAILED = 'failed';
 const HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE = 'unavailable';
 const HEARTBEAT_FRESHNESS_MAX_STALL_MS_DEFAULT = 15000;
+const HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS = 25000;
 const HEARTBEAT_FRESHNESS_MIN_SAMPLES_DEFAULT = 2;
 const HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON =
   'heartbeat_freshness_invariant_failed';
@@ -468,9 +475,9 @@ const BENCHMARK_TABLE_CREATE_TIMEOUT_HEADROOM_MS = 5000;
 const BENCHMARK_TABLE_CREATE_CONTROL_TIMEOUT_MS =
   QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS +
   BENCHMARK_TABLE_CREATE_TIMEOUT_HEADROOM_MS;
+const BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS = 180000;
 const BENCHMARK_TABLE_CREATE_OUTCOME_SUCCEEDED = 'succeeded';
 const BENCHMARK_TABLE_CREATE_OUTCOME_FAILED = 'failed';
-const BENCHMARK_TABLE_CREATE_TIMEOUT_MESSAGE_FRAGMENT = 'timeout';
 
 function buildBenchmarkTableCreateNodeClientContext(benchmarkConfig = {}) {
   const configuredControlTimeoutMs =
@@ -980,22 +987,85 @@ function isBenchmarkTableCreateTimeoutError(error) {
       error.timeoutClass.toLowerCase() === 'timeout') {
     return true;
   }
+  if (typeof error?.code === 'string' &&
+      error.code.toLowerCase() === 'etimedout') {
+    return true;
+  }
   const message = String(error?.message || error || '')
     .toLowerCase();
-  return message.includes(BENCHMARK_TABLE_CREATE_TIMEOUT_MESSAGE_FRAGMENT) ||
-    message.includes('timed out') ||
+  return message.includes('timed out') ||
     message.includes('deadline exceeded');
 }
 
-function isRetriableBenchmarkTableCreateError(error) {
+function isRetriableBenchmarkTableProgressError(error) {
   const message = String(error?.message || error || '')
     .toLowerCase();
+  if (isBenchmarkTableCreateTimeoutError(error)) {
+    return message.includes('timed out waiting for partition leader service') ||
+      message.includes('timed out waiting for routable partition service') ||
+      message.includes('admin api query timed out for node') ||
+      message.includes('timed out waiting for partition service metadata');
+  }
   if (!message) {
     return false;
   }
   return message.includes('unable to satisfy minimum routable provisioning cohort') ||
     message.includes('control_plane_write_unhealthy') ||
-    message.includes('cluster_member_unhealthy');
+    message.includes('cluster_member_unhealthy') ||
+    message.includes('distributed operation failed due to participant failures') ||
+    message.includes('cannot start a transaction within a transaction') ||
+    message.includes('cannot commit - no transaction is active') ||
+    message.includes('transaction already active on this partition') ||
+    message.includes('no active service found for partition') ||
+    message.includes('no partitions available for table') ||
+    (message.includes('table') && message.includes('not found')) ||
+    message.includes('connect econnrefused') ||
+    message.includes('connection refused');
+}
+
+function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {
+  if (!metadataSnapshot || typeof metadataSnapshot !== 'object') {
+    return false;
+  }
+  const tableRowCount = Number(metadataSnapshot?.tables?.rowCount || ZERO);
+  const partitionRowCount = Number(metadataSnapshot?.partitions?.rowCount || ZERO);
+  const tableId = String(metadataSnapshot?.tableId || '').trim();
+  const partitionIds = Array.isArray(metadataSnapshot?.partitions?.partitionIds) ?
+    metadataSnapshot.partitions.partitionIds.filter((partitionId) =>
+      typeof partitionId === 'string' && partitionId.length > ZERO,
+    ) :
+    [];
+  return (
+    (tableRowCount > ZERO || tableId.length > ZERO) &&
+    (partitionRowCount > ZERO || partitionIds.length > ZERO)
+  );
+}
+
+async function buildBenchmarkTableFailureAttempt({
+  createAttempt,
+  nodeClient,
+  canonicalWriteNode,
+  tableName,
+  error,
+}) {
+  const metadataSnapshot = await collectBenchmarkMetadataSnapshot({
+    nodeClient,
+    node: canonicalWriteNode,
+    tableName,
+    tableId: null,
+    requiredSchemaVersion: null,
+    stage: BENCHMARK_METADATA_STAGE_CREATE_ERROR,
+    readinessState: null,
+    probeError: String(error?.message || error),
+  });
+  return {
+    ...finalizeBenchmarkTableCreateAttempt(
+      createAttempt,
+      BENCHMARK_TABLE_CREATE_OUTCOME_FAILED,
+      error,
+    ),
+    metadataSnapshot,
+  };
 }
 
 async function refreshBenchmarkTableCreateReadModel(
@@ -1347,17 +1417,27 @@ async function ensureSutBenchmarkTable(
     buildBenchmarkTableCreateNodeClientContext(benchmarkConfig);
   const canonicalWriteNode =
     resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
+  const strictBenchmarkMode = isStrictBenchmarkMode(benchmarkConfig);
   const createRetryTimeoutMs =
     Number.isInteger(benchmarkConfig?.readyTimeoutMs) &&
       benchmarkConfig.readyTimeoutMs > ZERO ?
       benchmarkConfig.readyTimeoutMs :
       BENCHMARK_DEFAULTS.readyTimeoutMs;
+  const effectiveCreateRetryTimeoutMs =
+    Array.isArray(systemTableReadNodes) &&
+      systemTableReadNodes.length >=
+        PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+      Math.max(
+        createRetryTimeoutMs,
+        BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
+      ) :
+      createRetryTimeoutMs;
   const createRetryPollIntervalMs =
     Number.isInteger(benchmarkConfig?.readyPollIntervalMs) &&
       benchmarkConfig.readyPollIntervalMs > ZERO ?
       benchmarkConfig.readyPollIntervalMs :
       BENCHMARK_DEFAULTS.readyPollIntervalMs;
-  const createRetryDeadlineMs = timing.now() + createRetryTimeoutMs;
+  const createRetryDeadlineMs = timing.now() + effectiveCreateRetryTimeoutMs;
   let createAttempt = null;
   let createResult;
   while (true) {
@@ -1383,25 +1463,23 @@ async function ensureSutBenchmarkTable(
       };
       break;
     } catch (error) {
-      const metadataSnapshot = await collectBenchmarkMetadataSnapshot({
+      createAttempt = await buildBenchmarkTableFailureAttempt({
+        createAttempt,
         nodeClient,
-        node: canonicalWriteNode,
+        canonicalWriteNode,
         tableName,
-        tableId: null,
-        requiredSchemaVersion: null,
-        stage: BENCHMARK_METADATA_STAGE_CREATE_ERROR,
-        readinessState: null,
-        probeError: String(error?.message || error),
+        error,
       });
-      createAttempt = {
-        ...finalizeBenchmarkTableCreateAttempt(
-          createAttempt,
-          BENCHMARK_TABLE_CREATE_OUTCOME_FAILED,
-          error,
-        ),
-        metadataSnapshot,
-      };
-      if (!isRetriableBenchmarkTableCreateError(error) ||
+      const bootstrapProgressObserved =
+        strictBenchmarkMode !== true &&
+        hasBenchmarkTableBootstrapProgress(createAttempt?.metadataSnapshot);
+      if (bootstrapProgressObserved) {
+        createResult = {
+          nodeId: canonicalWriteNode.id,
+        };
+        break;
+      }
+      if (!isRetriableBenchmarkTableProgressError(error) ||
           timing.now() >= createRetryDeadlineMs) {
         throw attachBenchmarkTableCreateAttempt(error, createAttempt);
       }
@@ -1416,43 +1494,68 @@ async function ensureSutBenchmarkTable(
     }
   }
 
-  try {
-    const tableMetadata = await querySutTableMetadata(
-      nodeClient,
-      systemTableReadNodes,
-      tableName,
-    );
-    const tableId = tableMetadata.tableId;
-    if (!tableId) {
+  while (true) {
+    try {
+      const tableMetadata = await querySutTableMetadata(
+        nodeClient,
+        systemTableReadNodes,
+        tableName,
+      );
+      const tableId = tableMetadata.tableId;
+      if (!tableId) {
+        if (timing.now() >= createRetryDeadlineMs) {
+          return {
+            ...tableMetadata,
+            writeNodeId: createResult.nodeId,
+            createAttempt,
+          };
+        }
+        await refreshBenchmarkTableCreateReadModel(
+          nodeClient,
+          canonicalWriteNode,
+        );
+        await timing.sleep(createRetryPollIntervalMs);
+        continue;
+      }
+      const policyResult = await queryControlOnCanonicalSystemTableWriteNode(
+        nodeClient,
+        systemTableReadNodes,
+        buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies),
+        [],
+        NODE_CLIENT_MUTATING_CONTEXT,
+      );
+      const repairResult = await queryControlOnCanonicalSystemTableWriteNode(
+        nodeClient,
+        systemTableReadNodes,
+        buildBenchmarkPartitionRepairSql(tableName, tableId),
+        [],
+        NODE_CLIENT_MUTATING_CONTEXT,
+      );
       return {
         ...tableMetadata,
         writeNodeId: createResult.nodeId,
+        policyNodeId: policyResult.nodeId,
+        repairNodeId: repairResult.nodeId,
         createAttempt,
       };
+    } catch (error) {
+      if (!isRetriableBenchmarkTableProgressError(error) ||
+          timing.now() >= createRetryDeadlineMs) {
+        createAttempt = await buildBenchmarkTableFailureAttempt({
+          createAttempt,
+          nodeClient,
+          canonicalWriteNode,
+          tableName,
+          error,
+        });
+        throw attachBenchmarkTableCreateAttempt(error, createAttempt);
+      }
+      await refreshBenchmarkTableCreateReadModel(
+        nodeClient,
+        canonicalWriteNode,
+      );
+      await timing.sleep(createRetryPollIntervalMs);
     }
-    const policyResult = await queryControlOnCanonicalSystemTableWriteNode(
-      nodeClient,
-      systemTableReadNodes,
-      buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies),
-      [],
-      NODE_CLIENT_MUTATING_CONTEXT,
-    );
-    const repairResult = await queryControlOnCanonicalSystemTableWriteNode(
-      nodeClient,
-      systemTableReadNodes,
-      buildBenchmarkPartitionRepairSql(tableName, tableId),
-      [],
-      NODE_CLIENT_MUTATING_CONTEXT,
-    );
-    return {
-      ...tableMetadata,
-      writeNodeId: createResult.nodeId,
-      policyNodeId: policyResult.nodeId,
-      repairNodeId: repairResult.nodeId,
-      createAttempt,
-    };
-  } catch (error) {
-    throw attachBenchmarkTableCreateAttempt(error, createAttempt);
   }
 }
 
@@ -1467,8 +1570,10 @@ function isRetriableTableReadyError(error) {
   }
   return message.includes('no partitions available for table') ||
     message.includes('table') && message.includes('not found') ||
-    message.includes('connect econnrefused') ||
-    message.includes('timed out');
+    message.includes('timed out waiting for routable partition service') ||
+    message.includes('timed out waiting for partition leader service') ||
+    message.includes('timed out waiting for partition service metadata') ||
+    message.includes('connect econnrefused');
 }
 
 function rowsFromQueryResult(result) {
@@ -1757,7 +1862,8 @@ function isNodeAdminReady(diagnostics) {
   if (!diagnostics || typeof diagnostics !== 'object') {
     return false;
   }
-  return diagnostics.adminReady === true;
+  return diagnostics.adminReady === true ||
+    diagnostics.controlPlaneRecoveryReady === true;
 }
 
 function isLoadNodeCandidate(node) {
@@ -5094,6 +5200,62 @@ function resolveBenchmarkConfig(cluster) {
   return resolvePostgresBaselineBenchmarkConfig(cluster?._config?.benchmark || {});
 }
 
+function resolvePreflightConvergenceOptions(cluster, benchmarkConfig, nodeCount) {
+  const configuredSettleTimeoutMs = Number.isFinite(
+    cluster?._config?.convergence?.settleTimeoutMs,
+  ) && cluster._config.convergence.settleTimeoutMs > ZERO ?
+    Math.floor(cluster._config.convergence.settleTimeoutMs) :
+    null;
+  const readyTimeoutMs = Number.isFinite(benchmarkConfig?.readyTimeoutMs) &&
+    benchmarkConfig.readyTimeoutMs > ZERO ?
+    Math.floor(benchmarkConfig.readyTimeoutMs) :
+    null;
+  const quiescentTimeoutMs = Number.isFinite(benchmarkConfig?.quiescentTimeoutMs) &&
+    benchmarkConfig.quiescentTimeoutMs > ZERO ?
+    Math.floor(benchmarkConfig.quiescentTimeoutMs) :
+    null;
+
+  const configuredTargetVoterCount = Number.isFinite(
+    cluster?._config?.convergence?.targetVoterCount,
+  ) && cluster._config.convergence.targetVoterCount > ZERO ?
+    Math.floor(cluster._config.convergence.targetVoterCount) :
+    null;
+
+  let settleTimeoutMs = Math.max(
+    configuredSettleTimeoutMs || ZERO,
+    readyTimeoutMs || ZERO,
+    quiescentTimeoutMs || ZERO,
+  );
+
+  let targetVoterCount = configuredTargetVoterCount;
+
+  if (nodeCount >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD) {
+    settleTimeoutMs = Math.max(
+      settleTimeoutMs,
+      PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_MIN_SETTLE_TIMEOUT_MS,
+    );
+    if (Number.isInteger(targetVoterCount) && targetVoterCount > ZERO) {
+      targetVoterCount += PREFLIGHT_CONVERGENCE_ALLOWED_VOTER_SKEW;
+    }
+  }
+
+  if (!Number.isFinite(settleTimeoutMs) || settleTimeoutMs <= ZERO) {
+    settleTimeoutMs = BENCHMARK_DEFAULTS.readyTimeoutMs;
+  }
+
+  const options = {
+    settleTimeoutMs,
+    quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
+    targetVoterCount,
+  };
+
+  if (nodeCount >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD) {
+    options.forceRepairAfterMs = PREFLIGHT_CONVERGENCE_FORCE_REPAIR_AFTER_MS;
+  }
+
+  return options;
+}
+
 function resolvePrimaryProvider(cluster) {
   const hostAssignment = cluster?._hostAssignment;
   const providers = cluster?._providers;
@@ -8040,11 +8202,9 @@ async function run(cluster) {
     if (state.convergence) {
       return state.convergence;
     }
-    state.convergence = await cluster.waitForConvergence({
-      settleTimeoutMs: cluster?._config?.convergence?.settleTimeoutMs,
-      quietWindowMs: cluster?._config?.convergence?.quietWindowMs,
-      targetVoterCount: cluster?._config?.convergence?.targetVoterCount,
-    });
+    state.convergence = await cluster.waitForConvergence(
+      resolvePreflightConvergenceOptions(cluster, benchmarkConfig, nodes.length),
+    );
     state.diagnosticsCoverage = resolveDiagnosticsCoverage(state.convergence);
     return state.convergence;
   }
@@ -8291,6 +8451,29 @@ async function run(cluster) {
       const preLoadStableWindowMs = benchmarkConfig.strictPreloadReadiness === true ?
         benchmarkConfig.preloadRequiredStableMs :
         benchmarkConfig.quiescentStableWindowMs;
+      const effectivePreLoadStableWindowMs =
+        benchmarkConfig.strictPreloadReadiness !== true &&
+          nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.min(
+            preLoadStableWindowMs,
+            PRELOAD_QUIESCENCE_LARGE_CLUSTER_STABLE_WINDOW_MS,
+          ) :
+          preLoadStableWindowMs;
+      const preLoadQuiescentTimeoutMs =
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.max(
+            benchmarkConfig.quiescentTimeoutMs,
+            BENCHMARK_TABLE_CREATE_LARGE_CLUSTER_RETRY_TIMEOUT_MS,
+          ) :
+          benchmarkConfig.quiescentTimeoutMs;
+      const effectivePreloadMaxReplicaOpsInFlight =
+        benchmarkConfig.strictPreloadReadiness !== true &&
+          nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          Math.max(
+            benchmarkConfig.preloadMaxReplicaOpsInFlight,
+            PRELOAD_QUIESCENCE_LARGE_CLUSTER_MAX_REPLICA_OPS_IN_FLIGHT,
+          ) :
+          benchmarkConfig.preloadMaxReplicaOpsInFlight;
       let quiescenceResult;
       try {
         quiescenceResult = await waitForSutLoadQuiescence({
@@ -8299,11 +8482,11 @@ async function run(cluster) {
           seedNode,
           snapshotNodes: state.sutLoadNodes,
           tableName: benchmarkTableName,
-          timeoutMs: benchmarkConfig.quiescentTimeoutMs,
+          timeoutMs: preLoadQuiescentTimeoutMs,
           pollIntervalMs: benchmarkConfig.quiescentPollIntervalMs,
-          stableWindowMs: preLoadStableWindowMs,
+          stableWindowMs: effectivePreLoadStableWindowMs,
           noProgressTimeoutMs: benchmarkConfig.quiescentNoProgressTimeoutMs,
-          maxReplicaOpsInFlight: benchmarkConfig.preloadMaxReplicaOpsInFlight,
+          maxReplicaOpsInFlight: effectivePreloadMaxReplicaOpsInFlight,
           strictCanonicalReadiness:
             benchmarkConfig.strictPreloadReadiness === true,
           requiredSchemaVersion: state.requiredSchemaVersion,
@@ -8315,6 +8498,32 @@ async function run(cluster) {
         });
       } catch (error) {
         const gateResult = error?.gateResult || {};
+        const gateReasonKeys = Object.keys(gateResult.reasonHistogram || {});
+        const includedNodeIdSet = new Set(
+          Array.isArray(gateResult.includedNodeIds) ?
+            gateResult.includedNodeIds.map((nodeId) => String(nodeId)) :
+            [],
+        );
+        const partialReadyLoadNodes = state.sutLoadNodes.filter((node) =>
+          includedNodeIdSet.has(String(node?.id || '')),
+        );
+        const canUsePartialReadyFallback =
+          benchmarkConfig.strictPreloadReadiness !== true &&
+          nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD &&
+          partialReadyLoadNodes.length > ZERO &&
+          gateReasonKeys.length > ZERO &&
+          gateReasonKeys.every((reason) => {
+            const normalizedReason = String(reason || '');
+            return normalizedReason.startsWith(
+              QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
+            ) ||
+              normalizedReason.startsWith(
+                QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
+              ) ||
+              normalizedReason.startsWith(
+                QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
+              );
+          });
         const stalledReason = Object.keys(gateResult.reasonHistogram || {}).find(
           (reason) => String(reason || '').includes(NO_PROGRESS_REASON_CODE),
         ) || null;
@@ -8378,7 +8587,39 @@ async function run(cluster) {
             errors: [strictPreloadError],
           };
         }
-        throw error;
+        if (canUsePartialReadyFallback) {
+          const partialReadyNodeIds = partialReadyLoadNodes
+            .map((node) => String(node.id));
+          const excludedLoadNodeIds = state.sutLoadNodes
+            .map((node) => String(node.id))
+            .filter((nodeId) => !includedNodeIdSet.has(nodeId));
+          quiescenceResult = {
+            mode: 'degraded_partial_ready_timeout_fallback',
+            attempts: Number(gateResult.attempts || ZERO),
+            stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
+            inFlightCount: null,
+            readyLoadNodes: partialReadyLoadNodes,
+            excludedLoadNodeIds,
+            partitionGroupInFlight: gateResult.partitionGroupInFlight || {},
+            replicaOperationTimelineByOperationId:
+              gateResult.replicaOperationTimelineByOperationId || {},
+            reasonHistogram: gateResult.reasonHistogram || {},
+            includedNodeIds: partialReadyNodeIds,
+            excludedNodeIds: excludedLoadNodeIds,
+            versionConvergence: gateResult.versionConvergence || null,
+            readinessTimeline: gateResult.readinessTimeline || [],
+          };
+          emitPhaseProgress(
+            phaseContext,
+            'continuing with partial pre-load readiness after transient gate timeout',
+            {
+              includedNodeIds: partialReadyNodeIds,
+              excludedNodeIds: excludedLoadNodeIds,
+            },
+          );
+        } else {
+          throw error;
+        }
       }
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
@@ -8478,6 +8719,17 @@ async function run(cluster) {
         admittedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
         loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
       });
+      const effectiveLoadBenchmarkConfig =
+        strictBenchmarkMode !== true &&
+          nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+          {
+            ...benchmarkConfig,
+            heartbeatFreshnessMaxStallMs: Math.max(
+              Number(benchmarkConfig.heartbeatFreshnessMaxStallMs || ZERO),
+              HEARTBEAT_FRESHNESS_LARGE_CLUSTER_MAX_STALL_MS,
+            ),
+          } :
+          benchmarkConfig;
       const sutLoadResult = await runSutSharedLoad({
         nodeClient,
         seedNode,
@@ -8494,7 +8746,7 @@ async function run(cluster) {
         nodeFailureThreshold: benchmarkConfig.nodeFailureThreshold,
         nodeFailureCooldownMs: benchmarkConfig.nodeFailureCooldownMs,
         requiredSchemaVersion: state.requiredSchemaVersion,
-        benchmarkConfig,
+        benchmarkConfig: effectiveLoadBenchmarkConfig,
         runtimeAdmissionOwnership: state.runtimeAdmissionOwnership,
         onProgress: (message, details) => emitPhaseProgress(
           phaseContext,
@@ -9117,19 +9369,23 @@ async function run(cluster) {
       (failureArtifact.phase === SCENARIO_PHASE.PRE_FLIGHT ||
         failureArtifact.phase === SCENARIO_PHASE.PRE_LOAD_GATE);
     const snapshotNodes = failureDiagnosticNodes;
-    const snapshotsByNodeId = snapshotNodes.length > ZERO ?
+    const failureSnapshots = snapshotNodes.length > ZERO ?
       (shouldCapturePreflightSnapshots ?
-        await collectPreflightCriticalPathSnapshots({
-          nodeClient,
-          nodes: snapshotNodes,
-          context: NODE_CLIENT_TRANSIENT_CONTEXT,
-        }) :
+        {
+          snapshotsByNodeId: await collectPreflightCriticalPathSnapshots({
+            nodeClient,
+            nodes: snapshotNodes,
+            context: NODE_CLIENT_TRANSIENT_CONTEXT,
+          }),
+          controlPlaneLedgerSnapshotsByNodeId: null,
+        } :
         await collectFailureControlSnapshots({
           nodeClient,
           nodes: snapshotNodes,
           context: NODE_CLIENT_TRANSIENT_CONTEXT,
         })) :
       null;
+    const snapshotsByNodeId = failureSnapshots?.snapshotsByNodeId || null;
     const snapshotKind = snapshotsByNodeId ?
       (shouldCapturePreflightSnapshots ?
         ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH :
@@ -9149,6 +9405,8 @@ async function run(cluster) {
     const rootCauseBundle = buildRootCauseBundle({
       failureArtifact,
       snapshotsByNodeId,
+      controlPlaneLedgerSnapshotsByNodeId:
+        failureSnapshots?.controlPlaneLedgerSnapshotsByNodeId || null,
       adminQueryTraceByNodeId,
       snapshotKind,
       evaluateInvariants: shouldCapturePreflightSnapshots,

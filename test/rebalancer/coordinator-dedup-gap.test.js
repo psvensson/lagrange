@@ -15,6 +15,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
+import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
@@ -141,6 +147,62 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       }
     });
 
+  t.test(
+    'REPLACE allocation uses authoritative service rows when cache lags',
+    async (t) => {
+      const authoritativeRows = [
+        {
+          service_id: 'nodes-p1-r1',
+          service_type: 'partition',
+          partition_id: 'nodes-p1',
+          node_id: 'seed-node',
+        },
+        {
+          service_id: 'nodes-p1-r2',
+          service_type: 'partition',
+          partition_id: 'nodes-p1',
+          node_id: 'seed-node',
+        },
+        {
+          service_id: 'nodes-p1-r3',
+          service_type: 'partition',
+          partition_id: 'nodes-p1',
+          node_id: 'seed-node',
+        },
+      ];
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        cacheData: {
+          services: authoritativeRows.slice(1),
+        },
+        sqlQueryResults: {
+          'SELECT * FROM services': {
+            success: true,
+            rows: authoritativeRows,
+          },
+        },
+      });
+      coordinator.initialize();
+
+      try {
+        const replicaId = await coordinator.allocateCanonicalReplicaId({
+          partitionId: 'nodes-p1',
+          entityType: 'partition',
+          entityId: 'nodes-p1',
+          excludeReplicaIds: ['nodes-p1-r2'],
+        });
+        t.equal(
+          replicaId,
+          'nodes-p1-r4',
+          'allocator should avoid reusing authoritative replica IDs that are missing in cache',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
   t.test('REMOVE operations are deduplicated by replica intent, not only node',
     async (t) => {
       const coordinator = createTestCoordinator({
@@ -186,4 +248,157 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
         await coordinator.shutdown();
       }
     });
+
+  t.test('REMOVE is rejected when replica is owned by in-flight REPLACE',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        coordinator.repository.getOperationsByEntityAuthoritative = async () => [{
+          operationId: 'replace-op-1',
+          type: OperationType.REPLACE,
+          partitionId: 'nodes-p1',
+          entityType: 'partition',
+          entityId: 'nodes-p1',
+          sourceNodeId: 'seed-node',
+          targetNodeId: 'node-2',
+          sourceReplicaId: 'nodes-p1-r1',
+          replicaId: 'nodes-p1-r4',
+          status: 'active',
+          workflowStep: WORKFLOW_STEP.ACTIVE,
+          stepsHistory: [{
+            step: WORKFLOW_STEP.ACTIVE,
+            timestamp: Date.now(),
+            sourceReplicaId: 'nodes-p1-r1',
+          }],
+        }];
+
+        let conflictError = null;
+        try {
+          await coordinator.createOperation({
+            type: OperationType.REMOVE,
+            partitionId: 'nodes-p1',
+            nodeId: 'seed-node',
+            replicaId: 'nodes-p1-r4',
+          });
+        } catch (error) {
+          conflictError = error;
+        }
+
+        t.ok(
+          conflictError,
+          'conflicting REMOVE should be rejected',
+        );
+        t.equal(
+          conflictError?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT,
+          'conflicting remove should surface stable skip reason',
+        );
+        t.equal(
+          conflictError?.conflictingOperationId,
+          'replace-op-1',
+          'conflicting replace operation id should be attached',
+        );
+
+        t.equal(
+          coordinator.stats.operationsCreated,
+          0,
+          'no REMOVE operation should be created when conflict exists',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  t.test(
+    'terminal recent intent cache entry does not suppress create-operation recovery',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.ADD,
+        partitionId: 'nodes-p1',
+        nodeId: 'node-2',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'nodes-p1',
+      );
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: {
+          operationId: 'stale-op',
+          type: OperationType.ADD,
+          partitionId: 'nodes-p1',
+          entityType: 'partition',
+          entityId: 'nodes-p1',
+          targetNodeId: 'node-2',
+          status: 'pending',
+          workflowStep: WORKFLOW_STEP.PENDING,
+        },
+        expiresAt: Date.now() + 30_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => ({
+        operationId: 'stale-op',
+        type: OperationType.ADD,
+        partitionId: 'nodes-p1',
+        entityType: 'partition',
+        entityId: 'nodes-p1',
+        targetNodeId: 'node-2',
+        status: ReplicaStatus.REMOVED,
+        workflowStep: WORKFLOW_STEP.REMOVED,
+      });
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+          type: OperationType.ADD,
+          partitionId: 'nodes-p1',
+          entityType: 'partition',
+          entityId: 'nodes-p1',
+          targetNodeId: 'node-2',
+          status: 'pending',
+          workflowStep: WORKFLOW_STEP.PENDING,
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+        t.equal(
+          result.operationId,
+          'replacement-op',
+          'createOperation should not return stale terminal cached intent',
+        );
+        t.equal(
+          createdOperationCount,
+          1,
+          'createOperation should continue with create path after terminal intent validation',
+        );
+        t.equal(
+          coordinator.recentOperationIntents.has(dedupeKey),
+          false,
+          'terminal recent intent entry should be removed from cache',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
 });

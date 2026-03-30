@@ -11,11 +11,6 @@ const CLEANUP_TIMER_DELAY_MS = 25;
 const CLEANUP_WAIT_MS = 40;
 const LEASE_VALID_MS = 1000;
 const LEASE_EXPIRED_MS = -1000;
-const CACHE_WAIT_TIMEOUT_MS = 8;
-const CACHE_WAIT_DELAY_MS = 1;
-const CACHE_GATE_WAIT_MS = 15;
-const CACHE_BECOMES_READY_MS = 30;
-const CACHE_READY_TIMEOUT_MS = 60;
 
 function createNodeEvent(nodeId, leaseOffsetMs, connectionState = STATE.DISCONNECTED) {
   const now = Date.now();
@@ -254,7 +249,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   });
 
   await t.test(
-    'accepts delayed ready CDC rows that were ready when written',
+    'fails closed for delayed ready CDC rows that are no longer ready at decision time',
     async (t) => {
       const bootstrapService = new BootstrapService({
         nodeId: 'seed-node',
@@ -299,15 +294,15 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       );
       t.equal(
         scheduled,
-        true,
-        'delayed ready row should still schedule rebalance when it was ready at write time',
+        false,
+        'delayed ready row should not schedule rebalance from write-time readiness alone',
       );
 
       await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
       t.same(
         reasons,
-        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
-        'delayed ready row should eventually trigger one rebalance',
+        [],
+        'delayed ready row should not trigger rebalance after the delay window',
       );
     },
   );
@@ -361,7 +356,7 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   );
 
   await t.test(
-    'treats delayed ready-lease refresh from a prior heartbeat as no transition',
+    'treats delayed ready-lease refresh from an expired prior row as a fresh transition',
     async (t) => {
       const bootstrapService = new BootstrapService({
         nodeId: 'seed-node',
@@ -396,20 +391,14 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
       t.equal(
         scheduled,
-        false,
-        'delayed lease refresh should not retrigger node_ready rebalancing',
-      );
-      t.ok(
-        debugLogs.some((entry) =>
-          entry.message ===
-            'Skipping node-ready rebalance trigger: no not-ready to ready transition'),
-        'delayed lease refresh should be classified as a no-transition skip',
+        true,
+        'delayed lease refresh should schedule rebalancing when the prior row is no longer ready',
       );
       t.equal(
         infoLogs.some((entry) =>
           entry.message === 'Scheduling node-ready rebalance trigger'),
-        false,
-        'delayed lease refresh should not schedule a rebalance timer',
+        true,
+        'delayed lease refresh should schedule a rebalance timer when it restores current readiness',
       );
     },
   );
@@ -461,31 +450,17 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   );
 
   await t.test(
-    'waits for cache-visible readiness before firing node-ready rebalance trigger',
+    'does not wait for cache-visible readiness before firing node-ready rebalance trigger',
     async (t) => {
       const nodeId = 'node-7';
-      const readyNodeRow = createNodeEvent(nodeId, LEASE_VALID_MS).data;
-      let cacheReady = false;
 
       const bootstrapService = new BootstrapService({
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
           nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
-          leadershipWaitTimeoutMs: CACHE_READY_TIMEOUT_MS,
-          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
         },
       });
-      bootstrapService.systemTableCache = {
-        get: (_tableName, lookupNodeId) => {
-          if (lookupNodeId !== nodeId) {
-            return null;
-          }
-          return cacheReady ? readyNodeRow : createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS);
-        },
-      };
 
       let triggerCount = 0;
       bootstrapService.triggerRebalancingOnAllPartitions = () => {
@@ -498,41 +473,23 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       );
       t.equal(scheduled, true, 'should schedule node-ready rebalance trigger');
 
-      await new Promise((resolve) => setTimeout(resolve, CACHE_GATE_WAIT_MS));
-      t.equal(triggerCount, 0, 'rebalance should wait while cache row is not ready');
-
-      cacheReady = true;
-      await new Promise((resolve) => setTimeout(resolve, CACHE_BECOMES_READY_MS));
-      t.equal(triggerCount, 1, 'rebalance should fire after cache row becomes ready');
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.equal(triggerCount, 1, 'rebalance should fire without waiting for cache-visible readiness');
     },
   );
 
   await t.test(
-    'retries node-ready rebalance scheduling after cache-gated timeout on a later ready update',
+    'does not depend on cache-gated retry state for later ready updates',
     async (t) => {
       const nodeId = 'node-retry';
-      const readyNodeRow = createNodeEvent(nodeId, LEASE_VALID_MS).data;
-      let cacheReady = false;
 
       const bootstrapService = new BootstrapService({
         nodeId: 'seed-node',
         nodeAddress: 'localhost:8080',
         config: {
           nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
-          leadershipWaitTimeoutMs: CACHE_WAIT_TIMEOUT_MS,
-          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
         },
       });
-      bootstrapService.systemTableCache = {
-        get: (_tableName, lookupNodeId) => {
-          if (lookupNodeId !== nodeId) {
-            return null;
-          }
-          return cacheReady ? readyNodeRow : createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS);
-        },
-      };
 
       let triggerCount = 0;
       bootstrapService.triggerRebalancingOnAllPartitions = () => {
@@ -545,22 +502,19 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       );
       t.equal(firstScheduled, true, 'initial not-ready to ready transition should schedule');
 
-      await new Promise((resolve) => setTimeout(resolve, CACHE_GATE_WAIT_MS));
-      t.equal(triggerCount, 0, 'initial trigger should not fire before cache becomes ready');
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.equal(triggerCount, 1, 'initial trigger should fire without cache gating');
 
-      cacheReady = true;
       const retryScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
         createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
         createPreviousNodeRow(nodeId, LEASE_VALID_MS),
       );
       t.equal(
         retryScheduled,
-        true,
-        'ready update should reschedule after prior cache-gated timeout',
+        false,
+        'later ready updates should not rely on cache-gated retry state once the first trigger already fired',
       );
-
-      await new Promise((resolve) => setTimeout(resolve, CACHE_BECOMES_READY_MS));
-      t.equal(triggerCount, 1, 'retry should trigger node-ready rebalance once');
+      t.equal(triggerCount, 1, 'later ready updates should not create another rebalance trigger');
     },
   );
 
@@ -744,92 +698,6 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
         [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
         'stale regression should not cancel the pending rebalance trigger',
       );
-    },
-  );
-
-  await t.test(
-    'waitForReadyNodeInCache should not require connection_state readiness',
-    async (t) => {
-      const nodeId = 'node-ready';
-      const nodeRow = {
-        node_id: nodeId,
-        status: SERVICE_STATUS.ACTIVE,
-        connection_state: STATE.DISCONNECTED,
-        ready_lease_expires_at: Date.now() + LEASE_VALID_MS,
-      };
-
-      const bootstrapService = new BootstrapService({
-        nodeId: 'seed-node',
-        nodeAddress: 'localhost:8080',
-        config: {
-          leadershipWaitTimeoutMs: CACHE_WAIT_TIMEOUT_MS,
-          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
-        },
-      });
-      bootstrapService.systemTableCache = {
-        get: (_tableName, lookupNodeId) => {
-          return lookupNodeId === nodeId ? nodeRow : null;
-        },
-      };
-
-      await bootstrapService.seedCacheHydrationPhase
-        .waitForReadyNodeInCache(nodeId);
-      t.pass('cache waiter should use lease-based readiness without transport coupling');
-    },
-  );
-
-  await t.test(
-    'waitForReadyNodeInCache repairs propagated cache tables before timing out',
-    async (t) => {
-      const nodeId = 'node-repaired';
-      const nodeRow = {
-        node_id: nodeId,
-        status: SERVICE_STATUS.ACTIVE,
-        connection_state: STATE.DISCONNECTED,
-        ready_lease_expires_at: Date.now() + LEASE_VALID_MS,
-      };
-      const rowsByNodeId = new Map();
-      let repairCount = 0;
-
-      const bootstrapService = new BootstrapService({
-        nodeId: 'seed-node',
-        nodeAddress: 'localhost:8080',
-        config: {
-          leadershipWaitTimeoutMs: CACHE_WAIT_TIMEOUT_MS,
-          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
-          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
-        },
-      });
-      bootstrapService.systemTableCache = {
-        get: (_tableName, lookupNodeId) => {
-          const row = rowsByNodeId.get(lookupNodeId);
-          return row ? {...row} : null;
-        },
-      };
-      bootstrapService.seedMessageGroupsPhase
-        .getLeaderMessageGroupService = () => ({
-          applyCDCEvent: async () => {},
-        });
-      bootstrapService.seedCacheHydrationPhase
-        .hydrateFromLocalPartitions = async () => {
-          repairCount++;
-          rowsByNodeId.set(nodeId, {...nodeRow});
-          return {
-            success: true,
-            tables: {
-              nodes: {success: true, rowCount: 1},
-            },
-            errors: [],
-          };
-        };
-
-      await bootstrapService.seedCacheHydrationPhase
-        .waitForReadyNodeInCache(nodeId);
-      t.equal(repairCount, 1,
-        'cache waiter should repair propagated tables once before failing');
     },
   );
 });

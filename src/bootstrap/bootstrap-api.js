@@ -71,6 +71,9 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_PHASE_SCOPE,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
@@ -119,7 +122,9 @@ class BootstrapAPI {
    * @param {Map} options.messageGroupServices - Message group services map.
    * @param {Map} options.partitionServices - Partition services map.
    * @param {Object} options.replicaHandler - Replica handler.
-   * @param {BootstrapService} options.bootstrapService - Bootstrap service for rebalancing.
+  * @param {Object} [options.bootstrapStartupAdapter] - Narrow startup adapter.
+  * @param {Object} [options.runtimeOwner] - Dedicated steady-state runtime owner.
+  * @param {BootstrapService} [options.bootstrapService] - Legacy startup adapter.
    * @param {Object} [options.epochManager] - Assignment epoch manager.
    */
   constructor(options = {}) {
@@ -132,6 +137,17 @@ class BootstrapAPI {
       typeof options.controlPlaneWriteHealthProvider === TYPEOF.FUNCTION ?
         options.controlPlaneWriteHealthProvider :
         null;
+    this.bootstrapStartupAdapter =
+      options.bootstrapStartupAdapter || options.bootstrapService || null;
+    this.runtimeOwner =
+      options.runtimeOwner ||
+      this.bootstrapStartupAdapter?.runtimeDependencyOwner ||
+      options.bootstrapService?.runtimeDependencyOwner ||
+      null;
+    this.startupRecoveryCoordinator =
+      options.startupRecoveryCoordinator ||
+      this.runtimeOwner?.rebalanceCoordinator?.startupRecoveryCoordinator ||
+      null;
     this.systemTableCache = options.systemTableCache || null;
     this.seedNodeId = options.seedNodeId || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
@@ -141,13 +157,12 @@ class BootstrapAPI {
     this.partitionServices = options.partitionServices || new Map();
     this.replicaHandler = options.replicaHandler || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.bootstrapService = options.bootstrapService || null;
     this.cdcIntegrationService = options.cdcIntegrationService ||
-      this.bootstrapService?.cdcIntegrationService ||
+      this.runtimeOwner?.cdcIntegrationService ||
       null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
-      this.bootstrapService?.controlPlaneReadinessService ||
+      this.runtimeOwner?.controlPlaneReadinessService ||
       null;
     this.epochManager = options.epochManager || null;
     this.messageRouter = options.messageRouter || null;
@@ -183,7 +198,7 @@ class BootstrapAPI {
     this.ownsMoveReplicaAssignmentLifecycle =
       typeof options.ownsMoveReplicaAssignmentLifecycle === TYPEOF.BOOLEAN ?
         options.ownsMoveReplicaAssignmentLifecycle :
-        Boolean(options.bootstrapService);
+        Boolean(options.bootstrapStartupAdapter || options.bootstrapService);
     this.moveReplicaAssignmentReservations = new Map();
     this.moveReplicaAssignmentSweepTimer = null;
     this.readinessState = options.readinessState ||
@@ -223,7 +238,10 @@ class BootstrapAPI {
           getSystemTableCache: () => this.systemTableCache,
           getMessageGroupServices: () => this.messageGroupServices,
           getMessageRouter: () =>
-            this.messageRouter || this.bootstrapService?.messageRouter || null,
+            this.messageRouter ||
+            this.runtimeOwner?.messageRouter ||
+            this.bootstrapStartupAdapter?.messageRouter ||
+            null,
           getMoveReplicaAssignmentReservations: () =>
             this.moveReplicaAssignmentReservations,
           buildRegisterServiceValidationError: (...args) =>
@@ -309,7 +327,10 @@ class BootstrapAPI {
           getSqlQueryEngine: () => this.sqlQueryEngine,
           getLogger: () => this.logger,
           getMessageRouter: () =>
-            this.messageRouter || this.bootstrapService?.messageRouter || null,
+            this.messageRouter ||
+            this.runtimeOwner?.messageRouter ||
+            this.bootstrapStartupAdapter?.messageRouter ||
+            null,
           getMoveReplicaAssignmentReservations: () =>
             this.moveReplicaAssignmentReservations,
           getMoveReplicaAssignmentLeaseMs: () =>
@@ -356,7 +377,10 @@ class BootstrapAPI {
           getLogger: () => this.logger,
           getCdcIntegrationService: () => this.getCdcIntegrationService(),
           getMessageRouter: () =>
-            this.messageRouter || this.bootstrapService?.messageRouter || null,
+            this.messageRouter ||
+            this.runtimeOwner?.messageRouter ||
+            this.bootstrapStartupAdapter?.messageRouter ||
+            null,
           getAuthoritativeControlPlaneViewInstance: () =>
             this.authoritativeControlPlaneView,
           setAuthoritativeControlPlaneViewInstance: (view) => {
@@ -377,13 +401,20 @@ class BootstrapAPI {
         delegates: {
           getSeedNodeId: () => this.seedNodeId,
           getReadinessState: () => this.readinessState,
-          getBootstrapService: () => this.bootstrapService,
+          getBootstrapService: () => this.bootstrapStartupAdapter,
           getMessageRouter: () => this.messageRouter,
           getSqlQueryEngine: () => this.sqlQueryEngine,
+          getControlPlaneReadinessService: () =>
+            this.controlPlaneReadinessService ||
+            this.runtimeOwner?.controlPlaneReadinessService ||
+            null,
           getControlPlaneWriteHealthProvider: () =>
             this.controlPlaneWriteHealthProvider,
+          getStartupRecoveryCoordinator: () =>
+            this.startupRecoveryCoordinator,
           getLeaderReadinessStatusForProbe: () =>
             this.getLeaderReadinessStatusForProbe(),
+          getLogger: () => this.logger,
         },
       });
     this.bootstrapRequestOwner =
@@ -394,7 +425,7 @@ class BootstrapAPI {
           getSeedNodeAddress: () => this.seedNodeAddress,
           getSeedNodeWsAddress: () => this.seedNodeWsAddress,
           getWsPort: () => this.wsPort,
-          getBootstrapService: () => this.bootstrapService,
+          getBootstrapService: () => this.bootstrapStartupAdapter,
           getMaxConcurrentBootstrapRequests: () =>
             this.maxConcurrentBootstrapRequests,
           getBootstrapAdmissionRetryAfterMs: () =>
@@ -418,14 +449,14 @@ class BootstrapAPI {
               ),
           buildBootstrapNotReadyResponse: (options) =>
             this.buildBootstrapNotReadyResponse(options),
-          waitForServiceLeaders: () => this.waitForServiceLeaders(),
-          determineAndReserveMessageGroupAssignment: (nodeId) =>
-            this.determineAndReserveMessageGroupAssignment(nodeId),
+          waitForServiceLeaders: (options) => this.waitForServiceLeaders(options),
+          determineAndReserveMessageGroupAssignment: (nodeId, options) =>
+            this.determineAndReserveMessageGroupAssignment(nodeId, options),
           getCurrentEpoch: () => this.getCurrentEpoch(),
           buildBootstrapTopologySnapshotEnvelope: (options) =>
             this.buildBootstrapTopologySnapshotEnvelope(options),
           getClusterConfiguration: () => this.getClusterConfiguration(),
-          getReadyNodes: () => this.getReadyNodes(),
+          getReadyNodes: (options) => this.getReadyNodes(options),
           getTablePolicies: () => this.getTablePolicies(),
           getLatencyTopologyHints: (nodeId) =>
             this.getLatencyTopologyHints(nodeId),
@@ -440,10 +471,10 @@ class BootstrapAPI {
           getMessageGroups: () => this.getMessageGroups(),
           getControlPlaneReadinessService: () =>
             this.controlPlaneReadinessService ||
-            this.bootstrapService?.controlPlaneReadinessService ||
+            this.runtimeOwner?.controlPlaneReadinessService ||
             null,
           getEpochManager: () =>
-            this.epochManager || this.bootstrapService?.getEpochManager?.(),
+            this.epochManager || this.bootstrapStartupAdapter?.getEpochManager?.(),
         },
       });
     this.serviceLeaderReadinessOwner =
@@ -451,7 +482,7 @@ class BootstrapAPI {
         delegates: {
           getSystemTableCache: () => this.systemTableCache,
           getPartitionServices: () => this.partitionServices,
-          getBootstrapService: () => this.bootstrapService,
+          getBootstrapService: () => this.bootstrapStartupAdapter,
           getSeedNodeId: () => this.seedNodeId,
           getMissingServiceLeaders: () =>
             this.getMissingServiceLeaders ===
@@ -512,13 +543,13 @@ class BootstrapAPI {
    */
   getCdcIntegrationService() {
     return this.cdcIntegrationService ||
-      this.bootstrapService?.cdcIntegrationService ||
+      this.runtimeOwner?.cdcIntegrationService ||
       null;
   }
 
   /**
-   * Execute one bootstrap-owned control-plane query using repair-eligible
-   * routing semantics.
+   * Execute one bootstrap-owned control-plane query using
+   * control-plane-recovery eligibility semantics.
    * @param {string} sql
    * @param {Array<*>} [params=[]]
    * @return {Promise<Object>}
@@ -540,7 +571,7 @@ class BootstrapAPI {
       allowPressureDegrade: false,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     });
   }
 
@@ -566,8 +597,9 @@ class BootstrapAPI {
       allowPressureDefer: true,
       allowPressureDegrade: false,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
+      phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
       routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       ...options,
     });
   }
@@ -1748,12 +1780,13 @@ class BootstrapAPI {
    * Determine assignment and reserve MOVE_REPLICA ownership atomically before
    * responding to bootstrap.
    * @param {string} newNodeId
+   * @param {Object} [options={}]
    * @return {Promise<Object>}
    * @private
    */
-  async determineAndReserveMessageGroupAssignment(newNodeId) {
+  async determineAndReserveMessageGroupAssignment(newNodeId, options = {}) {
     return this.bootstrapJoinAdmissionOwner
-      .determineAndReserveMessageGroupAssignment(newNodeId);
+      .determineAndReserveMessageGroupAssignment(newNodeId, options);
   }
 
   /**
@@ -2247,8 +2280,8 @@ class BootstrapAPI {
    * @return {Promise<Object>} Leader readiness status.
    * @private
    */
-  async waitForServiceLeaders() {
-    return this.serviceLeaderReadinessOwner.waitForServiceLeaders();
+  async waitForServiceLeaders(options = {}) {
+    return this.serviceLeaderReadinessOwner.waitForServiceLeaders(options);
   }
 
   /**
@@ -2279,9 +2312,9 @@ class BootstrapAPI {
    * Uses ONLY the system cache - no fallbacks.
    * @return {string[]} Ready node IDs.
    */
-  getReadyNodes() {
+  getReadyNodes(options = {}) {
     return this.bootstrapClusterViewOwner
-      .getReadyNodes();
+      .getReadyNodes(options);
   }
 
   /**
@@ -2361,6 +2394,9 @@ class BootstrapAPI {
    */
   async shutdown() {
     this.stopMoveReplicaAssignmentSweep();
+    const wasInitialized = this.initialized === true;
+    const hadFastify = Boolean(this.fastify);
+    const serverListening = this.fastify?.server?.listening === true;
 
     if (this.fastify) {
       const server = this.fastify.server;
@@ -2390,6 +2426,9 @@ class BootstrapAPI {
 
     this.logger.info(BOOTSTRAP_API_LOG_MSG.SHUTDOWN, {
       seedNodeId: this.seedNodeId,
+      wasInitialized,
+      hadFastify,
+      serverListening,
     });
   }
 }

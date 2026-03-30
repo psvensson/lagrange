@@ -427,6 +427,35 @@ function createTestCoordinator(options = {}) {
       return {success: true, rows: []};
     },
   };
+  const controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway || {
+      readAuthoritativeRows: async (_tableName, sql, params = []) => {
+        return mockSqlEngine.executeQuery(sql, params);
+      },
+      readRows: async (_tableName, sql, params = []) => {
+        return mockSqlEngine.executeQuery(sql, params);
+      },
+      executeQuery: async (sql, params = []) => {
+        return mockSqlEngine.executeQuery(sql, params);
+      },
+      async submitMutation(mutation) {
+        switch (mutation?.operation) {
+          case 'insert':
+            return mockCdcService.insertSystemTableRow(
+              mutation.tableName,
+              mutation.row,
+            );
+          case 'update':
+            return mockCdcService.updateSystemTableRow(
+              mutation.tableName,
+              mutation.whereClause,
+              mutation.data,
+            );
+          default:
+            return {success: true, partitionResult: {affectedRows: 1}};
+        }
+      },
+    };
   const transactionCoordinator =
     Object.prototype.hasOwnProperty.call(options, 'transactionCoordinator') ?
       options.transactionCoordinator :
@@ -442,6 +471,7 @@ function createTestCoordinator(options = {}) {
     nodeId,
     systemTableCache: mockCache,
     cdcIntegrationService: mockCdcService,
+    controlPlaneSystemTableGateway,
     tablePolicyService: mockPolicyService,
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,

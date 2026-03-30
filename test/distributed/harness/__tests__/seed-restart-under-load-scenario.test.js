@@ -18,12 +18,15 @@ describe('seed-restart-under-load scenario', () => {
           failed: 1,
         }),
       }),
-      restartNode: async (nodeId) => {
-        calls.push(['restartNode', nodeId]);
+      restartNode: async (nodeId, options) => {
+        calls.push(['restartNode', nodeId, options]);
       },
       waitForConvergence: async () => {
         calls.push(['waitForConvergence']);
         return {settledAfterMs: 1};
+      },
+      waitForAllActive: async () => {
+        calls.push(['waitForAllActive']);
       },
       assertConsistency: async () => {
         calls.push(['assertConsistency']);
@@ -35,14 +38,22 @@ describe('seed-restart-under-load scenario', () => {
 
     const result = await run(cluster, {
       preRestartDelayMs: 0,
+      postRestartQuietWindowMs: 0,
+      restartReadinessTimeoutMs: 1234,
       minSuccessRate: 0.5,
     });
 
     assert.equal(result.seedNodeId, 'seed-1');
     assert.equal(result.convergenceTiming.settledAfterMs, 1);
     assert.ok(result.successRate >= 0.5);
-    assert.deepEqual(calls[0], ['restartNode', 'seed-1']);
-    assert.deepEqual(calls[1], ['waitForConvergence']);
-    assert.deepEqual(calls[2], ['waitForConsistencyConvergence']);
+    assert.deepEqual(calls[0], ['waitForAllActive']);
+    assert.deepEqual(calls[1], [
+      'restartNode',
+      'seed-1',
+      {readinessTimeoutMs: 1234},
+    ]);
+    assert.deepEqual(calls[2], ['waitForConvergence']);
+    assert.deepEqual(calls[3], ['waitForAllActive']);
+    assert.deepEqual(calls[4], ['waitForConsistencyConvergence']);
   });
 });

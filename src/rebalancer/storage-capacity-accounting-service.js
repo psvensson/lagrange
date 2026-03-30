@@ -175,6 +175,17 @@ class StorageCapacityAccountingService {
     return result?.rows || [];
   }
 
+  getSystemTableRowsSync(tableName) {
+    this.ensureDataSource();
+
+    if (this.systemTableCache &&
+        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      return this.systemTableCache.getAll(tableName) || [];
+    }
+
+    return [];
+  }
+
   /**
    * Estimate replica bytes for a given entity type and payload size.
    * @param {Object} options
@@ -242,6 +253,30 @@ class StorageCapacityAccountingService {
     const partitions = await this.getSystemTableRows(TABLES.PARTITIONS);
     const services = await this.getSystemTableRows(TABLES.SERVICES);
     const reservations = await this.getSystemTableRows(TABLES.STORAGE_RESERVATIONS);
+
+    const partitionSizes = this.buildPartitionSizeMap(partitions);
+    const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
+    const reservedBytesByNode = this.calculateReservedBytes(reservations);
+    const usedBytes = usedBytesByNode.get(nodeId) || NUM.ZERO;
+    const reservedBytes = reservedBytesByNode.get(nodeId) || NUM.ZERO;
+
+    return this.buildSnapshot(node, usedBytes, reservedBytes);
+  }
+
+  getCapacitySnapshotForNodeSync(nodeId) {
+    if (!nodeId) {
+      return null;
+    }
+
+    const nodes = this.getSystemTableRowsSync(TABLES.NODES);
+    const node = nodes.find((row) => row?.[COLUMN.NODE_ID] === nodeId);
+    if (!node) {
+      return null;
+    }
+
+    const partitions = this.getSystemTableRowsSync(TABLES.PARTITIONS);
+    const services = this.getSystemTableRowsSync(TABLES.SERVICES);
+    const reservations = this.getSystemTableRowsSync(TABLES.STORAGE_RESERVATIONS);
 
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);

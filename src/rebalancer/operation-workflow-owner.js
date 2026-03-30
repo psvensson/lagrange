@@ -14,8 +14,12 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  WORKFLOW_STEP, NUM, METRICS_LOG_TAG,
-  UNIFIED_SERVICE_TYPE,
+  isPriorityControlPlanePartition,
+  isSystemTablePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
+  WORKFLOW_STEP, NUM, TIME_MS, METRICS_LOG_TAG,
+  TYPEOF, UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {
@@ -42,6 +46,7 @@ import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCER_SKIP_REASON,
   OPERATION_TRANSITION_REASON,
 } from './rebalancer-constants.js';
@@ -53,10 +58,6 @@ import {
 import {
   SQL_RECONCILIATION_REASON,
 } from '../control-plane/read-model-contract.js';
-
-const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SYSTEM_TABLE_NAME).map((name) => `${name}-p1`),
-);
 
 const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
 
@@ -94,6 +95,19 @@ const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
     WORKFLOW_STEP.STOPPING,
   ]),
 );
+
+const SAFETY_DEFERRED_LOG_THROTTLE_MS =
+  TIME_MS.SECOND * NUM.FIVE;
+
+const TRANSITION_STEP_OPTIONS = Object.freeze({
+  DEFER_COMMITTED_MARK: Object.freeze({
+    markCommitted: false,
+  }),
+});
+
+const OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX = 'attempt';
+const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS =
+  TIME_MS.MINUTE * NUM.TWO;
 
 
 /**
@@ -162,6 +176,10 @@ class OperationWorkflowOwner {
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
     this.incompleteOperationQueryEmptyBackoffMs =
       options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
+    this.safetyDeferredLogStateByOperationId =
+      new Map();
+    this.transitionExecutionAttemptByStepOwnerKey =
+      new Map();
 
     if (typeof this.getActualReplicaStatus !== 'function') {
       throw new Error(
@@ -326,15 +344,84 @@ class OperationWorkflowOwner {
   }
 
   /**
+   * Build one stable owner key for transition-attempt tracking.
+   * @param {string} operationId
+   * @param {string} step
+   * @return {string}
+   */
+  buildTransitionExecutionStepOwnerKey(operationId, step) {
+    return [
+      String(operationId || ''),
+      String(step || ''),
+    ].join(OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR);
+  }
+
+  /**
+   * Allocate the next execution attempt number for one operation/step key.
+   * @param {string} operationId
+   * @param {string} step
+   * @return {number}
+   */
+  reserveTransitionExecutionAttempt(operationId, step) {
+    const ownerKey = this.buildTransitionExecutionStepOwnerKey(
+      operationId,
+      step,
+    );
+    const nextAttempt =
+      (this.transitionExecutionAttemptByStepOwnerKey.get(ownerKey) || NUM.ZERO) +
+      NUM.ONE;
+    this.transitionExecutionAttemptByStepOwnerKey.set(ownerKey, nextAttempt);
+    return nextAttempt;
+  }
+
+  /**
+   * Clear tracked attempt state after a committed transition.
+   * @param {string} operationId
+   * @param {string} step
+   * @return {void}
+   */
+  clearTransitionExecutionAttempt(operationId, step) {
+    const ownerKey = this.buildTransitionExecutionStepOwnerKey(
+      operationId,
+      step,
+    );
+    this.transitionExecutionAttemptByStepOwnerKey.delete(ownerKey);
+  }
+
+  /**
+   * Build one attempt-scoped transition session id.
+   * @param {string} operationId
+   * @param {string} step
+   * @param {number} executionAttempt
+   * @return {string}
+   */
+  buildTransitionExecutionSessionId(operationId, step, executionAttempt) {
+    return [
+      String(operationId || ''),
+      String(step || ''),
+      OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX +
+      String(executionAttempt),
+    ].join(OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR);
+  }
+
+  /**
    * Execute a step transition atomically using the distributed
    * transaction coordinator.
    * @param {Object} operation
    * @param {string} step
    * @param {string} reason
    * @param {Function} persistFn
-   * @return {Promise<void>}
+   * @param {Object} [options]
+   * @param {Function} [options.onIdempotentTransition]
+   * @return {Promise<boolean>} True when this call committed the transition.
    */
-  async executeAtomicTransition(operation, step, reason, persistFn) {
+  async executeAtomicTransition(
+    operation,
+    step,
+    reason,
+    persistFn,
+    options = {},
+  ) {
     return this.repository
       .runReplicaOperationTransitionExclusive(
         async () => {
@@ -344,7 +431,10 @@ class OperationWorkflowOwner {
             .isTransitionIdempotent(
               operation.operationId, step,
             )) {
-            return;
+            if (typeof options.onIdempotentTransition === TYPEOF.FUNCTION) {
+              options.onIdempotentTransition();
+            }
+            return false;
           }
 
           const txCoordinator = this.transactionCoordinator;
@@ -358,8 +448,15 @@ class OperationWorkflowOwner {
             );
           }
 
-          const sessionId =
-            `${operation.operationId}:${step}`;
+          const executionAttempt = this.reserveTransitionExecutionAttempt(
+            operation.operationId,
+            step,
+          );
+          const sessionId = this.buildTransitionExecutionSessionId(
+            operation.operationId,
+            step,
+            executionAttempt,
+          );
           const beginResult =
             await txCoordinator.begin(sessionId);
           if (!beginResult.success) {
@@ -370,6 +467,8 @@ class OperationWorkflowOwner {
               .transitionStep(
                 operation.operationId,
                 {nextStep: step, reason},
+                {},
+                TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
               );
             await persistFn(sessionId);
             const commitResult =
@@ -377,6 +476,16 @@ class OperationWorkflowOwner {
             if (!commitResult.success) {
               throw new Error(commitResult.error);
             }
+            this.operationWorkflowCoordinator
+              .markTransitionCommitted(
+                operation.operationId,
+                step,
+              );
+            this.clearTransitionExecutionAttempt(
+              operation.operationId,
+              step,
+            );
+            return true;
           } catch (error) {
             await txCoordinator.rollback(sessionId);
             throw error;
@@ -395,48 +504,84 @@ class OperationWorkflowOwner {
   async updateStep(operation, step, reason) {
     const previousStep = operation.workflowStep;
     if (previousStep === step) {
-      return;
+      return false;
     }
     const transitionReason = reason ||
       this.resolveTransitionReason(previousStep, step);
     const now = Date.now();
+    const readinessDecisionDimension =
+      this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
     const targetReadiness = targetNodeId ?
       this.controlPlaneReadinessService
-        .getNodeReadinessSync(targetNodeId) :
+        .getNodeReadinessSync(targetNodeId, {
+          decisionDimension:
+            readinessDecisionDimension,
+        }) :
       null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        readinessDecisionDimension,
       );
+    const persistedStatus =
+      WORKFLOW_STEP_TO_STATUS[step] || operation.status;
+    const stepEntry = {
+      step,
+      timestamp: now,
+      previousStep,
+      reason: transitionReason,
+      ownerKey: operation.operationId,
+    };
+    if (readinessSnapshot) {
+      stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
+        readinessSnapshot;
+    }
+    const projectIdempotentTransition = () => {
+      operation.workflowStep = step;
+      operation.status = persistedStatus;
+      const previousUpdatedAt = Number(operation.updatedAt);
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
+    };
 
     const persistFn = async (sessionId) => {
-      operation.workflowStep = step;
-      operation.updatedAt = now;
-      const stepEntry = {
-        step,
-        timestamp: now,
-        previousStep,
-        reason: transitionReason,
-        ownerKey: operation.operationId,
-      };
-      if (readinessSnapshot) {
-        stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
-          readinessSnapshot;
-      }
-      operation.stepsHistory.push(stepEntry);
-      operation.status =
-        WORKFLOW_STEP_TO_STATUS[step] || operation.status;
       await this.repository.persistOperationUpdate(
-        operation, {sessionId},
+        {
+          ...operation,
+          workflowStep: step,
+          updatedAt: now,
+          status: persistedStatus,
+          stepsHistory: [
+            ...(Array.isArray(operation.stepsHistory) ?
+              operation.stepsHistory : []),
+            stepEntry,
+          ],
+        },
+        {sessionId},
       );
     };
 
-    await this.executeAtomicTransition(
-      operation, step, transitionReason, persistFn,
+    const transitionCommitted = await this.executeAtomicTransition(
+      operation,
+      step,
+      transitionReason,
+      persistFn,
+      {
+        onIdempotentTransition: projectIdempotentTransition,
+      },
     );
+
+    if (!transitionCommitted) {
+      return false;
+    }
+
+    operation.workflowStep = step;
+    operation.updatedAt = now;
+    operation.status = persistedStatus;
+    operation.stepsHistory.push(stepEntry);
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
       operationId: operation.operationId,
@@ -451,6 +596,8 @@ class OperationWorkflowOwner {
       REBALANCE_COORDINATOR_EVENT.STEP_CHANGED,
       {operation, previousStep, newStep: step, reason: transitionReason},
     );
+
+    return true;
   }
 
   /**
@@ -469,48 +616,92 @@ class OperationWorkflowOwner {
       return;
     }
     const previousStep = operation.workflowStep;
+    const readinessDecisionDimension =
+      this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
     const targetReadiness = targetNodeId ?
       this.controlPlaneReadinessService
-        .getNodeReadinessSync(targetNodeId) :
+        .getNodeReadinessSync(targetNodeId, {
+          decisionDimension:
+            readinessDecisionDimension,
+        }) :
       null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        readinessDecisionDimension,
       );
-
-    const persistFn = async (sessionId) => {
+    const stepEntry = {
+      step: finalStep,
+      timestamp: now,
+      previousStep,
+      reason: OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+      ownerKey: operation.operationId,
+    };
+    if (readinessSnapshot) {
+      stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
+        readinessSnapshot;
+    }
+    const projectIdempotentTransition = () => {
       operation.workflowStep = finalStep;
       operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
-      operation.updatedAt = now;
-      operation.completedAt = now;
-      const stepEntry = {
-        step: finalStep,
-        timestamp: now,
-        previousStep,
-        reason: OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-        ownerKey: operation.operationId,
-      };
-      if (readinessSnapshot) {
-        stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
-          readinessSnapshot;
-      }
-      operation.stepsHistory.push(stepEntry);
+      const previousUpdatedAt = Number(operation.updatedAt);
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
+      const previousCompletedAt = Number(operation.completedAt);
+      operation.completedAt = Number.isFinite(previousCompletedAt) ?
+        Math.max(previousCompletedAt, now) :
+        now;
+    };
+
+    const persistFn = async (sessionId) => {
       await this.repository.persistOperationUpdate(
-        operation, {sessionId},
+        {
+          ...operation,
+          workflowStep: finalStep,
+          status: WORKFLOW_STEP_TO_STATUS[finalStep],
+          updatedAt: now,
+          completedAt: now,
+          stepsHistory: [
+            ...(Array.isArray(operation.stepsHistory) ?
+              operation.stepsHistory : []),
+            stepEntry,
+          ],
+        },
+        {sessionId},
       );
     };
 
-    await this.executeAtomicTransition(
+    const transitionCommitted = await this.executeAtomicTransition(
       operation,
       finalStep,
       OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
       persistFn,
+      {
+        onIdempotentTransition: projectIdempotentTransition,
+      },
     );
 
+    if (!transitionCommitted) {
+      await this.releaseReservationForOperation(operation);
+      this.clearDeferredSafetyBlockState(
+        operation.operationId,
+      );
+      return;
+    }
+
+    operation.workflowStep = finalStep;
+    operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
+    operation.updatedAt = now;
+    operation.completedAt = now;
+    operation.stepsHistory.push(stepEntry);
+
     await this.releaseReservationForOperation(operation);
+    this.clearDeferredSafetyBlockState(
+      operation.operationId,
+    );
 
     this.stats.operationsCompleted++;
 
@@ -572,54 +763,100 @@ class OperationWorkflowOwner {
     const transitionReason = isSafetyBlocked ?
       OPERATION_TRANSITION_REASON.SAFETY_POLICY_BLOCKED :
       OPERATION_TRANSITION_REASON.OPERATION_FAILED;
+    const readinessDecisionDimension =
+      this.resolveOperationReadinessDecisionDimension(operation);
 
     const targetNodeId = operation.targetNodeId;
     const targetReadiness = targetNodeId ?
       this.controlPlaneReadinessService
-        .getNodeReadinessSync(targetNodeId) :
+        .getNodeReadinessSync(targetNodeId, {
+          decisionDimension:
+            readinessDecisionDimension,
+        }) :
       null;
     const readinessSnapshot =
       ControlPlaneReadinessService.compactSnapshotSummary(
         targetReadiness,
-        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        readinessDecisionDimension,
       );
-
-    const persistFn = async (sessionId) => {
+    const failedStepEntry = {
+      step: WORKFLOW_STEP.FAILED,
+      timestamp: now,
+      previousStep,
+      reason: transitionReason,
+      ownerKey: operation.operationId,
+    };
+    if (options.stepMetadata &&
+        typeof options.stepMetadata === 'object') {
+      Object.assign(failedStepEntry, options.stepMetadata);
+    }
+    if (readinessSnapshot) {
+      failedStepEntry[
+        OPERATION_METADATA_KEY.READINESS_SNAPSHOT
+      ] = readinessSnapshot;
+    }
+    const projectIdempotentTransition = () => {
       operation.workflowStep = WORKFLOW_STEP.FAILED;
       operation.status = ReplicaStatus.FAILED;
-      operation.updatedAt = now;
-      operation.completedAt = now;
+      const previousUpdatedAt = Number(operation.updatedAt);
+      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+        Math.max(previousUpdatedAt, now) :
+        now;
+      const previousCompletedAt = Number(operation.completedAt);
+      operation.completedAt = Number.isFinite(previousCompletedAt) ?
+        Math.max(previousCompletedAt, now) :
+        now;
       operation.errorMessage = normalizedError;
-      const failedStepEntry = {
-        step: WORKFLOW_STEP.FAILED,
-        timestamp: now,
-        previousStep,
-        reason: transitionReason,
-        ownerKey: operation.operationId,
-      };
-      if (options.stepMetadata &&
-          typeof options.stepMetadata === 'object') {
-        Object.assign(failedStepEntry, options.stepMetadata);
-      }
-      if (readinessSnapshot) {
-        failedStepEntry[
-          OPERATION_METADATA_KEY.READINESS_SNAPSHOT
-        ] = readinessSnapshot;
-      }
-      operation.stepsHistory.push(failedStepEntry);
+    };
+
+    const persistFn = async (sessionId) => {
       await this.repository.persistOperationUpdate(
-        operation, {sessionId},
+        {
+          ...operation,
+          workflowStep: WORKFLOW_STEP.FAILED,
+          status: ReplicaStatus.FAILED,
+          updatedAt: now,
+          completedAt: now,
+          errorMessage: normalizedError,
+          stepsHistory: [
+            ...(Array.isArray(operation.stepsHistory) ?
+              operation.stepsHistory : []),
+            failedStepEntry,
+          ],
+        },
+        {sessionId},
       );
     };
 
-    await this.executeAtomicTransition(
+    const transitionCommitted = await this.executeAtomicTransition(
       operation,
       WORKFLOW_STEP.FAILED,
       transitionReason,
       persistFn,
+      {
+        onIdempotentTransition: projectIdempotentTransition,
+      },
     );
 
+    if (!transitionCommitted) {
+      await this.releaseReservationForOperation(operation);
+      this.clearDeferredSafetyBlockState(
+        operation.operationId,
+      );
+      return;
+    }
+
+    operation.workflowStep = WORKFLOW_STEP.FAILED;
+    operation.status = ReplicaStatus.FAILED;
+    operation.updatedAt = now;
+    operation.completedAt = now;
+    operation.errorMessage = normalizedError;
+    operation.stepsHistory.push(failedStepEntry);
+
     await this.releaseReservationForOperation(operation);
+    this.clearDeferredSafetyBlockState(
+      operation.operationId,
+    );
 
     this.stats.operationsFailed++;
 
@@ -818,11 +1055,12 @@ class OperationWorkflowOwner {
       };
     }
 
-    const replaceRemovePhase =
-      this.repository.isReplaceRemovePhase(operation);
+    const replaceRemoveDispatchPhase =
+      this.repository.isReplaceRemoveDispatchPhase(operation);
     const dispatchableWorkflowStep = operation.workflowStep;
-    if (replaceRemovePhase) {
-      if (dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE) {
+    if (replaceRemoveDispatchPhase) {
+      if (dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE &&
+          dispatchableWorkflowStep !== WORKFLOW_STEP.STOPPING) {
         return {
           success: false,
           skipped: true,
@@ -893,6 +1131,37 @@ class OperationWorkflowOwner {
     );
   }
 
+  /**
+   * Execute one operation from reconciliation paths that may already hold
+   * the per-operation owner key.
+   *
+   * Calling executeOperation() while runExclusive already owns the same key
+   * returns OPERATION_ALREADY_EXECUTING and can stall REPLACE source-removal
+   * progression. Reconciliation paths must dispatch directly when they
+   * already hold ownership.
+   *
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   */
+  async executeOperationFromReconcilePath(operation) {
+    const operationId = operation?.operationId;
+    const singleFlightKey = operationId ?
+      this.getExecuteOperationSingleFlightKey(operationId) :
+      null;
+    const inFlightOwnerKeys =
+      this.operationWorkflowCoordinator?.inFlightExecutionsByOwnerKey;
+    const ownerKeyAlreadyHeld = Boolean(
+      singleFlightKey &&
+      inFlightOwnerKeys instanceof Map &&
+      inFlightOwnerKeys.has(singleFlightKey),
+    );
+
+    if (ownerKeyAlreadyHeld) {
+      return this.executeOperationInternal(operation);
+    }
+    return this.executeOperation(operation);
+  }
+
 
   /**
    * Execute operation body once per operation ID.
@@ -916,18 +1185,41 @@ class OperationWorkflowOwner {
       };
     }
 
-    const replaceRemovePhase =
-      this.repository.isReplaceRemovePhase(operation);
+    const replaceRemoveDispatchPhase =
+      this.repository.isReplaceRemoveDispatchPhase(operation);
+    const removeStoppingReplayPhase =
+      operation.type === OperationType.REMOVE &&
+      operation.workflowStep === WORKFLOW_STEP.STOPPING;
     const replaceSourceReplicaId =
       this.repository.getReplaceSourceReplicaId(operation);
 
-    if (!replaceRemovePhase) {
+    if (!replaceRemoveDispatchPhase &&
+        !removeStoppingReplayPhase) {
       await this.updateStep(operation, WORKFLOW_STEP.SENDING);
     }
 
     const removeSafetyError =
       await this.getRemoveSafetyError(operation);
     if (removeSafetyError) {
+      if (this.shouldDeferSafetyBlockedReplaceRemove(
+        operation,
+        replaceRemoveDispatchPhase,
+        removeSafetyError,
+      )) {
+        this.logDeferredSafetyBlockedReplaceRemove(
+          operation,
+          removeSafetyError,
+        );
+        return {
+          success: false,
+          skipped: true,
+          reason: REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+          deferReason: REBALANCE_COORDINATOR_DEFER_REASON
+            .REPLACE_REMOVE_SAFETY_BLOCKED,
+          operationId: operation.operationId,
+          error: removeSafetyError,
+        };
+      }
       await this.failOperation(operation, removeSafetyError, {
         logLevel: FAILURE_LOG_LEVEL.WARN,
         logMessage: REBALANCE_COORDINATOR_LOG_MSG
@@ -939,6 +1231,9 @@ class OperationWorkflowOwner {
         error: removeSafetyError,
       };
     }
+    this.clearDeferredSafetyBlockState(
+      operation.operationId,
+    );
 
     const entityType =
       operation.entityType || SERVICE_TYPE.PARTITION;
@@ -956,7 +1251,7 @@ class OperationWorkflowOwner {
       messageType =
         ReplicaOperationMessageType.REMOVE_REPLICA;
     } else if (operation.type === OperationType.REPLACE) {
-      if (replaceRemovePhase) {
+      if (replaceRemoveDispatchPhase) {
         dispatchNodeId = operation.sourceNodeId;
         messageType =
           ReplicaOperationMessageType.REMOVE_REPLICA;
@@ -982,7 +1277,7 @@ class OperationWorkflowOwner {
     }
 
     if (operation.type === OperationType.REPLACE &&
-        replaceRemovePhase &&
+        replaceRemoveDispatchPhase &&
         !requestReplicaId) {
       const replaceSourceMissing =
         'Missing source replica for REPLACE operation ' +
@@ -1062,7 +1357,7 @@ class OperationWorkflowOwner {
         type: messageType,
         entityType,
         entityId,
-        replaceRemovePhase,
+        replaceRemovePhase: replaceRemoveDispatchPhase,
       },
     );
 
@@ -1071,7 +1366,10 @@ class OperationWorkflowOwner {
       request,
       {
         targetNodeId: dispatchNodeId,
-        deliveryPriority: 'background',
+        // Replica operation dispatch is the control-plane progress signal that
+        // advances split/rebalance workflows. It must preempt bulk metadata
+        // replication from transaction bookkeeping.
+        deliveryPriority: 'critical',
       },
     );
 
@@ -1089,7 +1387,7 @@ class OperationWorkflowOwner {
     }
 
     return this._handleDispatchResponse(
-      operation, response, replaceRemovePhase,
+      operation, response, replaceRemoveDispatchPhase,
     );
   }
 
@@ -1197,8 +1495,59 @@ class OperationWorkflowOwner {
    * @return {boolean}
    */
   isCriticalSystemPartition(partitionId) {
-    return typeof partitionId === 'string' &&
-      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+    return isSystemTablePartition({partitionId});
+  }
+
+  /**
+   * Resolve the readiness decision dimension for one operation context.
+   * Critical system partitions should continue owner progression while
+   * publication convergence is pending; ordinary entities remain strict.
+   *
+   * @param {Object|string|null} operationOrPartitionId
+   * @return {string}
+   */
+  resolveOperationReadinessDecisionDimension(operationOrPartitionId = null) {
+    const partitionId =
+      typeof operationOrPartitionId === 'string' ?
+        operationOrPartitionId :
+        operationOrPartitionId?.partitionId || null;
+    if (this.isCriticalSystemPartition(partitionId)) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+
+  /**
+   * Check decision dimension readiness with compatibility fallback.
+   * Fallback applies only when older snapshots omit
+   * controlPlaneRecoveryEligible explicitly.
+   *
+   * @param {Object|null} readiness
+   * @param {string} decisionDimension
+   * @return {boolean}
+   */
+  isReadinessDimensionSatisfied(readiness, decisionDimension) {
+    const dimensions = readiness?.dimensions &&
+      typeof readiness.dimensions === 'object' ?
+      readiness.dimensions :
+      null;
+    if (!dimensions) {
+      return false;
+    }
+    if (dimensions[decisionDimension] === true) {
+      return true;
+    }
+    if (decisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE) {
+      return false;
+    }
+    if (Object.hasOwn(dimensions, decisionDimension)) {
+      return false;
+    }
+    return dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] ===
+      true;
   }
 
   /**
@@ -1221,7 +1570,9 @@ class OperationWorkflowOwner {
     if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
       return false;
     }
-    return this.isNodeReadyForRouting(replicaRow.node_id);
+    return this.isNodeReadyForRouting(replicaRow.node_id, {
+      partitionId: replicaRow.partition_id || replicaRow.partitionId || null,
+    });
   }
 
   /**
@@ -1277,18 +1628,23 @@ class OperationWorkflowOwner {
    * @param {string} nodeId
    * @return {boolean}
    */
-  isNodeReadyForRouting(nodeId) {
+  isNodeReadyForRouting(nodeId, options = {}) {
     if (!nodeId) {
       return false;
     }
+    const decisionDimension =
+      this.resolveOperationReadinessDecisionDimension(
+        options?.partitionId || null,
+      );
     const readiness = this.controlPlaneReadinessService
-      .getNodeReadinessSync(nodeId);
-    if (!readiness || !readiness.dimensions) {
-      return false;
-    }
-    return readiness.dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
-    ] === true;
+      .getNodeReadinessSync(nodeId, {
+        decisionDimension:
+          decisionDimension,
+      });
+    return this.isReadinessDimensionSatisfied(
+      readiness,
+      decisionDimension,
+    );
   }
 
   /**
@@ -1301,11 +1657,14 @@ class OperationWorkflowOwner {
       return null;
     }
 
-    const isRemoveOperation =
-      operation.type === OperationType.REMOVE;
-    const isReplaceRemovePhase =
+    const isRemoveInitialDispatch =
+      operation.type === OperationType.REMOVE &&
+      (operation.workflowStep === WORKFLOW_STEP.PENDING ||
+        operation.workflowStep === WORKFLOW_STEP.SENDING);
+    const isReplaceRemoveInitialDispatch =
       this.repository.isReplaceRemovePhase(operation);
-    if (!isRemoveOperation && !isReplaceRemovePhase) {
+    if (!isRemoveInitialDispatch &&
+        !isReplaceRemoveInitialDispatch) {
       return null;
     }
 
@@ -1357,12 +1716,13 @@ class OperationWorkflowOwner {
       return null;
     }
 
-    if (isReplaceRemovePhase) {
+    if (isReplaceRemoveInitialDispatch) {
       const replacementReplicaId =
         this.repository.getReplaceTargetReplicaId(operation);
       if (!replacementReplicaId) {
-        return `Critical partition ` +
-          `${operation.partitionId} replacement replica` +
+        return 'Critical partition ' +
+          operation.partitionId +
+          ' replacement replica' +
           ' is unavailable';
       }
       const replacementReplica = criticalReplicaRows.find(
@@ -1374,9 +1734,11 @@ class OperationWorkflowOwner {
       if (!this.isVoterReadyRoutableReplica(
         replacementReplica,
       )) {
-        return `Critical partition ` +
-          `${operation.partitionId} replacement replica ` +
-          `${replacementReplicaId} is not voter-ready`;
+        return 'Critical partition ' +
+          operation.partitionId +
+          ' replacement replica ' +
+          replacementReplicaId +
+          ' is not voter-ready';
       }
     }
 
@@ -1523,7 +1885,12 @@ class OperationWorkflowOwner {
       return false;
     }
     const operation =
-      await this.repository.queryOperationById(operationId);
+      await this.repository.queryAuthoritativeOperationById(
+        operationId,
+        {
+          requireOwnerRpcRead: true,
+        },
+      );
     if (!this.isObservedProgressOperationCandidate(operation)) {
       return false;
     }
@@ -1587,7 +1954,7 @@ class OperationWorkflowOwner {
 
     if (operation.type === OperationType.REPLACE &&
         operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
-      await this.executeOperation(operation);
+      await this.executeOperationInternal(operation);
       return true;
     }
 
@@ -1632,6 +1999,13 @@ class OperationWorkflowOwner {
         return true;
       }
 
+      const replayResult = await this.executeOperationInternal(operation);
+      if (replayResult?.success === true &&
+          replayResult.status !==
+            ReplicaOperationResponseStatus.IN_PROGRESS) {
+        return true;
+      }
+
       return false;
     }
 
@@ -1657,10 +2031,12 @@ class OperationWorkflowOwner {
 
     if (actualStatus === ReplicaStatus.ACTIVE) {
       if (operation.type === OperationType.REPLACE) {
-        await this.updateStep(
+        const activeTransitionCommitted = await this.updateStep(
           operation, WORKFLOW_STEP.ACTIVE,
         );
-        await this.executeOperation(operation);
+        if (activeTransitionCommitted) {
+          await this.executeOperationFromReconcilePath(operation);
+        }
       } else {
         await this.completeOperation(operation);
       }
@@ -1682,15 +2058,27 @@ class OperationWorkflowOwner {
    * @param {string} step
    * @return {number}
    */
-  getTimeoutForStep(step) {
+  getTimeoutForStep(step, operation = null) {
     switch (step) {
     case WORKFLOW_STEP.PENDING:
     case WORKFLOW_STEP.SENDING:
       return this.config.pendingTimeoutMs;
     case WORKFLOW_STEP.CREATING:
       return this.config.creatingTimeoutMs;
-    case WORKFLOW_STEP.SYNCING:
-      return this.config.syncingTimeoutMs;
+    case WORKFLOW_STEP.SYNCING: {
+      const configuredTimeout = this.config.syncingTimeoutMs;
+      const partitionId = operation?.partitionId || null;
+      if (!isPriorityControlPlanePartition({partitionId})) {
+        return configuredTimeout;
+      }
+      return Math.max(
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
+        Math.min(
+          configuredTimeout,
+          PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
+        ),
+      );
+    }
     case WORKFLOW_STEP.STOPPING:
       return this.config.removingTimeoutMs;
     default:
@@ -1706,6 +2094,11 @@ class OperationWorkflowOwner {
    * @return {Promise<void>}
    */
   async reconcileTimeoutOperation(operation, now) {
+    const progressed =
+      await this.reconcileOperationProgress(operation);
+    if (progressed) {
+      return;
+    }
 
     const operationBudget = createTopLevelOperationBudget({
       configuredBudgetMs:
@@ -1719,6 +2112,7 @@ class OperationWorkflowOwner {
 
     const stepTimeout = this.getTimeoutForStep(
       operation.workflowStep,
+      operation,
     );
     const stepAllocation = createChildTimeoutBudget(
       operationBudget,
@@ -1846,9 +2240,32 @@ class OperationWorkflowOwner {
 
       this.operationWorkflowRunExclusive(
         singleFlightKey,
-        () => this.reconcileTimeoutOperation(
-          operation, Date.now(),
-        ),
+        async () => {
+          const authoritativeOperation =
+            await this.repository.queryAuthoritativeOperationById(
+              operation.operationId,
+              {
+                requireOwnerRpcRead: false,
+              },
+            );
+          if (!authoritativeOperation) {
+            return;
+          }
+          if (!this.repository.isOperationLocallyOwned(
+            authoritativeOperation,
+          )) {
+            return;
+          }
+          if (this.repository.isOperationTerminal(
+            authoritativeOperation,
+          )) {
+            return;
+          }
+
+          await this.reconcileTimeoutOperation(
+            authoritativeOperation, Date.now(),
+          );
+        },
       ).catch((error) => {
         this.logger.error(
           REBALANCE_COORDINATOR_LOG_MSG
@@ -2227,7 +2644,93 @@ class OperationWorkflowOwner {
     const normalized = errorMessage.toLowerCase();
     return normalized.includes(
       'would drop voter-ready replicas below minimum',
-    ) || normalized.includes('safety check unavailable');
+    ) ||
+      normalized.includes('safety check unavailable') ||
+      normalized.includes('replacement replica');
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {boolean} replaceRemovePhase
+   * @param {string} removeSafetyError
+   * @return {boolean}
+   */
+  shouldDeferSafetyBlockedReplaceRemove(
+    operation,
+    replaceRemovePhase,
+    removeSafetyError,
+  ) {
+    return Boolean(
+      operation &&
+      operation.type === OperationType.REPLACE &&
+      replaceRemovePhase &&
+      this.isSafetyPolicyFailure(removeSafetyError),
+    );
+  }
+
+  /**
+   * @param {string|null|undefined} operationId
+   * @return {void}
+   */
+  clearDeferredSafetyBlockState(operationId) {
+    if (typeof operationId !== 'string' ||
+        operationId.length === NUM.ZERO) {
+      return;
+    }
+    this.safetyDeferredLogStateByOperationId
+      .delete(operationId);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string} errorMessage
+   * @return {void}
+   */
+  logDeferredSafetyBlockedReplaceRemove(
+    operation,
+    errorMessage,
+  ) {
+    const operationId = operation?.operationId;
+    if (typeof operationId !== 'string' ||
+        operationId.length === NUM.ZERO) {
+      return;
+    }
+    const now = Date.now();
+    const previousState =
+      this.safetyDeferredLogStateByOperationId
+        .get(operationId) || null;
+    const errorChanged = previousState?.errorMessage !==
+      errorMessage;
+    const throttleElapsed = !previousState ||
+      now - previousState.loggedAtMs >=
+        SAFETY_DEFERRED_LOG_THROTTLE_MS;
+
+    this.safetyDeferredLogStateByOperationId.set(
+      operationId,
+      {
+        errorMessage,
+        loggedAtMs: now,
+      },
+    );
+
+    if (!errorChanged && !throttleElapsed) {
+      return;
+    }
+
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG
+        .OPERATION_DEFERRED_BY_SAFETY_POLICY,
+      {
+        operationId,
+        partitionId: operation.partitionId,
+        sourceNodeId: operation.sourceNodeId,
+        targetNodeId: operation.targetNodeId,
+        workflowStep: operation.workflowStep,
+        reason: REBALANCE_COORDINATOR_DEFER_REASON
+          .REPLACE_REMOVE_SAFETY_BLOCKED,
+        errorMessage,
+      },
+    );
   }
 
   /**

@@ -179,6 +179,7 @@ async function resolveMetadataIngressReadinessAsync(
         requiredTables,
       });
     if (service?.isCurrentRaftLeader?.() === true ||
+        selection?.localIngress === true ||
         (Array.isArray(selection?.targets) &&
           selection.targets.length > NUM.ZERO)) {
       const retryAfterMs = Number.isFinite(

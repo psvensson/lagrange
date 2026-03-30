@@ -35,6 +35,12 @@ test('isRetryableControlPlaneError detects explicit deferRetry marker', async (t
   t.equal(isRetryableControlPlaneError(error), true);
 });
 
+test('isRetryableControlPlaneError detects transaction lane contention', async (t) => {
+  const error = new Error('Transaction already active on this partition');
+
+  t.equal(isRetryableControlPlaneError(error), true);
+});
+
 test('isRetryableControlPlaneError excludes hard validation failures', async (t) => {
   const error = new Error('Replica owner conflict');
   error.code = 'REPLICA_OWNER_CONFLICT';

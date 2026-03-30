@@ -58,7 +58,9 @@ async function activateMessageGroupServiceRows(options = {}) {
   if (!activateReplica && !systemTableWriter) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.ACTIVATOR_REQUIRED);
   }
-  if (options.handlerRegistered !== true) {
+  const handlerReady = options.messageGroupServiceHandler != null ||
+    options.handlerRegistered === true;
+  if (handlerReady !== true) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.HANDLER_REQUIRED);
   }
   if (options.endpointsPublished !== true) {

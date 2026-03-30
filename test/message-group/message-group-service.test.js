@@ -1530,6 +1530,111 @@ test(
 );
 
 test(
+  'MessageGroupService - strict CDC propagation falls back to addressed local ingress during metadata-publication convergence when no strict target is viable',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const readinessState = createTrafficReadinessState();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-local-bootstrap-fallback',
+        replicaId: 'mg-strict-local-bootstrap-fallback-r1',
+        nodeId,
+        replicaIds: [
+          'mg-strict-local-bootstrap-fallback-r1',
+          'mg-strict-local-bootstrap-fallback-r2',
+          'mg-strict-local-bootstrap-fallback-r3',
+        ],
+        transport: router,
+        bootstrapReadinessState: readinessState,
+      });
+
+      readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+        ready: false,
+        reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+      });
+      service.raft = {
+        state: LifeRaft.FOLLOWER,
+      };
+      service.leaderId = 'mg-strict-local-bootstrap-fallback-r3';
+      service.forwardCDCEventToLeader = async () => {
+        throw new Error(
+          'addressed local metadata-publication ingress should not re-forward strict CDC',
+        );
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-strict-local-bootstrap-fallback',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-local-bootstrap-fallback-r3',
+          [COLUMN.GROUP_ID]: 'mg-strict-local-bootstrap-fallback',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+          [COLUMN.ADDRESS]:
+            'seed-node/message-group/mg-strict-local-bootstrap-fallback-r3',
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now() - 1,
+        },
+      );
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.NODES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'metadata-publication convergence should keep strict CDC ingress locally routable when no viable non-local strict target exists yet',
+      );
+      t.equal(
+        readiness.localIngress,
+        true,
+        'strict readiness should fall back to the addressed local ingress while leader metadata is still converging',
+      );
+
+      const result = await service.handleLatencyCdcPropagationMessage(
+        'msg-strict-local-bootstrap-fallback',
+        {
+          type: 'latency.cdc.propagation',
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          data: {
+            [COLUMN.NODE_ID]: 'node-strict-local-bootstrap-fallback',
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          },
+        },
+      );
+
+      t.equal(
+        result.acknowledged,
+        true,
+        'addressed local metadata-publication fallback should acknowledge strict CDC',
+      );
+      t.equal(
+        service.systemTableCache.get(
+          TABLES.NODES,
+          'node-strict-local-bootstrap-fallback',
+        )?.[COLUMN.STATUS],
+        SERVICE_STATUS.ACTIVE,
+        'addressed local metadata-publication fallback should apply strict CDC while leader metadata converges',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - strict CDC forward retries selection after authoritative topology repair',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
@@ -1965,8 +2070,8 @@ test('MessageGroupService - publishes leader state as follower metadata in servi
     );
     t.equal(
       roleUpdate?.options?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'raft role persistence should route through repairEligible readiness',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'raft role persistence should route through control-plane recovery readiness',
     );
     t.equal(
       roleUpdate?.options?.deliveryPriority,
@@ -2567,8 +2672,8 @@ test('MessageGroupService - persists leader node updates to message groups table
     );
     t.equal(
       leaderUpdate?.options?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'leader node persistence should route through repairEligible readiness',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'leader node persistence should route through control-plane recovery readiness',
     );
     t.equal(
       leaderUpdate?.options?.deliveryPriority,

@@ -95,6 +95,7 @@ class MessageRouterSetup {
     advertisedNodeWsAddress,
     wsPort,
     identifyPayload,
+    externalAdmissionEnabled,
   }) {
     // Validate required dependencies
     if (!nodeId) {
@@ -118,6 +119,7 @@ class MessageRouterSetup {
       advertisedAddress: advertisedNodeWsAddress || null,
       wsPort,
       identifyPayload,
+      externalAdmissionEnabled,
     });
 
     // Set up resolver to extract nodeId from address pattern "${nodeId}/..."

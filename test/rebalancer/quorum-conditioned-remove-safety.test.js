@@ -5,8 +5,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {NODE_STATE} from '../../src/constants/index.js';
+import {WORKFLOW_STEP, NODE_STATE} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {
+  REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_DEFER_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 function createReadyNode(nodeId) {
@@ -459,7 +463,7 @@ test('RebalanceCoordinator - allows REMOVE when projected quorum remains safe', 
   }
 });
 
-test('RebalanceCoordinator - blocks REPLACE remove until replacement is voter-ready',
+test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-ready',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -473,7 +477,7 @@ test('RebalanceCoordinator - blocks REPLACE remove until replacement is voter-re
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'completed'};
+          return {acknowledged: true, status: 'initiated'};
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -535,10 +539,37 @@ test('RebalanceCoordinator - blocks REPLACE remove until replacement is voter-re
       const result = await coordinator.executeOperation(operation);
 
       t.equal(result.success, false,
-        'REPLACE remove should be blocked while replacement is learner');
+        'REPLACE remove should not dispatch while replacement is learner');
+      t.equal(result.skipped, true,
+        'REPLACE remove learner safety block should be deferred');
+      t.equal(result.reason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        'defer should return canonical safety blocked reason code');
+      t.equal(
+        result.deferReason,
+        REBALANCE_COORDINATOR_DEFER_REASON
+          .REPLACE_REMOVE_SAFETY_BLOCKED,
+        'defer should report canonical replace-remove safety reason',
+      );
       t.match(result.error, /replacement replica/i,
-        'failure should mention replacement readiness');
-      t.equal(deliveries.length, 0, 'should not dispatch unsafe REPLACE remove');
+        'defer should mention replacement readiness requirement');
+      t.equal(deliveries.length, 0, 'should not dispatch blocked REPLACE remove');
+      t.equal(operation.workflowStep, WORKFLOW_STEP.ACTIVE,
+        'deferred remove should keep REPLACE in ACTIVE remove phase');
+
+      const replacementRow = coordinator.systemTableCache.get(
+        'services',
+        'nodes-p1-r4',
+      );
+      t.ok(replacementRow, 'replacement replica row should exist in cache');
+      replacementRow.raft_role = 'follower';
+
+      const retryResult = await coordinator.executeOperation(operation);
+      t.equal(retryResult.success, true,
+        'remove should dispatch once replacement becomes voter-ready');
+      t.equal(deliveries.length, 1,
+        'remove dispatch should proceed after learner promotion');
+      t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+        'dispatched remove phase should transition operation into STOPPING');
     } finally {
       await coordinator.shutdown();
       ConfigurationManager.resetInstance();

@@ -16,6 +16,8 @@ const DEFAULT_REQUIRED_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
   CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY,
 ]);
+const CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING =
+  'publishedConvergencePending';
 
 const REASON_BY_DIMENSION = Object.freeze({
   [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
@@ -67,6 +69,17 @@ function normalizeReasonCodes(readiness, failedDimensions) {
     codes.push(mappedCode);
   }
 
+  for (const code of Array.isArray(readiness?.priorityControlPlaneRecovery?.reasonCodes) ?
+    readiness.priorityControlPlaneRecovery.reasonCodes :
+    []) {
+    const normalizedCode = String(code || '');
+    if (normalizedCode.length === NUM.ZERO || seen.has(normalizedCode)) {
+      continue;
+    }
+    seen.add(normalizedCode);
+    codes.push(normalizedCode);
+  }
+
   return Object.freeze(codes);
 }
 
@@ -94,6 +107,13 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   const failedDimensions = requiredDimensions.filter((dimension) => {
     return readiness?.dimensions?.[dimension] !== true;
   });
+  const requirePublishedConvergence =
+    options.requirePublishedConvergence === true;
+  const priorityRecoveryActive =
+    readiness?.priorityControlPlaneRecovery?.active === true;
+  if (requirePublishedConvergence && priorityRecoveryActive) {
+    failedDimensions.push(CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING);
+  }
   if (failedDimensions.length === NUM.ZERO) {
     return null;
   }
@@ -113,6 +133,7 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
 }
 
 export {
+  CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING,
   CONTROL_PLANE_MUTATION_WORK_CLASS,
   getLocalControlPlaneMutationReadinessBlocker,
   normalizeControlPlaneMutationWorkClass,

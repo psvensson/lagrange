@@ -58,13 +58,19 @@ function buildReadiness(nodeId, ready) {
  * @param {Map<string,Object>} readinessMap - nodeId → snapshot
  * @return {Object}
  */
-function createControlledReadinessService(readinessMap) {
+function createControlledReadinessService(readinessMap, calls = null) {
   return {
-    getNodeReadinessSync: (nodeId) => {
+    getNodeReadinessSync: (nodeId, options = {}) => {
+      if (Array.isArray(calls)) {
+        calls.push({kind: 'sync', nodeId, options});
+      }
       return readinessMap.get(nodeId) ||
         buildReadiness(nodeId, false);
     },
-    getNodeReadiness: async (nodeId) => {
+    getNodeReadiness: async (nodeId, options = {}) => {
+      if (Array.isArray(calls)) {
+        calls.push({kind: 'async', nodeId, options});
+      }
       return readinessMap.get(nodeId) ||
         buildReadiness(nodeId, false);
     },
@@ -180,6 +186,7 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
     );
 
     const readinessMap = new Map();
+    const readinessCalls = [];
     readinessMap.set(
       FIXTURE_NODE_ID, buildReadiness(FIXTURE_NODE_ID, true),
     );
@@ -188,7 +195,7 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
       {node_id: FIXTURE_NODE_ID},
     ]);
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const dispatch = new ReplicaDispatchService({
       nodeId: FIXTURE_NODE_ID,
@@ -202,6 +209,11 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
           dispatch.isNodeReady(FIXTURE_NODE_ID),
           true,
           'node should be ready when canonical readiness says so',
+        );
+        t.equal(
+          readinessCalls[readinessCalls.length - 1]?.options?.decisionDimension,
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          'dispatch should record control-plane recovery as its decision dimension',
         );
       });
 
@@ -248,6 +260,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
     const unreadyNodeId = 'node-unready';
 
     const readinessMap = new Map();
+    const readinessCalls = [];
     readinessMap.set(readyNodeId, buildReadiness(readyNodeId, true));
     readinessMap.set(
       unreadyNodeId, buildReadiness(unreadyNodeId, false),
@@ -258,7 +271,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
       {node_id: unreadyNodeId},
     ]);
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,
@@ -300,6 +313,12 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
         t.notOk(
           ids.includes(unreadyNodeId),
           'unready node should be excluded',
+        );
+        t.ok(
+          readinessCalls.every((call) =>
+            call.options?.decisionDimension ===
+              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE),
+          'steady-state rebalancer availability should record repairEligible decisions',
         );
       });
 
@@ -354,6 +373,7 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
     );
 
     const readinessMap = new Map();
+    const readinessCalls = [];
     readinessMap.set(
       FIXTURE_NODE_ID, buildReadiness(FIXTURE_NODE_ID, true),
     );
@@ -362,7 +382,7 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
       {node_id: FIXTURE_NODE_ID},
     ]);
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const coordinator = new RebalanceCoordinator({
       nodeId: FIXTURE_NODE_ID,
@@ -469,12 +489,13 @@ test('QueryExecutor routability consumes canonical serve readiness',
       }],
     });
     const readinessMap = new Map();
+    const readinessCalls = [];
     readinessMap.set(
       FIXTURE_NODE_ID,
       buildReadiness(FIXTURE_NODE_ID, true),
     );
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const executor = new QueryExecutor({
       nodeId: FIXTURE_NODE_ID,
@@ -579,6 +600,7 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       }],
     });
     const readinessMap = new Map();
+    const readinessCalls = [];
     const readiness = buildReadiness(FIXTURE_NODE_ID, true);
     readiness.dimensions[
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
@@ -591,7 +613,7 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
     ] = false;
     readinessMap.set(FIXTURE_NODE_ID, readiness);
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const executor = new QueryExecutor({
       nodeId: FIXTURE_NODE_ID,
@@ -620,6 +642,11 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       false,
       'default serve-eligible routing should still block non-servable nodes',
     );
+    t.equal(
+      readinessCalls[0]?.options?.decisionDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      'default query routing should record serveEligible decisions',
+    );
 
     const repairEligible = await executor.executeOnPartition(
       FIXTURE_PARTITION_ID,
@@ -638,6 +665,11 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       true,
       'bootstrap-owned routing should be able to use repair-eligible readiness',
     );
+    t.equal(
+      readinessCalls[readinessCalls.length - 1]?.options?.decisionDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'bootstrap routing overrides should record repairEligible decisions',
+    );
   });
 
 // ── Rebalancer isNodeReady ──────────────────────────────────────────
@@ -650,6 +682,7 @@ test('UnifiedRebalancer.isNodeReady consumes canonical readiness',
     );
 
     const readinessMap = new Map();
+    const readinessCalls = [];
     readinessMap.set(
       FIXTURE_NODE_ID, buildReadiness(FIXTURE_NODE_ID, true),
     );
@@ -658,7 +691,7 @@ test('UnifiedRebalancer.isNodeReady consumes canonical readiness',
       {node_id: FIXTURE_NODE_ID},
     ]);
     const readinessService =
-      createControlledReadinessService(readinessMap);
+      createControlledReadinessService(readinessMap, readinessCalls);
 
     const rebalancer = new UnifiedRebalancer({
       entityId: FIXTURE_PARTITION_ID,
@@ -695,6 +728,11 @@ test('UnifiedRebalancer.isNodeReady consumes canonical readiness',
           await rebalancer.isNodeReady(FIXTURE_NODE_ID),
           true,
           'node should be ready when canonical readiness and transport ok',
+        );
+        t.equal(
+          readinessCalls[readinessCalls.length - 1]?.options?.decisionDimension,
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          'rebalancer node-readiness checks should record repairEligible decisions',
         );
       });
 

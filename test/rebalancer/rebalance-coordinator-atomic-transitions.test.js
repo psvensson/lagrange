@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -36,7 +37,7 @@ function createMinimalCoordinator(overrides = {}) {
         rollbackParticipant: async () => {},
         now: () => 1000,
       });
-  return new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
     systemTableCache: {get() { return null; }},
     cdcIntegrationService: {async waitForCacheUpdate() {}},
@@ -55,6 +56,8 @@ function createMinimalCoordinator(overrides = {}) {
     enableTimeouts: false,
     ...overrides,
   });
+  coordinator.repository.confirmReplicaOperationPersistence = async () => {};
+  return coordinator;
 }
 
 function createTestOperation(overrides = {}) {
@@ -76,6 +79,14 @@ function createTestOperation(overrides = {}) {
     stepsHistory: [],
     ...overrides,
   };
+}
+
+function buildExpectedTransitionSessionId(
+  operationId,
+  workflowStep,
+  attempt = 1,
+) {
+  return `${operationId}:${workflowStep}:attempt${attempt}`;
 }
 
 test('updateStep wraps transition and persist in transaction boundary',
@@ -124,7 +135,10 @@ test('updateStep wraps transition and persist in transaction boundary',
 
 test('updateStep persists through the opened transaction session',
   async (t) => {
-    const expectedSessionId = `op-atomic-test:${WORKFLOW_STEP.SENDING}`;
+    const expectedSessionId = buildExpectedTransitionSessionId(
+      'op-atomic-test',
+      WORKFLOW_STEP.SENDING,
+    );
     const observedSessions = [];
     const observedRoutingDimensions = [];
     const txCoordinator = new DistributedTransactionCoordinator({
@@ -168,16 +182,82 @@ test('updateStep persists through the opened transaction session',
       );
       t.same(
         observedRoutingDimensions,
-        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],
-        'owner mutation routing should stay on repairEligible for internal topology work',
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+        'owner mutation routing should stay on control-plane recovery readiness for internal topology work',
       );
     } finally {
       await coordinator.shutdown();
     }
   });
 
+test('updateStep retries with a fresh transition session after stale-session ' +
+  'begin contention', async (t) => {
+  const blockedSessions = new Set();
+  const observedBeginSessions = [];
+  const txCoordinator = {
+    async begin(sessionId) {
+      observedBeginSessions.push(sessionId);
+      if (observedBeginSessions.length === 1) {
+        blockedSessions.add(sessionId);
+        return {
+          success: false,
+          error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        };
+      }
+      if (blockedSessions.has(sessionId)) {
+        return {
+          success: false,
+          error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        };
+      }
+      return {success: true};
+    },
+    async commit() {
+      return {success: true};
+    },
+    async rollback() {
+      return {success: true};
+    },
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+
+  try {
+    const operation = createTestOperation();
+
+    await t.rejects(
+      coordinator.updateStep(operation, WORKFLOW_STEP.SENDING),
+      /transaction already active/i,
+      'first attempt should fail when the transition session is already active',
+    );
+
+    await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'second attempt should succeed after rotating the transition session id',
+    );
+    t.equal(
+      observedBeginSessions.length,
+      2,
+      'owner should attempt begin twice across retries',
+    );
+    t.not(
+      observedBeginSessions[0],
+      observedBeginSessions[1],
+      'retries must rotate transition session ids to avoid stale-session deadlocks',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('getInFlightOperations keeps replica_operations owner-local reads on ' +
-  'repairEligible routing', async (t) => {
+  'control-plane recovery routing', async (t) => {
   const observedRoutingDimensions = [];
   const coordinator = createMinimalCoordinator({
     cdcIntegrationService: {
@@ -207,8 +287,8 @@ test('getInFlightOperations keeps replica_operations owner-local reads on ' +
     );
     t.same(
       observedRoutingDimensions,
-      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],
-      'replica_operations owner reads must stay on repairEligible routing',
+      [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+      'replica_operations owner reads must stay on control-plane recovery routing',
     );
   } finally {
     await coordinator.shutdown();
@@ -365,6 +445,309 @@ test('executeAtomicTransition rolls back on persist failure',
     }
   });
 
+test('executeAtomicTransition retries the same step after a failed persist ' +
+  'without idempotency poisoning', async (t) => {
+  let persistUpdateCalls = 0;
+  const operationId = 'op-atomic-retry-step';
+  const coordinator = createMinimalCoordinator({
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (!sql.includes('UPDATE replica_operations')) {
+          return {success: true, rows: [], changes: 1};
+        }
+        persistUpdateCalls += 1;
+        if (persistUpdateCalls === 1) {
+          return {success: false, error: 'persist failed'};
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = createTestOperation({
+      operationId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+
+    await t.rejects(
+      coordinator.updateStep(
+        firstAttempt,
+        WORKFLOW_STEP.SENDING,
+      ),
+      'first persist failure should propagate',
+    );
+
+    t.equal(
+      coordinator.operationWorkflowCoordinator
+        .isTransitionIdempotent(
+          operationId,
+          WORKFLOW_STEP.SENDING,
+        ),
+      false,
+      'failed persist must not mark the transition idempotent',
+    );
+
+    const secondAttempt = createTestOperation({
+      operationId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await coordinator.updateStep(
+      secondAttempt,
+      WORKFLOW_STEP.SENDING,
+    );
+
+    t.equal(
+      persistUpdateCalls,
+      2,
+      'same step should be persisted again after the first failure',
+    );
+    t.equal(
+      secondAttempt.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'retry should advance the workflow step',
+    );
+    t.equal(
+      coordinator.operationWorkflowCoordinator
+        .isTransitionIdempotent(
+          operationId,
+          WORKFLOW_STEP.SENDING,
+        ),
+      true,
+      'transition should become idempotent only after the successful commit',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('updateStep retries on the same operation object after a failed persist',
+  async (t) => {
+    let persistUpdateCalls = 0;
+    const operationId = 'op-atomic-same-object-retry';
+    const coordinator = createMinimalCoordinator({
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (!sql.includes('UPDATE replica_operations')) {
+            return {success: true, rows: [], changes: 1};
+          }
+          persistUpdateCalls += 1;
+          if (persistUpdateCalls === 1) {
+            return {success: false, error: 'persist failed'};
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = createTestOperation({
+        operationId,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        status: 'pending',
+        stepsHistory: [],
+      });
+
+      await t.rejects(
+        coordinator.updateStep(operation, WORKFLOW_STEP.SENDING),
+        'first persist failure should propagate for the same object',
+      );
+
+      t.equal(
+        coordinator.operationWorkflowCoordinator
+          .isTransitionIdempotent(
+            operationId,
+            WORKFLOW_STEP.SENDING,
+          ),
+        false,
+        'failed persist on the same object must not mark the transition idempotent',
+      );
+
+      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+      t.equal(
+        persistUpdateCalls,
+        2,
+        'same operation object should persist the transition again after failure',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.SENDING,
+        'same operation object should still advance after the retry succeeds',
+      );
+      t.equal(
+        operation.stepsHistory.length,
+        1,
+        'successful retry on the same object should append one durable step entry',
+      );
+      t.equal(
+        operation.stepsHistory[0]?.step,
+        WORKFLOW_STEP.SENDING,
+        'same-object retry should durably record the requested step',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('completeOperation retries on the same operation object after a failed persist',
+  async (t) => {
+    let persistUpdateCalls = 0;
+    const operationId = 'op-atomic-complete-same-object-retry';
+    const coordinator = createMinimalCoordinator({
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (!sql.includes('UPDATE replica_operations')) {
+            return {success: true, rows: [], changes: 1};
+          }
+          persistUpdateCalls += 1;
+          if (persistUpdateCalls === 1) {
+            return {success: false, error: 'persist failed'};
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = createTestOperation({
+        operationId,
+        workflowStep: WORKFLOW_STEP.SYNCING,
+        status: 'syncing',
+        stepsHistory: [],
+      });
+
+      await t.rejects(
+        coordinator.completeOperation(operation),
+        'first terminal persist failure should propagate for the same object',
+      );
+
+      t.equal(
+        coordinator.operationWorkflowCoordinator
+          .isTransitionIdempotent(
+            operationId,
+            WORKFLOW_STEP.ACTIVE,
+          ),
+        false,
+        'failed completeOperation persist must not mark the terminal transition idempotent',
+      );
+
+      await coordinator.completeOperation(operation);
+
+      t.equal(
+        persistUpdateCalls,
+        2,
+        'same operation object should persist the terminal transition again after failure',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'same operation object should still complete after the retry succeeds',
+      );
+      t.equal(
+        operation.stepsHistory.length,
+        1,
+        'successful terminal retry on the same object should append one durable step entry',
+      );
+      t.equal(
+        operation.stepsHistory[0]?.step,
+        WORKFLOW_STEP.ACTIVE,
+        'same-object terminal retry should durably record the final step',
+      );
+      t.ok(
+        operation.completedAt !== null,
+        'successful terminal retry should set completedAt on the live object',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('failOperation retries on the same operation object after a failed persist',
+  async (t) => {
+    let persistUpdateCalls = 0;
+    const operationId = 'op-atomic-fail-same-object-retry';
+    const coordinator = createMinimalCoordinator({
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (!sql.includes('UPDATE replica_operations')) {
+            return {success: true, rows: [], changes: 1};
+          }
+          persistUpdateCalls += 1;
+          if (persistUpdateCalls === 1) {
+            return {success: false, error: 'persist failed'};
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = createTestOperation({
+        operationId,
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+        stepsHistory: [],
+      });
+
+      await t.rejects(
+        coordinator.failOperation(operation, 'test failure'),
+        'first failure persist should propagate for the same object',
+      );
+
+      t.equal(
+        coordinator.operationWorkflowCoordinator
+          .isTransitionIdempotent(
+            operationId,
+            WORKFLOW_STEP.FAILED,
+          ),
+        false,
+        'failed failOperation persist must not mark the failure transition idempotent',
+      );
+
+      await coordinator.failOperation(operation, 'test failure');
+
+      t.equal(
+        persistUpdateCalls,
+        2,
+        'same operation object should persist the failure transition again after failure',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.FAILED,
+        'same operation object should still fail after the retry succeeds',
+      );
+      t.equal(
+        operation.status,
+        ReplicaStatus.FAILED,
+        'successful retry should project failed status onto the live object',
+      );
+      t.equal(
+        operation.errorMessage,
+        'test failure',
+        'successful retry should project the normalized failure message onto the live object',
+      );
+      t.equal(
+        operation.stepsHistory.length,
+        1,
+        'successful failure retry on the same object should append one durable step entry',
+      );
+      t.equal(
+        operation.stepsHistory[0]?.step,
+        WORKFLOW_STEP.FAILED,
+        'same-object failure retry should durably record the failed step',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('executeAtomicTransition fails closed when transaction coordinator ' +
   'is absent', async (t) => {
   let persistCalled = false;
@@ -443,7 +826,10 @@ test('persistNewOperation retries transient routable partition timeouts ' +
 
 test('persistOperationUpdate retries transient partition transaction ' +
   'contention on the canonical owner mutation path', async (t) => {
-  const expectedSessionId = `op-atomic-test:${WORKFLOW_STEP.SENDING}`;
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    'op-atomic-test',
+    WORKFLOW_STEP.SENDING,
+  );
   let executeCalls = 0;
   const observedSessions = [];
   const coordinator = createMinimalCoordinator({
@@ -572,16 +958,28 @@ test('executeAtomicTransition serializes cross-operation transitions ' +
     t.same(
       beginCalls,
       [
-        `op-atomic-first:${WORKFLOW_STEP.SENDING}`,
-        `op-atomic-second:${WORKFLOW_STEP.SENDING}`,
+        buildExpectedTransitionSessionId(
+          'op-atomic-first',
+          WORKFLOW_STEP.SENDING,
+        ),
+        buildExpectedTransitionSessionId(
+          'op-atomic-second',
+          WORKFLOW_STEP.SENDING,
+        ),
       ],
       'cross-operation transitions should begin sequentially without partition contention',
     );
     t.same(
       persistSessions,
       [
-        `op-atomic-first:${WORKFLOW_STEP.SENDING}`,
-        `op-atomic-second:${WORKFLOW_STEP.SENDING}`,
+        buildExpectedTransitionSessionId(
+          'op-atomic-first',
+          WORKFLOW_STEP.SENDING,
+        ),
+        buildExpectedTransitionSessionId(
+          'op-atomic-second',
+          WORKFLOW_STEP.SENDING,
+        ),
       ],
       'replica_operations updates should persist one transition at a time on the owner lane',
     );
@@ -620,6 +1018,48 @@ test('idempotency check prevents duplicate step transition',
         operation.stepsHistory.length,
         stepsBefore,
         'duplicate transition must be skipped by idempotency check',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('idempotent updateStep projects stale operation objects to the committed step',
+  async (t) => {
+    const operationId = 'op-idempotent-stale-projection';
+    const coordinator = createMinimalCoordinator();
+    coordinator.initialize();
+
+    try {
+      const committedOperation = createTestOperation({
+        operationId,
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: ReplicaStatus.CREATING,
+      });
+      await coordinator.updateStep(committedOperation, WORKFLOW_STEP.SYNCING);
+
+      const staleOperation = createTestOperation({
+        operationId,
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: ReplicaStatus.CREATING,
+        stepsHistory: [],
+      });
+      await coordinator.updateStep(staleOperation, WORKFLOW_STEP.SYNCING);
+
+      t.equal(
+        staleOperation.workflowStep,
+        WORKFLOW_STEP.SYNCING,
+        'idempotent transitions should still project stale in-memory steps',
+      );
+      t.equal(
+        staleOperation.status,
+        ReplicaStatus.SYNCING,
+        'idempotent transitions should still project stale in-memory status',
+      );
+      t.equal(
+        staleOperation.stepsHistory.length,
+        0,
+        'idempotent projections should not append duplicate durable history entries',
       );
     } finally {
       await coordinator.shutdown();

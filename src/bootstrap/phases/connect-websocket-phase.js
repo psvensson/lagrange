@@ -130,6 +130,7 @@ class ConnectWebSocketPhase {
         advertisedNodeWsAddress,
         wsPort: wsPort,
         identifyPayload,
+        externalAdmissionEnabled: false,
       });
     } catch (error) {
       logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {

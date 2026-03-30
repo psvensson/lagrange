@@ -3,6 +3,73 @@ import assert from 'node:assert/strict';
 import {run} from '../../scenarios/node-join-under-load.js';
 
 describe('node-join-under-load scenario', () => {
+  it('waits for load-readiness stability before preparing benchmark table',
+    async () => {
+      let loadReadinessSettled = false;
+      let observedSeedQuery = false;
+
+      const cluster = {
+        waitForLoadReadinessStability: async () => {
+          loadReadinessSettled = true;
+        },
+        getNodes: () => [{
+          id: 'seed',
+          async queryWithTimeout(sql) {
+            observedSeedQuery = true;
+            assert.equal(
+              loadReadinessSettled,
+              true,
+              'benchmark table bootstrap should not start before load-readiness settles',
+            );
+            if (sql.includes('FROM partitions')) {
+              return {
+                rows: [{partition_id: 'tbl-benchmark-p1'}],
+              };
+            }
+            if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
+              return {
+                rows: [{table_id: 'tbl-benchmark'}],
+              };
+            }
+            return {rows: []};
+          },
+        }],
+        waitForBenchmarkReadyLoadNodes: async () => [
+          {id: 'seed'},
+          {id: 'peer-1'},
+        ],
+        startLoad: () => ({
+          getMetrics: () => ({failed: 0}),
+          waitComplete: async () => ({
+            total: 10,
+            success: 10,
+            failed: 0,
+            errors: 0,
+            targetOperations: 10,
+            undispatchedOperations: 0,
+            queueDelay: {p95: 10},
+          }),
+        }),
+        addNode: async () => ({id: 'joiner-2'}),
+        waitForConvergence: async () => ({
+          settledAfterMs: 1,
+        }),
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await run(cluster, {
+        preJoinSettleMs: 0,
+        loadReadinessStableWindowMs: 250,
+        loadReadinessStabilizationTimeoutMs: 1000,
+      });
+
+      assert.equal(
+        observedSeedQuery,
+        true,
+        'scenario should execute benchmark table bootstrap after load-readiness stabilization',
+      );
+    });
+
   it('prepares benchmark workload routing before starting join load',
     async () => {
       const seedQueries = [];
@@ -27,6 +94,11 @@ describe('node-join-under-load scenario', () => {
           id: 'seed',
           async queryWithTimeout(sql) {
             seedQueries.push(sql);
+            if (sql.includes('FROM partitions')) {
+              return {
+                rows: [{partition_id: 'tbl-benchmark-p1'}],
+              };
+            }
             if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
               return {
                 rows: [{table_id: 'tbl-benchmark'}],
@@ -59,20 +131,21 @@ describe('node-join-under-load scenario', () => {
       );
     });
 
-  it('waits for stabilized load readiness before starting pressure', async () => {
-    let readinessGateSettled = false;
+  it('waits for benchmark-ready load nodes before starting pressure', async () => {
+    let benchmarkReadySettled = false;
     let startLoadObserved = false;
 
     const cluster = {
-      waitForLoadReadinessStability: async () => {
-        readinessGateSettled = true;
+      waitForBenchmarkReadyLoadNodes: async () => {
+        benchmarkReadySettled = true;
+        return [{id: 'seed'}, {id: 'joiner-1'}];
       },
       startLoad: () => {
         startLoadObserved = true;
         assert.equal(
-          readinessGateSettled,
+          benchmarkReadySettled,
           true,
-          'load should not start before readiness stabilization completes',
+          'load should not start before benchmark-ready node selection completes',
         );
         return {
           getMetrics: () => ({failed: 0}),
@@ -228,6 +301,11 @@ describe('node-join-under-load scenario', () => {
       const rawSeedNode = {
         id: 'seed',
         async queryWithTimeout(sql) {
+          if (sql.includes('FROM partitions')) {
+            return {
+              rows: [{partition_id: 'tbl-benchmark-p1'}],
+            };
+          }
           if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
             return {
               rows: [{table_id: 'tbl-benchmark'}],
@@ -315,6 +393,73 @@ describe('node-join-under-load scenario', () => {
       );
     });
 
+  it('disables dynamic benchmark admission gating after ready-node gate timeout fallback',
+    async () => {
+      let observedStartLoadOptions = null;
+      const rawNodes = [
+        {
+          id: 'seed',
+          async queryWithTimeout(sql) {
+            if (sql.includes('FROM partitions')) {
+              return {
+                rows: [{partition_id: 'tbl-benchmark-p1'}],
+              };
+            }
+            if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
+              return {
+                rows: [{table_id: 'tbl-benchmark'}],
+              };
+            }
+            return {rows: []};
+          },
+        },
+        {id: 'peer-1', async queryWithTimeout() { return {rows: []}; }},
+        {id: 'peer-2', async queryWithTimeout() { return {rows: []}; }},
+      ];
+
+      const cluster = {
+        waitForBenchmarkReadyLoadNodes: async () => {
+          throw new Error('Timed out waiting for benchmark-ready quorum');
+        },
+        resolveBenchmarkReadyLoadNodes: async () => [],
+        startLoad: (options = {}) => {
+          observedStartLoadOptions = options;
+          return {
+            waitComplete: async () => ({
+              total: 10,
+              success: 10,
+              failed: 0,
+              errors: 0,
+              targetOperations: 10,
+              undispatchedOperations: 0,
+              queueDelay: {p95: 10},
+            }),
+          };
+        },
+        addNode: async () => ({id: 'joiner-3'}),
+        getNodes: () => rawNodes,
+        waitForConvergence: async () => ({
+          settledAfterMs: 1,
+        }),
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await run(cluster, {
+        preJoinSettleMs: 0,
+      });
+
+      assert.equal(
+        typeof observedStartLoadOptions.nodeResolver,
+        'undefined',
+        'fallback mode should rely on admin load-lane admission and skip an extra routing pre-gate',
+      );
+      assert.deepEqual(
+        observedStartLoadOptions.nodes.map((node) => node.id),
+        ['seed'],
+        'fallback mode should use a conservative single-node load target to reduce admission pressure while readiness recovers',
+      );
+    });
+
   it('scales benchmark load pressure to the initially ready node budget',
     async () => {
       let observedOpsPerSec = null;
@@ -322,6 +467,11 @@ describe('node-join-under-load scenario', () => {
         {
           id: 'seed',
           async queryWithTimeout(sql) {
+            if (sql.includes('FROM partitions')) {
+              return {
+                rows: [{partition_id: 'tbl-benchmark-p1'}],
+              };
+            }
             if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
               return {
                 rows: [{table_id: 'tbl-benchmark'}],
@@ -384,6 +534,11 @@ describe('node-join-under-load scenario', () => {
       {
         id: 'seed',
         async queryWithTimeout(sql) {
+          if (sql.includes('FROM partitions')) {
+            return {
+              rows: [{partition_id: 'tbl-benchmark-p1'}],
+            };
+          }
           if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
             return {
               rows: [{table_id: 'tbl-benchmark'}],

@@ -80,6 +80,23 @@ class ServiceRegistrationVisibilityOwner {
     };
   }
 
+  buildRegisteredServiceVisibilityExpectation(serviceRow) {
+    if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    const expectation = {};
+    for (const fieldName of REGISTERED_SERVICE_CACHE_REQUIRED_FIELDS) {
+      expectation[fieldName] = serviceRow[fieldName] || null;
+    }
+    for (const fieldName of REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS) {
+      if (serviceRow[fieldName]) {
+        expectation[fieldName] = serviceRow[fieldName];
+      }
+    }
+    return expectation;
+  }
+
   getRegisteredServiceMismatchFields(observedService, expectedService) {
     const mismatchFields = [];
     for (const fieldName of REGISTERED_SERVICE_CACHE_REQUIRED_FIELDS) {
@@ -259,11 +276,13 @@ class ServiceRegistrationVisibilityOwner {
     }
 
     try {
+      const expectedFields =
+        this.buildRegisteredServiceVisibilityExpectation(expectedService);
       return await cdcIntegrationService.repairCacheVisibilityHole(
         TABLES.SERVICES,
         expectedService[COLUMN.SERVICE_ID],
         true,
-        expectedService,
+        expectedFields,
         null,
         {
           fallbackPhase: 'bootstrap_api_service_registration',

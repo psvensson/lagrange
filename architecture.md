@@ -296,6 +296,30 @@ Unified lifecycle anti-patterns (forbidden):
 4. Feature flags or fallback branches that preserve pre-cutover lifecycle
    ownership paths.
 
+### Startup Adapters and Steady-State Owners
+
+`BootstrapService` and `NodeJoiningService` remain startup adapters only.
+They provision transport, hydrate cache state, subscribe to CDC, and hand work
+to the steady-state owners. They do not retain a parallel ownership path for
+lifecycle, placement, or readiness after startup handoff.
+
+Mandatory owner boundaries:
+
+1. `ServiceLifecycleManager` is the only owner of replica create/start/stop/
+  restart operations.
+2. `ServiceReconciler` is the only owner of desired-vs-actual convergence for
+  partition, message-group, and runtime service placement.
+3. `BootstrapService` and `NodeJoiningService` may request startup-time
+  convergence through those owners, but may not directly keep runtime-only
+  helper seams once continuity coverage exists.
+4. Phase labels in startup flows are progress markers for operators and tests,
+  not independent ownership domains.
+5. Readiness decisions consume canonical owner rows and declared read models;
+  startup adapters may surface those decisions but do not redefine them.
+6. Transport evidence from `MessageRouter` may repair health assessment when
+  cache propagation lags, but it does not replace owner-row authority for
+  placement or leader identity.
+
 ## Ownership Consolidation (Architecture Traceability)
 
 This section is the canonical owner map for consolidation work tracked in:
@@ -1664,6 +1688,12 @@ A thin `ControlPlaneService` facade remains for backward compatibility, delegati
   moves
 
 ## Bootstrap Process
+
+Startup phase names in this section are progress labels only. They describe
+operator-visible handoff checkpoints while lifecycle ownership stays with
+`ServiceLifecycleManager`, placement ownership stays with
+`ServiceReconciler`, and canonical topology truth stays in owner rows plus the
+declared read-model contract.
 
 ### Seed Node Bootstrap
 

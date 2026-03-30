@@ -38,8 +38,7 @@ test(
       }],
     ]);
 
-    const resolved = service.seedMessageGroupsPhase
-      .getLeaderMessageGroupService();
+    const resolved = service.getLeaderMessageGroupService();
 
     assert.equal(
       resolved,

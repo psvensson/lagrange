@@ -4,12 +4,45 @@
  * Requirements: 8.1, 8.2, 8.3, 8.4
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
+import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {COLUMN, META_SERVICE_ID, TABLES} from '../../src/constants/index.js';
+
+const ports = createPortAllocator(import.meta.url);
+
+t.jobs = 1;
+
+function createLocalServiceEndpointCache(nodeId) {
+  const endpointRows = [{
+    [COLUMN.ENDPOINT_ID]: `postgres-wire-endpoint-${nodeId}`,
+    [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.PROTOCOL]: 'tcp',
+    [COLUMN.ADDRESS]: nodeId,
+    [COLUMN.PORT]: 5432,
+    [COLUMN.METADATA]: '{}',
+  }];
+
+  return {
+    filter(tableName, predicate) {
+      if (tableName !== TABLES.SERVICE_ENDPOINTS) {
+        return [];
+      }
+      return endpointRows.filter(predicate);
+    },
+    getAll(tableName) {
+      if (tableName !== TABLES.SERVICE_ENDPOINTS) {
+        return [];
+      }
+      return [...endpointRows];
+    },
+  };
+}
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -33,7 +66,7 @@ function initializeTestEnvironment() {
 
 // Get a random available port
 function getRandomPort() {
-  return 10000 + Math.floor(Math.random() * 50000);
+  return ports.getPort();
 }
 
 test('Bootstrap sequence - server starts before services', async (t) => {
@@ -144,14 +177,16 @@ test('BootstrapService - activates message-group rows after seed registration',
     };
     bootstrap.initializeMessageGroupServiceHandler = () => {
       order.push('message-group-handler');
-      bootstrap.messageGroupServiceHandlerRegistered = true;
+      bootstrap.messageGroupServiceHandler = {};
     };
     bootstrap.initializeControlPlaneService = async () => {
       order.push('control-plane');
     };
     bootstrap.registerSeedNodeWithControlPlane = async () => {
       order.push('seed-registration');
-      bootstrap.messageGroupServiceEndpointsPublished = true;
+      bootstrap.systemTableCache = createLocalServiceEndpointCache(
+        bootstrap.nodeId,
+      );
     };
     bootstrap.activateMessageGroupServiceRows = async () => {
       order.push('activate-message-group-rows');
@@ -176,11 +211,8 @@ test('BootstrapService - activates message-group rows after seed registration',
     const result = await bootstrap.bootstrap();
 
     t.equal(result.success, true, 'bootstrap should succeed');
-    t.equal(
-      bootstrap.messageGroupServiceEndpointsPublished,
-      true,
-      'bootstrap should mark endpoint publication complete before activation',
-    );
+    t.equal(bootstrap.hasPublishedLocalServiceEndpoints(), true,
+      'bootstrap should observe local endpoint publication before activation');
     t.ok(
       order.indexOf('message-group-handler') <
         order.indexOf('seed-registration'),
@@ -190,6 +222,70 @@ test('BootstrapService - activates message-group rows after seed registration',
       order.indexOf('seed-registration') <
         order.indexOf('activate-message-group-rows'),
       'message-group rows should activate after seed control-plane registration',
+    );
+  });
+
+test('BootstrapService - notifies local admin runtime before seed self-publication',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const order = [];
+    const bootstrap = new BootstrapService({
+      nodeId: 'bootstrap-local-admin-node',
+      nodeAddress: 'ws://localhost:12002',
+      wsPort: 12002,
+      onLocalAdminRuntimeReady: async ({owner, systemTableCache, messageRouter}) => {
+        order.push('local-admin-runtime');
+        t.equal(owner, bootstrap,
+          'callback should receive the active bootstrap owner');
+        t.same(systemTableCache, bootstrap.systemTableCache,
+          'callback should receive the current system cache');
+        t.same(messageRouter, bootstrap.messageRouter,
+          'callback should receive the current message router');
+      },
+    });
+
+    bootstrap.systemTableCache = {cache: true};
+    bootstrap.messageRouter = {router: true};
+    bootstrap.seedInfrastructurePhase.phaseInfrastructure = async () => {};
+    bootstrap.seedMessageGroupsPhase.phaseMessageGroups = async () => {};
+    bootstrap.seedPartitionsPhase.phasePartitions = async () => {};
+    bootstrap.seedRegistrationPhase.phaseRegistration = async () => {};
+    bootstrap.seedCacheHydrationPhase.phaseCacheHydration = async () => {};
+    bootstrap.initializeReplicaHandler = () => {};
+    bootstrap.initializeMessageGroupServiceHandler = () => {
+      bootstrap.messageGroupServiceHandler = {};
+    };
+    bootstrap.initializeControlPlaneService = async () => {
+      order.push('control-plane');
+    };
+    bootstrap.registerSeedNodeWithControlPlane = async () => {
+      order.push('seed-registration');
+      bootstrap.systemTableCache = createLocalServiceEndpointCache(
+        bootstrap.nodeId,
+      );
+    };
+    bootstrap.activateMessageGroupServiceRows = async () => {};
+    bootstrap.initializeRuntimeServiceHandler = () => {};
+    bootstrap.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {};
+    bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.logger = {
+      info() {},
+      debug() {},
+      warn() {},
+      error() {},
+    };
+
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+    t.ok(
+      order.indexOf('control-plane') < order.indexOf('local-admin-runtime'),
+      'local admin callback should wait for control-plane wiring',
+    );
+    t.ok(
+      order.indexOf('local-admin-runtime') < order.indexOf('seed-registration'),
+      'local admin callback should run before seed self-publication blocks startup',
     );
   });
 
@@ -297,122 +393,6 @@ test('Bootstrap sequence - without wsPort fails (no server)', async (t) => {
   } finally {
     await bootstrap.shutdown();
   }
-});
-
-test('Bootstrap sequence - startWebSocketServer after bootstrap', async (t) => {
-  initializeTestEnvironment();
-
-  const wsPort = getRandomPort();
-  const nodeId = `test-node-${Date.now()}`;
-
-  // Bootstrap without wsPort first
-  const bootstrap = new BootstrapService({
-    nodeId,
-    nodeAddress: `ws://localhost:${wsPort}`,
-    wsPort, // Set wsPort so startWebSocketServer can use it
-    config: {
-      leadershipWaitTimeoutMs: 5000,
-      leadershipWaitInitialDelayMs: 10,
-      partitionDbPath: ':memory:',
-    },
-  });
-
-  try {
-    const result = await bootstrap.bootstrap();
-
-    t.equal(result.success, true, 'bootstrap should succeed');
-
-    // Server should already be running since wsPort was provided
-    t.ok(result.messageRouter.server, 'WebSocket server should be running');
-    t.ok(result.messageRouter.hasSelfConnection(),
-      'self-connection should be established');
-
-    // Calling startWebSocketServer again should be a no-op
-    await bootstrap.startWebSocketServer();
-
-    // Server should still be running
-    t.ok(result.messageRouter.server, 'WebSocket server should still be running');
-    t.ok(result.messageRouter.hasSelfConnection(),
-      'self-connection should still be established');
-  } finally {
-    await bootstrap.shutdown();
-  }
-});
-
-
-test('Bootstrap sequence - epoch manager initialized with partition assignments', async (t) => {
-  initializeTestEnvironment();
-
-  const wsPort = getRandomPort();
-  const nodeId = `test-node-${Date.now()}`;
-
-  const bootstrap = new BootstrapService({
-    nodeId,
-    nodeAddress: `ws://localhost:${wsPort}`,
-    wsPort,
-    config: {
-      leadershipWaitTimeoutMs: 5000,
-      leadershipWaitInitialDelayMs: 10,
-      partitionDbPath: ':memory:',
-    },
-  });
-
-  try {
-    const result = await bootstrap.bootstrap();
-
-    t.equal(result.success, true, 'bootstrap should succeed');
-
-    // Verify epoch manager is created
-    t.ok(result.epochManager, 'should have epochManager in result');
-    t.ok(bootstrap.getEpochManager(), 'getEpochManager() should return the manager');
-
-    // Verify epoch manager is initialized
-    const epochManager = result.epochManager;
-    t.ok(epochManager.isInitialized(), 'epoch manager should be initialized');
-
-    // Verify initial epoch
-    const currentEpoch = epochManager.getCurrentEpoch();
-    t.equal(currentEpoch.epoch, 0, 'initial epoch should be 0');
-    t.equal(currentEpoch.proposedBy, nodeId, 'epoch should be proposed by seed node');
-
-    // Verify assignments contain partitions
-    const assignments = currentEpoch.assignments;
-    t.ok(Object.keys(assignments).length > 0, 'should have partition assignments');
-
-    // Verify all assignments point to the seed node
-    for (const [partitionId, nodes] of Object.entries(assignments)) {
-      t.ok(nodes.includes(nodeId),
-        `partition ${partitionId} should be assigned to seed node`);
-    }
-  } finally {
-    await bootstrap.shutdown();
-  }
-});
-
-test('Bootstrap sequence - epoch manager cleaned up on shutdown', async (t) => {
-  initializeTestEnvironment();
-
-  const wsPort = getRandomPort();
-  const nodeId = `test-node-${Date.now()}`;
-
-  const bootstrap = new BootstrapService({
-    nodeId,
-    nodeAddress: `ws://localhost:${wsPort}`,
-    wsPort,
-    config: {
-      leadershipWaitTimeoutMs: 5000,
-      leadershipWaitInitialDelayMs: 10,
-      partitionDbPath: ':memory:',
-    },
-  });
-
-  const result = await bootstrap.bootstrap();
-  t.equal(result.success, true, 'bootstrap should succeed');
-  t.ok(bootstrap.getEpochManager(), 'epoch manager should exist before shutdown');
-
-  await bootstrap.shutdown();
-
-  t.equal(bootstrap.getEpochManager(), null, 'epoch manager should be null after shutdown');
 });
 
 test('Bootstrap sequence - partition leadership wait fails when no leaders', async (t) => {

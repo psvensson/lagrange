@@ -22,6 +22,9 @@ import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
 import {
+  readAuthoritativeControlPlaneRows,
+} from './control-plane-system-table-gateway.js';
+import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
   LEASE_EMPTY_QUERY_PARAMS,
@@ -179,7 +182,8 @@ class LeaseService extends EventEmitter {
     }
 
     const now = this.now();
-    const result = await this.getControlPlaneSystemTableGateway().readRows(
+    const result = await readAuthoritativeControlPlaneRows(
+      this.getControlPlaneSystemTableGateway(),
       TABLES.NODES,
       LEASE_SQL.SELECT_ALL_NODES,
       LEASE_EMPTY_QUERY_PARAMS,

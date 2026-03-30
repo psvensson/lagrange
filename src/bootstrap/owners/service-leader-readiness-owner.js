@@ -22,6 +22,10 @@ import {
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
 } from '../bootstrap-api-constants.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+  resolveMembershipJoinIntentType,
+} from '../../control-plane/membership-lifecycle-controller.js';
 
 const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODES,
@@ -310,10 +314,18 @@ class ServiceLeaderReadinessOwner {
     };
   }
 
-  async waitForServiceLeaders() {
+  resolveRequiredLeaderTables(options = {}) {
+    return resolveMembershipJoinIntentType(options.startupMode) ===
+      MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
+      TRAFFIC_REQUIRED_LEADER_TABLES :
+      BOOTSTRAP_REQUIRED_LEADER_TABLES;
+  }
+
+  async waitForServiceLeaders(options = {}) {
+    const requiredTables = this.resolveRequiredLeaderTables(options);
     const missing = this.normalizeLeaderStatusForRequiredTables(
       this.getMissingServiceLeaders(),
-      BOOTSTRAP_REQUIRED_LEADER_TABLES,
+      requiredTables,
     );
     const blockingMissing = this.getBlockingLeaderStatusForReadiness(missing);
     const missingCount = this.countMissingLeaderInfo(blockingMissing);

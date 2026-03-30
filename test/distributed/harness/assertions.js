@@ -19,6 +19,10 @@ const NODES_QUERY =
 const PARTITIONS_QUERY = 'SELECT * FROM partitions';
 const CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX =
   'Control snapshot API is required for convergence assertions on node ';
+const CONVERGENCE_REACHABILITY_TIMEOUT_MS = 1000;
+const CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS = 10000;
+const ADMIN_SOCKET_LANE_DEFAULT = 'default';
+const ADMIN_SOCKET_LANE_SNAPSHOT = 'snapshot';
 
 // --- Service row field values ---
 const RAFT_ROLE_LEARNER = 'learner';
@@ -83,6 +87,8 @@ const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
   'timestamp',
 ]);
 const CONTROL_SNAPSHOT_FIELD_NODES = 'nodes';
+const CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES = 'publishedNodes';
+const CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES = 'projectedNodes';
 const CONTROL_SNAPSHOT_FIELD_PARTITIONS = 'partitions';
 const CONTROL_SNAPSHOT_FIELD_LEADERS = 'leaders';
 const CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS = 'voterCounts';
@@ -93,6 +99,7 @@ const CONTROL_SNAPSHOT_FIELD_ROWS = 'rows';
 const CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP = 'partitionMembership';
 const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS =
   'replicaRoleDiagnostics';
+const CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS = 'activeNodeViews';
 const REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS =
   'replicaLeaderNodeIds';
 const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES = 'replicaRoles';
@@ -170,16 +177,109 @@ function hasConflictingLeaders(leadersA, leadersB) {
 }
 
 /**
+ * Determine whether two active-node sets only differ by a small
+ * symmetric-difference skew, which can occur transiently during
+ * control-plane publication handoff after membership changes.
+ * @param {Array<string>} activeNodesA
+ * @param {Array<string>} activeNodesB
+ * @param {number} maxSkew
+ * @returns {boolean}
+ */
+function isTolerableActiveNodeSkew(activeNodesA, activeNodesB, maxSkew) {
+  if (!Array.isArray(activeNodesA) || !Array.isArray(activeNodesB)) {
+    return false;
+  }
+  const allowedSkew = Number.isFinite(maxSkew) ?
+    Math.max(0, Math.floor(maxSkew)) :
+    0;
+  if (allowedSkew <= 0) {
+    return false;
+  }
+
+  const setA = new Set(activeNodesA.map((nodeId) => String(nodeId)));
+  const setB = new Set(activeNodesB.map((nodeId) => String(nodeId)));
+  let differenceCount = 0;
+
+  for (const nodeId of setA) {
+    if (!setB.has(nodeId)) {
+      differenceCount += 1;
+      if (differenceCount > allowedSkew) {
+        return false;
+      }
+    }
+  }
+  for (const nodeId of setB) {
+    if (!setA.has(nodeId)) {
+      differenceCount += 1;
+      if (differenceCount > allowedSkew) {
+        return false;
+      }
+    }
+  }
+  return differenceCount <= allowedSkew;
+}
+
+/**
+ * Determine whether two partition-ID sets only differ by a small
+ * symmetric-difference skew, which can occur transiently while
+ * partition split publications are still propagating.
+ * @param {Array<string>} partitionsA
+ * @param {Array<string>} partitionsB
+ * @param {number} maxSkew
+ * @returns {boolean}
+ */
+function isTolerablePartitionSkew(partitionsA, partitionsB, maxSkew) {
+  if (!Array.isArray(partitionsA) || !Array.isArray(partitionsB)) {
+    return false;
+  }
+  const allowedSkew = Number.isFinite(maxSkew) ?
+    Math.max(0, Math.floor(maxSkew)) :
+    0;
+  if (allowedSkew <= 0) {
+    return false;
+  }
+
+  const setA = new Set(partitionsA.map((partitionId) => String(partitionId)));
+  const setB = new Set(partitionsB.map((partitionId) => String(partitionId)));
+  let differenceCount = 0;
+
+  for (const partitionId of setA) {
+    if (!setB.has(partitionId)) {
+      differenceCount += 1;
+      if (differenceCount > allowedSkew) {
+        return false;
+      }
+    }
+  }
+  for (const partitionId of setB) {
+    if (!setA.has(partitionId)) {
+      differenceCount += 1;
+      if (differenceCount > allowedSkew) {
+        return false;
+      }
+    }
+  }
+
+  return differenceCount <= allowedSkew;
+}
+
+/**
  * Probe reachability with structured diagnostics when available.
  * @param {Object} node
  * @returns {Promise<Object>}
  */
-async function probeNodeReachability(node) {
+async function probeNodeReachability(node, options = {}) {
+  const timeoutMs = Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
+    Math.floor(options.timeoutMs) :
+    CONVERGENCE_REACHABILITY_TIMEOUT_MS;
   if (typeof node?.getReachabilityDiagnostics === 'function') {
-    const diagnostics = await node.getReachabilityDiagnostics();
+    const diagnostics = await node.getReachabilityDiagnostics({
+      timeoutMs,
+    });
     return {
       nodeId: String(diagnostics?.nodeId || node?.id || 'unknown'),
       reachable: diagnostics?.reachable === true,
+      adminReady: diagnostics?.adminReady === true,
       reachableBy: diagnostics?.reachableBy || null,
       lastError: diagnostics?.lastError || null,
       diagnostics,
@@ -193,6 +293,7 @@ async function probeNodeReachability(node) {
       return {
         nodeId: String(result?.nodeId || node?.id || 'unknown'),
         reachable: result?.reachable === true,
+        adminReady: result?.adminReady === true,
         reachableBy: result?.reachableBy || null,
         lastError: result?.lastError || null,
         diagnostics: result,
@@ -202,6 +303,7 @@ async function probeNodeReachability(node) {
     return {
       nodeId: String(node?.id || 'unknown'),
       reachable: result === true,
+      adminReady: result === true,
       reachableBy: null,
       lastError: result === true ? null : 'reachability probe failed',
       diagnostics: null,
@@ -211,6 +313,7 @@ async function probeNodeReachability(node) {
   return {
     nodeId: String(node?.id || 'unknown'),
     reachable: false,
+    adminReady: false,
     reachableBy: null,
     lastError: 'node does not expose reachability probe',
     diagnostics: null,
@@ -422,6 +525,77 @@ function extractControlSnapshotNodeIds(snapshot) {
   return nodeIds;
 }
 
+function extractControlSnapshotPublishedNodeIds(snapshot) {
+  const activeNodeViews =
+    snapshot?.controlPlaneDiagnostics?.[CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS];
+  const hasActiveNodeViews =
+    activeNodeViews &&
+    typeof activeNodeViews === 'object' &&
+    !Array.isArray(activeNodeViews);
+  if (hasActiveNodeViews &&
+      activeNodeViews.publishedMembershipAvailable !== true) {
+    return null;
+  }
+
+  const explicitPublishedNodes = Array.isArray(
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES],
+  ) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PUBLISHED_NODES] :
+    (Array.isArray(activeNodeViews?.publishedNodeIds) ?
+      activeNodeViews.publishedNodeIds :
+      null);
+  if (Array.isArray(explicitPublishedNodes)) {
+    const nodeIds = new Set();
+    for (const nodeId of explicitPublishedNodes) {
+      const normalizedNodeId = String(nodeId || '').trim();
+      if (normalizedNodeId.length === 0) {
+        continue;
+      }
+      nodeIds.add(normalizedNodeId);
+    }
+    return nodeIds;
+  }
+
+  const publicationConvergence =
+    extractControlSnapshotPublicationConvergence(snapshot);
+  if (!Array.isArray(publicationConvergence?.publishedActiveNodeIds)) {
+    return null;
+  }
+  const nodeIds = new Set();
+  for (const nodeId of publicationConvergence.publishedActiveNodeIds) {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (normalizedNodeId.length === 0) {
+      continue;
+    }
+    nodeIds.add(normalizedNodeId);
+  }
+  return nodeIds;
+}
+
+function extractControlSnapshotProjectedNodeIds(snapshot) {
+  const activeNodeViews =
+    snapshot?.controlPlaneDiagnostics?.[CONTROL_SNAPSHOT_FIELD_ACTIVE_NODE_VIEWS];
+  const projectedNodes = Array.isArray(
+    snapshot?.[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES],
+  ) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_PROJECTED_NODES] :
+    (Array.isArray(activeNodeViews?.projectedNodeIds) ?
+      activeNodeViews.projectedNodeIds :
+      null);
+  if (!Array.isArray(projectedNodes)) {
+    return extractControlSnapshotNodeIds(snapshot);
+  }
+  const nodeIds = new Set();
+  for (const nodeId of projectedNodes) {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (normalizedNodeId.length === 0) {
+      continue;
+    }
+    nodeIds.add(normalizedNodeId);
+  }
+  return nodeIds;
+}
+
 function extractControlSnapshotPartitionIds(snapshot) {
   const partitionIds = new Set();
   const partitions = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITIONS]) ?
@@ -586,6 +760,33 @@ function extractControlSnapshotPartitionMembership(snapshot) {
   return partitionMembership;
 }
 
+function extractControlSnapshotPublicationConvergence(snapshot) {
+  const controlPlaneDiagnostics = snapshot?.controlPlaneDiagnostics;
+  if (!controlPlaneDiagnostics || typeof controlPlaneDiagnostics !== 'object') {
+    return null;
+  }
+  const publicationConvergence =
+    controlPlaneDiagnostics.publicationConvergence;
+  if (!publicationConvergence || typeof publicationConvergence !== 'object') {
+    return null;
+  }
+  return publicationConvergence;
+}
+
+function extractControlSnapshotControlPlaneDiagnostics(snapshot) {
+  const controlPlaneDiagnostics = snapshot?.controlPlaneDiagnostics;
+  if (!controlPlaneDiagnostics ||
+      typeof controlPlaneDiagnostics !== 'object' ||
+      Array.isArray(controlPlaneDiagnostics)) {
+    return null;
+  }
+  try {
+    return JSON.parse(JSON.stringify(controlPlaneDiagnostics));
+  } catch (_error) {
+    return null;
+  }
+}
+
 async function queryControlSnapshot(node, options = {}) {
   if (typeof node?.getControlSnapshot !== 'function') {
     throw new Error(
@@ -594,25 +795,73 @@ async function queryControlSnapshot(node, options = {}) {
     );
   }
 
-  const result = await node.getControlSnapshot({
-    forceRepair: options.forceRepair === true,
-  });
-  const snapshot = extractControlSnapshotPayload(result, node?.id);
-  const inFlightSummary = extractControlSnapshotInFlightSummary(snapshot);
+  const timeoutMs = Number.isFinite(options?.timeoutMs) && options.timeoutMs > 0 ?
+    Math.floor(options.timeoutMs) :
+    CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
+  const lane = typeof options?.lane === 'string' && options.lane.length > 0 ?
+    options.lane :
+    ADMIN_SOCKET_LANE_SNAPSHOT;
+  const allowLaneFallback = options?.allowLaneFallback !== false;
 
-  return {
-    nodeId: String(node?.id || VALUE_UNKNOWN),
-    servicesRows: [],
-    activeNodeIds: extractControlSnapshotNodeIds(snapshot),
-    expectedPartitionIds: extractControlSnapshotPartitionIds(snapshot),
-    operationRows: extractControlSnapshotOperationRows(snapshot),
-    error: null,
-    voterCounts: extractControlSnapshotVoterCounts(snapshot),
-    leaders: extractControlSnapshotLeaders(snapshot),
-    inFlightReplicaOperationCount: inFlightSummary.inFlightCount,
-    inFlightReplicaOperationStatuses: inFlightSummary.statusCounts,
-    partitionMembership: extractControlSnapshotPartitionMembership(snapshot),
+  const queryForLane = async (targetLane) => {
+    const result = await node.getControlSnapshot({
+      forceRepair: options.forceRepair === true,
+      timeoutMs,
+      lane: targetLane,
+    });
+    const snapshot = extractControlSnapshotPayload(result, node?.id);
+    const inFlightSummary = extractControlSnapshotInFlightSummary(snapshot);
+    const publicationConvergence =
+      extractControlSnapshotPublicationConvergence(snapshot);
+    const controlPlaneDiagnostics =
+      extractControlSnapshotControlPlaneDiagnostics(snapshot);
+
+    return {
+      nodeId: String(node?.id || VALUE_UNKNOWN),
+      servicesRows: [],
+      activeNodeIds: extractControlSnapshotNodeIds(snapshot),
+      authoritativeActiveNodeIds:
+        extractControlSnapshotPublishedNodeIds(snapshot),
+      projectedActiveNodeIds:
+        extractControlSnapshotProjectedNodeIds(snapshot),
+      expectedPartitionIds: extractControlSnapshotPartitionIds(snapshot),
+      operationRows: extractControlSnapshotOperationRows(snapshot),
+      error: null,
+      voterCounts: extractControlSnapshotVoterCounts(snapshot),
+      leaders: extractControlSnapshotLeaders(snapshot),
+      publicationEpoch:
+        Number.isInteger(publicationConvergence?.publicationEpoch) ?
+          publicationConvergence.publicationEpoch :
+          null,
+      publishedActiveNodeIds: Array.isArray(
+        publicationConvergence?.publishedActiveNodeIds,
+      ) ?
+        [...publicationConvergence.publishedActiveNodeIds].sort() :
+        null,
+      inFlightReplicaOperationCount: inFlightSummary.inFlightCount,
+      inFlightReplicaOperationStatuses: inFlightSummary.statusCounts,
+      partitionMembership: extractControlSnapshotPartitionMembership(snapshot),
+      controlPlaneDiagnostics,
+    };
   };
+
+  try {
+    return await queryForLane(lane);
+  } catch (primaryError) {
+    if (!allowLaneFallback || lane !== ADMIN_SOCKET_LANE_SNAPSHOT) {
+      throw primaryError;
+    }
+    try {
+      return await queryForLane(ADMIN_SOCKET_LANE_DEFAULT);
+    } catch (fallbackError) {
+      throw new Error(
+        String(primaryError?.message || primaryError) +
+          '; fallback lane ' + ADMIN_SOCKET_LANE_DEFAULT +
+          ' failed: ' +
+          String(fallbackError?.message || fallbackError),
+      );
+    }
+  }
 }
 
 async function queryNodeConsistencyStateViaSql(node) {
@@ -644,8 +893,68 @@ async function queryNodeConsistencyStateViaSql(node) {
   return {
     nodeId: node.id,
     activeNodes,
+    authoritativeActiveNodes: null,
+    projectedActiveNodes: null,
     partitions,
     leaders,
+  };
+}
+
+async function queryConvergenceSnapshotViaSql(node) {
+  const [partResult, svcResult] =
+    await Promise.all([
+      node.query(PARTITIONS_QUERY),
+      node.query(SERVICES_QUERY),
+    ]);
+
+  const partitionRows = (partResult && partResult.rows) || [];
+  const servicesRows = (svcResult && svcResult.rows) || [];
+  const voterCounts = countVotersPerPartition(servicesRows);
+  const leaders = extractLeaders(servicesRows);
+  const expectedPartitionIds = new Set(
+    partitionRows
+      .map((row) => String(row?.partition_id || ''))
+      .filter((partitionId) => partitionId.length > 0),
+  );
+
+  // When services rows are follower-only on a recovering node,
+  // supplement leader identity from persisted partition metadata.
+  for (const row of partitionRows) {
+    const partitionId = String(row?.partition_id || '').trim();
+    if (partitionId.length === 0 || leaders.has(partitionId)) {
+      continue;
+    }
+    const partitionLeader = String(
+      row?.leader_node_id || row?.leaderNodeId || row?.leader || '',
+    ).trim();
+    if (partitionLeader.length > 0) {
+      leaders.set(partitionId, partitionLeader);
+    }
+  }
+
+  if (expectedPartitionIds.size === 0 && voterCounts.size > 0) {
+    for (const partitionId of voterCounts.keys()) {
+      expectedPartitionIds.add(partitionId);
+    }
+  }
+
+  return {
+    nodeId: String(node?.id || VALUE_UNKNOWN),
+    servicesRows,
+    activeNodeIds: new Set(),
+    authoritativeActiveNodeIds: null,
+    projectedActiveNodeIds: new Set(),
+    expectedPartitionIds,
+    operationRows: [],
+    error: null,
+    voterCounts,
+    leaders,
+    publicationEpoch: null,
+    publishedActiveNodeIds: null,
+    inFlightReplicaOperationCount: 0,
+    inFlightReplicaOperationStatuses: new Map(),
+    partitionMembership: null,
+    controlPlaneDiagnostics: null,
   };
 }
 
@@ -660,11 +969,24 @@ async function queryNodeConsistencyState(node, options = {}) {
       return {
         nodeId: String(node?.id || VALUE_UNKNOWN),
         activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
+        authoritativeActiveNodes:
+          snapshotState.authoritativeActiveNodeIds instanceof Set ?
+            Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
+            null,
+        projectedActiveNodes:
+          snapshotState.projectedActiveNodeIds instanceof Set ?
+            Array.from(snapshotState.projectedActiveNodeIds).sort() :
+            null,
         partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
         leaders: Object.fromEntries(
           Array.from(snapshotState.leaders || [])
             .sort(([left], [right]) => left.localeCompare(right)),
         ),
+        publicationEpoch: snapshotState.publicationEpoch,
+        publishedActiveNodeIds:
+          snapshotState.authoritativeActiveNodeIds instanceof Set ?
+            Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
+            null,
       };
     } catch (error) {
       controlSnapshotError = error;
@@ -774,16 +1096,54 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
     options.targetVoterCount > 0 ?
     options.targetVoterCount :
     CONVERGENCE_DEFAULTS.targetVoterCount;
+  const forceRepair = options?.forceRepair === true;
+  const reachabilityTimeoutMs = Number.isFinite(options?.reachabilityTimeoutMs) &&
+    options.reachabilityTimeoutMs > 0 ?
+    Math.floor(options.reachabilityTimeoutMs) :
+    CONVERGENCE_REACHABILITY_TIMEOUT_MS;
+  const snapshotTimeoutMs = Number.isFinite(options?.snapshotTimeoutMs) &&
+    options.snapshotTimeoutMs > 0 ?
+    Math.floor(options.snapshotTimeoutMs) :
+    CONVERGENCE_CONTROL_SNAPSHOT_TIMEOUT_MS;
   let lastError = null;
   let bestSnapshot = null;
   let bestSnapshotDebt = null;
   for (const node of nodes) {
     try {
-      const report = await probeNodeReachability(node);
+      const report = await probeNodeReachability(node, {
+        timeoutMs: reachabilityTimeoutMs,
+      });
       if (!report.reachable) {
         continue;
       }
-      const snapshot = await queryControlSnapshot(node);
+      let snapshot = null;
+      let controlSnapshotError = null;
+      try {
+        snapshot = await queryControlSnapshot(node, {
+          forceRepair,
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+        });
+      } catch (error) {
+        controlSnapshotError = error;
+      }
+      if (!snapshot) {
+        try {
+          snapshot = await queryConvergenceSnapshotViaSql(node);
+          snapshot.error = controlSnapshotError ?
+            String(controlSnapshotError?.message || controlSnapshotError) :
+            null;
+        } catch (sqlFallbackError) {
+          if (!controlSnapshotError) {
+            throw sqlFallbackError;
+          }
+          throw new Error(
+            String(controlSnapshotError?.message || controlSnapshotError) +
+              '; raw convergence fallback failed: ' +
+              String(sqlFallbackError?.message || sqlFallbackError),
+          );
+        }
+      }
       // If the snapshot has no partition topology yet (e.g.
       // node just restarted and its cache is still hydrating),
       // try the next reachable node before accepting it.
@@ -831,11 +1191,33 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
   // whatever partial data is available rather than nothing.
   for (const node of nodes) {
     try {
-      const report = await probeNodeReachability(node);
+      const report = await probeNodeReachability(node, {
+        timeoutMs: reachabilityTimeoutMs,
+      });
       if (!report.reachable) {
         continue;
       }
-      return await queryControlSnapshot(node);
+      try {
+        return await queryControlSnapshot(node, {
+          timeoutMs: snapshotTimeoutMs,
+          lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+        });
+      } catch (controlSnapshotError) {
+        try {
+          const sqlFallbackSnapshot =
+            await queryConvergenceSnapshotViaSql(node);
+          sqlFallbackSnapshot.error = String(
+            controlSnapshotError?.message || controlSnapshotError,
+          );
+          return sqlFallbackSnapshot;
+        } catch (sqlFallbackError) {
+          throw new Error(
+            String(controlSnapshotError?.message || controlSnapshotError) +
+              '; raw convergence fallback failed: ' +
+              String(sqlFallbackError?.message || sqlFallbackError),
+          );
+        }
+      }
     } catch (err) {
       lastError = err?.message || String(err);
     }
@@ -851,6 +1233,7 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
     inFlightReplicaOperationCount: 0,
     inFlightReplicaOperationStatuses: new Map(),
     partitionMembership: null,
+    controlPlaneDiagnostics: null,
   };
 }
 
@@ -860,7 +1243,9 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
  *
  * Convergence is reached when ALL of the following hold:
  *   1. Every partition has at least one leader.
- *   2. No partition has voter count above targetVoterCount.
+ *   2. No partition has voter count above targetVoterCount
+ *      (or stale-only over-target when
+ *      ignoreStaleInFlightReplicaOperations is enabled).
  *   3. No leader identity change within quietWindowMs.
  *   4. No partition stayed over target for longer than
  *      maxSustainedOverTargetMs.
@@ -880,6 +1265,11 @@ async function waitForConvergence(nodes, options = {}) {
     sampleIntervalMs,
     targetVoterCount,
   } = opts;
+  const ignoreStaleInFlightReplicaOperations =
+    options?.ignoreStaleInFlightReplicaOperations === true;
+  const forceRepairAfterMs = Number.isFinite(options.forceRepairAfterMs) ?
+    options.forceRepairAfterMs :
+    TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
 
   const overTargetState = new Map();
   const previousLeaders = new Map();
@@ -891,18 +1281,28 @@ async function waitForConvergence(nodes, options = {}) {
   let latestExpectedPartitionIds = new Set();
   let latestOperationRows = [];
   let latestInFlightReplicaOperationCount = 0;
+  let latestStaleInFlightReplicaOperationCount = 0;
+  let latestEffectiveInFlightReplicaOperationCount = 0;
   let latestInFlightReplicaOperationStatuses = new Map();
   let latestPartitionMembership = null;
+  let latestControlPlaneDiagnostics = null;
   let latestSnapshotNodeId = null;
   let latestSnapshotError = null;
 
   const startMs = Date.now();
   const deadline = startMs + settleTimeoutMs;
+  const forceRepairThreshold = startMs + Math.max(0, forceRepairAfterMs);
+  let forceRepairAttempted = false;
 
   while (Date.now() <= deadline) {
     const now = Date.now();
+    const forceRepair = now >= forceRepairThreshold;
+    if (forceRepair && !forceRepairAttempted) {
+      forceRepairAttempted = true;
+    }
     const snapshot = await queryReachableClusterSnapshot(nodes, {
       targetVoterCount,
+      forceRepair,
     });
     latestRows = snapshot.servicesRows;
     latestExpectedPartitionIds = snapshot.expectedPartitionIds;
@@ -916,6 +1316,7 @@ async function waitForConvergence(nodes, options = {}) {
     latestInFlightReplicaOperationStatuses =
       snapshot.inFlightReplicaOperationStatuses;
     latestPartitionMembership = snapshot.partitionMembership;
+    latestControlPlaneDiagnostics = snapshot.controlPlaneDiagnostics;
 
     // When the partitions table is not yet fully in the cache
     // (e.g. after a seed restart) but services rows are
@@ -946,15 +1347,41 @@ async function waitForConvergence(nodes, options = {}) {
     const hasOverTarget = [...latestCounts.values()].some(
       (c) => c > targetVoterCount,
     );
+    const staleInFlightReplicaOperationCount = Number.isFinite(
+      latestControlPlaneDiagnostics?.replicaOperations?.staleInFlightCount,
+    ) ?
+      Math.max(
+        0,
+        Math.floor(
+          latestControlPlaneDiagnostics.replicaOperations
+            .staleInFlightCount,
+        ),
+      ) :
+      0;
+    latestStaleInFlightReplicaOperationCount =
+      staleInFlightReplicaOperationCount;
+    const effectiveInFlightReplicaOperationCount =
+      ignoreStaleInFlightReplicaOperations ?
+        Math.max(
+          0,
+          latestInFlightReplicaOperationCount -
+            staleInFlightReplicaOperationCount,
+        ) :
+        latestInFlightReplicaOperationCount;
+    latestEffectiveInFlightReplicaOperationCount =
+      effectiveInFlightReplicaOperationCount;
     const hasInFlightReplicaOperations =
-      latestInFlightReplicaOperationCount > 0;
+      effectiveInFlightReplicaOperationCount > 0;
+    const hasBlockingOverTarget = hasOverTarget &&
+      (!ignoreStaleInFlightReplicaOperations ||
+      hasInFlightReplicaOperations);
     const quietElapsed = now - lastLeaderChangeAt;
     const allHaveLeaders = latestExpectedPartitionIds.size > 0 &&
       [...latestExpectedPartitionIds].every(
         (pid) => latestLeaders.has(pid),
       );
 
-    if (!hasOverTarget &&
+    if (!hasBlockingOverTarget &&
         !hasInFlightReplicaOperations &&
         quietElapsed >= quietWindowMs &&
         allHaveLeaders) {
@@ -1037,6 +1464,10 @@ async function waitForConvergence(nodes, options = {}) {
     'Leaders: ' + JSON.stringify(leaderSummary) + '. ' +
     'In-flight replica operations: ' +
     latestInFlightReplicaOperationCount + '. ' +
+    (ignoreStaleInFlightReplicaOperations ?
+      'Effective in-flight replica operations: ' +
+      latestEffectiveInFlightReplicaOperationCount + '. ' :
+      '') +
     'In-flight statuses: ' +
     JSON.stringify(inFlightReplicaOperationSummary) + '. ' +
     'Over-target durations: ' + JSON.stringify(overTargetSummary) + '. ' +
@@ -1049,6 +1480,12 @@ async function waitForConvergence(nodes, options = {}) {
     leaders: leaderSummary,
     leaderChanges,
     inFlightReplicaOperationCount: latestInFlightReplicaOperationCount,
+    effectiveInFlightReplicaOperationCount:
+      ignoreStaleInFlightReplicaOperations ?
+        latestEffectiveInFlightReplicaOperationCount :
+        latestInFlightReplicaOperationCount,
+    staleInFlightReplicaOperationCount:
+      latestStaleInFlightReplicaOperationCount,
     inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
     replicaOperationRows: latestOperationRows,
     maxOverTargetMs: maxOT,
@@ -1060,6 +1497,7 @@ async function waitForConvergence(nodes, options = {}) {
     operationHistory,
     operationHistoryError,
     elapsedMs: Date.now() - startMs,
+    controlPlaneDiagnostics: latestControlPlaneDiagnostics,
   };
   throw err;
 }
@@ -1278,6 +1716,131 @@ function formatOperationHistoryEntry(entry) {
     OPERATION_HISTORY_AT_PREFIX + at;
 }
 
+function cloneDiagnostics(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function buildPublicationConvergenceFromState(state) {
+  const convergence = state?.controlPlaneDiagnostics?.publicationConvergence;
+  if (convergence &&
+      typeof convergence === 'object' &&
+      !Array.isArray(convergence)) {
+    return cloneDiagnostics(convergence);
+  }
+  const publicationEpoch = Number.isInteger(state?.publicationEpoch) ?
+    state.publicationEpoch :
+    null;
+  const publishedActiveNodeIds = Array.isArray(state?.publishedActiveNodeIds) ?
+    [...state.publishedActiveNodeIds].sort() :
+    null;
+  if (!Number.isInteger(publicationEpoch) &&
+      !Array.isArray(publishedActiveNodeIds)) {
+    return null;
+  }
+  return {
+    publicationEpoch,
+    publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds) ?
+      publishedActiveNodeIds :
+      [],
+  };
+}
+
+function buildConsistencyStateByNodeId(nodeStates) {
+  const stateByNodeId = {};
+  for (const state of Array.isArray(nodeStates) ? nodeStates : []) {
+    const nodeId = String(state?.nodeId || VALUE_UNKNOWN);
+    stateByNodeId[nodeId] = {
+      activeNodes: Array.isArray(state?.activeNodes) ?
+        [...state.activeNodes].sort() :
+        [],
+      authoritativeActiveNodes: Array.isArray(state?.authoritativeActiveNodes) ?
+        [...state.authoritativeActiveNodes].sort() :
+        null,
+      partitions: Array.isArray(state?.partitions) ?
+        [...state.partitions].sort() :
+        [],
+      publicationEpoch: Number.isInteger(state?.publicationEpoch) ?
+        state.publicationEpoch :
+        null,
+      publishedActiveNodeIds: Array.isArray(state?.publishedActiveNodeIds) ?
+        [...state.publishedActiveNodeIds].sort() :
+        [],
+    };
+  }
+  return stateByNodeId;
+}
+
+function buildConsistencyControlPlaneDiagnostics(nodeStates, mismatch) {
+  const publicationConvergenceByNodeId = {};
+  const snapshotDiagnosticsByNodeId = {};
+
+  for (const state of Array.isArray(nodeStates) ? nodeStates : []) {
+    const nodeId = String(state?.nodeId || VALUE_UNKNOWN);
+    const convergence = buildPublicationConvergenceFromState(state);
+    if (convergence) {
+      publicationConvergenceByNodeId[nodeId] = convergence;
+    }
+    const snapshotDiagnostics = cloneDiagnostics(state?.controlPlaneDiagnostics);
+    if (snapshotDiagnostics) {
+      snapshotDiagnosticsByNodeId[nodeId] = snapshotDiagnostics;
+    }
+  }
+
+  if (Object.keys(publicationConvergenceByNodeId).length === 0 &&
+      Object.keys(snapshotDiagnosticsByNodeId).length === 0) {
+    return null;
+  }
+
+  const preferredSnapshotNodeId = String(
+    mismatch?.referenceNodeId ||
+    (Array.isArray(nodeStates) && nodeStates.length > 0 ?
+      nodeStates[0]?.nodeId :
+      VALUE_UNKNOWN) ||
+    VALUE_UNKNOWN,
+  );
+  const publicationConvergence =
+    publicationConvergenceByNodeId[preferredSnapshotNodeId] ||
+    Object.values(publicationConvergenceByNodeId)[0] ||
+    null;
+
+  return {
+    snapshotNodeId: preferredSnapshotNodeId,
+    publicationConvergence,
+    publicationConvergenceByNodeId,
+    mismatch: {
+      ...(mismatch && typeof mismatch === 'object' ? mismatch : {}),
+      observedAt: new Date().toISOString(),
+    },
+    consistencyStateByNodeId: buildConsistencyStateByNodeId(nodeStates),
+    snapshotDiagnosticsByNodeId,
+  };
+}
+
+function createConsistencyMismatchError(message, options = {}) {
+  const error = new Error(message);
+  const controlPlaneDiagnostics = buildConsistencyControlPlaneDiagnostics(
+    options.nodeStates,
+    options.mismatch,
+  );
+  if (!controlPlaneDiagnostics) {
+    return error;
+  }
+  error.diagnostics = {
+    ...(error?.diagnostics && typeof error.diagnostics === 'object' ?
+      error.diagnostics :
+      {}),
+    controlPlaneDiagnostics,
+  };
+  return error;
+}
+
 /**
  * Assert all reachable nodes agree on cluster state: active
  * nodes, partition assignments, and leader identities.
@@ -1289,23 +1852,38 @@ async function assertConsistency(nodes, options = {}) {
   const forceRepair = options.forceRepair === true;
   const tolerateEmptyLeaders =
     options.tolerateEmptyLeaders === true;
-  const reachable = [];
+  const tolerateActiveNodeSkew = options.tolerateActiveNodeSkew === true;
+  const maxActiveNodeSkew = Number.isFinite(options.maxActiveNodeSkew) ?
+    Math.max(0, Math.floor(options.maxActiveNodeSkew)) :
+    1;
+  const toleratePartitionSkew = options.toleratePartitionSkew === true;
+  const maxPartitionSkew = Number.isFinite(options.maxPartitionSkew) ?
+    Math.max(0, Math.floor(options.maxPartitionSkew)) :
+    2;
+  const queryable = [];
   const reports = [];
   for (const node of nodes) {
     try {
       const report = await probeNodeReachability(node);
       reports.push(report);
-      if (report.reachable) reachable.push(node);
+      if (report.reachable !== true) {
+        continue;
+      }
+      if (typeof node?.getControlSnapshot === 'function' &&
+          report.adminReady !== true) {
+        continue;
+      }
+      queryable.push(node);
     } catch (_err) {
       // skip
     }
   }
 
-  if (reachable.length < 2) {
+  if (queryable.length < 2) {
     const summary = summarizeReachabilityReports(reports);
     throw new Error(
       'Cannot assert consistency: fewer than 2 reachable ' +
-      'nodes (found ' + reachable.length + '). Reachability: ' +
+      'nodes (found ' + queryable.length + '). Reachability: ' +
       summary,
     );
   }
@@ -1313,7 +1891,7 @@ async function assertConsistency(nodes, options = {}) {
   // Collect state from each reachable node.
   const nodeStates = [];
   const queryFailures = [];
-  for (const node of reachable) {
+  for (const node of queryable) {
     try {
       nodeStates.push(
         await queryNodeConsistencyState(node, {forceRepair}),
@@ -1342,35 +1920,137 @@ async function assertConsistency(nodes, options = {}) {
     );
   }
 
+  if (!forceRepair) {
+    const hasAuthoritativePublishedMembership = nodeStates.some((state) =>
+      Array.isArray(state?.authoritativeActiveNodes),
+    );
+    const hasMissingAuthoritativePublishedMembership = nodeStates.some((state) =>
+      !Array.isArray(state?.authoritativeActiveNodes),
+    );
+    if (hasAuthoritativePublishedMembership &&
+        hasMissingAuthoritativePublishedMembership) {
+      const reachableByNodeId = new Map(
+        queryable.map((node) => [String(node?.id || ''), node]),
+      );
+      for (let i = 0; i < nodeStates.length; i++) {
+        const state = nodeStates[i];
+        if (Array.isArray(state?.authoritativeActiveNodes)) {
+          continue;
+        }
+        const node = reachableByNodeId.get(String(state?.nodeId || ''));
+        if (!node) {
+          continue;
+        }
+        try {
+          nodeStates[i] = await queryNodeConsistencyState(node, {
+            forceRepair: true,
+          });
+        } catch (_error) {
+          // Keep the original non-repaired observation if the retry fails.
+        }
+      }
+    }
+  }
+
   // Compare all states against the first node.
   const reference = nodeStates[0];
   const refActiveStr = JSON.stringify(reference.activeNodes);
+  const refHasAuthoritativeActiveNodes =
+    Array.isArray(reference.authoritativeActiveNodes);
+  const refAuthoritativeActiveStr = refHasAuthoritativeActiveNodes ?
+    JSON.stringify(reference.authoritativeActiveNodes) :
+    null;
   const refPartStr = JSON.stringify(reference.partitions);
   const refLeaders = sortObjectKeys(
     normalizeLeaders(reference.leaders),
   );
   const refLeaderStr = JSON.stringify(refLeaders);
+  const refPublicationEpoch = Number.isInteger(reference.publicationEpoch) ?
+    reference.publicationEpoch :
+    null;
+  const refPublishedActiveStr = JSON.stringify(
+    Array.isArray(reference.publishedActiveNodeIds) ?
+      [...reference.publishedActiveNodeIds].sort() :
+      [],
+  );
 
   for (let i = 1; i < nodeStates.length; i++) {
     const other = nodeStates[i];
 
     const otherActiveStr = JSON.stringify(other.activeNodes);
-    if (otherActiveStr !== refActiveStr) {
-      throw new Error(
+    const otherHasAuthoritativeActiveNodes =
+      Array.isArray(other.authoritativeActiveNodes);
+    const canCompareAuthoritativeActiveNodes =
+      refHasAuthoritativeActiveNodes &&
+      otherHasAuthoritativeActiveNodes;
+
+    if (canCompareAuthoritativeActiveNodes) {
+      const otherAuthoritativeActiveStr =
+        JSON.stringify(other.authoritativeActiveNodes);
+      if (otherAuthoritativeActiveStr !== refAuthoritativeActiveStr) {
+        throw createConsistencyMismatchError(
+          'Published active-node sets disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId + '. ' +
+          reference.nodeId + ': ' + refAuthoritativeActiveStr + '. ' +
+          other.nodeId + ': ' + otherAuthoritativeActiveStr,
+          {
+            nodeStates,
+            mismatch: {
+              reasonCode: 'published_active_nodes_disagree',
+              referenceNodeId: reference.nodeId,
+              otherNodeId: other.nodeId,
+            },
+          },
+        );
+      }
+    } else if (otherActiveStr !== refActiveStr) {
+      if (tolerateActiveNodeSkew &&
+          isTolerableActiveNodeSkew(
+            reference.activeNodes,
+            other.activeNodes,
+            maxActiveNodeSkew,
+          )) {
+        continue;
+      }
+      throw createConsistencyMismatchError(
         'Active nodes disagree between ' +
         reference.nodeId + ' and ' + other.nodeId + '. ' +
         reference.nodeId + ': ' + refActiveStr + '. ' +
         other.nodeId + ': ' + otherActiveStr,
+        {
+          nodeStates,
+          mismatch: {
+            reasonCode: 'active_nodes_disagree',
+            referenceNodeId: reference.nodeId,
+            otherNodeId: other.nodeId,
+          },
+        },
       );
     }
 
     const otherPartStr = JSON.stringify(other.partitions);
     if (otherPartStr !== refPartStr) {
-      throw new Error(
+      if (toleratePartitionSkew &&
+          isTolerablePartitionSkew(
+            reference.partitions,
+            other.partitions,
+            maxPartitionSkew,
+          )) {
+        continue;
+      }
+      throw createConsistencyMismatchError(
         'Partition assignments disagree between ' +
         reference.nodeId + ' and ' + other.nodeId + '. ' +
         reference.nodeId + ': ' + refPartStr + '. ' +
         other.nodeId + ': ' + otherPartStr,
+        {
+          nodeStates,
+          mismatch: {
+            reasonCode: 'partition_assignments_disagree',
+            referenceNodeId: reference.nodeId,
+            otherNodeId: other.nodeId,
+          },
+        },
       );
     }
 
@@ -1383,12 +2063,64 @@ async function assertConsistency(nodes, options = {}) {
           !hasConflictingLeaders(refLeaders, otherLeaders)) {
         continue;
       }
-      throw new Error(
+      throw createConsistencyMismatchError(
         'Leader identities disagree between ' +
         reference.nodeId + ' and ' + other.nodeId + '. ' +
         reference.nodeId + ': ' + refLeaderStr + '. ' +
         other.nodeId + ': ' + otherLeaderStr,
+        {
+          nodeStates,
+          mismatch: {
+            reasonCode: 'leader_identities_disagree',
+            referenceNodeId: reference.nodeId,
+            otherNodeId: other.nodeId,
+          },
+        },
       );
+    }
+
+    if (canCompareAuthoritativeActiveNodes) {
+      const otherPublicationEpoch = Number.isInteger(other.publicationEpoch) ?
+        other.publicationEpoch :
+        null;
+      if (otherPublicationEpoch !== refPublicationEpoch) {
+        throw createConsistencyMismatchError(
+          'Publication epochs disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId + '. ' +
+          reference.nodeId + ': ' + String(refPublicationEpoch) + '. ' +
+          other.nodeId + ': ' + String(otherPublicationEpoch),
+          {
+            nodeStates,
+            mismatch: {
+              reasonCode: 'publication_epochs_disagree',
+              referenceNodeId: reference.nodeId,
+              otherNodeId: other.nodeId,
+            },
+          },
+        );
+      }
+
+      const otherPublishedActiveStr = JSON.stringify(
+        Array.isArray(other.publishedActiveNodeIds) ?
+          [...other.publishedActiveNodeIds].sort() :
+          [],
+      );
+      if (otherPublishedActiveStr !== refPublishedActiveStr) {
+        throw createConsistencyMismatchError(
+          'Published active-node sets disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId + '. ' +
+          reference.nodeId + ': ' + refPublishedActiveStr + '. ' +
+          other.nodeId + ': ' + otherPublishedActiveStr,
+          {
+            nodeStates,
+            mismatch: {
+              reasonCode: 'published_active_nodes_disagree',
+              referenceNodeId: reference.nodeId,
+              otherNodeId: other.nodeId,
+            },
+          },
+        );
+      }
     }
   }
 }
@@ -1421,17 +2153,17 @@ async function waitForConsistencyConvergence(nodes, options = {}) {
   const forceRepairThreshold = Date.now() +
     Math.max(0, forceRepairAfterMs);
   let lastError = null;
-  let forceRepairAttempted = false;
 
   while (Date.now() <= deadline) {
     const forceRepair = Date.now() >= forceRepairThreshold;
-    if (forceRepair && !forceRepairAttempted) {
-      forceRepairAttempted = true;
-    }
     try {
       await assertConsistency(nodes, {
         forceRepair,
-        tolerateEmptyLeaders: forceRepairAttempted,
+        tolerateEmptyLeaders: true,
+        tolerateActiveNodeSkew: options.tolerateActiveNodeSkew === true,
+        maxActiveNodeSkew: options.maxActiveNodeSkew,
+        toleratePartitionSkew: options.toleratePartitionSkew === true,
+        maxPartitionSkew: options.maxPartitionSkew,
       });
       return;
     } catch (error) {
@@ -1487,24 +2219,74 @@ function assertConsistencyFromSnapshots(snapshots) {
     nodeId: String(snapshot?.nodeId || VALUE_UNKNOWN),
     activeNodes: Array.isArray(snapshot?.nodes) ?
       [...snapshot.nodes].sort() : [],
+    authoritativeActiveNodes:
+      extractControlSnapshotPublishedNodeIds(snapshot) instanceof Set ?
+        Array.from(extractControlSnapshotPublishedNodeIds(snapshot)).sort() :
+        null,
+    projectedActiveNodes:
+      Array.from(extractControlSnapshotProjectedNodeIds(snapshot)).sort(),
     partitions: Array.isArray(snapshot?.partitions) ?
       [...snapshot.partitions].sort() : [],
     leaders: snapshot?.leaders &&
       typeof snapshot.leaders === 'object' ?
       sortObjectKeys(normalizeLeaders(snapshot.leaders)) : {},
+    publicationEpoch: Number.isInteger(
+      snapshot?.controlPlaneDiagnostics?.publicationConvergence?.publicationEpoch,
+    ) ?
+      snapshot.controlPlaneDiagnostics.publicationConvergence.publicationEpoch :
+      (Number.isInteger(snapshot?.publicationEpoch) ?
+        snapshot.publicationEpoch :
+        null),
+    publishedActiveNodeIds: Array.isArray(
+      snapshot?.controlPlaneDiagnostics?.publicationConvergence?.publishedActiveNodeIds,
+    ) ?
+      [...snapshot.controlPlaneDiagnostics.publicationConvergence
+        .publishedActiveNodeIds].sort() :
+      (Array.isArray(snapshot?.publishedActiveNodeIds) ?
+        [...snapshot.publishedActiveNodeIds].sort() :
+        []),
   }));
 
   const reference = normalized[0];
   const refActiveStr = JSON.stringify(reference.activeNodes);
+  const refHasAuthoritativeActiveNodes =
+    Array.isArray(reference.authoritativeActiveNodes);
+  const refAuthoritativeActiveStr = refHasAuthoritativeActiveNodes ?
+    JSON.stringify(reference.authoritativeActiveNodes) :
+    null;
   const refPartStr = JSON.stringify(reference.partitions);
   const refLeaderStr = JSON.stringify(reference.leaders);
+  const refPublicationEpoch = Number.isInteger(reference.publicationEpoch) ?
+    reference.publicationEpoch :
+    null;
+  const refPublishedActiveStr = JSON.stringify(
+    reference.publishedActiveNodeIds,
+  );
 
   for (let i = 1; i < normalized.length; i++) {
     const other = normalized[i];
 
     const otherActiveStr =
       JSON.stringify(other.activeNodes);
-    if (otherActiveStr !== refActiveStr) {
+    const otherHasAuthoritativeActiveNodes =
+      Array.isArray(other.authoritativeActiveNodes);
+    const canCompareAuthoritativeActiveNodes =
+      refHasAuthoritativeActiveNodes &&
+      otherHasAuthoritativeActiveNodes;
+
+    if (canCompareAuthoritativeActiveNodes) {
+      const otherAuthoritativeActiveStr =
+        JSON.stringify(other.authoritativeActiveNodes);
+      if (otherAuthoritativeActiveStr !== refAuthoritativeActiveStr) {
+        throw new Error(
+          'Published active-node sets disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId +
+          '. ' + reference.nodeId + ': ' +
+          refAuthoritativeActiveStr + '. ' +
+          other.nodeId + ': ' + otherAuthoritativeActiveStr,
+        );
+      }
+    } else if (otherActiveStr !== refActiveStr) {
       throw new Error(
         'Active nodes disagree between ' +
         reference.nodeId + ' and ' + other.nodeId +
@@ -1536,6 +2318,30 @@ function assertConsistencyFromSnapshots(snapshots) {
         refLeaderStr + '. ' +
         other.nodeId + ': ' + otherLeaderStr,
       );
+    }
+
+    if (canCompareAuthoritativeActiveNodes) {
+      if (other.publicationEpoch !== refPublicationEpoch) {
+        throw new Error(
+          'Publication epochs disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId +
+          '. ' + reference.nodeId + ': ' +
+          String(refPublicationEpoch) + '. ' +
+          other.nodeId + ': ' + String(other.publicationEpoch),
+        );
+      }
+
+      const otherPublishedActiveStr =
+        JSON.stringify(other.publishedActiveNodeIds);
+      if (otherPublishedActiveStr !== refPublishedActiveStr) {
+        throw new Error(
+          'Published active-node sets disagree between ' +
+          reference.nodeId + ' and ' + other.nodeId +
+          '. ' + reference.nodeId + ': ' +
+          refPublishedActiveStr + '. ' +
+          other.nodeId + ': ' + otherPublishedActiveStr,
+        );
+      }
     }
   }
 }

@@ -1,11 +1,3 @@
-/**
- * Join Message Group Phase — handles joining an existing message group
- * by moving a replica during the join process.
- *
- * Extracted from NodeJoiningService to keep the orchestrator thin.
- * The class receives required dependencies via constructor injection.
- */
-
 import {assertCritical} from '../../utils/assert.js';
 import {NodeService} from '../../node/node-service.js';
 import {
@@ -31,29 +23,12 @@ import {
 const LOG_ENVELOPE_DEFAULT = JOIN_REPLICA_DEFAULT.LOG_ENVELOPE;
 const LOG_REGISTRATION_DEFAULT = JOIN_REPLICA_DEFAULT.LOG_REGISTRATION;
 
-/**
- * Handles the join-existing-message-group phase and
- * replica startup ownership assertion during the join process.
- */
-class JoinMessageGroupPhase {
-  /**
-   * @param {Object} options
-   * @param {string} options.nodeId - This node's ID.
-   * @param {Object} options.delegates - Callbacks into the joining
-   *   service for accessing mutable state.
-   */
+class JoinMessageGroupRuntimeOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.delegates = options.delegates || {};
   }
 
-  /**
-   * Enforce single-owner invariant before starting a local
-   * message-group replica.
-   * Unauthorized duplicate startup must fail fast.
-   * @param {string} replicaId
-   * @return {void}
-   */
   assertReplicaStartupOwnership(replicaId) {
     const systemTableCache =
       NodeService.getInstance().getSystemTableCache();
@@ -105,13 +80,6 @@ class JoinMessageGroupPhase {
     );
   }
 
-  /**
-   * Phase 3b: Join existing message group by moving a replica.
-   * Requirements: 8.3 - Services created AFTER self-connection
-   * established.
-   * @param {Object} assignment - Assignment instructions.
-   * @return {Promise<void>}
-   */
   async phaseJoinExistingMessageGroup(assignment) {
     const {
       groupId,
@@ -132,26 +100,17 @@ class JoinMessageGroupPhase {
       replicaToMove: assignment.replicaToMove,
     });
 
-    // Requirements: 8.3 - MessageRouter should already be
-    // initialized in phaseConnectWebSocket
     const messageRouter = this.delegates.getMessageRouter();
     if (!messageRouter) {
       throw new Error(JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
     }
 
-    // MOVE_REPLICA strategy: Take over the existing replica ID
-    // from the source node. We don't create a new replica, we
-    // take over an existing one. The services table entry will
-    // be UPDATED to point to this node.
     const replicaId = assignment.replicaToMove;
     if (!replicaId) {
       throw new Error(JOINING_ERROR_MSG.MOVE_REPLICA_MISSING);
     }
     this.assertReplicaStartupOwnership(replicaId);
 
-    // The replica IDs stay the same - we're just moving one
-    // replica to a different node. existingPeerIds already
-    // contains all replica IDs including the one being moved.
     const allReplicaIds = existingPeerIds || [];
 
     logger.info(JOINING_LOG_MSG.JOIN_CREATING_WITH_PEERS, {
@@ -178,9 +137,6 @@ class JoinMessageGroupPhase {
         replicaIds: allReplicaIds,
         replicaIndex: NUM.ZERO,
         peerAddresses: peerAddresses || [],
-        // Join-time replicas must not campaign before the existing control
-        // plane has converged on their placement. Existing leaders will pull
-        // them into the group via AppendEntries without a local election.
         deferElection: true,
         isJoiningExistingGroup: true,
         createDelayMs: NUM.ZERO,
@@ -210,12 +166,6 @@ class JoinMessageGroupPhase {
       raftTerm: messageGroup.raft?.term,
     });
 
-    // Do not publish the services row yet. The joining node must not become
-    // a routable replica target until canonical node membership and endpoint
-    // publication have completed. The shared activation step after
-    // QUERYING_STATE is the only owner allowed to make local replicas
-    // externally targetable during join.
-
     logger.info(JOINING_LOG_MSG.JOINED_EXISTING_GROUP, {
       nodeId: this.nodeId,
       groupId,
@@ -226,4 +176,4 @@ class JoinMessageGroupPhase {
   }
 }
 
-export {JoinMessageGroupPhase};
+export {JoinMessageGroupRuntimeOwner};

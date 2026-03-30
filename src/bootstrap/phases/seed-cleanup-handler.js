@@ -270,11 +270,12 @@ class SeedCleanupHandler {
       d.setLatencyTopology(null);
 
       d.clearCdcIntegrationService();
+      await d.clearRuntimeServiceHandler();
       d.stopAndClearControlPlaneServices();
-      d.clearRpcClient();
+      await d.clearRpcClient();
       d.clearReplicaStateMachine();
       d.clearEpochManager();
-      d.clearReplicaHandler();
+      await d.clearReplicaHandler();
       d.clearTablePolicyService();
       d.clearRebalanceCoordinator();
       d.clearNodeReadyRebalanceState();
@@ -561,8 +562,9 @@ class SeedCleanupHandler {
     await LatencyTopologySetup.stop(d.getLatencyTopology());
     d.setLatencyTopology(null);
 
+    await d.clearRuntimeServiceHandler();
     d.stopAndClearControlPlaneServices();
-    d.clearRpcClient();
+    await d.clearRpcClient();
     d.clearReplicaStateMachine();
 
     const systemTableWriter = d.getSystemTableWriter();
@@ -571,7 +573,7 @@ class SeedCleanupHandler {
     }
     d.setSystemTableWriter(null);
     d.clearEpochManager();
-    d.clearReplicaHandler();
+    await d.clearReplicaHandler();
 
     // Shutdown partition services
     for (const [replicaId, partition] of

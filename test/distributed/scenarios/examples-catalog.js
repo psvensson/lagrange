@@ -136,14 +136,79 @@ async function resolveLocalReplicaNodes(nodes, seedNode, tableName) {
 function createClusterClient(nodes, seedNode, options = {}) {
   const routingCache = new Map();
   const localReplicaRouting = options.localReplicaRouting === true;
+  const preferredReadNodes = [
+    ...nodes.filter((node) => node?.id !== seedNode?.id),
+    ...nodes.filter((node) => node?.id === seedNode?.id),
+  ];
+
+  const buildCandidateNodeOrder = (preferredNode) => {
+    const ordered = [];
+    const pushNode = (node) => {
+      if (!node || typeof node.query !== 'function' ||
+          typeof node.partitionCallback !== 'function') {
+        return;
+      }
+      if (ordered.some((candidate) => candidate.id === node.id)) {
+        return;
+      }
+      ordered.push(node);
+    };
+
+    if (preferredNode?.id === seedNode?.id) {
+      for (const node of preferredReadNodes) {
+        pushNode(node);
+      }
+      return ordered;
+    }
+
+    pushNode(preferredNode);
+    for (const node of preferredReadNodes) {
+      pushNode(node);
+    }
+    return ordered;
+  };
+
+  const queryAcrossNodes = async (sql, params = []) => {
+    const candidates = preferredReadNodes.filter((node) =>
+      node && typeof node.query === 'function',
+    );
+    let lastError = null;
+    for (const node of candidates) {
+      try {
+        return await node.query(sql, params);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
+    return seedNode.query(sql, params);
+  };
+
+  const partitionCallbackAcrossNodes = async (payload, preferredNode) => {
+    const candidates = buildCandidateNodeOrder(preferredNode);
+    let lastError = null;
+    for (const node of candidates) {
+      try {
+        return await node.partitionCallback(payload);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
+    return seedNode.partitionCallback(payload);
+  };
 
   const pickNodeForTable = async (statement) => {
     if (!localReplicaRouting) {
-      return seedNode;
+      return preferredReadNodes[ZERO] || seedNode;
     }
     const tableName = parseTableName(statement);
     if (!tableName) {
-      return seedNode;
+      return preferredReadNodes[ZERO] || seedNode;
     }
     const cached = routingCache.get(tableName);
     if (cached && Array.isArray(cached.nodes) && cached.nodes.length > ZERO) {
@@ -156,28 +221,25 @@ function createClusterClient(nodes, seedNode, options = {}) {
       tableName,
     );
     if (replicaNodes.length === ZERO) {
-      return seedNode;
+      return preferredReadNodes[ZERO] || seedNode;
     }
+    const preferredReplicaNodes = [
+      ...replicaNodes.filter((node) => node?.id !== seedNode?.id),
+      ...replicaNodes.filter((node) => node?.id === seedNode?.id),
+    ];
     routingCache.set(tableName, {
-      nodes: replicaNodes,
+      nodes: preferredReplicaNodes,
       cursor: ZERO,
     });
-    return replicaNodes[ZERO];
+    return preferredReplicaNodes[ZERO];
   };
 
   return {
-    query: (sql, params) => seedNode.query(sql, params),
+    query: (sql, params) => queryAcrossNodes(sql, params),
     partitionCallback: async (payload) => {
       const statement = payload?.statement || '';
       const preferredNode = await pickNodeForTable(statement);
-      try {
-        return await preferredNode.partitionCallback(payload);
-      } catch (error) {
-        if (preferredNode === seedNode) {
-          throw error;
-        }
-        return seedNode.partitionCallback(payload);
-      }
+      return partitionCallbackAcrossNodes(payload, preferredNode);
     },
   };
 }

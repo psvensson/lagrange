@@ -74,6 +74,14 @@ function buildRuntimeFailureScenario() {
               capturedAtMs: 1,
               controlPlaneDiagnostics: {
                 schemaVersion: 1,
+                publicationConvergence: {
+                  publicationEpoch: 7,
+                  publicationStatus: 'pending',
+                  publishedActiveNodeIds: ['node-1', 'node-2'],
+                  requiredAckNodeIds: ['node-1', 'node-2'],
+                  acknowledgedNodeIds: ['node-1'],
+                  pendingAckNodeIds: ['node-2'],
+                },
                 publicationMode: {
                   currentMode: 'conservative_fanout',
                   reasonCode: 'grouped_delivery_failed',
@@ -402,6 +410,57 @@ function buildPlaybackDerivedFailureResult() {
   };
 }
 
+function buildConvergenceDiagnosticsOnlyScenario() {
+  return {
+    scenario: 'rolling-restart',
+    passed: false,
+    error: 'Convergence timeout after 120000ms',
+    details: {
+      diagnostics: {
+        failure: {
+          rootCauseClass: 'topology',
+          dominantReason: 'convergence_timeout',
+          reasonCounts: {
+            convergence_timeout: 1,
+          },
+          affectedNodeIds: ['seed-1', 'joiner-1'],
+        },
+        failedPhase: {
+          phase: 'pre_load_gate',
+          artifacts: {},
+        },
+        snapshotNodeId: 'seed-1',
+        controlPlaneDiagnostics: {
+          publicationConvergence: {
+            publicationEpoch: 8,
+            publicationStatus: 'ack_pending',
+            pendingAckNodeIds: ['joiner-1'],
+            requiredAckNodeIds: ['seed-1', 'joiner-1', 'joiner-2'],
+            acknowledgedNodeIds: ['seed-1', 'joiner-2'],
+            publishedActiveNodeIds: ['seed-1', 'joiner-2'],
+          },
+          publicationMode: {
+            currentMode: 'recovering',
+            reasonCode: 'publication_ack_pending',
+          },
+          readinessByNodeId: {
+            'joiner-1': {
+              nodeId: 'joiner-1',
+              dimensions: {
+                serveEligible: false,
+                repairEligible: true,
+              },
+              reasons: [{
+                code: 'control_plane_publication_pending',
+              }],
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
 describe('failure-bundle', () => {
   let tempDir;
   let outputDir;
@@ -425,10 +484,23 @@ describe('failure-bundle', () => {
         join(scenarioDir, 'node-1.log'),
         [
           'line-1',
+          '2026-03-07T00:00:03.000Z [node-1] info: ' +
+            '{"level":30,"time":"2026-03-07T00:00:03.000Z",' +
+            '"nodeId":"node-1","msg":"Resolved startup auto-rejoin decision",' +
+            '"mode":"join","source":"rejoin_hints",' +
+            '"startupMode":"durable_rejoin","peerAddress":"seed-1:8080"}',
+          '2026-03-07T00:00:03.500Z [node-1] info: ' +
+            '{"level":30,"time":"2026-03-07T00:00:03.500Z",' +
+            '"nodeId":"node-1","msg":"Startup runtime handoff completed",' +
+            '"startupBranch":"join","startupPhase":"READY",' +
+            '"bootstrapApiHasSqlQueryEngine":true,' +
+            '"bootstrapApiHasMessageRouter":true,' +
+            '"bootstrapApiHasStartupRecoveryCoordinator":true,' +
+            '"adminRuntimeStarted":true,"adminPort":8081}',
           '2026-03-07T00:00:04.000Z [node-1] info: ' +
             '{"level":40,"time":"2026-03-07T00:00:04.000Z",' +
             '"nodeId":"node-1","pid":1,"subsystem":"query-executor",' +
-            `"msg":"Partition routing candidates filtered by readiness",` +
+            '"msg":"Partition routing candidates filtered by readiness",' +
             '"partitionId":"users-p1",' +
             '"routingSnapshot":{' +
               '"reasonCode":"all_services_filtered_by_readiness",' +
@@ -442,7 +514,8 @@ describe('failure-bundle', () => {
                 '"node-1":{' +
                   '"decisionDimension":"serveEligible",' +
                   '"reasonCodes":["cluster_member_unhealthy"],' +
-                  '"failedDimensions":["clusterMemberHealthy","controlPlaneWritable","serveEligible"]' +
+                  '"failedDimensions":[' +
+                    '"clusterMemberHealthy","controlPlaneWritable","serveEligible"]' +
                 '}' +
               '}' +
             '}}',
@@ -451,6 +524,28 @@ describe('failure-bundle', () => {
       );
       await writeFile(join(scenarioDir, '_timeline.log'), 'timeline\n');
       await writeFile(join(scenarioDir, '_analysis.json'), '{"summary":"ok"}\n');
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [JSON.stringify({
+          timestamp: 1709769603500,
+          type: 'node.restart.boundary',
+          scope: 'node',
+          entityId: 'node-1',
+          details: {
+            phase: 'after_ready',
+            snapshot: {
+              nodeId: 'node-1',
+              publicationConvergence: {
+                publicationEpoch: 7,
+                pendingAckNodeIds: ['node-2'],
+              },
+              localReadiness: {
+                reasonCodes: ['control_plane_publication_pending'],
+              },
+            },
+          },
+        })].join('\n') + '\n',
+      );
 
       const scenario = buildRuntimeFailureScenario();
       const writer = new ReportWriter(reportPath);
@@ -502,6 +597,14 @@ describe('failure-bundle', () => {
         'seed-1/message-group/mg-1',
       );
       assert.equal(
+        scenarioBundle.publicationConvergence.pendingAckCount,
+        1,
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.failureClass,
+        'publication_convergence_blocked',
+      );
+      assert.equal(
         scenarioBundle.controlPlane.workflowAdmissionsByWorkflowId[
           'split-tbl-users-users-p1-v2'
         ].timeoutClassification.classification,
@@ -526,8 +629,30 @@ describe('failure-bundle', () => {
       );
       assert.equal(
         scenarioBundle.nodeDiagnostics['node-1']
+          .decisionArtifacts.latestStartupDecision.startupMode,
+        'durable_rejoin',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1']
+          .decisionArtifacts.latestRuntimeHandoff.startupBranch,
+        'join',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1'].restartBoundaries[0].phase,
+        'after_ready',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1']
           .routingDiagnostics.deniedByNodeId['node-1'].reasonCodes[0],
         'cluster_member_unhealthy',
+      );
+      assert.equal(
+        scenarioBundle.recoveryReadiness.routingDimensionCounts.serveEligible,
+        1,
+      );
+      assert.equal(
+        scenarioBundle.recoveryReadiness.pendingAckBlockedNodeIds.includes('node-2'),
+        true,
       );
       assert.match(
         scenarioBundle.nodeDiagnostics['node-1'].errors[0],
@@ -563,16 +688,28 @@ describe('failure-bundle', () => {
         reportJson.scenarios[0].failureBundle.jsonPath,
         scenario.failureBundle.jsonPath,
       );
+      assert.equal(
+        reportJson.scenarios[0].failureClassification.failureClass,
+        'publication_convergence_blocked',
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence.pendingAckCount,
+        1,
+      );
 
       const markdown = await readFile(
         resolve(tempDir, scenario.failureBundle.markdownPath),
         UTF8_ENCODING,
       );
       assert.match(markdown, /## Node Diagnostics/);
+      assert.match(markdown, /## Publication Convergence/);
+      assert.match(markdown, /## Recovery Readiness/);
       assert.match(markdown, /## Control Plane Diagnostics/);
       assert.match(markdown, /Heartbeat Publication/);
       assert.match(markdown, /Timeline Correlation/);
       assert.match(markdown, /Routing Diagnostics/);
+      assert.match(markdown, /Latest Startup Decision/);
+      assert.match(markdown, /Restart Boundaries/);
       assert.match(markdown, /cache_visibility_timeout/);
       assert.match(markdown, /operation=queryLoad/);
     });
@@ -687,6 +824,52 @@ describe('failure-bundle', () => {
       assert.match(markdown, /operation=queryLoad/);
       assert.match(markdown, /timeoutClass=timeout/);
       assert.match(markdown, /circuit breaker is open/);
+    });
+
+  it('maps direct convergence diagnostics into control-plane bundle fields',
+    async () => {
+      const scenarioDir = join(outputDir, 'rolling-restart');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(join(scenarioDir, 'seed-1.log'), 'convergence timeout\n');
+
+      const scenario = buildConvergenceDiagnosticsOnlyScenario();
+      await writeFailureBundlesForReport({
+        scenarios: [scenario],
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenario.failureBundle.jsonPath), UTF8_ENCODING),
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.publicationConvergence.publicationStatus,
+        'ack_pending',
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.publicationModeByNodeId['seed-1'].currentMode,
+        'recovering',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.pendingAckCount,
+        1,
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.failureClass,
+        'publication_convergence_blocked',
+      );
+      assert.equal(
+        scenarioBundle.recoveryReadiness.pendingAckRepairEligibleNodeIds[0],
+        'joiner-1',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['joiner-1'].readiness.reasons[0].code,
+        'control_plane_publication_pending',
+      );
     });
 
   it('includes bottleneck estimates in scenario failure bundle summaries',
@@ -950,6 +1133,568 @@ describe('failure-bundle', () => {
       assert.ok(
         reportJson.scenarios[0].details.diagnostics.firstFaultTimeline,
         'written report should persist derived first-fault timeline',
+      );
+    });
+
+  it('derives publication convergence from playback active-gate diagnostics',
+    async () => {
+      const scenarioDir = join(outputDir, 'seed-restart-under-load');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify({
+            timestamp: 5000,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.waiting-active',
+              nodeDiagnostics: [{
+                nodeId: 'seed-1',
+                reasons: [],
+              }, {
+                nodeId: 'joiner-1',
+                reasons: [],
+              }],
+              snapshotCoverage: {
+                completeCoverage: true,
+                expectedNodeCount: 2,
+                selectedNodeId: 'seed-1',
+                selectedCapturedAtMs: 4990,
+                selectedObservedNodeIds: ['seed-1', 'joiner-1'],
+                selectedControlPlaneDiagnosticsAvailable: true,
+                selectedPublicationConvergence: {
+                  publicationEpoch: 3,
+                  publicationStatus: 'PUBLISHED',
+                  pendingAckNodeIds: [],
+                  publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+                  projectionDiagnostics: {
+                    readinessDecisionMode:
+                      'cluster_member_or_recovery_eligible',
+                    readinessDecisionDimensions: [
+                      'clusterMemberHealthy',
+                      'controlPlaneRecoveryEligible',
+                      'controlPlaneWritable',
+                    ],
+                    recoveryEligibleProjectionEnabled: true,
+                    recoveryEligibleIncludedNodeIds: ['joiner-1'],
+                    readinessExcludedNodeIds: ['seed-2'],
+                    clusterMemberUnhealthyExcludedNodeIds: ['seed-2'],
+                  },
+                  priorityPartitionSummary: {
+                    satisfied: false,
+                    requiredDistinctNodeCount: 3,
+                    readyEligibleNodeCount: 2,
+                    totalPriorityPartitionCount: 5,
+                    missingPartitionIds: [
+                      'control_plane_publications-p1',
+                      'replica_operations-p1',
+                    ],
+                    blockedPartitionCount: 2,
+                    largestSpreadGap: 1,
+                    totalSpreadGap: 2,
+                  },
+                },
+                selectedPriorityRecoveryDecisionSnapshots: {
+                  schemaVersion: 1,
+                  capturedAt: 5000,
+                  publicationEpoch: 3,
+                  snapshots: [{
+                    partitionId: 'control_plane_publications-p1',
+                    epoch: 3,
+                    operationId: null,
+                    correlationKey:
+                      'control_plane_publications-p1|3|operation_unknown',
+                    semanticState: 'blocked_unclassified',
+                    blockerReasons: ['eligible_but_no_operation_created'],
+                    planner: {
+                      spreadGap: 1,
+                    },
+                    admission: {
+                      eligibleNodeIds: ['joiner-1'],
+                      decisionDimension: 'repairEligible',
+                    },
+                    readiness: {
+                      learnerPromotion: {
+                        activeLearnerNodeIds: [],
+                        promotableLearnerNodeIds: [],
+                      },
+                    },
+                  }, {
+                    partitionId: 'replica_operations-p1',
+                    epoch: 3,
+                    operationId: 'op-1',
+                    correlationKey: 'replica_operations-p1|3|op-1',
+                    semanticState: 'recovering_in_flight',
+                    blockerReasons: [
+                      'operation_created_but_no_step_transitions',
+                      'learner_active_but_never_promotable',
+                    ],
+                    planner: {
+                      spreadGap: 1,
+                    },
+                    admission: {
+                      eligibleNodeIds: ['joiner-1'],
+                      decisionDimension: 'controlPlaneRecoveryEligible',
+                    },
+                    coordinator: {
+                      operationIds: ['op-1'],
+                      operation: {
+                        operationId: 'op-1',
+                        status: 'open',
+                        workflowStep: 'DISPATCHED',
+                        latestTimelineStep: 'CREATE_REPLICA',
+                        updatedAtMs: 5100,
+                      },
+                    },
+                    readiness: {
+                      learnerPromotion: {
+                        activeLearnerNodeIds: ['joiner-1'],
+                        promotableLearnerNodeIds: [],
+                      },
+                    },
+                  }],
+                  blockerPartitionIdsByReason: {
+                    eligible_but_no_operation_created:
+                      ['control_plane_publications-p1'],
+                    operation_created_but_no_step_transitions:
+                      ['replica_operations-p1'],
+                    learner_active_but_never_promotable:
+                      ['replica_operations-p1'],
+                    publication_recovery_eligible_but_coordinator_excludes_node:
+                      [],
+                  },
+                },
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: ['priority_control_plane_spread_pending'],
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                missingPublishedNodeIds: [],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 5,
+                  missingPartitionIds: [
+                    'control_plane_publications-p1',
+                    'replica_operations-p1',
+                  ],
+                  blockedPartitionCount: 2,
+                  largestSpreadGap: 1,
+                  totalSpreadGap: 2,
+                },
+              },
+              activeGateProgress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 2,
+                inactiveNodeCount: 0,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: 'PUBLISHED',
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasonCount: 1,
+                gateReasons: ['priority_control_plane_spread_pending'],
+                prioritySpreadSatisfied: false,
+                prioritySpreadGap: 2,
+                blockers: ['publication_gate=priority_control_plane_spread_pending'],
+                blockerSignature:
+                  'publication_gate=priority_control_plane_spread_pending',
+              },
+              activeGateBestProgress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 2,
+                inactiveNodeCount: 0,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: 'PUBLISHED',
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasonCount: 1,
+                gateReasons: ['priority_control_plane_spread_pending'],
+                prioritySpreadSatisfied: false,
+                prioritySpreadGap: 2,
+                blockers: ['publication_gate=priority_control_plane_spread_pending'],
+                blockerSignature:
+                  'publication_gate=priority_control_plane_spread_pending',
+              },
+              activeGateNoProgress: {
+                enabled: true,
+                mode: 'load',
+                maxAttempts: 45,
+                attemptsSinceProgress: 22,
+                stalled: false,
+              },
+              activeGateBlockerHistory: [{
+                signature: 'publication_gate=priority_control_plane_spread_pending',
+                blockers: ['publication_gate=priority_control_plane_spread_pending'],
+                count: 11,
+                firstAttempt: 20,
+                firstElapsedMs: 20000,
+                lastAttempt: 40,
+                lastElapsedMs: 40000,
+              }],
+              priorityRecoveryInvariants: {
+                invariants: [{
+                  id: 'priority_recovery_bootstrap_ready_allows_join_during_priority_recovery',
+                  reasonCode:
+                    'priority_recovery_bootstrap_join_not_admitted_during_recovery',
+                  severity: 'error',
+                  scope: 'cluster',
+                  owningSubsystem: 'distributed_harness_cluster_active_gate',
+                  passed: true,
+                  details: {
+                    mode: 'load',
+                    prioritySpreadPending: true,
+                    bootstrapAdmittedNodeIds: ['joiner-1'],
+                  },
+                }, {
+                  id:
+                    'priority_recovery_cluster_active_requires_publication_' +
+                    'convergence_and_priority_spread',
+                  reasonCode:
+                    'priority_recovery_cluster_marked_active_without_convergence',
+                  severity: 'error',
+                  scope: 'cluster',
+                  owningSubsystem: 'distributed_harness_cluster_active_gate',
+                  passed: false,
+                  details: {
+                    mode: 'load',
+                    allActive: true,
+                    publicationConvergenceReady: false,
+                  },
+                }],
+                failingInvariantIds: [
+                  'priority_recovery_cluster_active_requires_publication_' +
+                    'convergence_and_priority_spread',
+                ],
+                passed: false,
+              },
+            },
+          }),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(
+        'seed-restart-under-load',
+        buildPlaybackDerivedFailureResult(),
+      );
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.controlPlane.publicationConvergence.publicationStatus,
+        'PUBLISHED',
+      );
+      assert.deepEqual(
+        scenarioBundle.controlPlane.publicationConvergenceGate.reasons,
+        ['priority_control_plane_spread_pending'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.prioritySpreadPending,
+        true,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-003',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'publication_converged_priority_spread_pending',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateNoProgress
+          .attemptsSinceProgress,
+        22,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateProgress
+          .gateReasonCount,
+        1,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateBlockerHistory[0]
+          .signature,
+        'publication_gate=priority_control_plane_spread_pending',
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.projectionDiagnostics,
+        {
+          readinessDecisionMode: 'cluster_member_or_recovery_eligible',
+          readinessDecisionDimensions: [
+            'clusterMemberHealthy',
+            'controlPlaneRecoveryEligible',
+            'controlPlaneWritable',
+          ],
+          recoveryEligibleProjectionEnabled: true,
+          recoveryEligibleIncludedNodeIds: ['joiner-1'],
+          readinessExcludedNodeIds: ['seed-2'],
+          clusterMemberUnhealthyExcludedNodeIds: ['seed-2'],
+        },
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressClassCount,
+        3,
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressClassIds,
+        [
+          'eligible_but_no_operation_created',
+          'learner_active_but_never_promotable',
+          'operation_created_but_no_step_transitions',
+        ],
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        ['control_plane_publications-p1', 'replica_operations-p1'],
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryPartitionWitnesses,
+        [{
+          partitionId: 'control_plane_publications-p1',
+          semanticState: 'blocked_unclassified',
+          blockerReasons: ['eligible_but_no_operation_created'],
+          spreadGap: 1,
+          decisionDimension: 'repairEligible',
+          eligibleNodeCount: 1,
+          recoveryEligibleExcludedNodeIds: [],
+          activeLearnerNodeIds: [],
+          promotableLearnerNodeIds: [],
+          operationIds: [],
+          latestOperationWorkflowStep: null,
+          latestOperationStatus: null,
+          latestOperationTimelineStep: null,
+        }, {
+          partitionId: 'replica_operations-p1',
+          semanticState: 'recovering_in_flight',
+          blockerReasons: [
+            'operation_created_but_no_step_transitions',
+            'learner_active_but_never_promotable',
+          ],
+          spreadGap: 1,
+          decisionDimension: 'controlPlaneRecoveryEligible',
+          eligibleNodeCount: 1,
+          recoveryEligibleExcludedNodeIds: [],
+          activeLearnerNodeIds: ['joiner-1'],
+          promotableLearnerNodeIds: [],
+          operationIds: ['op-1'],
+          latestOperationWorkflowStep: 'DISPATCHED',
+          latestOperationStatus: 'open',
+          latestOperationTimelineStep: 'CREATE_REPLICA',
+        }],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryInvariantFailingIds[0],
+        'priority_recovery_cluster_active_requires_publication_convergence_and_priority_spread',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryInvariantFailures[0]
+          .reasonCode,
+        'priority_recovery_cluster_marked_active_without_convergence',
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.priorityRecoveryDecisionSnapshots.snapshotCount,
+        2,
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.priorityRecoveryInvariants.passed,
+        false,
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.failureClass,
+        'publication_convergence_blocked',
+      );
+      assert.ok(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'closureRecordId=CL-003',
+        ),
+      );
+      assert.ok(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'closureWitnessClass=publication_converged_priority_spread_pending',
+        ),
+      );
+
+      const reportJson = JSON.parse(await readFile(reportPath, UTF8_ENCODING));
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence.prioritySpreadPending,
+        true,
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence.closureRecordId,
+        'CL-003',
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence.closureWitnessClass,
+        'publication_converged_priority_spread_pending',
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence.activeGateNoProgress
+          .maxAttempts,
+        45,
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence
+          .projectionDiagnostics.recoveryEligibleProjectionEnabled,
+        true,
+      );
+      assert.equal(
+        reportJson.scenarios[0].publicationConvergence
+          .priorityRecoveryProgressClassCount,
+        3,
+      );
+      assert.equal(
+        reportJson.scenarios[0].failureClassification.failureClass,
+        'publication_convergence_blocked',
+      );
+      assert.ok(
+        reportJson.scenarios[0].failureClassification.signals.includes(
+          'closureRecordId=CL-003',
+        ),
+      );
+
+      const scenarioMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.markdownPath),
+        UTF8_ENCODING,
+      );
+      assert.match(
+        scenarioMarkdown,
+          /Priority Recovery Partition Witnesses: control_plane_publications-p1#state=blocked_unclassified#gap=1#blockers=eligible_but_no_operation_created#decision=repairEligible#eligible=1, replica_operations-p1#state=recovering_in_flight#gap=1#blockers=operation_created_but_no_step_transitions\|learner_active_but_never_promotable#decision=controlPlaneRecoveryEligible#eligible=1#ops=op-1#step=CREATE_REPLICA#status=open#learners=joiner-1/,
+      );
+    });
+
+  it('prefers the richest playback active-gate diagnostics over a later timeout-only sample',
+    async () => {
+      const scenarioDir = join(outputDir, 'seed-restart-under-load');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify({
+            timestamp: 5000,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.waiting-active',
+              snapshotCoverage: {
+                completeCoverage: true,
+                expectedNodeCount: 2,
+                bestCoverageNodeCount: 2,
+                selectedNodeId: 'seed-1',
+                selectedCapturedAtMs: 4990,
+                selectedObservedNodeIds: ['seed-1', 'joiner-1'],
+                selectedControlPlaneDiagnosticsAvailable: true,
+                selectedPublicationConvergence: {
+                  publicationEpoch: 7,
+                  publicationStatus: 'PUBLISHED',
+                  pendingAckNodeIds: [],
+                  publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+                  priorityPartitionSummary: {
+                    satisfied: false,
+                    requiredDistinctNodeCount: 3,
+                    readyEligibleNodeCount: 2,
+                    totalPriorityPartitionCount: 5,
+                    missingPartitionIds: ['replica_operations-p1'],
+                  },
+                },
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: ['priority_control_plane_spread_pending'],
+              },
+            },
+          }),
+          JSON.stringify({
+            timestamp: 9000,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.waiting-active',
+              snapshotCoverage: {
+                completeCoverage: false,
+                expectedNodeCount: 2,
+                bestCoverageNodeCount: 0,
+                selectedNodeId: 'seed-1',
+                selectedCapturedAtMs: null,
+                selectedObservedNodeIds: [],
+                selectedControlPlaneDiagnosticsAvailable: false,
+                selectedPublicationConvergence: null,
+                selectedError:
+                  'Admin API query timed out for node seed-1 on lane snapshot after 1ms',
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: [
+                  'publication_convergence_missing',
+                  'publication_not_published=unknown',
+                ],
+              },
+            },
+          }),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(
+        'seed-restart-under-load',
+        buildPlaybackDerivedFailureResult(),
+      );
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.controlPlane.publicationConvergence.publicationStatus,
+        'PUBLISHED',
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.activeGateSnapshotCoverage.bestCoverageNodeCount,
+        2,
+      );
+      assert.deepEqual(
+        scenarioBundle.controlPlane.publicationConvergenceGate.reasons,
+        ['priority_control_plane_spread_pending'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-003',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'publication_converged_priority_spread_pending',
       );
     });
 });
