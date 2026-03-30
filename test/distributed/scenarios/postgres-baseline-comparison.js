@@ -105,6 +105,15 @@ const STRICT_INVARIANT_GATE_IDS = new Set([
   INVARIANT_ID.CDC_RETRY_BUDGET_HEALTHY,
   INVARIANT_ID.CACHE_FRESHNESS_WITHIN_WATERMARK,
 ]);
+const STRICT_INVARIANT_RETRY_REASON_CODES = new Set([
+  'leadership_unknown_control_plane_partition',
+]);
+const STRICT_INVARIANT_RETRY_LEADERSHIP_ERROR_CODES = new Set([
+  'leader_service_missing',
+  'partition_missing',
+]);
+const STRICT_INVARIANT_RETRY_MAX_WINDOW_MS = 30000;
+const STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS = 250;
 const SYNC_STANDBY_TEMPLATE_PREFIX = 'ANY ';
 const SYNC_STANDBY_TEMPLATE_SUFFIX = ' (*)';
 const PSQL_ON_ERROR_STOP = '-v ON_ERROR_STOP=1';
@@ -420,6 +429,9 @@ const DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX = 'self_discovery=';
 const DISCOVERY_SOURCE_STATUS_DISCOVERED = 'discovered';
 const DISCOVERY_SOURCE_STATUS_EMPTY = 'empty';
 const DISCOVERY_SOURCE_STATUS_ERROR = 'error';
+const DISCOVERY_SOURCE_SCOPE_TABLE_NAME_AND_ID = 'table_name_and_id';
+const DISCOVERY_SOURCE_SCOPE_TABLE_NAME_ONLY = 'table_name_only';
+const DISCOVERY_SOURCE_SCOPE_UNSCOPED = 'unscoped';
 const DISCOVERY_UNKNOWN_NODE_ID = 'unknown';
 const ADMIN_QUERY_TRACE_CAPTURE_MAX_NODES = 8;
 const ADMIN_QUERY_TRACE_CAPTURE_MAX_PER_NODE = 16;
@@ -1417,7 +1429,6 @@ async function ensureSutBenchmarkTable(
     buildBenchmarkTableCreateNodeClientContext(benchmarkConfig);
   const canonicalWriteNode =
     resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
-  const strictBenchmarkMode = isStrictBenchmarkMode(benchmarkConfig);
   const createRetryTimeoutMs =
     Number.isInteger(benchmarkConfig?.readyTimeoutMs) &&
       benchmarkConfig.readyTimeoutMs > ZERO ?
@@ -1471,7 +1482,6 @@ async function ensureSutBenchmarkTable(
         error,
       });
       const bootstrapProgressObserved =
-        strictBenchmarkMode !== true &&
         hasBenchmarkTableBootstrapProgress(createAttempt?.metadataSnapshot);
       if (bootstrapProgressObserved) {
         createResult = {
@@ -2163,6 +2173,30 @@ function evaluateDiscoveryReplicaBenchmarkAdmission(admission) {
   };
 }
 
+function shouldDeferTopologyOnlyAdmissionBlocker(admissionEvaluation, options = {}) {
+  if (options.allowTopologyDeferredSelection !== true) {
+    return false;
+  }
+  if (!admissionEvaluation || admissionEvaluation.ready === true ||
+      admissionEvaluation.hasAdmission !== true) {
+    return false;
+  }
+  const admissionState = admissionEvaluation.admissionState;
+  if (!admissionState || typeof admissionState !== 'object') {
+    return false;
+  }
+  if (admissionState.routingReady !== true || admissionState.schemaReady !== true) {
+    return false;
+  }
+  if (admissionState.topologyReady === true) {
+    return false;
+  }
+  const reasons = Array.isArray(admissionEvaluation.reasons) ?
+    admissionEvaluation.reasons :
+    [];
+  return !reasons.includes(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
+}
+
 function buildCanonicalDiscoveryReadinessState(readiness) {
   if (!readiness || typeof readiness !== 'object') {
     return null;
@@ -2319,11 +2353,164 @@ function summarizeReadinessProbeReasons(options = {}) {
 }
 
 async function fetchLocalServiceDiscoverySnapshot(nodeClient, node, options = {}) {
-  try {
-    return await nodeClient.fetchServiceDiscovery(node, options.context);
-  } catch (_error) {
-    return null;
+  const contextSequence = Array.isArray(options.contextSequence) &&
+    options.contextSequence.length > ZERO ?
+    options.contextSequence :
+    [{
+      context:
+        options.context && typeof options.context === 'object' ?
+          options.context :
+          NODE_CLIENT_TRANSIENT_CONTEXT,
+    }];
+  const nodeId = String(node?.id || '');
+  for (const contextEntry of contextSequence) {
+    const context = contextEntry?.context &&
+      typeof contextEntry.context === 'object' ?
+      contextEntry.context :
+      NODE_CLIENT_TRANSIENT_CONTEXT;
+    try {
+      const snapshot = await nodeClient.fetchServiceDiscovery(node, context);
+      if (nodeId.length === ZERO ||
+          discoverySnapshotHasReplicaForNodeId(snapshot, nodeId)) {
+        return snapshot;
+      }
+    } catch (_error) {
+      continue;
+    }
   }
+  return null;
+}
+
+function discoverySnapshotHasReplicaForNodeId(snapshot, nodeId) {
+  const normalizedNodeId = String(nodeId || '');
+  if (normalizedNodeId.length === ZERO) {
+    return false;
+  }
+  const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+  for (const service of services) {
+    const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
+    for (const replica of replicas) {
+      if (String(replica?.nodeId || '') === normalizedNodeId) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function mergeDiscoveryExcludedReadinessByNodeId(base, next) {
+  const merged = {
+    ...(base && typeof base === 'object' ? base : {}),
+  };
+  const entries = next && typeof next === 'object' ?
+    Object.entries(next) :
+    [];
+  for (const [nodeId, reasons] of entries) {
+    if (!Object.prototype.hasOwnProperty.call(merged, nodeId)) {
+      merged[nodeId] = [];
+    }
+    const normalizedReasons = Array.isArray(reasons) ?
+      reasons.map((reason) => String(reason)) :
+      [];
+    merged[nodeId] = uniqueSorted([
+      ...merged[nodeId],
+      ...normalizedReasons,
+    ]);
+  }
+  return merged;
+}
+
+function resolveDiscoverySourceScope(tableName, tableId) {
+  const normalizedTableName = normalizeTableName(tableName, '');
+  const normalizedTableId = normalizeTableId(tableId, '');
+  if (normalizedTableName.length > ZERO && normalizedTableId.length > ZERO) {
+    return DISCOVERY_SOURCE_SCOPE_TABLE_NAME_AND_ID;
+  }
+  if (normalizedTableName.length > ZERO) {
+    return DISCOVERY_SOURCE_SCOPE_TABLE_NAME_ONLY;
+  }
+  return DISCOVERY_SOURCE_SCOPE_UNSCOPED;
+}
+
+function buildSutLoadDiscoveryContextSequence(
+  baseContext,
+  discoveryTableName,
+  discoveryTableId,
+) {
+  const normalizedBaseContext =
+    baseContext && typeof baseContext === 'object' ?
+      {...baseContext} :
+      {...NODE_CLIENT_TRANSIENT_CONTEXT};
+  const normalizedTableName = normalizeTableName(discoveryTableName, '');
+  const normalizedTableId = normalizeTableId(discoveryTableId, '');
+  const sequence = [];
+  const seen = new Set();
+
+  function pushContext(context) {
+    const contextObject = context && typeof context === 'object' ? context : {};
+    const tableName = normalizeTableName(
+      contextObject[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME],
+      '',
+    );
+    const tableId = normalizeTableId(
+      contextObject[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID],
+      '',
+    );
+    const scope = resolveDiscoverySourceScope(tableName, tableId);
+    const signature = [scope, tableName, tableId].join('|');
+    if (seen.has(signature)) {
+      return;
+    }
+    seen.add(signature);
+    const normalizedContext = {
+      ...contextObject,
+    };
+    if (tableName.length > ZERO) {
+      normalizedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME] = tableName;
+    } else {
+      delete normalizedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME];
+    }
+    if (tableId.length > ZERO) {
+      normalizedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID] = tableId;
+    } else {
+      delete normalizedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID];
+    }
+    sequence.push({
+      context: normalizedContext,
+      scope,
+    });
+  }
+
+  if (normalizedTableName.length > ZERO && normalizedTableId.length > ZERO) {
+    pushContext({
+      ...normalizedBaseContext,
+      [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: normalizedTableName,
+      [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID]: normalizedTableId,
+    });
+  }
+  if (normalizedTableName.length > ZERO) {
+    const tableNameOnlyContext = {
+      ...normalizedBaseContext,
+      [NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME]: normalizedTableName,
+    };
+    delete tableNameOnlyContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID];
+    pushContext({
+      ...tableNameOnlyContext,
+    });
+  }
+  const unscopedContext = {
+    ...normalizedBaseContext,
+  };
+  delete unscopedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_NAME];
+  delete unscopedContext[NODE_CLIENT_DISCOVERY_CONTEXT_TABLE_ID];
+  pushContext(unscopedContext);
+  if (sequence.length === ZERO) {
+    sequence.push({
+      context: {...NODE_CLIENT_TRANSIENT_CONTEXT},
+      scope: DISCOVERY_SOURCE_SCOPE_UNSCOPED,
+    });
+  }
+  return sequence;
 }
 
 function extractLocalReplicaReadiness(snapshot, nodeId, options = {}) {
@@ -2469,6 +2656,10 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol, optio
           },
         );
       if (readinessEvaluation.ready) {
+        discoveredNodeIds.push(nodeId);
+        continue;
+      }
+      if (shouldDeferTopologyOnlyAdmissionBlocker(admissionEvaluation, options)) {
         discoveredNodeIds.push(nodeId);
         continue;
       }
@@ -2955,6 +3146,14 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
         sourceResult.status.length > ZERO ?
           sourceResult.status :
           DISCOVERY_SOURCE_STATUS_EMPTY;
+      const scope =
+        typeof sourceResult?.scope === 'string' &&
+        sourceResult.scope.length > ZERO ?
+          sourceResult.scope :
+          null;
+      const statusWithScope = scope ?
+        status + '@' + scope :
+        status;
       const excludedReadiness = sourceResult?.excludedReadinessByNodeId &&
         typeof sourceResult.excludedReadinessByNodeId === 'object' ?
         Object.entries(sourceResult.excludedReadinessByNodeId)
@@ -2967,7 +3166,7 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
           .join(',') :
         '';
       if (status === DISCOVERY_SOURCE_STATUS_ERROR) {
-        return nodeId + ':' + status +
+        return nodeId + ':' + statusWithScope +
           '=' +
           String(sourceResult?.error || 'unknown');
       }
@@ -2983,7 +3182,7 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
           sourceResult.protocol.length > ZERO ?
           sourceResult.protocol :
           'unknown-protocol';
-        const baseSummary = nodeId + ':' + status + '=' +
+        const baseSummary = nodeId + ':' + statusWithScope + '=' +
           serviceId + '@' + protocol + ':' + sourceNodeIds.join('|');
         if (excludedReadiness.length > ZERO) {
           return baseSummary + '[excluded=' + excludedReadiness + ']';
@@ -2991,9 +3190,10 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
         return baseSummary;
       }
       if (excludedReadiness.length > ZERO) {
-        return nodeId + ':' + status + '[excluded=' + excludedReadiness + ']';
+        return nodeId + ':' + statusWithScope +
+          '[excluded=' + excludedReadiness + ']';
       }
-      return nodeId + ':' + status;
+      return nodeId + ':' + statusWithScope;
     })
     .join(';');
   const probeSummary = Object.entries(probeReadinessByNodeId)
@@ -3114,6 +3314,73 @@ function selectStrictInvariantGateEntries(invariants) {
     .filter((invariant) =>
       STRICT_INVARIANT_GATE_IDS.has(String(invariant?.invariantId || '')),
     );
+}
+
+function resolveStrictInvariantViolationEntries(breach) {
+  const detailViolations = breach?.details?.violations;
+  if (Array.isArray(detailViolations)) {
+    return detailViolations;
+  }
+  const observedViolations = breach?.observed?.violations;
+  if (Array.isArray(observedViolations)) {
+    return observedViolations;
+  }
+  return [];
+}
+
+function isRetryableStrictInvariantHardBreach(breach) {
+  const reasonCode = String(breach?.reasonCode || '');
+  if (!STRICT_INVARIANT_RETRY_REASON_CODES.has(reasonCode)) {
+    return false;
+  }
+  const violations = resolveStrictInvariantViolationEntries(breach);
+  if (violations.length === ZERO) {
+    return true;
+  }
+  return violations.every((violation) =>
+    STRICT_INVARIANT_RETRY_LEADERSHIP_ERROR_CODES.has(
+      String(violation?.lastErrorCode || ''),
+    ));
+}
+
+function shouldRetryStrictInvariantBreaches(strictInvariantBreaches) {
+  if (!strictInvariantBreaches ||
+      strictInvariantBreaches.hardCount <= ZERO ||
+      !Array.isArray(strictInvariantBreaches.hardBreaches)) {
+    return false;
+  }
+  return strictInvariantBreaches.hardBreaches.every(
+    (breach) => isRetryableStrictInvariantHardBreach(breach),
+  );
+}
+
+function resolveStrictInvariantRetryWindowMs(preLoadStableWindowMs, benchmarkConfig) {
+  const pollIntervalMs = Number.isInteger(benchmarkConfig?.quiescentPollIntervalMs) &&
+    benchmarkConfig.quiescentPollIntervalMs > ZERO ?
+    benchmarkConfig.quiescentPollIntervalMs :
+    STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS;
+  const stableWindowMs = Number.isInteger(preLoadStableWindowMs) &&
+    preLoadStableWindowMs >= ZERO ?
+    preLoadStableWindowMs :
+    ZERO;
+  const candidateWindowMs = Math.max(stableWindowMs, pollIntervalMs * 4);
+  return Math.min(
+    STRICT_INVARIANT_RETRY_MAX_WINDOW_MS,
+    Math.max(pollIntervalMs, candidateWindowMs),
+  );
+}
+
+function evaluateStrictPreloadInvariantsFromSnapshots(preLoadSnapshotsByNodeId) {
+  const invariantEvaluation = evaluateRootCauseInvariants({
+    snapshotsByNodeId: preLoadSnapshotsByNodeId,
+  });
+  const strictInvariantBreaches = summarizeInvariantBreaches(
+    selectStrictInvariantGateEntries(invariantEvaluation.invariants),
+  );
+  return {
+    invariantEvaluation,
+    strictInvariantBreaches,
+  };
 }
 
 function createEmptyInternalSignalClassCounts() {
@@ -3928,6 +4195,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
     candidates.length,
   );
   const strictMinReachable = options.strictMinReachable === true;
+  const deferLocalReplicaReadiness =
+    options.deferLocalReplicaReadiness === true;
 
   const candidateById = new Map();
   for (const node of candidates) {
@@ -3967,6 +4236,11 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         {}),
     } :
     NODE_CLIENT_TRANSIENT_CONTEXT;
+  const discoveryContextSequence = buildSutLoadDiscoveryContextSequence(
+    discoveryContext,
+    discoveryTableName,
+    discoveryTableId,
+  );
   const startedAt = timing.now();
   const deadline = startedAt + timeoutMs;
   let attempts = ZERO;
@@ -4001,51 +4275,85 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         sourceNode.id.length > ZERO ?
         sourceNode.id :
         DISCOVERY_UNKNOWN_NODE_ID;
-      try {
-        const snapshot = await nodeClient.fetchServiceDiscovery(
-          sourceNode,
-          discoveryContext,
-        );
-        const discoverySelection =
-          resolveSutLoadNodeSelectionFromDiscovery(snapshot, {
-            admissionRuntimeOwnership: options.admissionRuntimeOwnership,
-          });
-        const snapshotNodeIds = discoverySelection.nodeIds;
-        if (snapshotNodeIds.length > ZERO) {
-          sourceResults.push({
-            nodeId: sourceNodeId,
-            status: DISCOVERY_SOURCE_STATUS_DISCOVERED,
-            discoveredNodeIds: snapshotNodeIds,
-            selection: discoverySelection.selection,
-            serviceId: discoverySelection.serviceId,
-            protocol: discoverySelection.protocol,
-            excludedReadinessByNodeId:
-              discoverySelection.excludedReadinessByNodeId,
-          });
-          for (const discoveredNodeId of snapshotNodeIds) {
-            if (discoveredNodeIdSet.has(discoveredNodeId)) {
-              continue;
-            }
-            discoveredNodeIdSet.add(discoveredNodeId);
-            discoveredNodeIds.push(discoveredNodeId);
+      let sourceDiscoverySelection = null;
+      let sourceScope = null;
+      let sourceExcludedReadinessByNodeId = {};
+      const sourceErrors = [];
+      let attemptedScope = null;
+      for (const contextEntry of discoveryContextSequence) {
+        const contextScope =
+          typeof contextEntry?.scope === 'string' &&
+          contextEntry.scope.length > ZERO ?
+            contextEntry.scope :
+            DISCOVERY_SOURCE_SCOPE_UNSCOPED;
+        attemptedScope = contextScope;
+        const context =
+          contextEntry?.context && typeof contextEntry.context === 'object' ?
+            contextEntry.context :
+            NODE_CLIENT_TRANSIENT_CONTEXT;
+        try {
+          const snapshot = await nodeClient.fetchServiceDiscovery(
+            sourceNode,
+            context,
+          );
+          const discoverySelection =
+            resolveSutLoadNodeSelectionFromDiscovery(snapshot, {
+              admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+              allowTopologyDeferredSelection: true,
+            });
+          sourceExcludedReadinessByNodeId = mergeDiscoveryExcludedReadinessByNodeId(
+            sourceExcludedReadinessByNodeId,
+            discoverySelection.excludedReadinessByNodeId,
+          );
+          if (discoverySelection.nodeIds.length > ZERO) {
+            sourceDiscoverySelection = discoverySelection;
+            sourceScope = contextScope;
+            break;
           }
-          continue;
+        } catch (error) {
+          sourceErrors.push(
+            contextScope + '=' + summarizeDiscoverySourceError(error),
+          );
         }
+      }
+      if (sourceDiscoverySelection) {
+        const snapshotNodeIds = sourceDiscoverySelection.nodeIds;
         sourceResults.push({
           nodeId: sourceNodeId,
-          status: DISCOVERY_SOURCE_STATUS_EMPTY,
-          discoveredNodeIds: [],
-          excludedReadinessByNodeId:
-            discoverySelection.excludedReadinessByNodeId,
+          status: DISCOVERY_SOURCE_STATUS_DISCOVERED,
+          scope: sourceScope,
+          discoveredNodeIds: snapshotNodeIds,
+          selection: sourceDiscoverySelection.selection,
+          serviceId: sourceDiscoverySelection.serviceId,
+          protocol: sourceDiscoverySelection.protocol,
+          excludedReadinessByNodeId: sourceExcludedReadinessByNodeId,
         });
-      } catch (error) {
+        for (const discoveredNodeId of snapshotNodeIds) {
+          if (discoveredNodeIdSet.has(discoveredNodeId)) {
+            continue;
+          }
+          discoveredNodeIdSet.add(discoveredNodeId);
+          discoveredNodeIds.push(discoveredNodeId);
+        }
+        continue;
+      }
+      if (sourceErrors.length > ZERO) {
         sourceResults.push({
           nodeId: sourceNodeId,
           status: DISCOVERY_SOURCE_STATUS_ERROR,
+          scope: attemptedScope,
           discoveredNodeIds: [],
-          error: summarizeDiscoverySourceError(error),
+          error: sourceErrors.join(DISCOVERY_ERROR_CHAIN_SEPARATOR),
         });
+        continue;
       }
+      sourceResults.push({
+        nodeId: sourceNodeId,
+        status: DISCOVERY_SOURCE_STATUS_EMPTY,
+        scope: attemptedScope,
+        discoveredNodeIds: [],
+        excludedReadinessByNodeId: sourceExcludedReadinessByNodeId,
+      });
     }
     lastSourceResults = sourceResults;
     lastDiscoveredNodeIds = discoveredNodeIds;
@@ -4063,7 +4371,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               const localSnapshot = await fetchLocalServiceDiscoverySnapshot(
                 nodeClient,
                 node,
-                {context: discoveryContext},
+                {
+                  contextSequence: discoveryContextSequence,
+                },
               );
               const localReadiness = extractLocalReplicaReadiness(
                 localSnapshot,
@@ -4072,29 +4382,47 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
                   admissionRuntimeOwnership: options.admissionRuntimeOwnership,
                 },
               );
+              const shouldProbeLoadLane = deferLocalReplicaReadiness ||
+                (localReadiness?.requiresConfirmation === true &&
+                  localReadiness?.evaluation?.ready === true);
               const loadLaneReadiness =
-                localReadiness?.requiresConfirmation === true &&
-                localReadiness?.evaluation?.ready === true ?
+                shouldProbeLoadLane ?
                   await probeLoadLaneReadiness(nodeClient, node, {
                     tableProbeSql: loadLaneTableProbeSql,
                   }) :
                   {ready: false, reasons: []};
+              const adminReady = isNodeAdminReady(diagnostics) ||
+                (deferLocalReplicaReadiness === true &&
+                  loadLaneReadiness?.ready === true);
               return {
                 node,
                 diagnostics,
                 error: null,
-                adminReady: isNodeAdminReady(diagnostics),
+                adminReady,
                 localReadiness,
                 loadLaneReadiness,
               };
             } catch (_error) {
+              let loadLaneReadiness = {
+                ready: false,
+                reasons: [],
+              };
+              if (deferLocalReplicaReadiness === true) {
+                loadLaneReadiness = await probeLoadLaneReadiness(
+                  nodeClient,
+                  node,
+                  {
+                    tableProbeSql: loadLaneTableProbeSql,
+                  },
+                );
+              }
               return {
                 node,
                 diagnostics: null,
                 error: summarizeDiscoverySourceError(_error),
-                adminReady: false,
+                adminReady: loadLaneReadiness?.ready === true,
                 localReadiness: null,
-                loadLaneReadiness: null,
+                loadLaneReadiness,
               };
             }
           }),
@@ -4110,17 +4438,27 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               error: probeResult?.error,
             }));
           }
-          if (probeResult?.localReadiness?.requiresConfirmation === true &&
+          if (deferLocalReplicaReadiness !== true &&
+              probeResult?.localReadiness?.requiresConfirmation === true &&
               probeResult?.localReadiness?.evaluation?.ready !== true) {
-            const localReasons =
-              Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) &&
-                probeResult.localReadiness.evaluation.reasons.length > ZERO ?
-                probeResult.localReadiness.evaluation.reasons :
-                ['self_discovery_missing'];
-            for (const reason of localReasons) {
-              exclusionReasons.push(
-                DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX + String(reason),
+            const deferTopologyOnlyLocalConfirmation =
+              shouldDeferTopologyOnlyAdmissionBlocker(
+                probeResult?.localReadiness?.evaluation,
+                {
+                  allowTopologyDeferredSelection: true,
+                },
               );
+            if (!deferTopologyOnlyLocalConfirmation) {
+              const localReasons =
+                Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) &&
+                  probeResult.localReadiness.evaluation.reasons.length > ZERO ?
+                  probeResult.localReadiness.evaluation.reasons :
+                  ['self_discovery_missing'];
+              for (const reason of localReasons) {
+                exclusionReasons.push(
+                  DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX + String(reason),
+                );
+              }
             }
           }
           if (probeResult?.loadLaneReadiness?.ready !== true &&
@@ -8352,6 +8690,8 @@ async function run(cluster) {
           timing: scenarioOverrides.timing,
           tableName: benchmarkTableName,
           tableId: state.requiredSchemaTableId,
+          deferLocalReplicaReadiness:
+            benchmarkConfig.strictPreloadReadiness === true,
           minReachableNodeCount: targetSutLoadNodeCount,
           strictMinReachable: benchmarkConfig.strictDiscovery === true,
           admissionRuntimeOwnership: state.runtimeAdmissionOwnership,
@@ -8633,20 +8973,59 @@ async function run(cluster) {
           state.effectiveSutLoadNodes.length > ZERO ?
             state.effectiveSutLoadNodes :
             state.sutLoadNodes;
-        const preLoadSnapshotsByNodeId = invariantSnapshotNodes.length > ZERO ?
+        const strictInvariantRetryPollIntervalMs = Math.max(
+          benchmarkConfig.quiescentPollIntervalMs,
+          STRICT_INVARIANT_RETRY_MIN_POLL_INTERVAL_MS,
+        );
+        const strictInvariantRetryWindowMs = resolveStrictInvariantRetryWindowMs(
+          preLoadStableWindowMs,
+          benchmarkConfig,
+        );
+        const strictInvariantRetryDeadlineMs =
+          scenarioOverrides.timing.now() + strictInvariantRetryWindowMs;
+        let strictInvariantRetryAttempts = ZERO;
+        let preLoadSnapshotsByNodeId = invariantSnapshotNodes.length > ZERO ?
           await collectPreflightCriticalPathSnapshots({
             nodeClient,
             nodes: invariantSnapshotNodes,
           }) :
           {};
-        state.preLoadInvariantEvaluation = evaluateRootCauseInvariants({
-          snapshotsByNodeId: preLoadSnapshotsByNodeId,
-        });
-        const strictInvariantBreaches = summarizeInvariantBreaches(
-          selectStrictInvariantGateEntries(
-            state.preLoadInvariantEvaluation.invariants,
-          ),
-        );
+        let strictInvariantEvaluation =
+          evaluateStrictPreloadInvariantsFromSnapshots(
+            preLoadSnapshotsByNodeId,
+          );
+        state.preLoadInvariantEvaluation =
+          strictInvariantEvaluation.invariantEvaluation;
+        let strictInvariantBreaches =
+          strictInvariantEvaluation.strictInvariantBreaches;
+        while (strictInvariantBreaches.hardCount > ZERO &&
+          shouldRetryStrictInvariantBreaches(strictInvariantBreaches) &&
+          scenarioOverrides.timing.now() < strictInvariantRetryDeadlineMs) {
+          strictInvariantRetryAttempts += ONE;
+          emitPhaseProgress(
+            phaseContext,
+            'rechecking transient strict invariant breaches before hard fail',
+            {
+              retryAttempt: strictInvariantRetryAttempts,
+              retryWindowMs: strictInvariantRetryWindowMs,
+            },
+          );
+          await scenarioOverrides.timing.sleep(strictInvariantRetryPollIntervalMs);
+          preLoadSnapshotsByNodeId = invariantSnapshotNodes.length > ZERO ?
+            await collectPreflightCriticalPathSnapshots({
+              nodeClient,
+              nodes: invariantSnapshotNodes,
+            }) :
+            {};
+          strictInvariantEvaluation =
+            evaluateStrictPreloadInvariantsFromSnapshots(
+              preLoadSnapshotsByNodeId,
+            );
+          state.preLoadInvariantEvaluation =
+            strictInvariantEvaluation.invariantEvaluation;
+          strictInvariantBreaches =
+            strictInvariantEvaluation.strictInvariantBreaches;
+        }
         state.strictBenchmarkGate.invariants = {
           status: strictInvariantBreaches.hardCount > ZERO ?
             PHASE_STATUS.FAIL :
@@ -8654,6 +9033,8 @@ async function run(cluster) {
           totalCount: strictInvariantBreaches.totalCount,
           hardCount: strictInvariantBreaches.hardCount,
           softCount: strictInvariantBreaches.softCount,
+          retryAttempts: strictInvariantRetryAttempts,
+          retryWindowMs: strictInvariantRetryWindowMs,
           dominantInvariant: state.preLoadInvariantEvaluation.dominantInvariant,
           breaches: strictInvariantBreaches.failing,
         };
