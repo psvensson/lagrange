@@ -24,6 +24,7 @@ import {
   CONSISTENCY_VERDICT,
   GATE_RESULT_MODE,
   NODE_CLIENT_CHANNEL,
+  NODE_CLIENT_DEFAULT_CHANNEL_POLICIES,
   NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
   NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
@@ -78,6 +79,7 @@ import {
   extractNodeProbeReasonsByNodeId,
   formatNodeProbeReasons,
   buildVersionLagSummary,
+  buildStrictPreloadNodeReasonSummary,
 } from './postgres-baseline-diagnostics.js';
 import {
   createQuietModeState,
@@ -422,6 +424,7 @@ const DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID =
 const DISCOVERY_DIAGNOSTIC_PREFIX_PROBES = 'probes=';
 const DISCOVERY_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
 const DISCOVERY_PROBE_REASON_LOAD_PROBE_FAILED = 'load_probe_failed';
+const DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN = 'circuit_open';
 const DISCOVERY_PROBE_REASON_REACHABLE_BY_PREFIX = 'reachable_by=';
 const DISCOVERY_PROBE_REASON_LAST_ERROR_PREFIX = 'last_error=';
 const DISCOVERY_PROBE_REASON_PROBE_ERROR_PREFIX = 'probe_error=';
@@ -446,6 +449,13 @@ const DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES =
   'insufficient_reachable_nodes';
 const DISCOVERY_SELECTION_POSTGRES_WIRE = 'postgres-wire';
 const DISCOVERY_STALLED_ATTEMPT_THRESHOLD = 5;
+const DEFAULT_PROBE_TIMEOUT_MS =
+  Number.isInteger(
+    NODE_CLIENT_DEFAULT_CHANNEL_POLICIES?.[NODE_CLIENT_CHANNEL.PROBE]?.timeoutMs,
+  ) &&
+  NODE_CLIENT_DEFAULT_CHANNEL_POLICIES[NODE_CLIENT_CHANNEL.PROBE].timeoutMs > ZERO ?
+    NODE_CLIENT_DEFAULT_CHANNEL_POLICIES[NODE_CLIENT_CHANNEL.PROBE].timeoutMs :
+    1000;
 const DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID =
   'excludedReadinessByNodeId';
 const DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE =
@@ -2571,8 +2581,32 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
   const issueLoadProbeQuery = typeof nodeClient?.queryLoadProbe === 'function' ?
     (sql, params, context) => nodeClient.queryLoadProbe(node, sql, params, context) :
     (sql, params, context) => nodeClient.queryLoad(node, sql, params, context);
-  try {
-    await issueLoadProbeQuery(
+  const issueLoadChannelProbeQuery = typeof nodeClient?.queryLoad === 'function' ?
+    (sql, params, context) => nodeClient.queryLoad(node, sql, params, context) :
+    null;
+  const issueDirectLoadProbeQuery = async (sql, params = []) => {
+    const normalizedParams = Array.isArray(params) ? params : [];
+    if (typeof node?.queryWithTimeout === 'function') {
+      return node.queryWithTimeout(
+        sql,
+        normalizedParams,
+        {
+          timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+          lane: NODE_CLIENT_CHANNEL.LOAD,
+        },
+      );
+    }
+    if (typeof node?.query === 'function') {
+      return node.query(sql, normalizedParams);
+    }
+    throw new Error(
+      'Node handle missing direct query method(node=' +
+        String(node?.id || DISCOVERY_UNKNOWN_NODE_ID) +
+        ')',
+    );
+  };
+  const runLoadProbe = async (queryFn) => {
+    await queryFn(
       'SELECT 1',
       [],
       NODE_CLIENT_TRANSIENT_CONTEXT,
@@ -2581,17 +2615,43 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
       options.tableProbeSql :
       '';
     if (tableProbeSql.length > ZERO) {
-      await issueLoadProbeQuery(
+      await queryFn(
         tableProbeSql,
         [],
         NODE_CLIENT_TRANSIENT_CONTEXT,
       );
     }
+  };
+  try {
+    await runLoadProbe(issueLoadProbeQuery);
     return {
       ready: true,
       reasons: [],
     };
   } catch (error) {
+    if (issueLoadChannelProbeQuery !== null) {
+      try {
+        await runLoadProbe(issueLoadChannelProbeQuery);
+        return {
+          ready: true,
+          reasons: [],
+        };
+      } catch (_loadChannelFallbackError) {
+        // Continue with additional fallback strategies.
+      }
+    }
+    if (isNodeClientCircuitOpenError(error)) {
+      try {
+        await runLoadProbe((sql, params) =>
+          issueDirectLoadProbeQuery(sql, params));
+        return {
+          ready: true,
+          reasons: [],
+        };
+      } catch (_fallbackError) {
+        // Fall through to the standard load probe failure reason.
+      }
+    }
     return {
       ready: false,
       reasons: [
@@ -2599,6 +2659,40 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
           truncateDiscoveryErrorMessage(String(error?.message || error)),
       ],
     };
+  }
+}
+
+async function probeReadinessWithCircuitOpenFallback(nodeClient, node) {
+  try {
+    return await nodeClient.probeReadiness(node);
+  } catch (error) {
+    try {
+      if (typeof node?.getReachabilityDiagnostics === 'function') {
+        const diagnostics = await node.getReachabilityDiagnostics({
+          timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+          scope: 'preflight',
+        });
+        if (diagnostics && typeof diagnostics === 'object') {
+          return diagnostics;
+        }
+      }
+      if (typeof node?.queryWithTimeout === 'function') {
+        await node.queryWithTimeout('SELECT 1', [], {
+          timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
+        });
+      } else if (typeof node?.query === 'function') {
+        await node.query('SELECT 1', []);
+      } else {
+        throw new Error('node_missing_query_methods');
+      }
+      return {
+        nodeId: String(node?.id || DISCOVERY_UNKNOWN_NODE_ID),
+        reachable: true,
+        adminReady: true,
+      };
+    } catch (_fallbackError) {
+      throw error;
+    }
   }
 }
 
@@ -2924,6 +3018,19 @@ function extractDiscoveryErrorMessageChain(error) {
     depth += ONE;
   }
   return messages;
+}
+
+function isNodeClientCircuitOpenError(error) {
+  if (String(error?.code || '') === DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN) {
+    return true;
+  }
+  const messageChain = extractDiscoveryErrorMessageChain(error);
+  if (messageChain.some((message) =>
+    String(message).includes('code=' + DISCOVERY_NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN))) {
+    return true;
+  }
+  return messageChain.some((message) =>
+    String(message).includes('circuit breaker is open'));
 }
 
 function buildDiscoveryNodeClientErrorContext(error) {
@@ -4197,6 +4304,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   const strictMinReachable = options.strictMinReachable === true;
   const deferLocalReplicaReadiness =
     options.deferLocalReplicaReadiness === true;
+  const allowSoftDiscoveryNodeFallback =
+    options.allowSoftDiscoveryNodeFallback === true;
 
   const candidateById = new Map();
   for (const node of candidates) {
@@ -4255,7 +4364,13 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   let bestCandidateNodeIds = [];
   let bestReachableNodeIds = [];
   let bestProbeReadinessByNodeId = {};
+  let bestAdminFallbackCandidates = [];
+  let bestAdminFallbackSourceResults = [];
+  let bestAdminFallbackDiscoveredNodeIds = [];
+  let bestAdminFallbackCandidateNodeIds = [];
+  let bestAdminFallbackProbeReadinessByNodeId = {};
   let attemptsSinceBestReachableImprovement = ZERO;
+  let attemptsSinceBestAdminFallbackImprovement = ZERO;
 
   function buildDiscoveryDiagnostics(options = {}) {
     return buildSutLoadDiscoveryDiagnostics({
@@ -4263,6 +4378,20 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       strictMinReachable,
       requiredReachableNodeCount,
     });
+  }
+
+  function selectNonStrictFallbackNodes(candidates) {
+    const list = Array.isArray(candidates) ?
+      candidates.filter((node) => Boolean(node)) :
+      [];
+    if (list.length === ZERO) {
+      return [];
+    }
+    const targetCount = Math.max(
+      ONE,
+      Math.min(list.length, requiredReachableNodeCount),
+    );
+    return list.slice(ZERO, targetCount);
   }
 
   while (true) {
@@ -4367,7 +4496,10 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         const readinessProbeResults = await Promise.all(
           discoveredCandidates.map(async (node) => {
             try {
-              const diagnostics = await nodeClient.probeReadiness(node);
+              const diagnostics = await probeReadinessWithCircuitOpenFallback(
+                nodeClient,
+                node,
+              );
               const localSnapshot = await fetchLocalServiceDiscoverySnapshot(
                 nodeClient,
                 node,
@@ -4382,18 +4514,19 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
                   admissionRuntimeOwnership: options.admissionRuntimeOwnership,
                 },
               );
-              const shouldProbeLoadLane = deferLocalReplicaReadiness ||
-                (localReadiness?.requiresConfirmation === true &&
-                  localReadiness?.evaluation?.ready === true);
+              const shouldProbeLoadLane =
+                deferLocalReplicaReadiness !== true &&
+                localReadiness?.requiresConfirmation === true &&
+                localReadiness?.evaluation?.ready === true ||
+                (allowSoftDiscoveryNodeFallback === true &&
+                  loadLaneTableProbeSql.length > ZERO);
               const loadLaneReadiness =
                 shouldProbeLoadLane ?
                   await probeLoadLaneReadiness(nodeClient, node, {
                     tableProbeSql: loadLaneTableProbeSql,
                   }) :
                   {ready: false, reasons: []};
-              const adminReady = isNodeAdminReady(diagnostics) ||
-                (deferLocalReplicaReadiness === true &&
-                  loadLaneReadiness?.ready === true);
+              const adminReady = isNodeAdminReady(diagnostics);
               return {
                 node,
                 diagnostics,
@@ -4403,34 +4536,32 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
                 loadLaneReadiness,
               };
             } catch (_error) {
-              let loadLaneReadiness = {
-                ready: false,
-                reasons: [],
-              };
-              if (deferLocalReplicaReadiness === true) {
-                loadLaneReadiness = await probeLoadLaneReadiness(
-                  nodeClient,
-                  node,
-                  {
-                    tableProbeSql: loadLaneTableProbeSql,
-                  },
-                );
-              }
               return {
                 node,
                 diagnostics: null,
                 error: summarizeDiscoverySourceError(_error),
-                adminReady: loadLaneReadiness?.ready === true,
+                adminReady: false,
                 localReadiness: null,
-                loadLaneReadiness,
+                loadLaneReadiness: {
+                  ready: false,
+                  reasons: [],
+                },
               };
             }
           }),
         );
         const reachableCandidates = [];
+        const adminFallbackCandidates = [];
+        const verifiedLoadLaneFallbackCandidates = [];
         const probeReadinessByNodeId = {};
         for (const probeResult of readinessProbeResults) {
           const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
+          if (probeResult?.adminReady === true && probeResult?.node) {
+            adminFallbackCandidates.push(probeResult.node);
+            if (probeResult?.loadLaneReadiness?.ready === true) {
+              verifiedLoadLaneFallbackCandidates.push(probeResult.node);
+            }
+          }
           const exclusionReasons = [];
           if (probeResult?.adminReady !== true) {
             exclusionReasons.push(...summarizeReadinessProbeReasons({
@@ -4441,7 +4572,15 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           if (deferLocalReplicaReadiness !== true &&
               probeResult?.localReadiness?.requiresConfirmation === true &&
               probeResult?.localReadiness?.evaluation?.ready !== true) {
+            const localReadinessReasons =
+              Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) ?
+                probeResult.localReadiness.evaluation.reasons.map((reason) =>
+                  String(reason)) :
+                [];
+            const hasLocalVoterReadinessBlock = localReadinessReasons.some((reason) =>
+              reason.startsWith('local_replica_not_voter_ready'));
             const deferTopologyOnlyLocalConfirmation =
+              !hasLocalVoterReadinessBlock &&
               shouldDeferTopologyOnlyAdmissionBlocker(
                 probeResult?.localReadiness?.evaluation,
                 {
@@ -4487,6 +4626,25 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
             bestReachableCandidates.length < requiredReachableNodeCount) {
           attemptsSinceBestReachableImprovement += ONE;
         }
+        const prioritizedFallbackCandidates =
+          allowSoftDiscoveryNodeFallback === true &&
+            verifiedLoadLaneFallbackCandidates.length > ZERO ?
+            verifiedLoadLaneFallbackCandidates :
+            adminFallbackCandidates;
+        if (prioritizedFallbackCandidates.length >
+            bestAdminFallbackCandidates.length) {
+          bestAdminFallbackCandidates = [...prioritizedFallbackCandidates];
+          bestAdminFallbackSourceResults = sourceResults;
+          bestAdminFallbackDiscoveredNodeIds = [...discoveredNodeIds];
+          bestAdminFallbackCandidateNodeIds = [...lastCandidateNodeIds];
+          bestAdminFallbackProbeReadinessByNodeId = {
+            ...probeReadinessByNodeId,
+          };
+          attemptsSinceBestAdminFallbackImprovement = ZERO;
+        } else if (bestAdminFallbackCandidates.length > ZERO &&
+            bestReachableCandidates.length === ZERO) {
+          attemptsSinceBestAdminFallbackImprovement += ONE;
+        }
         if (reachableCandidates.length >= requiredReachableNodeCount) {
           return {
             nodes: reachableCandidates,
@@ -4499,6 +4657,32 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 lastProbeReadinessByNodeId,
+              elapsedMs: timing.now() - startedAt,
+            }),
+          };
+        }
+        if (allowSoftDiscoveryNodeFallback &&
+          !strictMinReachable &&
+            bestReachableCandidates.length === ZERO &&
+            bestAdminFallbackCandidates.length > ZERO &&
+            attemptsSinceBestAdminFallbackImprovement >=
+              DISCOVERY_STALLED_ATTEMPT_THRESHOLD) {
+          const admittedFallbackNodes = selectNonStrictFallbackNodes(
+            bestAdminFallbackCandidates,
+          );
+          const admittedFallbackNodeIds = admittedFallbackNodes.map((node) => node.id);
+          return {
+            nodes: admittedFallbackNodes,
+            diagnostics: buildDiscoveryDiagnostics({
+              attempts,
+              timedOut: true,
+              gateReason: null,
+              discoveredNodeIds: bestAdminFallbackDiscoveredNodeIds,
+              candidateNodeIds: bestAdminFallbackCandidateNodeIds,
+              reachableNodeIds: admittedFallbackNodeIds,
+              sourceResults: bestAdminFallbackSourceResults,
+              [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
+                bestAdminFallbackProbeReadinessByNodeId,
               elapsedMs: timing.now() - startedAt,
             }),
           };
@@ -4530,24 +4714,42 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       }
     }
     if (timing.now() >= deadline) {
+      const timedOutFallbackNodes = allowSoftDiscoveryNodeFallback ?
+        selectNonStrictFallbackNodes(
+          bestAdminFallbackCandidates,
+        ) :
+        [];
+      const timedOutFallbackNodeIds = timedOutFallbackNodes.map((node) => node.id);
       const timedOutNodes = bestReachableCandidates.length > ZERO ?
         bestReachableCandidates :
-        [];
+        (timedOutFallbackNodes.length > ZERO ?
+          timedOutFallbackNodes :
+          []);
       const timedOutSourceResults = bestReachableCandidates.length > ZERO ?
         bestSourceResults :
-        lastSourceResults;
+        (timedOutFallbackNodes.length > ZERO ?
+          bestAdminFallbackSourceResults :
+          lastSourceResults);
       const timedOutDiscoveredNodeIds = bestReachableCandidates.length > ZERO ?
         bestDiscoveredNodeIds :
-        lastDiscoveredNodeIds;
+        (timedOutFallbackNodes.length > ZERO ?
+          bestAdminFallbackDiscoveredNodeIds :
+          lastDiscoveredNodeIds);
       const timedOutCandidateNodeIds = bestReachableCandidates.length > ZERO ?
         bestCandidateNodeIds :
-        lastCandidateNodeIds;
+        (timedOutFallbackNodes.length > ZERO ?
+          bestAdminFallbackCandidateNodeIds :
+          lastCandidateNodeIds);
       const timedOutReachableNodeIds = bestReachableCandidates.length > ZERO ?
         bestReachableNodeIds :
-        lastReachableNodeIds;
+        (timedOutFallbackNodeIds.length > ZERO ?
+          timedOutFallbackNodeIds :
+          lastReachableNodeIds);
       const timedOutProbeReadinessByNodeId = bestReachableCandidates.length > ZERO ?
         bestProbeReadinessByNodeId :
-        lastProbeReadinessByNodeId;
+        (timedOutFallbackNodes.length > ZERO ?
+          bestAdminFallbackProbeReadinessByNodeId :
+          lastProbeReadinessByNodeId);
       const gateReason = strictMinReachable &&
         timedOutReachableNodeIds.length < requiredReachableNodeCount ?
         DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES :
@@ -6843,8 +7045,8 @@ function formatHeartbeatFreshnessFailures(heartbeatFreshness) {
     parts.push(
       'node=' + nodeId +
         ', reasons=' + (failedReasons.length > ZERO ?
-          failedReasons.join('|') :
-          'unknown'),
+        failedReasons.join('|') :
+        'unknown'),
     );
   }
   return parts.join('; ');
@@ -6879,7 +7081,7 @@ function startLoadRebalancingPressureMonitor(options = {}) {
     loadNodes,
   );
   const pressure = buildLoadRebalancingPressureState({
-    monitoredNodeIds: controlSnapshotCandidates.map((node) => String(node.id)),
+    monitoredNodeIds: admittedNodeIds,
     cooldownMs: benchmarkConfig.rebalanceHysteresisCooldownMs,
     minLeaderChangeDelta: benchmarkConfig.rebalanceHysteresisMinDelta,
     pollIntervalMs: benchmarkConfig.loadRebalanceMonitorPollIntervalMs,
@@ -8695,6 +8897,8 @@ async function run(cluster) {
           minReachableNodeCount: targetSutLoadNodeCount,
           strictMinReachable: benchmarkConfig.strictDiscovery === true,
           admissionRuntimeOwnership: state.runtimeAdmissionOwnership,
+          allowSoftDiscoveryNodeFallback:
+            benchmarkConfig.allowSoftDiscoveryNodeFallback === true,
         },
       );
       const sutLoadNodes = sutLoadResolution.nodes;
@@ -8864,6 +9068,27 @@ async function run(cluster) {
                 QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
               );
           });
+        const canUseSoftStallFallback =
+          benchmarkConfig.allowPreloadStallSoftFallback === true &&
+          benchmarkConfig.strictPreloadReadiness !== true &&
+          benchmarkConfig.strictDiscovery !== true &&
+          state.sutLoadNodes.length > ZERO &&
+          gateReasonKeys.length > ZERO &&
+          gateReasonKeys.every((reason) => {
+            const normalizedReason = String(reason || '');
+            return normalizedReason.startsWith(
+              QUIESCENCE_REASON_NODE_PROBE_ERROR_PREFIX,
+            ) ||
+              normalizedReason.startsWith(
+                QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX,
+              ) ||
+              normalizedReason.startsWith(
+                QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX,
+              ) ||
+              normalizedReason.startsWith(
+                QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX,
+              );
+          });
         const stalledReason = Object.keys(gateResult.reasonHistogram || {}).find(
           (reason) => String(reason || '').includes(NO_PROGRESS_REASON_CODE),
         ) || null;
@@ -8882,6 +9107,8 @@ async function run(cluster) {
         if (benchmarkConfig.strictPreloadReadiness === true) {
           const nodeReasonsByNodeId = extractNodeProbeReasonsByNodeId(gateResult);
           const formattedNodeReasons = formatNodeProbeReasons(nodeReasonsByNodeId);
+          const strictPreloadReasonSummary =
+            buildStrictPreloadNodeReasonSummary(gateResult);
           const saturation = buildSaturationCounters({
             reasonHistogram: gateResult.reasonHistogram,
           });
@@ -8904,6 +9131,10 @@ async function run(cluster) {
                 defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
               }),
               nodeReasonsByNodeId,
+              strictPreloadReasonCodeHistogram:
+                strictPreloadReasonSummary.reasonCodeHistogram,
+              strictPreloadStaleReplicaOperationAgeBuckets:
+                strictPreloadReasonSummary.staleReplicaOperationAgeBuckets,
               versionConvergence: gateResult.versionConvergence || null,
               readinessTimeline: gateResult.readinessTimeline || [],
               benchmarkMetadataFlow: buildBenchmarkMetadataFlow(
@@ -8957,6 +9188,45 @@ async function run(cluster) {
               excludedNodeIds: excludedLoadNodeIds,
             },
           );
+        } else if (canUseSoftStallFallback) {
+          const fallbackReadyLoadNodes = partialReadyLoadNodes.length > ZERO ?
+            partialReadyLoadNodes :
+            state.sutLoadNodes.slice(
+              ZERO,
+              Math.max(
+                ONE,
+                Math.min(state.sutLoadNodes.length, targetSutLoadNodeCount),
+              ),
+            );
+          const fallbackReadyNodeIds = fallbackReadyLoadNodes
+            .map((node) => String(node.id));
+          const fallbackExcludedNodeIds = state.sutLoadNodes
+            .map((node) => String(node.id))
+            .filter((nodeId) => !fallbackReadyNodeIds.includes(nodeId));
+          quiescenceResult = {
+            mode: 'degraded_soft_stall_fallback',
+            attempts: Number(gateResult.attempts || ZERO),
+            stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
+            inFlightCount: null,
+            readyLoadNodes: fallbackReadyLoadNodes,
+            excludedLoadNodeIds: fallbackExcludedNodeIds,
+            partitionGroupInFlight: gateResult.partitionGroupInFlight || {},
+            replicaOperationTimelineByOperationId:
+              gateResult.replicaOperationTimelineByOperationId || {},
+            reasonHistogram: gateResult.reasonHistogram || {},
+            includedNodeIds: fallbackReadyNodeIds,
+            excludedNodeIds: fallbackExcludedNodeIds,
+            versionConvergence: gateResult.versionConvergence || null,
+            readinessTimeline: gateResult.readinessTimeline || [],
+          };
+          emitPhaseProgress(
+            phaseContext,
+            'continuing with non-strict pre-load readiness after soft stall fallback',
+            {
+              includedNodeIds: fallbackReadyNodeIds,
+              excludedNodeIds: fallbackExcludedNodeIds,
+            },
+          );
         } else {
           throw error;
         }
@@ -8968,7 +9238,7 @@ async function run(cluster) {
         includedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
         excludedNodeIds: state.excludedSutLoadNodeIds,
       });
-      if (strictBenchmarkMode === true) {
+      if (benchmarkConfig.strictPreloadReadiness === true) {
         const invariantSnapshotNodes =
           state.effectiveSutLoadNodes.length > ZERO ?
             state.effectiveSutLoadNodes :
@@ -9167,25 +9437,44 @@ async function run(cluster) {
         state.rebalancingPressure?.load?.heartbeatFreshness || null;
       state.strictBenchmarkGate.heartbeatFreshness =
         state.heartbeatFreshnessResult;
+      const allowSoftHeartbeatFreshnessFallback =
+        benchmarkConfig.allowPreloadStallSoftFallback === true &&
+        state.quiescenceResult?.mode === 'degraded_soft_stall_fallback';
       if (state.heartbeatFreshnessResult?.failed === true) {
-        return {
-          status: PHASE_STATUS.FAIL,
-          artifacts: {
-            sutLoadNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
-            loadMetrics: state.loadMetrics,
-            rebalancingPressure: state.rebalancingPressure.load,
-            heartbeatFreshness: state.heartbeatFreshnessResult,
-            saturation: state.saturation,
-            strictBenchmarkGate: state.strictBenchmarkGate,
-          },
-          errors: [
-            HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON +
-              ': ' +
-              formatHeartbeatFreshnessFailures(
-                state.heartbeatFreshnessResult,
-              ),
-          ],
-        };
+        if (allowSoftHeartbeatFreshnessFallback) {
+          state.runtimeInternalSignalMessages.push(
+            'heartbeat_freshness_degraded_soft_fallback',
+          );
+          emitPhaseProgress(
+            phaseContext,
+            'continuing despite heartbeat freshness degradation under soft preload fallback',
+            {
+              failureCount:
+                Array.isArray(state.heartbeatFreshnessResult?.failures) ?
+                  state.heartbeatFreshnessResult.failures.length :
+                  ONE,
+            },
+          );
+        } else {
+          return {
+            status: PHASE_STATUS.FAIL,
+            artifacts: {
+              sutLoadNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+              loadMetrics: state.loadMetrics,
+              rebalancingPressure: state.rebalancingPressure.load,
+              heartbeatFreshness: state.heartbeatFreshnessResult,
+              saturation: state.saturation,
+              strictBenchmarkGate: state.strictBenchmarkGate,
+            },
+            errors: [
+              HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON +
+                ': ' +
+                formatHeartbeatFreshnessFailures(
+                  state.heartbeatFreshnessResult,
+                ),
+            ],
+          };
+        }
       }
       const hardLoadFailures = collectLoadMetricHardFailures(state.loadMetrics);
       if (hardLoadFailures.length > ZERO) {

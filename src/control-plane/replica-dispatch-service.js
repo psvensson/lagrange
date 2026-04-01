@@ -641,7 +641,7 @@ class ReplicaDispatchService extends EventEmitter {
       updateResult?.partitionResult?.affectedRows,
     );
     if (updateAffectedRows === NUM.ZERO) {
-      throw this.buildMissingNodeRowError(nodeId);
+      throw await this.resolveMissingNodeRowUpdateError(nodeId, existing);
     }
 
     if (nextState === STATE.READY) {
@@ -1453,11 +1453,11 @@ class ReplicaDispatchService extends EventEmitter {
     if (!error) {
       return false;
     }
-    if (error?.code === 'NODE_ROW_MISSING') {
-      return false;
-    }
     if (error?.deferRetry === true) {
       return true;
+    }
+    if (error?.code === 'NODE_ROW_MISSING') {
+      return false;
     }
     if (Number.isFinite(error?.retryAfterMs) &&
         error.retryAfterMs > NUM.ZERO) {
@@ -1856,6 +1856,117 @@ class ReplicaDispatchService extends EventEmitter {
       SYSTEM_TABLE_NAME.NODES,
       nodeId,
     ) || {};
+  }
+
+  /**
+   * Read one authoritative node row directly from the control-plane gateway.
+   * This lets restart recovery distinguish a genuinely missing node row from a
+   * transiently unavailable authoritative path.
+   * @param {string} nodeId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async getAuthoritativeNodeRow(nodeId) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    let result = null;
+
+    if (typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
+      result = await gateway.readAuthoritativeRows(
+        SYSTEM_TABLE_NAME.NODES,
+        'SELECT * FROM nodes WHERE node_id = ?',
+        [nodeId],
+        {owner: DISPATCH_SUBSYSTEM},
+      );
+    } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
+      result = await gateway.executeRead({
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        sql: 'SELECT * FROM nodes WHERE node_id = ?',
+        params: [nodeId],
+        strategy: 'authoritative',
+      }, {
+        owner: DISPATCH_SUBSYSTEM,
+      });
+    } else if (typeof gateway.readRows === TYPEOF.FUNCTION) {
+      result = await gateway.readRows(
+        SYSTEM_TABLE_NAME.NODES,
+        'SELECT * FROM nodes WHERE node_id = ?',
+        [nodeId],
+        {owner: DISPATCH_SUBSYSTEM},
+      );
+    }
+
+    if (result?.success === false) {
+      return {
+        success: false,
+        error: result.error || 'authoritative_row_source_unavailable',
+        deferRetry: result.deferRetry === true ||
+          result.error === 'authoritative_row_source_unavailable',
+        retryAfterMs: Number.isFinite(result.retryAfterMs) ?
+          result.retryAfterMs :
+          this.nodeStateUpdateRetryAfterMs,
+      };
+    }
+
+    const rows = Array.isArray(result?.rows) ?
+      result.rows :
+      (Array.isArray(result) ? result : []);
+    const row = rows[0] || null;
+    return {
+      success: true,
+      row,
+    };
+  }
+
+  /**
+   * Classify a zero-row NODE_STATE_UPDATE write miss.
+   * Previously known nodes may be temporarily invisible while authoritative
+   * control-plane recovery is still converging; startup first-inserts must
+   * still fail loudly.
+   * @param {string} nodeId
+   * @param {Object} existing
+   * @return {Promise<Error>}
+   * @private
+   */
+  async resolveMissingNodeRowUpdateError(nodeId, existing) {
+    const error = this.buildMissingNodeRowError(nodeId);
+    if (!existing || !existing[COLUMN.NODE_ID]) {
+      return error;
+    }
+
+    try {
+      const authoritativeNodeRow = await this.getAuthoritativeNodeRow(nodeId);
+      if (authoritativeNodeRow?.success === true) {
+        if (authoritativeNodeRow.row?.[COLUMN.NODE_ID]) {
+          error.deferRetry = true;
+          error.retryAfterMs = this.nodeStateUpdateRetryAfterMs;
+          error.reasonCode = 'authoritative_node_row_visibility_lag';
+        }
+        return error;
+      }
+
+      if (authoritativeNodeRow?.deferRetry === true) {
+        error.deferRetry = true;
+        error.retryAfterMs = authoritativeNodeRow.retryAfterMs;
+        error.reasonCode = authoritativeNodeRow.error ||
+          'authoritative_row_source_unavailable';
+      }
+      return error;
+    } catch (readError) {
+      const readMessage = readError?.message || String(readError);
+      if (readError?.deferRetry === true ||
+          (typeof this.cdcIntegrationService?.isTransientCdcError ===
+            TYPEOF.FUNCTION &&
+            this.cdcIntegrationService.isTransientCdcError(readMessage)) ||
+          readMessage.includes('authoritative_row_source_unavailable')) {
+        error.deferRetry = true;
+        error.retryAfterMs = Number.isFinite(readError?.retryAfterMs) ?
+          readError.retryAfterMs :
+          this.nodeStateUpdateRetryAfterMs;
+        error.reasonCode = readError?.code ||
+          'authoritative_row_source_unavailable';
+      }
+      return error;
+    }
   }
 
   /**

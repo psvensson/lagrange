@@ -9,6 +9,10 @@ import {
   createTopLevelOperationBudget,
   getRemainingBudgetMs,
 } from '../../control-plane/timeout-budget.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
 import {DurableWorkflowCoordinator} from
   '../../workflow/durable-workflow-coordinator.js';
 
@@ -57,6 +61,8 @@ const PARTICIPANT_RETRY_DEFAULT = Object.freeze({
 const PARTICIPANT_RETRY_LOG_MSG = 'Distributed transaction participant retry';
 const RECOVERY_SWEEP_LOG_MSG = 'Distributed transaction recovery sweep failed';
 const RECOVERY_SWEEP_DEFAULT_INTERVAL_MS = 1000;
+const RECOVERY_SWEEP_DEFER_BASE_MS = 1000;
+const RECOVERY_SWEEP_DEFER_MAX_MS = 30000;
 const TIMEOUT_ERROR_MESSAGES = new Set([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
   QUERY_ERROR_MSG.QUERY_TIMED_OUT,
@@ -132,6 +138,8 @@ class DistributedTransactionCoordinator {
       RECOVERY_SWEEP_DEFAULT_INTERVAL_MS;
     this.recoverySweepTimer = null;
     this.recoverySweepInFlight = false;
+    this.recoverySweepDeferredUntilMs = 0;
+    this.recoverySweepDeferredAttempts = 0;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) => {
@@ -552,13 +560,33 @@ class DistributedTransactionCoordinator {
         resolved: 0,
         failed: 0,
         skipped: true,
+        deferred: 0,
+        results: [],
+      };
+    }
+    if (this.isRecoverySweepDeferred()) {
+      return {
+        swept: 0,
+        resolved: 0,
+        failed: 0,
+        skipped: false,
+        deferred: 1,
+        deferredUntilMs: this.recoverySweepDeferredUntilMs,
         results: [],
       };
     }
     this.recoverySweepInFlight = true;
     try {
       if (typeof this.loadRecoveryStateForSweep === 'function') {
-        const payload = await this.loadRecoveryStateForSweep();
+        let payload;
+        try {
+          payload = await this.loadRecoveryStateForSweep();
+        } catch (error) {
+          if (this.shouldDeferRecoverySweepError(error)) {
+            return this.buildDeferredRecoverySweepResult(error);
+          }
+          throw error;
+        }
         if (payload && typeof payload === 'object') {
           this.recoverFromSystemTables(payload);
         }
@@ -571,21 +599,62 @@ class DistributedTransactionCoordinator {
           this.isTransactionBudgetExceeded(tx),
         );
       const results = [];
+      let deferred = 0;
 
       for (const tx of stuckTransactions) {
         let protocolResult = null;
         let sweepPath = null;
-        await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
-          if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
-            sweepPath = QUERY_OPERATION.COMMIT;
-            protocolResult = await this.runCommitProtocol(tx, {
-              allowTimedOutCommitStatuses: true,
+        try {
+          await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
+            if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
+              sweepPath = QUERY_OPERATION.COMMIT;
+              protocolResult = await this.runCommitProtocol(tx, {
+                allowTimedOutCommitStatuses: true,
+              });
+              return;
+            }
+            sweepPath = QUERY_OPERATION.ROLLBACK;
+            protocolResult = await this.runRollbackProtocol(tx);
             });
-            return;
+        } catch (error) {
+          if (this.shouldDeferRecoverySweepError(error)) {
+            deferred += 1;
+            const deferredResult = this.buildDeferredRecoverySweepResult(
+              error,
+              {
+                swept: stuckTransactions.length,
+                results: [{
+                  transactionId: tx.transactionId,
+                  sessionId: tx.sessionId,
+                  sweepPath,
+                  statusAfter: tx.status,
+                  success: false,
+                  deferred: true,
+                  error: error?.message || String(error),
+                }],
+              },
+            );
+            results.push(...deferredResult.results);
+            continue;
           }
-          sweepPath = QUERY_OPERATION.ROLLBACK;
-          protocolResult = await this.runRollbackProtocol(tx);
-        });
+          throw error;
+        }
+
+        if (protocolResult?.success !== true &&
+          this.shouldDeferRecoverySweepError(protocolResult)) {
+          deferred += 1;
+          this.deferRecoverySweep(protocolResult);
+          results.push({
+            transactionId: tx.transactionId,
+            sessionId: tx.sessionId,
+            sweepPath,
+            statusAfter: tx.status,
+            success: false,
+            deferred: true,
+            error: protocolResult?.error || null,
+          });
+          continue;
+        }
 
         results.push({
           transactionId: tx.transactionId,
@@ -598,11 +667,20 @@ class DistributedTransactionCoordinator {
       }
 
       const resolved = results.filter((entry) => entry.success).length;
-      const failed = results.length - resolved;
+      const failed = results.filter((entry) =>
+        entry.success !== true && entry.deferred !== true,
+      ).length;
+      if (deferred === 0) {
+        this.clearRecoverySweepDeferState();
+      }
       return {
         swept: stuckTransactions.length,
         resolved,
         failed,
+        deferred,
+        deferredUntilMs: deferred > 0 ?
+          this.recoverySweepDeferredUntilMs :
+          0,
         skipped: false,
         results,
       };
@@ -637,6 +715,77 @@ class DistributedTransactionCoordinator {
     }
     clearInterval(this.recoverySweepTimer);
     this.recoverySweepTimer = null;
+  }
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  isRecoverySweepDeferred() {
+    return Number.isFinite(this.recoverySweepDeferredUntilMs) &&
+      this.recoverySweepDeferredUntilMs > this.now();
+  }
+
+  /**
+   * @param {*} errorLike
+   * @return {boolean}
+   * @private
+   */
+  shouldDeferRecoverySweepError(errorLike) {
+    return isRetryableControlPlaneError(errorLike);
+  }
+
+  /**
+   * @param {*} errorLike
+   * @return {{delayMs: number, deferredUntilMs: number}}
+   * @private
+   */
+  deferRecoverySweep(errorLike) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    const backoffMs = retryAfterMs > 0 ?
+      retryAfterMs :
+      Math.min(
+        RECOVERY_SWEEP_DEFER_MAX_MS,
+        Math.max(
+          this.recoverySweepIntervalMs,
+          RECOVERY_SWEEP_DEFER_BASE_MS * (2 ** this.recoverySweepDeferredAttempts),
+        ),
+      );
+    this.recoverySweepDeferredAttempts += 1;
+    this.recoverySweepDeferredUntilMs = this.now() + backoffMs;
+    return {
+      delayMs: backoffMs,
+      deferredUntilMs: this.recoverySweepDeferredUntilMs,
+    };
+  }
+
+  /**
+   * @return {void}
+   * @private
+   */
+  clearRecoverySweepDeferState() {
+    this.recoverySweepDeferredUntilMs = 0;
+    this.recoverySweepDeferredAttempts = 0;
+  }
+
+  /**
+   * @param {*} errorLike
+   * @param {Object} [overrides={}]
+   * @return {Object}
+   * @private
+   */
+  buildDeferredRecoverySweepResult(errorLike, overrides = {}) {
+    this.deferRecoverySweep(errorLike);
+    return {
+      swept: overrides.swept || 0,
+      resolved: 0,
+      failed: 0,
+      skipped: false,
+      deferred: Number.isFinite(overrides.deferred) ? overrides.deferred : 1,
+      deferredUntilMs: this.recoverySweepDeferredUntilMs,
+      error: errorLike?.message || String(errorLike),
+      results: Array.isArray(overrides.results) ? overrides.results : [],
+    };
   }
 
   /**

@@ -1243,29 +1243,47 @@ class UnifiedRebalancer extends EventEmitter {
 
     const connectedNodeIds = this.resolveConnectedClusterNodeIds();
     if (connectedNodeIds.size > 0) {
+      const knownNodeIds = new Set(nodeRows.map((nodeRow) => {
+        return normalizeNodeRow(nodeRow).nodeId;
+      }).filter((nodeId) =>
+        typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      ));
+      const requiredHealthyNodeCount =
+        this.resolveCriticalSystemRequiredHealthyNodeCount(
+          activeMembershipNodeIds.length,
+        );
+      const hasRequiredHealthyNodes =
+        activeNodeIds.length >= requiredHealthyNodeCount;
+      const publishedActiveNodeIds =
+        this.isControlPlanePriorityPartition() && hasRequiredHealthyNodes ?
+          this.getPublishedActiveNodeIdSet() :
+          null;
       for (const connectedNodeId of connectedNodeIds) {
-        if (!nodeRows.some((nodeRow) => {
-          return normalizeNodeRow(nodeRow).nodeId === connectedNodeId;
-        })) {
-          return Object.freeze({
-            reason:
-              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
-                .TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE,
-            connectedNodeId,
-          });
+        if (knownNodeIds.has(connectedNodeId)) {
+          continue;
         }
+        if (publishedActiveNodeIds &&
+            !publishedActiveNodeIds.has(connectedNodeId)) {
+          continue;
+        }
+        return Object.freeze({
+          reason:
+            CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+              .TRANSPORT_MEMBERSHIP_EXCEEDS_NODES_CACHE,
+          connectedNodeId,
+        });
       }
     }
 
     const endpointVisibility =
       this.evaluateCriticalSystemEndpointVisibility(activeNodeIds);
     if (endpointVisibility.ready !== true) {
-      return Object.freeze({
-        reason:
-          CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
-            .ENDPOINT_VISIBILITY_INCOMPLETE,
-        ...endpointVisibility,
-      });
+          return Object.freeze({
+            reason:
+              CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON
+                .ENDPOINT_VISIBILITY_INCOMPLETE,
+            ...endpointVisibility,
+          });
     }
 
     const inFlightTopologyOperations =

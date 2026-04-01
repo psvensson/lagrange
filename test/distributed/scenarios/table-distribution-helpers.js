@@ -375,6 +375,24 @@ function resolveBenchmarkAdmissionPollIntervalMs(cluster, options = {}) {
   return BENCHMARK_DEFAULTS.readyPollIntervalMs;
 }
 
+function resolveBenchmarkAdmissionEnforcement(cluster, options = {}) {
+  if (options.enforceBenchmarkLoadAdmission === true) {
+    return true;
+  }
+  if (options.enforceBenchmarkLoadAdmission === false) {
+    return false;
+  }
+  const configuredEnforcement =
+    cluster?._config?.benchmark?.enforceBenchmarkLoadAdmission;
+  if (configuredEnforcement === true) {
+    return true;
+  }
+  if (configuredEnforcement === false) {
+    return false;
+  }
+  return true;
+}
+
 function preserveNodeOrder(currentNodes, nextNodes, limit = Number.POSITIVE_INFINITY) {
   const normalizedLimit = Number.isInteger(limit) && limit > ZERO ?
     limit :
@@ -431,9 +449,17 @@ function resolvePartitioningDispatchNodes(
   selected,
   currentNodes = [],
   targetNodeCount = ZERO,
+  options = {},
 ) {
+  const allowReplicaBearingFallback =
+    options.allowReplicaBearingFallback === true;
   const nextNodes = supportsBenchmarkAdmission ?
-    selected.readyReplicaNodes :
+    (
+      selected.readyReplicaNodes.length > ZERO ||
+      allowReplicaBearingFallback !== true
+    ) ?
+      selected.readyReplicaNodes :
+      selected.selectedNodes :
     selected.selectedNodes;
   if (!Array.isArray(nextNodes) || nextNodes.length === ZERO) {
     return [];
@@ -457,6 +483,7 @@ function resolvePartitioningDispatchNodes(
  * @param {number} [options.stableWindowMs]
  * @param {number} [options.pollIntervalMs]
  * @param {number} [options.queryTimeoutMs]
+ * @param {boolean} [options.enforceBenchmarkLoadAdmission]
  * @return {Promise<Array<Object>>}
  */
 async function admitBenchmarkLoadNodes(cluster, options = {}) {
@@ -468,8 +495,13 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
     cluster,
     options,
   );
+  const enforceBenchmarkLoadAdmission = resolveBenchmarkAdmissionEnforcement(
+    cluster,
+    options,
+  );
 
-  if (typeof cluster?.waitForBenchmarkReadyLoadNodes === 'function') {
+  if (enforceBenchmarkLoadAdmission &&
+      typeof cluster?.waitForBenchmarkReadyLoadNodes === 'function') {
     return cluster.waitForBenchmarkReadyLoadNodes({
       tableName: options.tableName,
       tableId: options.tableId,
@@ -483,7 +515,8 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
     });
   }
 
-  if (typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function') {
+  if (enforceBenchmarkLoadAdmission &&
+      typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function') {
     const readyNodes = await cluster.resolveBenchmarkReadyLoadNodes({
       tableName: options.tableName,
       tableId: options.tableId,
@@ -528,6 +561,7 @@ async function admitBenchmarkLoadNodes(cluster, options = {}) {
  * @param {number} [options.queryTimeoutMs]
  * @param {Array<Object>} [options.queryNodes]
  * @param {Array<Object>} [options.fallbackNodes]
+ * @param {boolean} [options.enforceBenchmarkLoadAdmission]
  * @return {Promise<Object>}
  */
 async function createPartitioningBenchmarkLoadNodePlan(
@@ -546,6 +580,7 @@ async function createPartitioningBenchmarkLoadNodePlan(
     };
   }
   const supportsBenchmarkAdmission =
+    resolveBenchmarkAdmissionEnforcement(cluster, options) &&
     typeof cluster?.resolveBenchmarkReadyLoadNodes === 'function';
 
   const selectLoadNodes = async () => {
@@ -613,6 +648,8 @@ async function createPartitioningBenchmarkLoadNodePlan(
   let lastDistribution = null;
   let lastSelectedNodes = [];
   let lastReadyReplicaNodes = [];
+  let admissionFallbackWarning = null;
+  let allowReplicaBearingFallback = false;
 
   while (true) {
     try {
@@ -647,6 +684,17 @@ async function createPartitioningBenchmarkLoadNodePlan(
     }
 
     if (Date.now() > deadlineAtMs && readySinceMs === null) {
+      if (supportsBenchmarkAdmission === true &&
+          lastSelectedNodes.length >= bootstrapRequiredNodeCount) {
+        allowReplicaBearingFallback = true;
+        admissionFallbackWarning =
+          'Timed out after ' + timeoutMs +
+          'ms waiting for benchmark admission for table-local load on ' +
+          String(options.tableName || 'unknown') +
+          '; degrading bootstrap to replica-bearing nodes (' +
+          lastSelectedNodes.length + '/' + targetNodeCount + ' available)';
+        break;
+      }
       throw new Error(
         'Timed out after ' + timeoutMs +
         'ms waiting for partitioning bootstrap quorum and benchmark-ready ' +
@@ -670,6 +718,9 @@ async function createPartitioningBenchmarkLoadNodePlan(
     },
     [],
     targetNodeCount,
+    {
+      allowReplicaBearingFallback,
+    },
   );
   let currentNodes = initialNodes;
   let stopped = false;
@@ -686,6 +737,9 @@ async function createPartitioningBenchmarkLoadNodePlan(
         selected,
         currentNodes,
         targetNodeCount,
+        {
+          allowReplicaBearingFallback,
+        },
       );
     } catch (_error) {
       return;
@@ -714,6 +768,8 @@ async function createPartitioningBenchmarkLoadNodePlan(
     },
     bootstrapRequiredNodeCount,
     targetNodeCount,
+    admissionFallbackWarning,
+    admissionFallbackUsed: allowReplicaBearingFallback,
   };
 }
 

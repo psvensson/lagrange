@@ -2245,6 +2245,164 @@ describe('postgres-baseline-comparison scenario', () => {
     );
   });
 
+  it('continues with degraded preload mode when soft stall fallback is enabled',
+    async () => {
+      const loadCalls = [];
+      let inFlightProbeCount = 0;
+      let tableProbeCount = 0;
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            tableProbeCount += 1;
+            if (tableProbeCount === 1) {
+              return {rows: [{count: 0}]};
+            }
+            throw new Error(
+              'Distributed operation failed due to participant failures',
+            );
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            inFlightProbeCount += 1;
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                leaders: {p1: this.id},
+                replicaOperations: {
+                  inFlightCount: 0,
+                  statusHistogram: {},
+                },
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            strictDiscovery: false,
+            allowPreloadStallSoftFallback: true,
+            requiredSutLoadNodeCount: 1,
+            quiescentTimeoutMs: 500,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+            quiescentNoProgressTimeoutMs: 20,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              return {
+                start: () => ({
+                  waitComplete: async () => ({
+                    total: 10,
+                    success: 10,
+                    failed: 0,
+                    errors: 0,
+                    opsPerSec: 10,
+                    latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                  }),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      const result = await run(cluster);
+      assert.equal(
+        result.details.phaseArtifacts.pre_load_gate.mode,
+        'degraded_soft_stall_fallback',
+        'soft stall fallback should record degraded pre-load gate mode',
+      );
+      assert.deepEqual(
+        loadCalls[0],
+        ['seed-1'],
+        'soft stall fallback should continue SUT load with available candidate nodes',
+      );
+      assert.ok(
+        loadCalls.length >= 2,
+        'soft stall fallback should continue through both SUT and baseline load phases',
+      );
+      assert.ok(
+        inFlightProbeCount >= 2,
+        'soft stall fallback should still exercise quiescence polling before continuing',
+      );
+    });
+
   it('treats replica operation timeline movement as preload progress',
     async () => {
       const loadCalls = [];

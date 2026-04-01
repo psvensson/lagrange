@@ -506,6 +506,176 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
       );
     });
 
+  it('uses snapshot lane for local recovery snapshot fallback queries',
+    async () => {
+      const controlSnapshotQueryOptions = [];
+      let replayPollCount = 0;
+      let restarted = false;
+      const transactionStatusById = new Map();
+      let activeTransactionId = null;
+      let preparedTransactionId = null;
+
+      const buildControlSnapshotRows = () => [{
+        cluster: {
+          nodeCount: 7,
+          activeNodeCount: 7,
+        },
+        partitions: RECOVERY_READY_PARTITIONS,
+        queryEngine: restarted ?
+          {
+            transactionRecovery: {
+              totalRecovered: 2,
+              resumed: 2,
+              failed: 0,
+            },
+          } :
+          {
+            transactionRecovery: null,
+          },
+      }];
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        queryWithTimeout: async (sql, params = [], options = {}) => {
+          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
+            controlSnapshotQueryOptions.push(options);
+          }
+          return seedNode.query(sql, params);
+        },
+        query: async (sql, params = []) => {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_FROM_TABLES)) {
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark-events-1',
+                table_policies: TABLE_POLICIES_JSON,
+              }],
+            };
+          }
+          if (sql.includes(SQL_FROM_PARTITIONS)) {
+            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
+          }
+          if (sql.includes(SQL_FROM_SERVICES)) {
+            return {
+              rows: [
+                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
+              ],
+            };
+          }
+          if (sql.includes(SQL_INSERT_TRANSACTION)) {
+            const [transactionId, _sessionId, status] = params;
+            transactionStatusById.set(transactionId, status);
+            if (status === 'ACTIVE') {
+              activeTransactionId = transactionId;
+            }
+            if (status === 'PREPARED') {
+              preparedTransactionId = transactionId;
+            }
+            return {rows: []};
+          }
+
+          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
+            if (restarted) {
+              replayPollCount += 1;
+              if (replayPollCount >= 2 &&
+                activeTransactionId &&
+                preparedTransactionId) {
+                transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
+                transactionStatusById.set(preparedTransactionId, 'COMMITTED');
+              }
+            }
+            const rows = params
+              .map((transactionId) => {
+                const status = transactionStatusById.get(transactionId);
+                if (!status) {
+                  return null;
+                }
+                return {
+                  transaction_id: transactionId,
+                  status,
+                };
+              })
+              .filter(Boolean);
+            return {rows};
+          }
+
+          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
+            return {
+              rows: buildControlSnapshotRows(),
+            };
+          }
+
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        getNodes: () => [
+          seedNode,
+          {id: 'node-2', role: 'joiner'},
+          {id: 'node-3', role: 'joiner'},
+          {id: 'node-4', role: 'joiner'},
+          {id: 'node-5', role: 'joiner'},
+          {id: 'node-6', role: 'joiner'},
+          {id: 'node-7', role: 'joiner'},
+        ],
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForControlPlaneQuiescence: async () => {},
+        startLoad: () => ({
+          cancel: () => {},
+          waitComplete: async () => ({
+            total: 120,
+            success: 120,
+            failed: 0,
+          }),
+        }),
+        restartNode: async () => {
+          restarted = true;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      const result = await run(cluster, {
+        preRestartDelayMs: 0,
+        transactionReplayPollIntervalMs: 1,
+        transactionReplayTimeoutMs: 2000,
+        distributionPollIntervalMs: 1,
+        distributionTimeoutMs: 2000,
+        minAdditionalPartitions: 0,
+        minDistinctReplicaNodes: 6,
+      });
+
+      assert.ok(
+        controlSnapshotQueryOptions.length >= 1,
+        'scenario should query local control snapshots via queryWithTimeout fallback',
+      );
+      assert.equal(controlSnapshotQueryOptions[0].lane, 'snapshot');
+      assert.equal(controlSnapshotQueryOptions[0].timeoutMs, 30000);
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.activeTransactionId
+        ],
+        'ROLLED_BACK',
+      );
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.preparedTransactionId
+        ],
+        'COMMITTED',
+      );
+    });
+
   it('retries transient local recovery snapshot failures after restart',
     async () => {
       let replayPollCount = 0;
@@ -679,6 +849,357 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
         recoverySnapshotAttemptCount >= 3,
         'scenario should retry local recovery snapshots while the restarted admin endpoint is still reconnecting',
       );
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.activeTransactionId
+        ],
+        'ROLLED_BACK',
+      );
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.preparedTransactionId
+        ],
+        'COMMITTED',
+      );
+    });
+
+  it('falls back to replay validation when recovery readiness times out',
+    async () => {
+      let restarted = false;
+      const transactionStatusById = new Map();
+      let activeTransactionId = null;
+      let preparedTransactionId = null;
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        getControlSnapshot: async () => {
+          return {
+            rows: [{
+              cluster: {
+                nodeCount: 7,
+                activeNodeCount: 7,
+              },
+              partitions: RECOVERY_READY_PARTITIONS,
+              queryEngine: {
+                transactionRecovery: null,
+              },
+            }],
+          };
+        },
+        query: async (sql, params = []) => {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_FROM_TABLES)) {
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark-events-1',
+                table_policies: TABLE_POLICIES_JSON,
+              }],
+            };
+          }
+          if (sql.includes(SQL_FROM_PARTITIONS)) {
+            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
+          }
+          if (sql.includes(SQL_FROM_SERVICES)) {
+            return {
+              rows: [
+                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
+              ],
+            };
+          }
+          if (sql.includes(SQL_INSERT_TRANSACTION)) {
+            const [transactionId, _sessionId, status] = params;
+            transactionStatusById.set(transactionId, status);
+            if (status === 'ACTIVE') {
+              activeTransactionId = transactionId;
+            }
+            if (status === 'PREPARED') {
+              preparedTransactionId = transactionId;
+            }
+            return {rows: []};
+          }
+          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
+            if (restarted && activeTransactionId && preparedTransactionId) {
+              transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
+              transactionStatusById.set(preparedTransactionId, 'COMMITTED');
+            }
+            const rows = params
+              .map((transactionId) => {
+                const status = transactionStatusById.get(transactionId);
+                if (!status) {
+                  return null;
+                }
+                return {
+                  transaction_id: transactionId,
+                  status,
+                };
+              })
+              .filter(Boolean);
+            return {rows};
+          }
+          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
+            return {
+              rows: [{
+                cluster: {
+                  nodeCount: 7,
+                  activeNodeCount: 7,
+                },
+                partitions: RECOVERY_READY_PARTITIONS,
+                queryEngine: {
+                  transactionRecovery: null,
+                },
+              }],
+            };
+          }
+
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        getNodes: () => [
+          seedNode,
+          {id: 'node-2', role: 'joiner'},
+          {id: 'node-3', role: 'joiner'},
+          {id: 'node-4', role: 'joiner'},
+          {id: 'node-5', role: 'joiner'},
+          {id: 'node-6', role: 'joiner'},
+          {id: 'node-7', role: 'joiner'},
+        ],
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForControlPlaneQuiescence: async () => {},
+        startLoad: () => ({
+          cancel: () => {},
+          waitComplete: async () => ({
+            total: 120,
+            success: 120,
+            failed: 0,
+          }),
+        }),
+        restartNode: async () => {
+          restarted = true;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      const result = await run(cluster, {
+        preRestartDelayMs: 0,
+        convergenceTimeoutMs: 50,
+        transactionReplayTimeoutMs: 50,
+        transactionReplayPollIntervalMs: 1,
+        distributionPollIntervalMs: 1,
+        distributionTimeoutMs: 2000,
+        minAdditionalPartitions: 0,
+        minDistinctReplicaNodes: 6,
+      });
+
+      assert.equal(result.recoveryReadiness.deferredToReplayValidation, true);
+      assert.match(
+        result.recoveryReadiness.warning,
+        /Timed out waiting for post-restart recovery readiness/i,
+      );
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.activeTransactionId
+        ],
+        'ROLLED_BACK',
+      );
+      assert.equal(
+        result.replayValidation.statuses[
+          result.seededTransactions.preparedTransactionId
+        ],
+        'COMMITTED',
+      );
+    });
+
+  it('continues replay validation when post-restart convergence times out',
+    async () => {
+      let restarted = false;
+      let convergenceCallCount = 0;
+      const transactionStatusById = new Map();
+      let activeTransactionId = null;
+      let preparedTransactionId = null;
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        getControlSnapshot: async () => {
+          return {
+            rows: [{
+              cluster: {
+                nodeCount: 7,
+                activeNodeCount: 7,
+              },
+              controlPlaneDiagnostics: {
+                startupRecovery: {
+                  controlPlaneRecoveryReady: true,
+                  recoveryStage: 'traffic_ready',
+                },
+              },
+              partitions: RECOVERY_READY_PARTITIONS,
+              queryEngine: restarted ?
+                {
+                  transactionRecovery: {
+                    totalRecovered: 2,
+                    resumed: 2,
+                    failed: 0,
+                  },
+                } :
+                {
+                  transactionRecovery: null,
+                },
+            }],
+          };
+        },
+        query: async (sql, params = []) => {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+            return {rows: []};
+          }
+          if (sql.includes(SQL_FROM_TABLES)) {
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark-events-1',
+                table_policies: TABLE_POLICIES_JSON,
+              }],
+            };
+          }
+          if (sql.includes(SQL_FROM_PARTITIONS)) {
+            return {rows: [{partition_id: 'bench-p1'}, {partition_id: 'bench-p2'}]};
+          }
+          if (sql.includes(SQL_FROM_SERVICES)) {
+            return {
+              rows: [
+                {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+                {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-4', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-5', status: 'active'},
+                {partition_id: 'bench-p2', node_id: 'node-6', status: 'active'},
+              ],
+            };
+          }
+          if (sql.includes(SQL_INSERT_TRANSACTION)) {
+            const [transactionId, _sessionId, status] = params;
+            transactionStatusById.set(transactionId, status);
+            if (status === 'ACTIVE') {
+              activeTransactionId = transactionId;
+            }
+            if (status === 'PREPARED') {
+              preparedTransactionId = transactionId;
+            }
+            return {rows: []};
+          }
+          if (sql.includes(SQL_SELECT_TRANSACTION_STATUSES)) {
+            if (restarted && activeTransactionId && preparedTransactionId) {
+              transactionStatusById.set(activeTransactionId, 'ROLLED_BACK');
+              transactionStatusById.set(preparedTransactionId, 'COMMITTED');
+            }
+            const rows = params
+              .map((transactionId) => {
+                const status = transactionStatusById.get(transactionId);
+                if (!status) {
+                  return null;
+                }
+                return {
+                  transaction_id: transactionId,
+                  status,
+                };
+              })
+              .filter(Boolean);
+            return {rows};
+          }
+          if (sql.includes(SQL_CONTROL_SNAPSHOT)) {
+            return {
+              rows: [{
+                cluster: {
+                  nodeCount: 7,
+                  activeNodeCount: 7,
+                },
+                controlPlaneDiagnostics: {
+                  startupRecovery: {
+                    controlPlaneRecoveryReady: true,
+                    recoveryStage: 'traffic_ready',
+                  },
+                },
+                partitions: RECOVERY_READY_PARTITIONS,
+                queryEngine: restarted ?
+                  {
+                    transactionRecovery: {
+                      totalRecovered: 2,
+                      resumed: 2,
+                      failed: 0,
+                    },
+                  } :
+                  {
+                    transactionRecovery: null,
+                  },
+              }],
+            };
+          }
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        getNodes: () => [
+          seedNode,
+          {id: 'node-2', role: 'joiner'},
+          {id: 'node-3', role: 'joiner'},
+          {id: 'node-4', role: 'joiner'},
+          {id: 'node-5', role: 'joiner'},
+          {id: 'node-6', role: 'joiner'},
+          {id: 'node-7', role: 'joiner'},
+        ],
+        waitForConvergence: async () => {
+          convergenceCallCount += 1;
+          if (restarted && convergenceCallCount >= 2) {
+            throw new Error('Convergence timeout after 180000ms');
+          }
+          return {settledAfterMs: 1};
+        },
+        waitForControlPlaneQuiescence: async () => {},
+        startLoad: () => ({
+          cancel: () => {},
+          waitComplete: async () => ({
+            total: 120,
+            success: 120,
+            failed: 0,
+          }),
+        }),
+        restartNode: async () => {
+          restarted = true;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      const result = await run(cluster, {
+        preRestartDelayMs: 0,
+        transactionReplayPollIntervalMs: 1,
+        transactionReplayTimeoutMs: 2000,
+        distributionPollIntervalMs: 1,
+        distributionTimeoutMs: 2000,
+        minAdditionalPartitions: 0,
+        minDistinctReplicaNodes: 6,
+      });
+
+      assert.ok(
+        result.convergenceWarnings.length >= 1,
+        'scenario should retain convergence timeout diagnostics as warnings',
+      );
+      assert.match(result.convergenceWarnings[0], /Convergence timeout/i);
       assert.equal(
         result.replayValidation.statuses[
           result.seededTransactions.activeTransactionId

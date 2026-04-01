@@ -24,6 +24,19 @@ import {
 const LOAD_OPERATION_INSERT = 'INSERT';
 const ZERO = 0;
 
+async function waitForControlPlaneQuiescenceBestEffort(cluster, options) {
+  if (typeof cluster.waitForControlPlaneQuiescence !== 'function') {
+    return null;
+  }
+  try {
+    return await cluster.waitForControlPlaneQuiescence(options);
+  } catch (error) {
+    return {
+      warning: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Pick seed node with deterministic fallback.
  * @param {Array<Object>} nodes
@@ -42,6 +55,9 @@ function getSeedNode(nodes) {
 async function run(cluster, options = {}) {
   const {
     expectedNodeCount,
+    convergenceTimeoutMs,
+    controlPlaneQuiescenceTimeoutMs,
+    controlPlaneQuiescenceNoProgressTimeoutMs,
     loadOpsPerSec,
     loadDuration,
     tableName,
@@ -73,13 +89,15 @@ async function run(cluster, options = {}) {
   );
 
   const convergence = await cluster.waitForConvergence({
-    settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
+    settleTimeoutMs: convergenceTimeoutMs,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
-  if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
-    await cluster.waitForControlPlaneQuiescence();
-  }
+  const controlPlaneQuiescence =
+    await waitForControlPlaneQuiescenceBestEffort(cluster, {
+      timeoutMs: controlPlaneQuiescenceTimeoutMs,
+      noProgressTimeoutMs: controlPlaneQuiescenceNoProgressTimeoutMs,
+    });
 
   const tablePreparation = await prepareBenchmarkPartitioningTable(
     seedNode,
@@ -91,16 +109,37 @@ async function run(cluster, options = {}) {
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-table-partition-distribution',
   });
-  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
-    seedNode,
-    cluster,
-    {
-      tableName: effectiveTableName,
-      tableId: tablePreparation.tableId,
-      requiredNodeCount: minDistinctReplicaNodes,
-      queryNodes: nodes,
-    },
-  );
+  let loadNodePlan;
+  let loadNodeAdmissionFallback = null;
+  try {
+    loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+      seedNode,
+      cluster,
+      {
+        tableName: effectiveTableName,
+        tableId: tablePreparation.tableId,
+        requiredNodeCount: minDistinctReplicaNodes,
+        timeoutMs: Math.max(distributionTimeoutMs, convergenceTimeoutMs),
+        queryNodes: nodes,
+      },
+    );
+    if (loadNodePlan?.admissionFallbackWarning) {
+      loadNodeAdmissionFallback = {
+        warning: loadNodePlan.admissionFallbackWarning,
+      };
+    }
+  } catch (error) {
+    loadNodeAdmissionFallback = {
+      warning: error instanceof Error ? error.message : String(error),
+    };
+    loadNodePlan = {
+      initialNodes: [seedNode],
+      nodeResolver: () => [seedNode],
+      stop: () => {},
+      bootstrapRequiredNodeCount: 1,
+      targetNodeCount: 1,
+    };
+  }
   const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
     loadOpsPerSec,
     loadNodePlan.initialNodes.length,
@@ -158,6 +197,8 @@ async function run(cluster, options = {}) {
     tableName: effectiveTableName,
     tablePreparation,
     convergenceTiming: convergence,
+    controlPlaneQuiescence,
+    loadNodeAdmissionFallback,
     distribution,
     loadMetrics: metrics,
     successRate,

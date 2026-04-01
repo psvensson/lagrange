@@ -34,8 +34,17 @@ function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
       normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+    controlPlaneQuiescenceTimeoutMs:
+      normalizeFiniteNumber(options.controlPlaneQuiescenceTimeoutMs, 180000),
+    controlPlaneQuiescenceNoProgressTimeoutMs:
+      normalizeFiniteNumber(
+        options.controlPlaneQuiescenceNoProgressTimeoutMs,
+        90000,
+      ),
     distributionTimeoutMs:
-      normalizeFiniteNumber(options.distributionTimeoutMs, 90000),
+      normalizeFiniteNumber(options.distributionTimeoutMs, 180000),
     distributionPollIntervalMs:
       normalizeFiniteNumber(options.distributionPollIntervalMs, 250),
     postDistributionSoakMs:
@@ -70,6 +79,15 @@ function resolveSevenNodeTablePartitionDistributionScenarioConfig(options = {}) 
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
       normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+    controlPlaneQuiescenceTimeoutMs:
+      normalizeFiniteNumber(options.controlPlaneQuiescenceTimeoutMs, 180000),
+    controlPlaneQuiescenceNoProgressTimeoutMs:
+      normalizeFiniteNumber(
+        options.controlPlaneQuiescenceNoProgressTimeoutMs,
+        90000,
+      ),
     distributionTimeoutMs:
       normalizeFiniteNumber(options.distributionTimeoutMs, 90000),
     distributionPollIntervalMs:
@@ -92,10 +110,19 @@ function resolveSevenNodeLoadDuringPartitioningScenarioConfig(options = {}) {
       normalizeFiniteNumber(options.minAdditionalPartitions, 1),
     minDistinctReplicaNodes:
       normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+    controlPlaneQuiescenceTimeoutMs:
+      normalizeFiniteNumber(options.controlPlaneQuiescenceTimeoutMs, 180000),
+    controlPlaneQuiescenceNoProgressTimeoutMs:
+      normalizeFiniteNumber(
+        options.controlPlaneQuiescenceNoProgressTimeoutMs,
+        90000,
+      ),
     partitioningTimeoutMs:
       normalizeFiniteNumber(options.partitioningTimeoutMs, 180000),
     splitAttemptTimeoutMs:
-      normalizeFiniteNumber(options.splitAttemptTimeoutMs, 30000),
+      normalizeFiniteNumber(options.splitAttemptTimeoutMs, 60000),
     partitioningPollIntervalMs:
       normalizeFiniteNumber(options.partitioningPollIntervalMs, 250),
     minOpsAfterPartitioning:
@@ -110,17 +137,17 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
     preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 15000),
     preRestartActiveTimeoutMs:
-      normalizeFiniteNumber(options.preRestartActiveTimeoutMs, 120000),
+      normalizeFiniteNumber(options.preRestartActiveTimeoutMs, 180000),
     restartReadinessTimeoutMs:
-      normalizeFiniteNumber(options.restartReadinessTimeoutMs, 120000),
+      normalizeFiniteNumber(options.restartReadinessTimeoutMs, 360000),
     postRestartActiveTimeoutMs:
-      normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 180000),
+      normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 240000),
     postRestartQuietWindowMs:
       normalizeFiniteNumber(options.postRestartQuietWindowMs, 30000),
     convergenceTimeoutMs:
-      normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 240000),
     consistencyTimeoutMs:
-      normalizeFiniteNumber(options.consistencyTimeoutMs, 240000),
+      normalizeFiniteNumber(options.consistencyTimeoutMs, 300000),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
   });
 }

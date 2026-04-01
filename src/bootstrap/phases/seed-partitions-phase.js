@@ -13,6 +13,9 @@ import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
+import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
+import {resolveCanonicalLeaderService} from
+  '../../cache/leader-readiness-gate.js';
 import {
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
@@ -38,6 +41,7 @@ import {
   NUM,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
+  SERVICE_TYPE,
   STRING,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
@@ -436,12 +440,80 @@ class SeedPartitionsPhase {
     const d = this.delegates;
     const leadersFound = new Set();
     for (const partition of d.getPartitionServices().values()) {
-      if (partition.isLeader &&
-          partitionIds.has(partition.partitionId)) {
+      if (!partitionIds.has(partition.partitionId)) {
+        continue;
+      }
+
+      if (partition.isLeader ||
+          this.canBypassCanonicalPartitionLeadership(
+            partition.partitionId,
+          ) ||
+          this.canBypassLocalPriorityPartitionLeadership(
+            partition.partitionId,
+          )) {
         leadersFound.add(partition.partitionId);
       }
     }
     return leadersFound;
+  }
+
+  canBypassLocalPriorityPartitionLeadership(partitionId) {
+    const d = this.delegates;
+    if (!this.hasInitializedLocalPartitionReplica(partitionId)) {
+      return false;
+    }
+
+    const readinessState =
+      typeof d.getBootstrapReadinessState === 'function' ?
+        d.getBootstrapReadinessState() :
+        null;
+    if (!readinessState) {
+      return false;
+    }
+
+    const startupRecoveryCoordinator =
+      new StartupRecoveryCoordinator({readinessState});
+    return startupRecoveryCoordinator.evaluate({partitionId})
+      .shouldBypassLocalPriorityControlPlaneStartupReadiness === true;
+  }
+
+  canBypassCanonicalPartitionLeadership(partitionId) {
+    if (!this.hasInitializedLocalPartitionReplica(partitionId)) {
+      return false;
+    }
+
+    const d = this.delegates;
+    const systemTableCache =
+      typeof d.getSystemTableCacheRef === 'function' ?
+        d.getSystemTableCacheRef() :
+        typeof d.getSystemTableCacheSafe === 'function' ?
+          d.getSystemTableCacheSafe() :
+        null;
+    if (!systemTableCache) {
+      return false;
+    }
+
+    return Boolean(resolveCanonicalLeaderService(
+      systemTableCache,
+      SERVICE_TYPE.PARTITION,
+      partitionId,
+      {requireAddress: true},
+    ).leaderService);
+  }
+
+  hasInitializedLocalPartitionReplica(partitionId) {
+    const d = this.delegates;
+    for (const partition of d.getPartitionServices().values()) {
+      if (partition?.partitionId !== partitionId) {
+        continue;
+      }
+      if (partition?.initialized === false) {
+        continue;
+      }
+      return true;
+    }
+
+    return false;
   }
 
   /**

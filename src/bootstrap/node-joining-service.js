@@ -188,6 +188,9 @@ import {
   activateMessageGroupServiceRows,
 } from './shared/message-group-service-activation.js';
 import {
+  activatePartitionServiceRows,
+} from './shared/partition-service-activation.js';
+import {
   activateSteadyStateRuntimeHandoff,
 } from './shared/startup-sql-runtime-handoff.js';
 import {
@@ -2667,6 +2670,38 @@ class NodeJoiningService extends EventEmitter {
     });
   }
 
+  async activateJoinPartitionServiceRows(replicaIds = null) {
+    const partitionServices = replicaIds == null ?
+      this.partitionServices :
+      new Map(
+        replicaIds
+          .map((replicaId) => [
+            replicaId,
+            this.partitionServices.get(replicaId),
+          ])
+          .filter(([, service]) => service != null),
+      );
+
+    return activatePartitionServiceRows({
+      nodeId: this.nodeId,
+      systemTableWriter: this.createCdcIntegrationService(),
+      messageRouter: this.messageRouter,
+      deferTransientFailures: true,
+      onDeferredActivation: ({partitionId, replicaId, error}) => {
+        this.logger.warn(
+          'Deferring join partition service row activation',
+          {
+            nodeId: this.nodeId,
+            partitionId,
+            replicaId,
+            error: error?.message || String(error),
+          },
+        );
+      },
+      partitionServices,
+    });
+  }
+
   startJoinOpportunisticBackfill() {
     return this.querySystemStatePhase.startJoinOpportunisticBackfill();
   }
@@ -4182,6 +4217,9 @@ class NodeJoiningService extends EventEmitter {
 
     await this.triggerJoinReconciler(
       JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
+    );
+    await this.activateJoinPartitionServiceRows(
+      restorePlans.map(({replicaId}) => replicaId),
     );
     this.startDurableRejoinLocalPartitionElections(
       restorePlans,

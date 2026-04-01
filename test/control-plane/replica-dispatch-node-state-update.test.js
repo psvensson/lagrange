@@ -664,6 +664,21 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
           return {success: true};
         },
       },
+      controlPlaneSystemTableGateway: {
+        async updateSystemTableRow(tableName, whereClause, row, options) {
+          updates.push({tableName, whereClause, row, options});
+          return {
+            success: true,
+            partitionResult: {affectedRows: 0},
+          };
+        },
+        async readAuthoritativeRows() {
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
     });
 
     await t.rejects(
@@ -683,6 +698,113 @@ test('ReplicaDispatchService fails loudly when NODE_STATE_UPDATE targets a missi
 
     service.stop();
   });
+
+test('ReplicaDispatchService defers missing-row NODE_STATE_UPDATE misses for ' +
+  'previously known nodes while authoritative recovery is unavailable', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const scheduled = [];
+  const enqueues = [];
+  const cacheNode = {
+    node_id: 'node-recovery',
+    node_address: 'localhost:8084',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    cpu_usage_percent: 10,
+    memory_usage_percent: 20,
+    disk_usage_percent: 30,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: now - 1000,
+    ready_lease_expires_at: null,
+    created_at: now - 10000,
+  };
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {success: true};
+      },
+      async upsertSystemTableRow() {
+        return {success: true};
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow() {
+        return {
+          success: true,
+          partitionResult: {affectedRows: 0},
+        };
+      },
+      async readAuthoritativeRows() {
+        return {
+          success: false,
+          error: 'authoritative_row_source_unavailable',
+          rows: [],
+        };
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      scheduled.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+
+  service.nodeStateUpdateQueue = {
+    enqueue(nodeId, reason, context) {
+      enqueues.push({nodeId, reason, context});
+      return true;
+    },
+    shutdown() {},
+  };
+  service.nodeStateUpdateQueues = [service.nodeStateUpdateQueue];
+
+  const payload = {
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-recovery',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8084',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+  };
+
+  await service.reconcileNodeStateUpdate('node-recovery', {payload});
+
+  t.equal(
+    scheduled.length,
+    1,
+    'recovery miss should arm one deferred retry timer',
+  );
+  t.equal(
+    scheduled[0].delayMs,
+    service.nodeStateUpdateRetryAfterMs,
+    'recovery miss should use the node-state retry budget',
+  );
+  t.equal(
+    service.nodeStateUpdateDeferredRetries.size,
+    1,
+    'recovery miss should retain one deferred retry slot',
+  );
+
+  scheduled[0].callback();
+
+  t.same(
+    enqueues,
+    [{
+      nodeId: 'node-recovery',
+      reason: RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
+      context: {payload},
+    }],
+    'deferred recovery miss should re-enter the canonical node-state queue',
+  );
+
+  service.stop();
+});
 
 test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
   async (t) => {

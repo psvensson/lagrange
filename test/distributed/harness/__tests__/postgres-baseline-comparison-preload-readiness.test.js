@@ -817,7 +817,6 @@ describe('postgres-baseline-comparison scenario', () => {
     const controlSnapshotCalls = [];
     const tableProbeCalls = [];
     let serviceDiscoveryCallCount = 0;
-    let preflightAdmitted = false;
     const benchmarkTableProbeSql =
       'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
     const requiredSchemaVersion = typeof options.requiredSchemaVersion === 'string' ?
@@ -876,9 +875,6 @@ describe('postgres-baseline-comparison scenario', () => {
         }
         if (statement === benchmarkTableProbeSql) {
           tableProbeCalls.push(this.id);
-          if (!preflightAdmitted) {
-            preflightAdmitted = true;
-          }
           return {rows: [{count: 0}]};
         }
         if (statement.includes('FROM replica_operations') &&
@@ -925,7 +921,7 @@ describe('postgres-baseline-comparison scenario', () => {
         if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
             statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
           serviceDiscoveryCallCount += 1;
-          const isPreflightCall = !preflightAdmitted;
+          const isPreflightCall = serviceDiscoveryCallCount === 1;
           const readiness = {
             workloadReady: true,
             benchmarkReady: isPreflightCall ? true : benchmarkReady,
@@ -1240,8 +1236,8 @@ describe('postgres-baseline-comparison scenario', () => {
       );
       assert.equal(
         tableProbeCalls.length,
-        1,
-        'only the preflight load-lane probe should query the benchmark table',
+        0,
+        'strict canonical snapshot path should avoid fallback table probe queries',
       );
     });
 

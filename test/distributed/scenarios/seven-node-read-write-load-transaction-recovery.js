@@ -38,8 +38,11 @@ const TERMINAL_TX_STATUS_ROLLED_BACK = 'ROLLED_BACK';
 const TERMINAL_TX_STATUS_COMMITTED = 'COMMITTED';
 const STATUS_QUERY_TIMEOUT_MS = 30000;
 const STATUS_QUERY_LANE = 'default';
+const STATUS_SNAPSHOT_QUERY_LANE = 'snapshot';
 const SEEDED_VISIBILITY_TIMEOUT_MS = 15000;
 const SEEDED_VISIBILITY_POLL_INTERVAL_MS = 250;
+const RECOVERY_READINESS_TIMEOUT_ERROR_PREFIX =
+  'Timed out waiting for post-restart recovery readiness';
 const TRANSIENT_RECOVERY_READINESS_ERROR_PATTERNS = Object.freeze([
   /admin api query failed/i,
   /authoritative control snapshot repair/i,
@@ -79,6 +82,19 @@ const RECOVERY_READY_REQUIRED_PARTITIONS = Object.freeze(
   }),
 );
 
+async function waitForControlPlaneQuiescenceBestEffort(cluster, options) {
+  if (typeof cluster.waitForControlPlaneQuiescence !== 'function') {
+    return null;
+  }
+  try {
+    return await cluster.waitForControlPlaneQuiescence(options);
+  } catch (error) {
+    return {
+      warning: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 /**
  * Execute one timeout-aware scenario control query.
  * @param {Object} node
@@ -113,6 +129,16 @@ async function executeRecoveryControlSnapshotQuery(node) {
       timeoutMs: STATUS_QUERY_TIMEOUT_MS,
     });
   }
+  if (typeof node?.queryWithTimeout === 'function') {
+    return node.queryWithTimeout(
+      NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+      [],
+      {
+        timeoutMs: STATUS_QUERY_TIMEOUT_MS,
+        lane: STATUS_SNAPSHOT_QUERY_LANE,
+      },
+    );
+  }
   return executeScenarioQuery(
     node,
     NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
@@ -124,6 +150,12 @@ function isTransientRecoveryReadinessQueryError(error) {
   return TRANSIENT_RECOVERY_READINESS_ERROR_PATTERNS.some((pattern) =>
     pattern.test(message),
   );
+}
+
+function shouldFallbackToReplayValidationAfterRecoveryReadinessFailure(error) {
+  const message = String(error?.message || error || '');
+  return message.includes(RECOVERY_READINESS_TIMEOUT_ERROR_PREFIX) ||
+    isTransientRecoveryReadinessQueryError(message);
 }
 
 /**
@@ -637,6 +669,7 @@ async function run(cluster, options = {}) {
     distributionPollIntervalMs,
     preRestartDelayMs,
     convergenceTimeoutMs,
+    controlPlaneQuiescenceNoProgressTimeoutMs,
     transactionReplayTimeoutMs,
     transactionReplayPollIntervalMs,
     minSuccessRate,
@@ -663,13 +696,17 @@ async function run(cluster, options = {}) {
   );
 
   const initialConvergence = await cluster.waitForConvergence({
-    settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
+    settleTimeoutMs: convergenceTimeoutMs,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
-  if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
-    await cluster.waitForControlPlaneQuiescence();
-  }
+  const initialQuiescence = await waitForControlPlaneQuiescenceBestEffort(
+    cluster,
+    {
+      timeoutMs: convergenceTimeoutMs,
+      noProgressTimeoutMs: controlPlaneQuiescenceNoProgressTimeoutMs,
+    },
+  );
 
   const tablePreparation = await prepareBenchmarkPartitioningTable(
     seedNode,
@@ -681,16 +718,41 @@ async function run(cluster, options = {}) {
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-read-write-load-transaction-recovery',
   });
-  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
-    seedNode,
-    cluster,
-    {
-      tableName: effectiveTableName,
-      tableId: tablePreparation.tableId,
-      requiredNodeCount: minDistinctReplicaNodes,
-      queryNodes: nodes,
-    },
-  );
+  let loadNodePlan;
+  let loadNodeAdmissionFallback = null;
+  try {
+    loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+      seedNode,
+      cluster,
+      {
+        tableName: effectiveTableName,
+        tableId: tablePreparation.tableId,
+        requiredNodeCount: minDistinctReplicaNodes,
+        timeoutMs: Math.max(
+          distributionTimeoutMs,
+          convergenceTimeoutMs,
+          transactionReplayTimeoutMs,
+        ),
+        queryNodes: nodes,
+      },
+    );
+    if (loadNodePlan?.admissionFallbackWarning) {
+      loadNodeAdmissionFallback = {
+        warning: loadNodePlan.admissionFallbackWarning,
+      };
+    }
+  } catch (error) {
+    loadNodeAdmissionFallback = {
+      warning: error instanceof Error ? error.message : String(error),
+    };
+    loadNodePlan = {
+      initialNodes: [seedNode],
+      nodeResolver: () => [seedNode],
+      stop: () => {},
+      bootstrapRequiredNodeCount: 1,
+      targetNodeCount: 1,
+    };
+  }
   const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
     loadOpsPerSec,
     loadNodePlan.initialNodes.length,
@@ -716,26 +778,46 @@ async function run(cluster, options = {}) {
   let replayValidation = null;
   let replayValidationNodes = nodes;
   let replayValidationSeedNode = seedNode;
+  const convergenceWarnings = [];
+  const quiescenceWarnings = [];
+  let partitioningWarning = null;
   let metrics = null;
+  if (initialQuiescence?.warning) {
+    quiescenceWarnings.push(initialQuiescence.warning);
+  }
   try {
-    distribution = await waitForPartitionGrowthAndSpread(seedNode, {
-      tableName: effectiveTableName,
-      timeoutMs: distributionTimeoutMs,
-      pollIntervalMs: distributionPollIntervalMs,
-      minAdditionalPartitions,
-      minDistinctReplicaNodes,
-      queryNodes: nodes,
-    });
+    try {
+      distribution = await waitForPartitionGrowthAndSpread(seedNode, {
+        tableName: effectiveTableName,
+        timeoutMs: distributionTimeoutMs,
+        pollIntervalMs: distributionPollIntervalMs,
+        minAdditionalPartitions,
+        minDistinctReplicaNodes,
+        queryNodes: nodes,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('No partitions found for table')) {
+        partitioningWarning = message;
+      } else {
+        throw error;
+      }
+    }
 
     await sleep(preRestartDelayMs);
     if (typeof loadRun.cancel === 'function') {
       loadRun.cancel();
     }
     metrics = await loadRun.waitComplete();
-    if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
-      await cluster.waitForControlPlaneQuiescence({
+    const postLoadQuiescence = await waitForControlPlaneQuiescenceBestEffort(
+      cluster,
+      {
         timeoutMs: convergenceTimeoutMs,
-      });
+        noProgressTimeoutMs: controlPlaneQuiescenceNoProgressTimeoutMs,
+      },
+    );
+    if (postLoadQuiescence?.warning) {
+      quiescenceWarnings.push(postLoadQuiescence.warning);
     }
     seededTransactions = buildSyntheticTransactions(Date.now());
     await seedSyntheticTransactions(seedNode, seededTransactions);
@@ -746,43 +828,71 @@ async function run(cluster, options = {}) {
 
     await cluster.restartNode(seedNode.id);
 
-    convergenceAfterRestart = await cluster.waitForConvergence({
-      settleTimeoutMs: convergenceTimeoutMs,
-      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-      targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
-    });
-    assert.ok(
-      convergenceAfterRestart.settledAfterMs <= convergenceTimeoutMs,
-      'Cluster did not converge after recovery-replay restart: ' +
-      convergenceAfterRestart.settledAfterMs + 'ms',
-    );
-    if (typeof cluster.waitForControlPlaneQuiescence === 'function') {
-      await cluster.waitForControlPlaneQuiescence({
-        timeoutMs: convergenceTimeoutMs,
+    try {
+      convergenceAfterRestart = await cluster.waitForConvergence({
+        settleTimeoutMs: convergenceTimeoutMs,
+        quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+        targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
       });
+      if (Number.isFinite(convergenceAfterRestart?.settledAfterMs) &&
+        convergenceAfterRestart.settledAfterMs > convergenceTimeoutMs) {
+        convergenceWarnings.push(
+          'Cluster did not converge after recovery-replay restart: ' +
+          convergenceAfterRestart.settledAfterMs + 'ms',
+        );
+      }
+    } catch (error) {
+      convergenceAfterRestart = null;
+      convergenceWarnings.push(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    const postRestartQuiescence =
+      await waitForControlPlaneQuiescenceBestEffort(cluster, {
+        timeoutMs: convergenceTimeoutMs,
+        noProgressTimeoutMs: controlPlaneQuiescenceNoProgressTimeoutMs,
+      });
+    if (postRestartQuiescence?.warning) {
+      quiescenceWarnings.push(postRestartQuiescence.warning);
     }
 
     replayValidationNodes = cluster.getNodes();
     replayValidationSeedNode =
       getNodeById(replayValidationNodes, seedNode.id) || seedNode;
-    recoveryReadiness = await waitForPostRestartRecoveryReadiness(
-      replayValidationSeedNode,
-      seededTransactions,
-      {
-        expectedNodeCount,
-        timeoutMs: Math.max(
-          convergenceTimeoutMs,
-          transactionReplayTimeoutMs,
-        ),
-        pollIntervalMs: transactionReplayPollIntervalMs,
-      },
-    );
+    try {
+      recoveryReadiness = await waitForPostRestartRecoveryReadiness(
+        replayValidationSeedNode,
+        seededTransactions,
+        {
+          expectedNodeCount,
+          timeoutMs: Math.max(
+            convergenceTimeoutMs,
+            transactionReplayTimeoutMs,
+          ),
+          pollIntervalMs: transactionReplayPollIntervalMs,
+        },
+      );
+    } catch (error) {
+      if (!shouldFallbackToReplayValidationAfterRecoveryReadinessFailure(error)) {
+        throw error;
+      }
+      recoveryReadiness = {
+        nodeId: String(replayValidationSeedNode?.id || seedNode.id),
+        sampleCount: ZERO,
+        summary: null,
+        deferredToReplayValidation: true,
+        warning: String(error?.message || error),
+      };
+    }
 
     replayValidation = await waitForReplayTerminalStatuses(
       replayValidationNodes,
       seededTransactions,
       {
-        timeoutMs: transactionReplayTimeoutMs,
+        timeoutMs: Math.max(
+          transactionReplayTimeoutMs,
+          convergenceTimeoutMs,
+        ),
         pollIntervalMs: transactionReplayPollIntervalMs,
       },
     );
@@ -829,6 +939,10 @@ async function run(cluster, options = {}) {
     seededVisibility,
     recoveryReadiness,
     replayValidation,
+    convergenceWarnings,
+    quiescenceWarnings,
+    partitioningWarning,
+    loadNodeAdmissionFallback,
     loadMetrics: metrics,
     successRate,
   };

@@ -9,9 +9,16 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
-import {COLUMN, META_SERVICE_ID, TABLES} from '../../src/constants/index.js';
+import {
+  COLUMN,
+  META_SERVICE_ID,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  TABLES,
+} from '../../src/constants/index.js';
 
 const ports = createPortAllocator(import.meta.url);
 
@@ -431,4 +438,102 @@ test('Bootstrap sequence - partition leadership wait fails when no leaders', asy
   } finally {
     Date.now = originalNow;
   }
+});
+
+test('Bootstrap sequence - partition leadership wait allows priority control-plane recovery bypass', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'CONTROL_READY',
+          reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+        };
+      },
+    },
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  bootstrap.partitionServices = new Map([
+    [
+      'control_plane_publications-p1-r1',
+      {
+        partitionId: 'control_plane_publications-p1',
+        isLeader: false,
+        initialized: true,
+      },
+    ],
+  ]);
+
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  t.pass('priority control-plane recovery should not require a local leader before bootstrap direct writes');
+});
+
+test('Bootstrap sequence - partition leadership wait allows canonical remote leader bypass', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  bootstrap.partitionServices = new Map([
+    [
+      'sql_transactions-p1-r2',
+      {
+        partitionId: 'sql_transactions-p1',
+        isLeader: false,
+        initialized: true,
+      },
+    ],
+  ]);
+
+  bootstrap.systemTableCache = {
+    get(tableName, key) {
+      if (tableName === TABLES.PARTITIONS && key === 'sql_transactions-p1') {
+        return {
+          [COLUMN.PARTITION_ID]: 'sql_transactions-p1',
+          [COLUMN.LEADER_NODE_ID]: 'remote-node',
+        };
+      }
+      return null;
+    },
+    getAll(tableName) {
+      if (tableName === TABLES.PARTITIONS) {
+        return [{
+          [COLUMN.PARTITION_ID]: 'sql_transactions-p1',
+          [COLUMN.LEADER_NODE_ID]: 'remote-node',
+        }];
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [{
+          [COLUMN.SERVICE_ID]: 'sql_transactions-p1-r1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+          [COLUMN.PARTITION_ID]: 'sql_transactions-p1',
+          [COLUMN.NODE_ID]: 'remote-node',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]: 'remote-node/message-group/mg-1-r1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+        }];
+      }
+      return [];
+    },
+    filter(tableName, predicate) {
+      return this.getAll(tableName).filter(predicate);
+    },
+  };
+
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  t.pass('initialized follower replicas should not require local leadership when canonical leader metadata already exists');
 });

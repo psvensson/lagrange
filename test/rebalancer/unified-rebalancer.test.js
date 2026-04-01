@@ -3658,6 +3658,97 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance keeps priority control-plane recovery open when ' +
+    'transport sees unpublished extra peers beyond the readiness quorum',
+    async (t) => {
+      const readinessService = {
+        membershipPublicationService:
+          createMockMembershipPublicationService(
+            ['node-1', 'node-2'],
+            1,
+            {
+              status: 'PUBLISHED',
+              priorityPartitionSummary: {
+                satisfied: false,
+              },
+            },
+          ),
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        messageRouter: createMockMessageRouter('connected', [
+          'node-2',
+          'node-3',
+          'node-4',
+        ]),
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority recovery should continue when only unpublished peers remain outside the nodes cache',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'unpublished extra peers should not keep the topology-settling gate closed once quorum is healthy',
+      );
+
+      rebalancer.shutdown();
+    });
+
+  await t.test(
     'checkRebalance defers critical system partitions while active node endpoint visibility is incomplete',
     async (t) => {
       const rebalancer = createTestRebalancer({

@@ -20,6 +20,9 @@ import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {
+  PARTITION_SERVICE_ACTIVATION_ERROR,
+} from '../../src/bootstrap/shared/partition-service-activation.js';
+import {
   ControlPlaneKernelIngress,
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
 import {
@@ -383,6 +386,19 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
     });
 
     const calls = [];
+    service.messageRouter = {
+      isRegistered(address) {
+        return address === 'durable-join-node/partition/nodes-p1-r1';
+      },
+    };
+    service.cdcIntegrationService = {
+      updateSystemTableRow: async (_tableName, predicate) => {
+        calls.push(`activate:${predicate.service_id}`);
+      },
+      upsertSystemTableRow: async (_tableName, row) => {
+        calls.push(`activate:${row.service_id}`);
+      },
+    };
     service.initializeJoiningLifecycleOwners = async () => {
       calls.push('init');
     };
@@ -390,6 +406,8 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       calls.push('reconcile');
       for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
         service.partitionServices.set(replicaId, {
+          initialized: true,
+          partitionId: 'nodes-p1',
           startElection() {
             calls.push(`start:${replicaId}`);
           },
@@ -462,8 +480,8 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
 
     t.same(
       calls,
-      ['init', 'reconcile', 'start:nodes-p1-r1'],
-      'durable rejoin should recreate local partition runtimes before starting their elections',
+      ['init', 'reconcile', 'activate:nodes-p1-r1', 'start:nodes-p1-r1'],
+      'durable rejoin should activate restored partition services before starting their elections',
     );
     t.same(
       restored.map((plan) => plan.replicaId),
@@ -491,6 +509,90 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       restorePlan.dbPath,
       /\/tmp\/durable-join-data\/partitions\/nodes-p1\/nodes-p1-r1\.db$/,
       'restore plan should point at the durable local partition database path',
+    );
+  });
+
+test('NodeJoiningService - durable rejoin restore fails closed until restored partition handlers are routable',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'durable-join-node',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      dataDir: '/tmp/durable-join-data',
+    });
+
+    service.messageRouter = {
+      isRegistered() {
+        return false;
+      },
+    };
+    service.cdcIntegrationService = {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    };
+    service.initializeJoiningLifecycleOwners = async () => {};
+    service.triggerJoinReconciler = async () => {
+      for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
+        service.partitionServices.set(replicaId, {
+          initialized: true,
+          partitionId: 'nodes-p1',
+          startElection() {},
+        });
+      }
+    };
+
+    const schemaDefinition = {
+      tableName: 'nodes',
+      columns: [{name: 'node_id', type: 'TEXT', primaryKey: true}],
+    };
+    const rowsByTable = new Map([
+      [TABLES.TABLES, [{
+        table_id: 'nodes',
+        table_name: 'nodes',
+        schema_definition: JSON.stringify(schemaDefinition),
+      }]],
+      [TABLES.PARTITIONS, [{
+        partition_id: 'nodes-p1',
+        table_id: 'nodes',
+        table_name: 'nodes',
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'durable-join-node',
+      }]],
+      [TABLES.SERVICES, [{
+        service_id: 'nodes-p1-r1',
+        replica_id: 'nodes-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'durable-join-node',
+        partition_id: 'nodes-p1',
+        status: 'active',
+        address: 'durable-join-node/partition/nodes-p1-r1',
+      }]],
+    ]);
+    const systemTableCache = {
+      getAll(tableName) {
+        return rowsByTable.get(tableName) || [];
+      },
+      get(tableName, key) {
+        const rows = rowsByTable.get(tableName) || [];
+        return rows.find((row) =>
+          row.partition_id === key ||
+          row.table_id === key ||
+          row.service_id === key,
+        ) || null;
+      },
+    };
+
+    await t.rejects(
+      service.restoreDurableRejoinLocalPartitionServices(systemTableCache),
+      new Error(
+        PARTITION_SERVICE_ACTIVATION_ERROR
+          .replicaHandlerRequired('nodes-p1-r1'),
+      ),
+      'durable rejoin should fail closed until restored partition handlers are routable through the shared activation owner',
     );
   });
 

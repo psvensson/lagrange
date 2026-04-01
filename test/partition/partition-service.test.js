@@ -3583,6 +3583,105 @@ test(
 );
 
 test(
+  'PartitionService - priority recovery allows one bounded overflow learner promotion for critical partitions',
+  async (t) => {
+    const readinessState = createTrafficReadinessState();
+    readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+      ready: false,
+      reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+    });
+
+    const mockCache = {
+      get: (tableName, key) => {
+        if (tableName === TABLES.PARTITIONS && key === `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`) {
+          return {
+            partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+            replica_count: 3,
+          };
+        }
+        return null;
+      },
+      filter: (tableName, predicate) => {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+            replica_count: 3,
+          }].filter(predicate);
+        }
+        if (tableName === TABLES.SERVICES) {
+          const services = [
+            {
+              service_id: 'replica-1',
+              partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'leader',
+            },
+            {
+              service_id: 'replica-2',
+              partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-3',
+              partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-4',
+              partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-5',
+              partition_id: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'learner',
+            },
+          ];
+          return services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`,
+      tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      replicaId: 'replica-5',
+      replicaIds: ['replica-5'],
+      nodeId: 'node-5',
+      dbPath: ':memory:',
+      bootstrapReadinessState: readinessState,
+      systemTableCache: mockCache,
+    });
+
+    partition.role = RaftRole.LEARNER;
+    partition.leaderId = 'replica-1';
+
+    partition.checkLearnerPromotion();
+
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'priority recovery should allow one extra temporary voter to unblock critical control-plane convergence',
+    );
+    t.equal(
+      partition.learnerPromotionTimer,
+      null,
+      'successful overflow promotion should not reschedule',
+    );
+  },
+);
+
+test(
   'PartitionService - learner promotion uses startup leader hint for stable joins',
   async (t) => {
     const mockCache = {

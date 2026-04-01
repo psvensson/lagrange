@@ -8,6 +8,8 @@ const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
 const BENCHMARK_STRICT_DISCOVERY_DEFAULT = false;
 const BENCHMARK_STRICT_PARITY_DEFAULT = false;
 const BENCHMARK_STRICT_PRELOAD_READINESS_DEFAULT = false;
+const BENCHMARK_ALLOW_SOFT_DISCOVERY_NODE_FALLBACK_DEFAULT = false;
+const BENCHMARK_ALLOW_PRELOAD_STALL_SOFT_FALLBACK_DEFAULT = false;
 const BENCHMARK_STRICT_CDC_TELEMETRY_SCHEMA_DEFAULT = false;
 const BENCHMARK_STRICT_AUTHORITATIVE_FALLBACK_DEFAULT = false;
 const BENCHMARK_STRICT_OVERLOAD_POLICY_DEFAULT = false;
@@ -490,6 +492,14 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
       explicitRequiredSutLoadNodeCount !== null,
     strictParity,
     strictPreloadReadiness,
+    allowSoftDiscoveryNodeFallback:
+      configured.allowSoftDiscoveryNodeFallback === true ?
+        true :
+        BENCHMARK_ALLOW_SOFT_DISCOVERY_NODE_FALLBACK_DEFAULT,
+    allowPreloadStallSoftFallback:
+      configured.allowPreloadStallSoftFallback === true ?
+        true :
+        BENCHMARK_ALLOW_PRELOAD_STALL_SOFT_FALLBACK_DEFAULT,
     strictCdcTelemetrySchema,
     strictAuthoritativeFallback,
     strictOverloadPolicy,

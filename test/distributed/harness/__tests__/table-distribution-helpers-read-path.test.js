@@ -554,6 +554,158 @@ test('table-distribution-helpers waits for at least one admitted ' +
   }
 });
 
+test('table-distribution-helpers can bootstrap partitioning load when ' +
+  'benchmark admission enforcement is disabled', async () => {
+  const clusterNodes = [
+    {id: 'seed-1'},
+    {id: 'node-2'},
+    {id: 'node-3'},
+    {id: 'node-4'},
+    {id: 'node-5'},
+    {id: 'node-6'},
+    {id: 'node-7'},
+  ];
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+        enforceBenchmarkLoadAdmission: false,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: async () => [],
+  };
+
+  const plan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: 'benchmark_events',
+      tableId: 'tbl-benchmark-events-1',
+      requiredNodeCount: 5,
+      queryNodes: [seedNode],
+      timeoutMs: 40,
+      pollIntervalMs: 5,
+      stableWindowMs: 0,
+    },
+  );
+
+  try {
+    assert.deepEqual(
+      plan.initialNodes.map((node) => node.id),
+      ['seed-1', 'node-2', 'node-3'],
+      'disabled admission enforcement should bootstrap on replica-bearing nodes',
+    );
+  } finally {
+    plan.stop();
+  }
+});
+
+test('table-distribution-helpers degrades to replica-bearing bootstrap when ' +
+  'benchmark admission never stabilizes', async () => {
+  const clusterNodes = [
+    {id: 'seed-1'},
+    {id: 'node-2'},
+    {id: 'node-3'},
+    {id: 'node-4'},
+    {id: 'node-5'},
+    {id: 'node-6'},
+    {id: 'node-7'},
+  ];
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: async () => [],
+  };
+
+  const plan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: 'benchmark_events',
+      tableId: 'tbl-benchmark-events-1',
+      requiredNodeCount: 5,
+      queryNodes: [seedNode],
+      timeoutMs: 40,
+      pollIntervalMs: 5,
+      stableWindowMs: 0,
+    },
+  );
+
+  try {
+    assert.deepEqual(
+      plan.initialNodes.map((node) => node.id),
+      ['seed-1', 'node-2', 'node-3'],
+      'timed-out admission should still bootstrap on the replica-bearing quorum',
+    );
+    assert.equal(plan.admissionFallbackUsed, true);
+    assert.match(
+      String(plan.admissionFallbackWarning || ''),
+      /degrading bootstrap to replica-bearing nodes/i,
+    );
+  } finally {
+    plan.stop();
+  }
+});
+
 test('table-distribution-helpers falls back to the legacy cluster load ' +
   'readiness gate when benchmark admission is unavailable', async () => {
   const calls = [];

@@ -89,6 +89,73 @@ test('DistributedTransactionCoordinator - rollback clears active transaction', a
   t.equal(coordinator.hasActiveTransaction('s3'), false);
 });
 
+test(
+  'DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures',
+  async (t) => {
+    let nowMs = 10_000;
+    const coordinator = new DistributedTransactionCoordinator({
+      now: () => nowMs,
+      loadRecoveryStateForSweep: async () => ({
+        transactions: [
+          {
+            transaction_id: 'tx-recover-1',
+            session_id: 'recover-session-1',
+            status: TRANSACTION_STATUS.ACTIVE,
+            timeout_deadline: nowMs - 1,
+            created_at: 1,
+            updated_at: 1,
+          },
+        ],
+        participants: [
+          {
+            participant_id: 'tx-recover-1:p1',
+            transaction_id: 'tx-recover-1',
+            partition_id: 'p1',
+            status: TRANSACTION_STATUS.ACTIVE,
+            created_at: 1,
+            updated_at: 1,
+          },
+        ],
+        writeOperations: [],
+      }),
+      beginParticipant: async () => {},
+      rollbackParticipant: async () => {},
+      persistTransaction: async () => {
+        const error = new Error(
+          'Distributed operation failed due to participant failures',
+        );
+        error.errorCode = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+        throw error;
+      },
+    });
+
+    const firstSweep = await coordinator.runRecoverySweep();
+
+    t.equal(firstSweep.swept, 1);
+    t.equal(firstSweep.resolved, 0);
+    t.equal(firstSweep.failed, 0);
+    t.equal(firstSweep.deferred, 1);
+    t.equal(firstSweep.results.length, 1);
+    t.equal(firstSweep.results[0].deferred, true);
+    t.equal(
+      coordinator.hasActiveTransaction('recover-session-1'),
+      true,
+      'retryable recovery failures should remain eligible for a later sweep',
+    );
+
+    const secondSweep = await coordinator.runRecoverySweep();
+
+    t.equal(secondSweep.swept, 0);
+    t.equal(secondSweep.failed, 0);
+    t.equal(secondSweep.deferred, 1);
+    t.equal(
+      secondSweep.deferredUntilMs > nowMs,
+      true,
+      'subsequent sweeps should back off while the defer window is active',
+    );
+  },
+);
+
 test('DistributedTransactionCoordinator - supports recovery payloads', async (t) => {
   const coordinator = new DistributedTransactionCoordinator();
   coordinator.recover([

@@ -6390,8 +6390,16 @@ class PartitionService extends EventEmitter {
       this.isJoiningExistingGroup === true &&
       learnerCount === NUM.ONE &&
       activeVoterCount >= targetReplicaCount;
+    const priorityRecoveryOverflowPromotionAllowed =
+      isCriticalSystemPartition &&
+      this.isPriorityRecoveryPendingForLearnerPromotion() &&
+      learnerCount === NUM.ONE &&
+      activeVoterCount === targetReplicaCount + NUM.ONE;
+    const priorityRecoveryAdditionalVotersAllowed =
+      priorityRecoveryOverflowPromotionAllowed ? NUM.TWO : NUM.ZERO;
     const maxAllowedVotersAfterPromotion = targetReplicaCount +
-      (singleReplacementPromotionAllowed ? NUM.ONE : NUM.ZERO);
+      (singleReplacementPromotionAllowed ? NUM.ONE : NUM.ZERO) +
+      priorityRecoveryAdditionalVotersAllowed;
     const votersAfterPromotion = activeVoterCount + NUM.ONE;
     const wouldExceedTargetReplicaCount =
       votersAfterPromotion > maxAllowedVotersAfterPromotion;
@@ -6424,6 +6432,8 @@ class PartitionService extends EventEmitter {
       allLearnersWouldBeOdd,
       allLearnersWithinTarget,
       singleReplacementPromotionAllowed,
+      priorityRecoveryAdditionalVotersAllowed,
+      priorityRecoveryOverflowPromotionAllowed,
     });
 
     if (wouldExceedTargetReplicaCount) {
