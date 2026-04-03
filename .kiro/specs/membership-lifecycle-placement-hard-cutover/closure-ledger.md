@@ -16,6 +16,7 @@ Each record below represents one violated invariant.
 | CL-002 | narrowed | harness-control-snapshot | The cluster-active witness path must obtain one complete control snapshot from an admin-ready node once canonical publication is queryable. |
 | CL-003 | guarded | placement-priority-spread | Priority control-plane partitions must recover to required distinct-node spread before non-priority closure is considered complete. |
 | CL-004 | narrowed | readiness-projection | Benchmark load-lane admission must become serve-eligible for at least one admitted writer shortly after benchmark table bootstrap and join handoff. |
+| CL-005 | narrowed | readiness-projection | Partitioning pre-load bootstrap must expose the required replica-bearing quorum and at least one benchmark-ready replica-bearing node before scenario load startup begins. |
 
 ## CL-001 Published Membership Convergence Under Restart Churn
 
@@ -215,6 +216,10 @@ Each record below represents one violated invariant.
   last meaningful change string that still shows `publication=PUBLISHED`,
   `coverage=5/5#complete`, `missingPublished=0`, and only
   `gateReasons=priority_control_plane_spread_pending`.
+8. Focused local guards now prove partition `REPLACE` create dispatch carries
+  canonical bootstrap topology with the retiring source replica excluded, and
+  that both rebalance create dispatch and durable rejoin restore planning read
+  the same shared replicated-service topology helper.
 
 ### Exit Criteria
 
@@ -299,6 +304,11 @@ Each record below represents one violated invariant.
   now proves load-lane benchmark admission recovers from local
   schema_table_missing cache gaps via authoritative discovery repair before
   query rejection.
+7. Focused local guards now prove `ControlPlaneReadinessService`,
+  `BootstrapReadinessOwner`, `UnifiedRebalancer`, and
+  `RebalanceCoordinator` consume one shared membership-publication planning
+  snapshot for published epoch binding, explicit local-node exclusion, and
+  priority-spread-pending semantics.
 
 ### Exit Criteria
 
@@ -312,11 +322,106 @@ Each record below represents one violated invariant.
 ### Notes
 
 1. CL-004 is distinct from CL-003: this seam fails before useful load work
-  begins and is dominated by readiness admission closure, not priority spread
-  witness collapse.
+   begins and is dominated by readiness admission closure, not priority spread
+   witness collapse.
 2. Full distributed reruns should pause until the CL-004 minimal repro exists
-  and is made green.
+   and is made green.
 3. Owner-path patch landed in
   [src/admin/admin-websocket-api.js](src/admin/admin-websocket-api.js) now
   resolves load-lane table admission through bounded authoritative
   service-discovery repair, aligned with the new characterization guard.
+4. CL-005 is distinct from CL-004: the shared partitioning helper can time out
+   before `cluster.startLoad()` begins, so those reds should not be folded into
+   the downstream load-lane admission record.
+
+## CL-005 Partitioning Pre-Load Bootstrap Admission Never Opens
+
+- Status: narrowed
+- Concern: readiness-projection
+- Failure Class: convergence-lag
+- First Violated Invariant: Partitioning pre-load bootstrap must expose the
+  required replica-bearing quorum and at least one benchmark-ready
+  replica-bearing node before scenario load startup begins.
+- Authoritative Owner: shared partitioning bootstrap admission gate in
+  [test/distributed/scenarios/table-distribution-helpers.js](test/distributed/scenarios/table-distribution-helpers.js)
+  together with the canonical benchmark-ready owner path consumed through
+  `cluster.resolveBenchmarkReadyLoadNodes()`.
+- Authoritative State: benchmark table replica-bearing node set and
+  benchmark-ready node set for `benchmark_events` at pre-load bootstrap.
+- Allowed Evidence: authoritative table distribution query results,
+  benchmark-ready node selection from the canonical readiness projection,
+  helper timeout counters (`lastReadyReplicaCount`,
+  `lastReplicaBearingCount`, `lastReplicaSpread`), and targeted helper
+  characterization output.
+- Forbidden Promotion Inputs: downstream load-lane rejection counts after
+  `cluster.startLoad()`, cache-only table visibility, scenario-level fallback
+  node lists as semantic readiness truth, or final scenario pass/fail alone.
+- Convergence Trigger: repeated partitioning bootstrap admission polling after
+  benchmark table bootstrap and replica-placement convergence.
+- Stable Witness: per-poll replica-bearing node count, replica spread count,
+  and benchmark-ready replica-bearing node count for `benchmark_events`.
+- Entry Gate: `createPartitioningBenchmarkLoadNodePlan()` pre-load bootstrap
+  gate in
+  [test/distributed/scenarios/table-distribution-helpers.js](test/distributed/scenarios/table-distribution-helpers.js).
+- Current Symptom: shared partitioning scenarios can time out before
+  `cluster.startLoad()` with `lastReadyReplicaCount`,
+  `lastReplicaBearingCount`, and `lastReplicaSpread` all below the bootstrap
+  gate threshold.
+- Scope: the shared helper is used by
+  [test/distributed/scenarios/seven-node-table-partition-distribution.js](test/distributed/scenarios/seven-node-table-partition-distribution.js),
+  [test/distributed/scenarios/seven-node-load-during-partitioning.js](test/distributed/scenarios/seven-node-load-during-partitioning.js),
+  and
+  [test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js](test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js);
+  the smallest archived exact timeout is currently
+  `codex-seven-node-load-during-partitioning-20260402T133050Z`.
+- Next Falsification Step: rerun
+  `seven-node-table-partition-distribution` with a compact per-poll witness for
+  ready replica count, replica-bearing count, and replica spread so the first
+  stalled dimension is captured before any runtime change.
+- Required Guard: targeted helper characterization proving the shared
+  partitioning bootstrap gate preserves the per-poll readiness witness and
+  never starts load before both quorum and benchmark-ready admission are
+  satisfied.
+
+### Evidence
+
+1. The shared helper
+   [test/distributed/scenarios/table-distribution-helpers.js](test/distributed/scenarios/table-distribution-helpers.js)
+   throws a dedicated timeout for missing partitioning bootstrap quorum and
+   benchmark-ready table-local load admission before returning the load plan.
+2. The target scenario
+   [test/distributed/scenarios/seven-node-table-partition-distribution.js](test/distributed/scenarios/seven-node-table-partition-distribution.js)
+   invokes `createPartitioningBenchmarkLoadNodePlan()` before `cluster.startLoad()`,
+   so this seam fails earlier than any downstream load-lane dispatch evidence.
+3. The same pre-load gate is also used by
+   [test/distributed/scenarios/seven-node-load-during-partitioning.js](test/distributed/scenarios/seven-node-load-during-partitioning.js)
+   and
+   [test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js](test/distributed/scenarios/seven-node-read-write-load-transaction-recovery.js),
+   confirming one shared invariant across the partitioning scenario family.
+4. Archived report
+   `.tmp/codex-seven-node-load-during-partitioning-20260402T133050Z.report.json`
+   records the exact failure text:
+   `Timed out after 180000ms waiting for partitioning bootstrap quorum and benchmark-ready table-local load admission for table benchmark_events; lastReadyReplicaCount=2; lastReplicaBearingCount=2; lastReplicaSpread=2`.
+5. Targeted helper coverage in
+   [test/distributed/harness/__tests__/table-distribution-helpers-read-path.test.js](test/distributed/harness/__tests__/table-distribution-helpers-read-path.test.js)
+   already asserts this timeout surface, which anchors the record to the shared
+   pre-load gate rather than a later scenario-specific timeout.
+
+### Exit Criteria
+
+1. The shared partitioning bootstrap gate reaches the required replica-bearing
+   quorum and at least one benchmark-ready replica-bearing node within bounded
+   time.
+2. The helper-level guard emits and preserves the per-poll readiness witness for
+   failing and passing runs.
+3. Red partitioning scenarios rerun cleanly without relying on downstream
+   load-lane serve-eligibility as a substitute witness.
+
+### Notes
+
+1. CL-005 is distinct from CL-004 because CL-005 fails before
+   `cluster.startLoad()` and before any `nodeAdmissionBlocked`,
+   `benchmark_not_ready`, or `schema_table_missing` evidence exists.
+2. When `seven-node-table-partition-distribution` goes red with this helper
+   timeout, it should map here even if the currently archived exact reproducer
+   comes from a sibling partitioning scenario.
