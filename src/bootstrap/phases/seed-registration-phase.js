@@ -57,6 +57,17 @@ import {
 } from '../owners/seed-registration-runtime-owner.js';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
+const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
+  SYSTEM_TABLE_NAME.PARTITIONS,
+  SYSTEM_TABLE_NAME.SERVICES,
+  SYSTEM_TABLE_NAME.TABLES,
+  SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+]);
+const REGISTRATION_REQUIRED_LEADER_PARTITION_IDS = Object.freeze(
+  REGISTRATION_REQUIRED_LEADER_TABLES.map((tableName) =>
+    INITIAL_PARTITION_IDS[tableName],
+  ).filter(Boolean),
+);
 
 /**
  * Handles the registration phase of seed bootstrap.
@@ -84,7 +95,9 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const timestamp = Date.now();
 
-    await d.waitForPartitionLeadership();
+    await d.waitForPartitionLeadership({
+      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
+    });
     const systemTableWriter = this.ensureSystemTableWriter();
 
     logger.debug(BOOTSTRAP_LOG_MSG.BOOTSTRAP_MODE_ENABLED, {
@@ -454,28 +467,29 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
 
     const configPartition =
-      this.runtimeOwner.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
-    if (!configPartition || !configPartition.isLeader) {
-      logger.warn(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING);
-      return;
-    }
-
-    try {
-      const result = await configPartition.executeQuery(
-        BOOTSTRAP_SQL.CONFIG_COUNT,
-      );
-      if (result && result.rows && result.rows.length > NUM.ZERO &&
-          result.rows[NUM.ZERO].count > NUM.ZERO) {
-        logger.info(BOOTSTRAP_LOG_MSG.CONFIG_ALREADY_SEEDED, {
-          existingCount: result.rows[NUM.ZERO].count,
+      this.runtimeOwner.findLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
+    if (configPartition?.isLeader) {
+      try {
+        const result = await configPartition.executeQuery(
+          BOOTSTRAP_SQL.CONFIG_COUNT,
+        );
+        if (result && result.rows && result.rows.length > NUM.ZERO &&
+            result.rows[NUM.ZERO].count > NUM.ZERO) {
+          logger.info(BOOTSTRAP_LOG_MSG.CONFIG_ALREADY_SEEDED, {
+            existingCount: result.rows[NUM.ZERO].count,
+          });
+          return;
+        }
+      } catch (error) {
+        logger.debug(BOOTSTRAP_LOG_MSG.CONFIG_CHECK_FAILED, {
+          error: error.message,
         });
-        return;
+        throw error;
       }
-    } catch (error) {
-      logger.debug(BOOTSTRAP_LOG_MSG.CONFIG_CHECK_FAILED, {
-        error: error.message,
+    } else {
+      logger.debug(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING, {
+        strategy: 'direct_bootstrap_seed',
       });
-      throw error;
     }
 
     const systemTableCache = d.getSystemTableCache();
@@ -492,6 +506,10 @@ class SeedRegistrationPhase {
     try {
       const result = await dynamicConfigService.seedConfiguration(
         CONFIG_SEED_SOURCE.SYSTEM,
+        {
+          skipExistingCheck: true,
+          useDirectCdcMutations: true,
+        },
       );
       logger.info(BOOTSTRAP_LOG_MSG.CONFIG_SEEDED, {
         seeded: result.seeded.length,
@@ -518,20 +536,18 @@ class SeedRegistrationPhase {
     }
 
     const configPartition =
-      this.runtimeOwner.getLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
-    if (!configPartition || !configPartition.isLeader) {
-      throw new Error(BOOTSTRAP_LOG_MSG.CONFIG_LEADER_MISSING);
-    }
-
-    const result = await configPartition.executeQuery(
-      EPOCH_EXISTS_SQL,
-      [EPOCH_CONFIG_KEY],
-    );
-    const hasEpoch = result?.success &&
-      Array.isArray(result.rows) &&
-      result.rows.length > NUM.ZERO;
-    if (hasEpoch) {
-      return;
+      this.runtimeOwner.findLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
+    if (configPartition?.isLeader) {
+      const result = await configPartition.executeQuery(
+        EPOCH_EXISTS_SQL,
+        [EPOCH_CONFIG_KEY],
+      );
+      const hasEpoch = result?.success &&
+        Array.isArray(result.rows) &&
+        result.rows.length > NUM.ZERO;
+      if (hasEpoch) {
+        return;
+      }
     }
 
     const epoch = epochManager.getCurrentEpoch();

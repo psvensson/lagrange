@@ -52,6 +52,7 @@ import {
 } from './replica-handler-constants.js';
 import {PARTITION_SERVICE_INIT_STAGE} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {isNodeRecordReady} from './node-readiness-policy.js';
 import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
@@ -117,6 +118,38 @@ function isFreshPartitionBootstrapWindow(partition) {
   return Number.isFinite(partition.created_at) &&
     Number.isFinite(partition.updated_at) &&
     partition.created_at === partition.updated_at;
+}
+
+function hasExplicitReadyLeaseMetadata(nodeRow) {
+  return Boolean(
+    nodeRow &&
+    typeof nodeRow === REPLICA_HANDLER_TYPEOF.OBJECT &&
+    (
+      Object.prototype.hasOwnProperty.call(nodeRow, 'ready_lease_expires_at') ||
+      Object.prototype.hasOwnProperty.call(nodeRow, 'readyLeaseExpiresAt') ||
+      Object.prototype.hasOwnProperty.call(nodeRow, 'readyLeaseExpiresAtMs') ||
+      Object.prototype.hasOwnProperty.call(nodeRow, 'readyLeaseExpires')
+    )
+  );
+}
+
+function isReplicaJoinNodeViable(nodeRow, options = {}) {
+  if (!nodeRow) {
+    return true;
+  }
+
+  if (nodeRow.status !== ReplicaStatus.ACTIVE) {
+    return false;
+  }
+
+  if (!hasExplicitReadyLeaseMetadata(nodeRow)) {
+    return true;
+  }
+
+  return isNodeRecordReady(nodeRow, {
+    now: options.now,
+    requireActiveStatus: true,
+  });
 }
 
 /**
@@ -981,17 +1014,6 @@ class ReplicaHandler extends EventEmitter {
       // Clean up local resources (SQLite files)
       await this.cleanupReplicaResources(partitionId, replicaId);
 
-      // Emit removed outcome — coordinator will transition workflow.
-      this.emitExecutorOutcome(
-        EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
-        operationId,
-        WORKFLOW_STEP.REMOVED,
-        {replicaId},
-      );
-      await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVED, {
-        partitionId,
-      });
-
       // Delete service row from services table
       try {
         await this.getControlPlaneSystemTableGateway().submitMutation({
@@ -1010,6 +1032,16 @@ class ReplicaHandler extends EventEmitter {
         throw deleteError;
       }
 
+      if (typeof this.replicaStateMachine?.completeDurableRemoval ===
+        REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        this.replicaStateMachine.completeDurableRemoval(replicaId, {
+          partitionId,
+          nodeId: this.nodeId,
+          reason: 'durable_remove_cleanup_complete',
+          serviceId: replicaId,
+        });
+      }
+
       // Remove from local service tracking
       this.localServices.delete(replicaId);
       this.setLocalReplica(replicaId, {
@@ -1023,6 +1055,14 @@ class ReplicaHandler extends EventEmitter {
       if (operationId) {
         this.inProgressOperations.delete(operationId);
       }
+
+      // Emit removed outcome only after source-row cleanup is durable.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
+        operationId,
+        WORKFLOW_STEP.REMOVED,
+        {replicaId},
+      );
 
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REMOVE_COMPLETED, {
         operationId,
@@ -1483,6 +1523,7 @@ class ReplicaHandler extends EventEmitter {
       cachedServices,
       hydratedMetadata?.serviceRows || [],
     );
+    const now = Date.now();
 
     const addressManager = AddressManager.getInstance();
     const replicaIds = [];
@@ -1501,6 +1542,16 @@ class ReplicaHandler extends EventEmitter {
     // Count only established voters from sibling services. Freshly staged
     // rows in pending/creating/syncing states do not imply an existing group.
     const establishedExistingReplicaIds = new Set();
+    const isViableJoinService = (service) => {
+      if (!service?.node_id || typeof this.systemTableCache.get !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        return true;
+      }
+
+      return isReplicaJoinNodeViable(
+        this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, service.node_id),
+        {now},
+      );
+    };
 
     for (const service of services) {
       const serviceReplicaId = service.service_id || service.replica_id;
@@ -1514,7 +1565,9 @@ class ReplicaHandler extends EventEmitter {
       const isEstablishedVoter =
         service.status === ReplicaStatus.ACTIVE &&
         ESTABLISHED_VOTER_ROLES.has(service.raft_role);
-      if (serviceReplicaId !== replicaId && isEstablishedVoter) {
+      if (serviceReplicaId !== replicaId &&
+          isEstablishedVoter &&
+          isViableJoinService(service)) {
         establishedExistingReplicaIds.add(serviceReplicaId);
       }
 
@@ -1548,7 +1601,8 @@ class ReplicaHandler extends EventEmitter {
     const leaderService = canonicalLeaderNodeId ?
       services.find((service) =>
         service.node_id === canonicalLeaderNodeId &&
-        service.status === ReplicaStatus.ACTIVE,
+        service.status === ReplicaStatus.ACTIVE &&
+        isViableJoinService(service),
       ) :
       null;
     const isFreshBootstrapPartition = isFreshPartitionBootstrapWindow(partition);
@@ -1568,8 +1622,7 @@ class ReplicaHandler extends EventEmitter {
     // Fresh CREATE TABLE provisioning dispatches replica creation before the
     // partition row has a persisted leader_node_id. A single sibling leader
     // must not force later members of that first cohort into learner mode.
-    const hasKnownLeader = !isFreshBootstrapPartition &&
-      Boolean(canonicalLeaderNodeId);
+    const hasViableLeader = !isFreshBootstrapPartition && Boolean(leaderService);
 
     if (leaderService) {
       leaderAddress = leaderService.address ||
@@ -1591,9 +1644,9 @@ class ReplicaHandler extends EventEmitter {
       existingReplicaCount: isFreshBootstrapPartition ?
         NUM.ZERO :
         (
-          hasKnownLeader ?
+          hasViableLeader ?
             Math.max(NUM.ONE, establishedExistingReplicaIds.size) :
-            establishedExistingReplicaIds.size
+            NUM.ZERO
         ),
     };
   }

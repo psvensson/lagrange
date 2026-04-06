@@ -88,6 +88,14 @@ import {
   exitQuietMode,
   buildQuietModeDetails,
 } from './postgres-baseline-quiet-mode.js';
+import {
+  hasLoadLaneConfirmableLocalReadinessBlock,
+  normalizeSutLoadNodeAdmissionEvidence,
+  adjudicateSutLoadNodeAdmission,
+  buildSutLoadNodeAdmissionDecisionTrace,
+  shouldPreserveTopologyDeferredAdmission,
+  shouldConfirmLocalReadinessViaLoadLane,
+} from './postgres-baseline-node-admission.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -277,6 +285,8 @@ const LOAD_ROUTING_ADMISSION_REASON_PROBE_ERROR_PREFIX = 'routing_probe_error:';
 const LOAD_ROUTING_ADMISSION_REASON_SEPARATOR = '|';
 const LOAD_ROUTING_ADMISSION_SOURCE_DISCOVERY = 'service_discovery';
 const LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR = 'probe_error';
+const LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR_GRACE =
+  'probe_error_grace';
 const REBALANCING_WINDOW_PINNING_VIOLATION_REASON =
   'rebalancing_window_pinning_violation';
 const REBALANCING_PINNING_REASON_IN_FLIGHT_REPLICA_OPS =
@@ -460,9 +470,12 @@ const DISCOVERY_DIAGNOSTICS_FIELD_EXCLUDED_READINESS_BY_NODE_ID =
   'excludedReadinessByNodeId';
 const DISCOVERY_DIAGNOSTICS_FIELD_EXCLUSION_REASON_COUNTS_BY_NODE =
   'exclusionReasonCountsByNode';
+const DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID =
+  'nodeAdmissionTraceByNodeId';
 const DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUDED_NODES = 'excludedNodes=';
 const DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUSION_COUNTS =
   'excludedReasonCounts=';
+const DISCOVERY_DIAGNOSTIC_PREFIX_ADMISSION_STATES = 'admissionStates=';
 const DISCOVERY_DIAGNOSTIC_REASON_COUNT_SEPARATOR = '|';
 const DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR = ';';
 const LOAD_BREAKER_OWNER_NODE_CLIENT = 'node-client';
@@ -2584,7 +2597,7 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
   const issueLoadChannelProbeQuery = typeof nodeClient?.queryLoad === 'function' ?
     (sql, params, context) => nodeClient.queryLoad(node, sql, params, context) :
     null;
-  const issueDirectLoadProbeQuery = async (sql, params = []) => {
+  const issueDirectProbeQuery = async (sql, params = [], lane = NODE_CLIENT_CHANNEL.LOAD) => {
     const normalizedParams = Array.isArray(params) ? params : [];
     if (typeof node?.queryWithTimeout === 'function') {
       return node.queryWithTimeout(
@@ -2592,7 +2605,7 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
         normalizedParams,
         {
           timeoutMs: DEFAULT_PROBE_TIMEOUT_MS,
-          lane: NODE_CLIENT_CHANNEL.LOAD,
+          lane,
         },
       );
     }
@@ -2643,7 +2656,7 @@ async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
     if (isNodeClientCircuitOpenError(error)) {
       try {
         await runLoadProbe((sql, params) =>
-          issueDirectLoadProbeQuery(sql, params));
+          issueDirectProbeQuery(sql, params, NODE_CLIENT_CHANNEL.LOAD));
         return {
           ready: true,
           reasons: [],
@@ -3139,6 +3152,14 @@ function buildSutLoadDiscoveryDiagnostics(options = {}) {
             ]),
         ) :
         {},
+    [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
+      options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
+      typeof options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] ===
+        'object' ?
+        globalThis.structuredClone(
+          options[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID],
+        ) :
+        {},
     elapsedMs: Number.isFinite(options.elapsedMs) ?
       Math.max(ZERO, Math.floor(options.elapsedMs)) :
       ZERO,
@@ -3241,6 +3262,12 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
       aggregateDiscoveryReadinessExclusionReasonCountsByNodeId(
         excludedReadinessByNodeId,
       );
+  const nodeAdmissionTraceByNodeId =
+    diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] &&
+    typeof diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] ===
+      'object' ?
+      diagnostics[DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID] :
+      {};
   const sourceSummary = sourceResults
     .map((sourceResult) => {
       const nodeId =
@@ -3322,6 +3349,15 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
   const excludedReasonCountSummary = Object.entries(exclusionReasonCountsByNode)
     .map(([reason, count]) => String(reason) + ':' + String(count))
     .join(DISCOVERY_DIAGNOSTIC_REASON_COUNT_SEPARATOR);
+  const admissionStateSummary = Object.entries(nodeAdmissionTraceByNodeId)
+    .map(([nodeId, trace]) => {
+      const state = typeof trace?.derivedState === 'string' &&
+        trace.derivedState.length > ZERO ?
+        trace.derivedState :
+        'unknown';
+      return String(nodeId) + ':' + state;
+    })
+    .join(DISCOVERY_DIAGNOSTIC_NODE_REASON_SEPARATOR);
   const diagnosticsSummary = [
     'attempts=' + String(attempts),
     'timedOut=' + String(diagnostics.timedOut === true),
@@ -3348,6 +3384,11 @@ function formatSutLoadDiscoveryDiagnostics(diagnostics) {
         excludedReasonCountSummary :
         'none'),
   );
+  if (admissionStateSummary.length > ZERO) {
+    diagnosticsSummary.push(
+      DISCOVERY_DIAGNOSTIC_PREFIX_ADMISSION_STATES + admissionStateSummary,
+    );
+  }
   if (excludedNodeSummary.length > ZERO) {
     diagnosticsSummary.push(
       DISCOVERY_DIAGNOSTIC_PREFIX_EXCLUDED_NODES + excludedNodeSummary,
@@ -3694,6 +3735,13 @@ function normalizeNonNegativeInteger(value) {
   return Math.max(ZERO, Math.floor(Number(value)));
 }
 
+function normalizeOptionalNonNegativeInteger(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return Math.max(ZERO, Math.floor(Number(value)));
+}
+
 function normalizeNonNegativeNumber(value) {
   if (!Number.isFinite(value)) {
     return ZERO;
@@ -4035,6 +4083,217 @@ function resolveRequiredReachableLoadNodeCount(options = {}, candidateCount) {
   );
 }
 
+function formatReadinessReasonsByNodeId(reasonsByNodeId = {}) {
+  return Object.entries(
+    reasonsByNodeId && typeof reasonsByNodeId === 'object' ?
+      reasonsByNodeId :
+      {},
+  )
+    .map(([nodeId, reasons]) =>
+      String(nodeId) +
+        '=' +
+        (Array.isArray(reasons) && reasons.length > ZERO ?
+          reasons.join('|') :
+          'unknown'))
+    .join('; ');
+}
+
+async function evaluateSutLoadNodeAdmissionCandidates(
+  nodeClient,
+  candidateNodes,
+  options = {},
+) {
+  const candidates = Array.isArray(candidateNodes) ?
+    candidateNodes.filter(Boolean) :
+    [];
+  if (candidates.length === ZERO) {
+    return {
+      reachableCandidates: [],
+      adminFallbackCandidates: [],
+      verifiedLoadLaneFallbackCandidates: [],
+      probeReadinessByNodeId: {},
+      nodeAdmissionTraceByNodeId: {},
+    };
+  }
+
+  const discoveryContextSequence =
+    Array.isArray(options.contextSequence) &&
+      options.contextSequence.length > ZERO ?
+      options.contextSequence :
+      buildSutLoadDiscoveryContextSequence(
+        NODE_CLIENT_TRANSIENT_CONTEXT,
+        options.tableName,
+        options.tableId,
+      );
+  const loadLaneTableProbeSql =
+    typeof options.loadLaneTableProbeSql === 'string' ?
+      options.loadLaneTableProbeSql :
+      buildSutTableProbeSql(options.tableName);
+  const allowSoftDiscoveryNodeFallback =
+    options.allowSoftDiscoveryNodeFallback === true;
+  const deferLocalReplicaReadiness =
+    options.deferLocalReplicaReadiness === true;
+  const readinessProbeResults = await Promise.all(
+    candidates.map(async (node) => {
+      try {
+        const diagnostics = await probeReadinessWithCircuitOpenFallback(
+          nodeClient,
+          node,
+        );
+        const localSnapshot = await fetchLocalServiceDiscoverySnapshot(
+          nodeClient,
+          node,
+          {
+            contextSequence: discoveryContextSequence,
+          },
+        );
+        const localReadiness = extractLocalReplicaReadiness(
+          localSnapshot,
+          node.id,
+          {
+            admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+          },
+        );
+        const adminReady = isNodeAdminReady(diagnostics);
+        const hasConfirmableLocalReadinessBlock =
+          hasLoadLaneConfirmableLocalReadinessBlock(
+            localReadiness?.evaluation,
+          );
+        const shouldProbeLoadLane =
+          (deferLocalReplicaReadiness !== true &&
+            shouldConfirmLocalReadinessViaLoadLane(localReadiness, {
+              adminReady,
+              allowSoftDiscoveryNodeFallback,
+              hasTableProbe: loadLaneTableProbeSql.length > ZERO,
+            })) ||
+          (allowSoftDiscoveryNodeFallback === true &&
+            shouldPreserveTopologyDeferredAdmission(localReadiness) !== true &&
+            loadLaneTableProbeSql.length > ZERO);
+        const loadLaneReadiness =
+          shouldProbeLoadLane ?
+            await probeLoadLaneReadiness(nodeClient, node, {
+              tableProbeSql: loadLaneTableProbeSql,
+              allowControlChannelFallback:
+                hasConfirmableLocalReadinessBlock,
+            }) :
+            {ready: false, reasons: []};
+        return {
+          node,
+          diagnostics,
+          error: null,
+          adminReady,
+          localReadiness,
+          shouldProbeLoadLane,
+          loadLaneReadiness,
+        };
+      } catch (_error) {
+        return {
+          node,
+          diagnostics: null,
+          error: summarizeDiscoverySourceError(_error),
+          adminReady: false,
+          localReadiness: null,
+          shouldProbeLoadLane: false,
+          loadLaneReadiness: {
+            ready: false,
+            reasons: [],
+          },
+        };
+      }
+    }),
+  );
+
+  const reachableCandidates = [];
+  const adminFallbackCandidates = [];
+  const verifiedLoadLaneFallbackCandidates = [];
+  const probeReadinessByNodeId = {};
+  const nodeAdmissionTraceByNodeId = {};
+  for (const probeResult of readinessProbeResults) {
+    const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
+    const adminReasons = probeResult?.adminReady === true ?
+      [] :
+      summarizeReadinessProbeReasons({
+        diagnostics: probeResult?.diagnostics,
+        error: probeResult?.error,
+      });
+    const admissionDecision = adjudicateSutLoadNodeAdmission(
+      normalizeSutLoadNodeAdmissionEvidence({
+        nodeId,
+        adminReady: probeResult?.adminReady === true,
+        adminReasons,
+        localReadiness: probeResult?.localReadiness,
+        loadLaneAttempted: probeResult?.shouldProbeLoadLane === true,
+        loadLaneReadiness: probeResult?.loadLaneReadiness,
+        deferLocalReplicaReadiness,
+        allowTopologyDeferredSelection: true,
+      }),
+    );
+    nodeAdmissionTraceByNodeId[nodeId] =
+      buildSutLoadNodeAdmissionDecisionTrace(
+        {
+          nodeId,
+          adminReady: probeResult?.adminReady === true,
+          adminReasons,
+          localReadiness: probeResult?.localReadiness,
+          loadLaneAttempted: probeResult?.shouldProbeLoadLane === true,
+          loadLaneReadiness: probeResult?.loadLaneReadiness,
+        },
+        admissionDecision,
+      );
+    if (probeResult?.adminReady === true && probeResult?.node) {
+      adminFallbackCandidates.push(probeResult.node);
+      if (probeResult?.loadLaneReadiness?.ready === true) {
+        verifiedLoadLaneFallbackCandidates.push(probeResult.node);
+      }
+    }
+    if (admissionDecision.admit === true) {
+      reachableCandidates.push(probeResult.node);
+      continue;
+    }
+    probeReadinessByNodeId[nodeId] = admissionDecision.exclusionReasons;
+  }
+
+  return {
+    reachableCandidates,
+    adminFallbackCandidates,
+    verifiedLoadLaneFallbackCandidates,
+    probeReadinessByNodeId,
+    nodeAdmissionTraceByNodeId,
+  };
+}
+
+async function revalidateDegradedPreloadLoadNodes(
+  nodeClient,
+  candidateNodes,
+  options = {},
+) {
+  const admission = await evaluateSutLoadNodeAdmissionCandidates(
+    nodeClient,
+    candidateNodes,
+    {
+      tableName: options.tableName,
+      tableId: options.tableId,
+      loadLaneTableProbeSql: buildSutTableProbeSql(options.tableName),
+      allowSoftDiscoveryNodeFallback: true,
+      deferLocalReplicaReadiness: false,
+      admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+    },
+  );
+  const admittedNodeIds = admission.reachableCandidates.map((node) => node.id);
+  const admittedNodeIdSet = new Set(admittedNodeIds);
+  const excludedNodeIds = candidateNodes
+    .map((node) => String(node?.id || ''))
+    .filter((nodeId) => nodeId.length > ZERO)
+    .filter((nodeId) => !admittedNodeIdSet.has(nodeId));
+  return {
+    nodes: admission.reachableCandidates,
+    admittedNodeIds,
+    excludedNodeIds,
+    probeReadinessByNodeId: admission.probeReadinessByNodeId,
+    nodeAdmissionTraceByNodeId: admission.nodeAdmissionTraceByNodeId,
+  };
+}
+
 async function fetchControlSnapshotFromCandidates(
   nodeClient,
   candidates,
@@ -4358,17 +4617,20 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   let lastCandidateNodeIds = [];
   let lastReachableNodeIds = [];
   let lastProbeReadinessByNodeId = {};
+  let lastNodeAdmissionTraceByNodeId = {};
   let bestReachableCandidates = [];
   let bestSourceResults = [];
   let bestDiscoveredNodeIds = [];
   let bestCandidateNodeIds = [];
   let bestReachableNodeIds = [];
   let bestProbeReadinessByNodeId = {};
+  let bestNodeAdmissionTraceByNodeId = {};
   let bestAdminFallbackCandidates = [];
   let bestAdminFallbackSourceResults = [];
   let bestAdminFallbackDiscoveredNodeIds = [];
   let bestAdminFallbackCandidateNodeIds = [];
   let bestAdminFallbackProbeReadinessByNodeId = {};
+  let bestAdminFallbackNodeAdmissionTraceByNodeId = {};
   let attemptsSinceBestReachableImprovement = ZERO;
   let attemptsSinceBestAdminFallbackImprovement = ZERO;
 
@@ -4493,124 +4755,28 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
       );
       lastCandidateNodeIds = discoveredCandidates.map((node) => node.id);
       if (discoveredCandidates.length > ZERO) {
-        const readinessProbeResults = await Promise.all(
-          discoveredCandidates.map(async (node) => {
-            try {
-              const diagnostics = await probeReadinessWithCircuitOpenFallback(
-                nodeClient,
-                node,
-              );
-              const localSnapshot = await fetchLocalServiceDiscoverySnapshot(
-                nodeClient,
-                node,
-                {
-                  contextSequence: discoveryContextSequence,
-                },
-              );
-              const localReadiness = extractLocalReplicaReadiness(
-                localSnapshot,
-                node.id,
-                {
-                  admissionRuntimeOwnership: options.admissionRuntimeOwnership,
-                },
-              );
-              const shouldProbeLoadLane =
-                deferLocalReplicaReadiness !== true &&
-                localReadiness?.requiresConfirmation === true &&
-                localReadiness?.evaluation?.ready === true ||
-                (allowSoftDiscoveryNodeFallback === true &&
-                  loadLaneTableProbeSql.length > ZERO);
-              const loadLaneReadiness =
-                shouldProbeLoadLane ?
-                  await probeLoadLaneReadiness(nodeClient, node, {
-                    tableProbeSql: loadLaneTableProbeSql,
-                  }) :
-                  {ready: false, reasons: []};
-              const adminReady = isNodeAdminReady(diagnostics);
-              return {
-                node,
-                diagnostics,
-                error: null,
-                adminReady,
-                localReadiness,
-                loadLaneReadiness,
-              };
-            } catch (_error) {
-              return {
-                node,
-                diagnostics: null,
-                error: summarizeDiscoverySourceError(_error),
-                adminReady: false,
-                localReadiness: null,
-                loadLaneReadiness: {
-                  ready: false,
-                  reasons: [],
-                },
-              };
-            }
-          }),
+        const admissionEvaluation = await evaluateSutLoadNodeAdmissionCandidates(
+          nodeClient,
+          discoveredCandidates,
+          {
+            contextSequence: discoveryContextSequence,
+            loadLaneTableProbeSql,
+            deferLocalReplicaReadiness,
+            allowSoftDiscoveryNodeFallback,
+            admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+          },
         );
-        const reachableCandidates = [];
-        const adminFallbackCandidates = [];
-        const verifiedLoadLaneFallbackCandidates = [];
-        const probeReadinessByNodeId = {};
-        for (const probeResult of readinessProbeResults) {
-          const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
-          if (probeResult?.adminReady === true && probeResult?.node) {
-            adminFallbackCandidates.push(probeResult.node);
-            if (probeResult?.loadLaneReadiness?.ready === true) {
-              verifiedLoadLaneFallbackCandidates.push(probeResult.node);
-            }
-          }
-          const exclusionReasons = [];
-          if (probeResult?.adminReady !== true) {
-            exclusionReasons.push(...summarizeReadinessProbeReasons({
-              diagnostics: probeResult?.diagnostics,
-              error: probeResult?.error,
-            }));
-          }
-          if (deferLocalReplicaReadiness !== true &&
-              probeResult?.localReadiness?.requiresConfirmation === true &&
-              probeResult?.localReadiness?.evaluation?.ready !== true) {
-            const localReadinessReasons =
-              Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) ?
-                probeResult.localReadiness.evaluation.reasons.map((reason) =>
-                  String(reason)) :
-                [];
-            const hasLocalVoterReadinessBlock = localReadinessReasons.some((reason) =>
-              reason.startsWith('local_replica_not_voter_ready'));
-            const deferTopologyOnlyLocalConfirmation =
-              !hasLocalVoterReadinessBlock &&
-              shouldDeferTopologyOnlyAdmissionBlocker(
-                probeResult?.localReadiness?.evaluation,
-                {
-                  allowTopologyDeferredSelection: true,
-                },
-              );
-            if (!deferTopologyOnlyLocalConfirmation) {
-              const localReasons =
-                Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) &&
-                  probeResult.localReadiness.evaluation.reasons.length > ZERO ?
-                  probeResult.localReadiness.evaluation.reasons :
-                  ['self_discovery_missing'];
-              for (const reason of localReasons) {
-                exclusionReasons.push(
-                  DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX + String(reason),
-                );
-              }
-            }
-          }
-          if (probeResult?.loadLaneReadiness?.ready !== true &&
-              Array.isArray(probeResult?.loadLaneReadiness?.reasons)) {
-            exclusionReasons.push(...probeResult.loadLaneReadiness.reasons);
-          }
-          if (exclusionReasons.length === ZERO) {
-            reachableCandidates.push(probeResult.node);
-            continue;
-          }
-          probeReadinessByNodeId[nodeId] = uniqueSorted(exclusionReasons);
-        }
+        const reachableCandidates = admissionEvaluation.reachableCandidates;
+        const adminFallbackCandidates =
+          admissionEvaluation.adminFallbackCandidates;
+        const verifiedLoadLaneFallbackCandidates =
+          admissionEvaluation.verifiedLoadLaneFallbackCandidates;
+        const probeReadinessByNodeId =
+          admissionEvaluation.probeReadinessByNodeId;
+        const nodeAdmissionTraceByNodeId =
+          admissionEvaluation.nodeAdmissionTraceByNodeId;
         lastProbeReadinessByNodeId = probeReadinessByNodeId;
+        lastNodeAdmissionTraceByNodeId = nodeAdmissionTraceByNodeId;
         lastReachableNodeIds = reachableCandidates.map((node) => node.id);
         if (reachableCandidates.length > bestReachableCandidates.length) {
           bestReachableCandidates = [...reachableCandidates];
@@ -4621,6 +4787,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           bestProbeReadinessByNodeId = {
             ...probeReadinessByNodeId,
           };
+          bestNodeAdmissionTraceByNodeId = globalThis.structuredClone(
+            nodeAdmissionTraceByNodeId,
+          );
           attemptsSinceBestReachableImprovement = ZERO;
         } else if (bestReachableCandidates.length > ZERO &&
             bestReachableCandidates.length < requiredReachableNodeCount) {
@@ -4640,6 +4809,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           bestAdminFallbackProbeReadinessByNodeId = {
             ...probeReadinessByNodeId,
           };
+          bestAdminFallbackNodeAdmissionTraceByNodeId =
+            globalThis.structuredClone(nodeAdmissionTraceByNodeId);
           attemptsSinceBestAdminFallbackImprovement = ZERO;
         } else if (bestAdminFallbackCandidates.length > ZERO &&
             bestReachableCandidates.length === ZERO) {
@@ -4657,6 +4828,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 lastProbeReadinessByNodeId,
+              [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
+                lastNodeAdmissionTraceByNodeId,
               elapsedMs: timing.now() - startedAt,
             }),
           };
@@ -4683,6 +4856,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults: bestAdminFallbackSourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 bestAdminFallbackProbeReadinessByNodeId,
+              [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
+                bestAdminFallbackNodeAdmissionTraceByNodeId,
               elapsedMs: timing.now() - startedAt,
             }),
           };
@@ -4707,6 +4882,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults: bestSourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 bestProbeReadinessByNodeId,
+              [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
+                bestNodeAdmissionTraceByNodeId,
               elapsedMs: timing.now() - startedAt,
             }),
           };
@@ -4750,6 +4927,12 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         (timedOutFallbackNodes.length > ZERO ?
           bestAdminFallbackProbeReadinessByNodeId :
           lastProbeReadinessByNodeId);
+      const timedOutNodeAdmissionTraceByNodeId =
+        bestReachableCandidates.length > ZERO ?
+          bestNodeAdmissionTraceByNodeId :
+          (timedOutFallbackNodes.length > ZERO ?
+            bestAdminFallbackNodeAdmissionTraceByNodeId :
+            lastNodeAdmissionTraceByNodeId);
       const gateReason = strictMinReachable &&
         timedOutReachableNodeIds.length < requiredReachableNodeCount ?
         DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES :
@@ -4766,6 +4949,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           sourceResults: timedOutSourceResults,
           [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
             timedOutProbeReadinessByNodeId,
+          [DISCOVERY_DIAGNOSTICS_FIELD_NODE_ADMISSION_TRACE_BY_NODE_ID]:
+            timedOutNodeAdmissionTraceByNodeId,
           elapsedMs: timing.now() - startedAt,
         }),
       };
@@ -6407,6 +6592,24 @@ function resolveBaselinePerNodeBudget(
   );
 }
 
+function resolveBaselineLoadNodeCountForRun({
+  benchmarkConfig,
+  targetSutLoadNodeCount,
+  effectiveSutLoadNodeCount = null,
+}) {
+  if (benchmarkConfig.strictParity !== true) {
+    return benchmarkConfig.baselineLoadNodeCount;
+  }
+  if (benchmarkConfig.strictDiscovery === true) {
+    return targetSutLoadNodeCount;
+  }
+  if (Number.isInteger(effectiveSutLoadNodeCount) &&
+      effectiveSutLoadNodeCount > ZERO) {
+    return effectiveSutLoadNodeCount;
+  }
+  return targetSutLoadNodeCount;
+}
+
 function buildLoadParity({
   benchmarkConfig,
   benchmarkTableName,
@@ -6664,11 +6867,100 @@ function normalizeRoutingAdmissionReasons(reasons) {
   return uniqueSorted(normalizedReasons);
 }
 
+function normalizeRoutingAdmissionGrace(grace) {
+  if (!grace || typeof grace !== 'object' || grace.active !== true) {
+    return null;
+  }
+  const deadlineAtMs = normalizeOptionalNonNegativeInteger(grace.deadlineAtMs);
+  if (!Number.isInteger(deadlineAtMs)) {
+    return null;
+  }
+  const startedAtMs = normalizeOptionalNonNegativeInteger(grace.startedAtMs);
+  return {
+    active: true,
+    startedAtMs: Number.isInteger(startedAtMs) ? startedAtMs : deadlineAtMs,
+    deadlineAtMs,
+    lastError:
+      typeof grace.lastError === 'string' && grace.lastError.length > ZERO ?
+        grace.lastError :
+        null,
+  };
+}
+
+function resolveLoadRoutingAdmissionProbeErrorGraceMs(benchmarkConfig = {}) {
+  if (
+    Number.isInteger(benchmarkConfig.loadRoutingProbeErrorGraceMs) &&
+    benchmarkConfig.loadRoutingProbeErrorGraceMs >= ZERO
+  ) {
+    return benchmarkConfig.loadRoutingProbeErrorGraceMs;
+  }
+  const snapshotPolicy =
+    NODE_CLIENT_DEFAULT_CHANNEL_POLICIES?.[NODE_CLIENT_CHANNEL.SNAPSHOT] || {};
+  const controlQueryTimeoutMs =
+    Number.isInteger(benchmarkConfig.controlQueryTimeoutMs) &&
+      benchmarkConfig.controlQueryTimeoutMs > ZERO ?
+      benchmarkConfig.controlQueryTimeoutMs :
+      normalizeNonNegativeInteger(snapshotPolicy.timeoutMs);
+  const snapshotCooldownMs = normalizeNonNegativeInteger(
+    snapshotPolicy.cooldownMs,
+  );
+  const pollIntervalMs =
+    Number.isInteger(benchmarkConfig.loadRebalanceMonitorPollIntervalMs) &&
+      benchmarkConfig.loadRebalanceMonitorPollIntervalMs > ZERO ?
+      benchmarkConfig.loadRebalanceMonitorPollIntervalMs :
+      BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT;
+  return Math.max(
+    ZERO,
+    Number.isInteger(controlQueryTimeoutMs) ? controlQueryTimeoutMs : ZERO,
+    Number.isInteger(snapshotCooldownMs) ? snapshotCooldownMs + pollIntervalMs : ZERO,
+    pollIntervalMs * 3,
+  );
+}
+
+function resolveRoutingAdmissionProbeErrorGraceState(
+  previousState,
+  observedAtMs,
+  probeErrorGraceMs,
+  reason,
+) {
+  const lastReadyObservedAtMs = normalizeOptionalNonNegativeInteger(
+    previousState?.lastReadyObservedAtMs,
+  );
+  if (
+    !Number.isInteger(lastReadyObservedAtMs) ||
+    !Number.isInteger(probeErrorGraceMs) ||
+    probeErrorGraceMs <= ZERO ||
+    !Number.isInteger(observedAtMs)
+  ) {
+    return null;
+  }
+  const deadlineAtMs = lastReadyObservedAtMs + probeErrorGraceMs;
+  if (observedAtMs > deadlineAtMs) {
+    return null;
+  }
+  const previousGrace = normalizeRoutingAdmissionGrace(previousState?.grace);
+  return {
+    lastReadyObservedAtMs,
+    grace: {
+      active: true,
+      startedAtMs:
+        Number.isInteger(previousGrace?.startedAtMs) ?
+          previousGrace.startedAtMs :
+          observedAtMs,
+      deadlineAtMs,
+      lastError: reason,
+    },
+  };
+}
+
 function buildLoadRoutingAdmissionState(options = {}) {
   const admittedNodeIds = uniqueSorted(
     (Array.isArray(options.admittedNodeIds) ? options.admittedNodeIds : [])
       .map((nodeId) => String(nodeId || '').trim())
       .filter((nodeId) => nodeId.length > ZERO),
+  );
+  const initialObservedAtMs = normalizeOptionalNonNegativeInteger(
+    options.initialObservedAtMs,
   );
   const stateByNodeId = {};
   for (const nodeId of admittedNodeIds) {
@@ -6678,14 +6970,18 @@ function buildLoadRoutingAdmissionState(options = {}) {
       reasons: [],
       source: null,
       observedAtMs: null,
+      lastReadyObservedAtMs: initialObservedAtMs,
+      grace: null,
     };
   }
   return {
     schemaVersion: LOAD_ROUTING_ADMISSION_SCHEMA_VERSION,
     admittedNodeIds,
+    probeErrorGraceMs: normalizeNonNegativeInteger(options.probeErrorGraceMs),
     sampleCount: ZERO,
     blockedSampleCount: ZERO,
     allowedSampleCount: ZERO,
+    graceSampleCount: ZERO,
     stateByNodeId,
     transitions: [],
     probeErrors: [],
@@ -6708,14 +7004,26 @@ function updateRoutingAdmissionNodeState(routingAdmission, nodeId, nextState = {
   }
 
   const previousState = routingAdmission.stateByNodeId[normalizedNodeId] || null;
+  const normalizedObservedAtMs = normalizeNonNegativeInteger(
+    nextState.observedAtMs,
+  );
+  const normalizedReady = nextState.ready === true;
+  const explicitLastReadyObservedAtMs = normalizeOptionalNonNegativeInteger(
+    nextState.lastReadyObservedAtMs,
+  );
   const normalizedState = {
     nodeId: normalizedNodeId,
-    ready: nextState.ready === true,
+    ready: normalizedReady,
     reasons: normalizeRoutingAdmissionReasons(nextState.reasons),
     source: typeof nextState.source === 'string' && nextState.source.length > ZERO ?
       nextState.source :
       null,
-    observedAtMs: normalizeNonNegativeInteger(nextState.observedAtMs),
+    observedAtMs: normalizedObservedAtMs,
+    lastReadyObservedAtMs:
+      normalizedReady ?
+        (explicitLastReadyObservedAtMs ?? normalizedObservedAtMs) :
+        explicitLastReadyObservedAtMs,
+    grace: normalizeRoutingAdmissionGrace(nextState.grace),
   };
   routingAdmission.stateByNodeId[normalizedNodeId] = normalizedState;
 
@@ -6727,12 +7035,18 @@ function updateRoutingAdmissionNodeState(routingAdmission, nodeId, nextState = {
         typeof previousState.source === 'string' && previousState.source.length > ZERO ?
           previousState.source :
           null,
+      lastReadyObservedAtMs: normalizeOptionalNonNegativeInteger(
+        previousState.lastReadyObservedAtMs,
+      ),
+      grace: normalizeRoutingAdmissionGrace(previousState.grace),
     }) :
     null;
   const nextSignature = JSON.stringify({
     ready: normalizedState.ready,
     reasons: normalizedState.reasons,
     source: normalizedState.source,
+    lastReadyObservedAtMs: normalizedState.lastReadyObservedAtMs,
+    grace: normalizedState.grace,
   });
   if (previousSignature === nextSignature) {
     return;
@@ -6749,12 +7063,18 @@ function updateRoutingAdmissionNodeState(routingAdmission, nodeId, nextState = {
           previousState.source.length > ZERO ?
           previousState.source :
           null,
+      lastReadyObservedAtMs: normalizeOptionalNonNegativeInteger(
+        previousState.lastReadyObservedAtMs,
+      ),
+      grace: normalizeRoutingAdmissionGrace(previousState.grace),
     } :
       null,
     next: {
       ready: normalizedState.ready,
       reasons: normalizedState.reasons,
       source: normalizedState.source,
+      lastReadyObservedAtMs: normalizedState.lastReadyObservedAtMs,
+      grace: normalizedState.grace,
     },
   });
   if (routingAdmission.transitions.length > LOAD_ROUTING_ADMISSION_MAX_TRANSITIONS) {
@@ -6790,6 +7110,7 @@ function buildRoutingAdmissionBlockedError(nodeId, reasons) {
 }
 
 function buildLoadRebalancingPressureState(options = {}) {
+  const startedAtMs = Date.now();
   return {
     schemaVersion: REBALANCING_PRESSURE_SCHEMA_VERSION,
     monitoredNodeIds: Array.isArray(options.monitoredNodeIds) ?
@@ -6812,7 +7133,7 @@ function buildLoadRebalancingPressureState(options = {}) {
         BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT,
     maxReplicaOpsInFlightLimit:
       normalizeNonNegativeInteger(options.maxReplicaOpsInFlightLimit),
-    startedAtMs: Date.now(),
+    startedAtMs,
     endedAtMs: null,
     snapshotErrors: [],
     samples: [],
@@ -6830,6 +7151,8 @@ function buildLoadRebalancingPressureState(options = {}) {
     }),
     routingAdmission: buildLoadRoutingAdmissionState({
       admittedNodeIds: options.admittedNodeIds,
+      probeErrorGraceMs: options.probeErrorGraceMs,
+      initialObservedAtMs: startedAtMs,
     }),
   };
 }
@@ -7093,6 +7416,8 @@ function startLoadRebalancingPressureMonitor(options = {}) {
     pinningEnabled: benchmarkConfig.pinRebalancingDuringLoad === true,
     pinningBypassed: benchmarkConfig.allowLoadRebalancePinningBypass === true,
     admittedNodeIds,
+    probeErrorGraceMs:
+      resolveLoadRoutingAdmissionProbeErrorGraceMs(benchmarkConfig),
   });
 
   let lastLeaderSignature = null;
@@ -7124,6 +7449,7 @@ function startLoadRebalancingPressureMonitor(options = {}) {
         leaderChangesWithinCooldown: ZERO,
         routingAdmissionBlockedCount: ZERO,
         routingAdmissionBlockedNodeIds: [],
+        routingAdmissionGraceNodeIds: [],
       };
       try {
         const snapshot = await fetchControlSnapshotFromCandidates(
@@ -7216,6 +7542,7 @@ function startLoadRebalancingPressureMonitor(options = {}) {
       const routingAdmission = pressure.routingAdmission;
       let blockedCount = ZERO;
       const blockedNodeIds = [];
+      const graceNodeIds = [];
       const routingDiscoveryErrorMessage =
         routingDiscoveryError ?
           String(routingDiscoveryError?.message || routingDiscoveryError) :
@@ -7260,12 +7587,8 @@ function startLoadRebalancingPressureMonitor(options = {}) {
         } catch (error) {
           const reason = LOAD_ROUTING_ADMISSION_REASON_PROBE_ERROR_PREFIX +
             truncateDiscoveryErrorMessage(String(error?.message || error));
-          updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
-            ready: false,
-            reasons: [reason],
-            source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR,
-            observedAtMs,
-          });
+          const previousState =
+            routingAdmission.stateByNodeId?.[nodeId] || null;
           routingAdmission.probeErrors.push({
             nodeId,
             observedAtMs,
@@ -7274,8 +7597,34 @@ function startLoadRebalancingPressureMonitor(options = {}) {
           if (routingAdmission.probeErrors.length > LOAD_ROUTING_ADMISSION_MAX_PROBE_ERRORS) {
             routingAdmission.probeErrors.shift();
           }
-          blockedCount += ONE;
-          blockedNodeIds.push(nodeId);
+          const retainedState = resolveRoutingAdmissionProbeErrorGraceState(
+            previousState,
+            observedAtMs,
+            routingAdmission.probeErrorGraceMs,
+            reason,
+          );
+          if (retainedState) {
+            updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
+              ready: true,
+              reasons: [],
+              source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR_GRACE,
+              observedAtMs,
+              lastReadyObservedAtMs: retainedState.lastReadyObservedAtMs,
+              grace: retainedState.grace,
+            });
+            graceNodeIds.push(nodeId);
+          } else {
+            updateRoutingAdmissionNodeState(routingAdmission, nodeId, {
+              ready: false,
+              reasons: [reason],
+              source: LOAD_ROUTING_ADMISSION_SOURCE_PROBE_ERROR,
+              observedAtMs,
+              lastReadyObservedAtMs: null,
+              grace: null,
+            });
+            blockedCount += ONE;
+            blockedNodeIds.push(nodeId);
+          }
         }
       }
       routingAdmission.sampleCount += ONE;
@@ -7284,8 +7633,12 @@ function startLoadRebalancingPressureMonitor(options = {}) {
       } else {
         routingAdmission.allowedSampleCount += ONE;
       }
+      if (graceNodeIds.length > ZERO) {
+        routingAdmission.graceSampleCount += ONE;
+      }
       sample.routingAdmissionBlockedCount = blockedCount;
       sample.routingAdmissionBlockedNodeIds = uniqueSorted(blockedNodeIds);
+      sample.routingAdmissionGraceNodeIds = uniqueSorted(graceNodeIds);
 
       pressure.samples.push(sample);
       pressure.sampleCount = pressure.samples.length;
@@ -8526,9 +8879,10 @@ async function run(cluster) {
         benchmarkConfig.quiescentTimeoutMs,
       ) :
       benchmarkConfig.readyTimeoutMs;
-  const baselineLoadNodeCountForRun = benchmarkConfig.strictParity === true ?
-    targetSutLoadNodeCount :
-    benchmarkConfig.baselineLoadNodeCount;
+  const baselineLoadNodeCountForRun = resolveBaselineLoadNodeCountForRun({
+    benchmarkConfig,
+    targetSutLoadNodeCount,
+  });
   const strictFanoutOptOut = strictBenchmarkMode &&
     explicitRequiredSutLoadNodeCount !== null &&
     explicitRequiredSutLoadNodeCount < strictDefaultRequiredSutLoadNodeCount;
@@ -8913,6 +9267,31 @@ async function run(cluster) {
       const discoveryDiagnostics = formatSutLoadDiscoveryDiagnostics(
         state.sutLoadDiscovery,
       );
+      const preflightArtifacts = {
+        benchmarkTableName,
+        requiredSchemaVersion: state.requiredSchemaVersion,
+        requiredSchemaVersionSource: state.requiredSchemaVersionSource,
+        requiredSchemaVersionMetadataNodeId:
+          state.requiredSchemaVersionMetadataNodeId,
+        requiredSchemaTableId: state.requiredSchemaTableId,
+        benchmarkMetadataFlow: buildBenchmarkMetadataFlow(
+          state,
+          benchmarkTableName,
+        ),
+        effectiveReadyTimeoutMs: effectiveSutLoadDiscoveryTimeoutMs,
+        systemTableReadPath: state.systemTableReadPath,
+        sutLoadNodeIds: sutLoadNodes.map((node) => node.id),
+        sutLoadDiscovery: state.sutLoadDiscovery,
+        strictDiscoveryGate: state.strictDiscoveryGate,
+        strictBenchmarkGate: state.strictBenchmarkGate,
+        runtimeAdmissionOwnership:
+          buildAdmissionRuntimeOwnershipSummary(
+            state.runtimeAdmissionOwnership,
+          ),
+        quietMode: buildQuietModeDetails(state.quietMode, {
+          defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
+        }),
+      };
       emitPhaseProgress(phaseContext, 'discovered benchmark load candidates', {
         reachableNodeCount: sutLoadNodes.length,
         requiredNodeCount: targetSutLoadNodeCount,
@@ -8922,23 +9301,33 @@ async function run(cluster) {
           DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES +
           ': required=' + String(targetSutLoadNodeCount) +
           ', reachable=' + String(sutLoadNodes.length);
-        assert.ok(
-          sutLoadNodes.length >= targetSutLoadNodeCount,
-          'No discovered admin-ready load service nodes available for benchmark load' +
-            ' (' + strictDiscoveryErrorDetail +
-            (discoveryDiagnostics.length > ZERO ?
-              ', ' + discoveryDiagnostics :
-              '') +
-            ')',
-        );
+        if (sutLoadNodes.length < targetSutLoadNodeCount) {
+          return {
+            status: PHASE_STATUS.FAIL,
+            artifacts: preflightArtifacts,
+            errors: [
+              'No discovered admin-ready load service nodes available for benchmark load' +
+                ' (' + strictDiscoveryErrorDetail +
+                (discoveryDiagnostics.length > ZERO ?
+                  ', ' + discoveryDiagnostics :
+                  '') +
+                ')',
+            ],
+          };
+        }
       } else {
-        assert.ok(
-          sutLoadNodes.length > ZERO,
-          'No discovered admin-ready load service nodes available for benchmark load' +
-            (discoveryDiagnostics.length > ZERO ?
-              ' (' + discoveryDiagnostics + ')' :
-              ''),
-        );
+        if (sutLoadNodes.length <= ZERO) {
+          return {
+            status: PHASE_STATUS.FAIL,
+            artifacts: preflightArtifacts,
+            errors: [
+              'No discovered admin-ready load service nodes available for benchmark load' +
+                (discoveryDiagnostics.length > ZERO ?
+                  ' (' + discoveryDiagnostics + ')' :
+                  ''),
+            ],
+          };
+        }
       }
       state.sutLoadNodes = sutLoadNodes;
       emitPhaseMeaningfulChange(phaseContext, 'benchmark load candidates admitted', {
@@ -8946,31 +9335,7 @@ async function run(cluster) {
       });
       return {
         status: PHASE_STATUS.OK,
-        artifacts: {
-          benchmarkTableName,
-          requiredSchemaVersion: state.requiredSchemaVersion,
-          requiredSchemaVersionSource: state.requiredSchemaVersionSource,
-          requiredSchemaVersionMetadataNodeId:
-            state.requiredSchemaVersionMetadataNodeId,
-          requiredSchemaTableId: state.requiredSchemaTableId,
-          benchmarkMetadataFlow: buildBenchmarkMetadataFlow(
-            state,
-            benchmarkTableName,
-          ),
-          effectiveReadyTimeoutMs: effectiveSutLoadDiscoveryTimeoutMs,
-          systemTableReadPath: state.systemTableReadPath,
-          sutLoadNodeIds: sutLoadNodes.map((node) => node.id),
-          sutLoadDiscovery: state.sutLoadDiscovery,
-          strictDiscoveryGate: state.strictDiscoveryGate,
-          strictBenchmarkGate: state.strictBenchmarkGate,
-          runtimeAdmissionOwnership:
-            buildAdmissionRuntimeOwnershipSummary(
-              state.runtimeAdmissionOwnership,
-            ),
-          quietMode: buildQuietModeDetails(state.quietMode, {
-            defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
-          }),
-        },
+        artifacts: preflightArtifacts,
       };
     },
     [SCENARIO_PHASE.CONVERGE]: async (phaseContext) => {
@@ -9231,6 +9596,99 @@ async function run(cluster) {
           throw error;
         }
       }
+      const shouldRevalidateDegradedPreloadNodes =
+        quiescenceResult.mode !== GATE_RESULT_MODE.ALL_READY &&
+        Array.isArray(quiescenceResult.readyLoadNodes) &&
+        quiescenceResult.readyLoadNodes.length > ZERO;
+      if (shouldRevalidateDegradedPreloadNodes) {
+        emitPhaseProgress(
+          phaseContext,
+          'revalidating degraded pre-load fallback against load-lane admission',
+          {
+            candidateNodeIds: quiescenceResult.readyLoadNodes.map((node) => node.id),
+            mode: quiescenceResult.mode,
+          },
+        );
+        const preloadFallbackLoadAdmission =
+          await revalidateDegradedPreloadLoadNodes(
+            nodeClient,
+            quiescenceResult.readyLoadNodes,
+            {
+              tableName: benchmarkTableName,
+              tableId: state.requiredSchemaTableId,
+              admissionRuntimeOwnership: state.runtimeAdmissionOwnership,
+            },
+          );
+        if (preloadFallbackLoadAdmission.excludedNodeIds.length > ZERO) {
+          emitPhaseProgress(
+            phaseContext,
+            'excluded degraded pre-load fallback nodes that the load lane will reject',
+            {
+              admittedNodeIds: preloadFallbackLoadAdmission.admittedNodeIds,
+              excludedNodeIds: preloadFallbackLoadAdmission.excludedNodeIds,
+            },
+          );
+        }
+        quiescenceResult = {
+          ...quiescenceResult,
+          readyLoadNodes: preloadFallbackLoadAdmission.nodes,
+          excludedLoadNodeIds: uniqueSorted([
+            ...(Array.isArray(quiescenceResult.excludedLoadNodeIds) ?
+              quiescenceResult.excludedLoadNodeIds.map((nodeId) => String(nodeId)) :
+              []),
+            ...preloadFallbackLoadAdmission.excludedNodeIds,
+          ]),
+          preloadFallbackLoadAdmission: {
+            candidateNodeIds: quiescenceResult.readyLoadNodes.map((node) => node.id),
+            admittedNodeIds: preloadFallbackLoadAdmission.admittedNodeIds,
+            excludedNodeIds: preloadFallbackLoadAdmission.excludedNodeIds,
+            probeReadinessByNodeId:
+              preloadFallbackLoadAdmission.probeReadinessByNodeId,
+            nodeAdmissionTraceByNodeId:
+              preloadFallbackLoadAdmission.nodeAdmissionTraceByNodeId,
+          },
+        };
+        if (quiescenceResult.readyLoadNodes.length === ZERO) {
+          return {
+            status: PHASE_STATUS.FAIL,
+            artifacts: {
+              mode: quiescenceResult.mode,
+              attempts: quiescenceResult.attempts,
+              stableElapsedMs: quiescenceResult.stableElapsedMs,
+              includedNodeIds: [],
+              excludedNodeIds: quiescenceResult.excludedLoadNodeIds,
+              partitionGroupInFlight: quiescenceResult.partitionGroupInFlight || {},
+              replicaOperationTimelineByOperationId:
+                quiescenceResult.replicaOperationTimelineByOperationId || {},
+              reasonHistogram: quiescenceResult.reasonHistogram || {},
+              versionConvergence: quiescenceResult.versionConvergence || null,
+              benchmarkMetadataFlow: buildBenchmarkMetadataFlow(
+                state,
+                benchmarkTableName,
+              ),
+              preloadFallbackLoadAdmission:
+                quiescenceResult.preloadFallbackLoadAdmission,
+              quietMode: buildQuietModeDetails(state.quietMode, {
+                defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
+              }),
+            },
+            errors: [
+              'degraded pre-load fallback produced no strict load-admissible nodes' +
+                (Object.keys(
+                  quiescenceResult.preloadFallbackLoadAdmission
+                    ?.probeReadinessByNodeId ||
+                    {},
+                ).length > ZERO ?
+                  ': ' +
+                    formatReadinessReasonsByNodeId(
+                      quiescenceResult.preloadFallbackLoadAdmission
+                        .probeReadinessByNodeId,
+                    ) :
+                  ''),
+            ],
+          };
+        }
+      }
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
       state.excludedSutLoadNodeIds = quiescenceResult.excludedLoadNodeIds;
@@ -9354,6 +9812,12 @@ async function run(cluster) {
             state,
             benchmarkTableName,
           ),
+          ...(quiescenceResult.preloadFallbackLoadAdmission ?
+            {
+              preloadFallbackLoadAdmission:
+                quiescenceResult.preloadFallbackLoadAdmission,
+            } :
+            {}),
           strictPreloadReadiness: benchmarkConfig.strictPreloadReadiness === true,
           preloadRequiredStableMs: preLoadStableWindowMs,
           preloadMaxReplicaOpsInFlight:
@@ -9371,8 +9835,7 @@ async function run(cluster) {
         loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
       });
       const effectiveLoadBenchmarkConfig =
-        strictBenchmarkMode !== true &&
-          nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
+        nodes.length >= PREFLIGHT_CONVERGENCE_LARGE_CLUSTER_NODE_THRESHOLD ?
           {
             ...benchmarkConfig,
             heartbeatFreshnessMaxStallMs: Math.max(
@@ -9542,10 +10005,16 @@ async function run(cluster) {
         };
       }
 
+      const baselineLoadNodeCountForLoadPhase =
+        resolveBaselineLoadNodeCountForRun({
+          benchmarkConfig,
+          targetSutLoadNodeCount,
+          effectiveSutLoadNodeCount: state.effectiveSutLoadNodes.length,
+        });
       const baseline = await resolveBaselineMetrics({
         cluster,
         benchmarkConfig,
-        baselineLoadNodeCountOverride: baselineLoadNodeCountForRun,
+        baselineLoadNodeCountOverride: baselineLoadNodeCountForLoadPhase,
         scenarioOverrides,
         provider,
         networkName,
@@ -10289,4 +10758,9 @@ async function run(cluster) {
   };
 }
 
-export {run, resolveBenchmarkConfig, buildComparison};
+export {
+  run,
+  resolveBenchmarkConfig,
+  buildComparison,
+  probeLoadLaneReadiness,
+};

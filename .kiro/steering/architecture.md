@@ -1,5 +1,21 @@
 # Architecture Steering Pointer
 
+## Document Role
+
+This document governs architecture-document lookup only.
+
+Use this file for:
+
+- locating the canonical architecture entrypoint
+- understanding where current owner maps and subsystem detail live
+
+Do not use this file for:
+
+- stable implementation rules
+- testing policy
+- style guidance
+- roadmap scope decisions
+
 The canonical architecture entrypoint lives at `../../architecture.md`.
 
 Use that root document for component ownership, runtime boundaries, and

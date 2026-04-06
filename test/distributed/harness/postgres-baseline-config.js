@@ -23,6 +23,7 @@ const BENCHMARK_REBALANCE_HYSTERESIS_COOLDOWN_MS_DEFAULT = 2000;
 const BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT = 2;
 const BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT = 250;
 const BENCHMARK_LOAD_REBALANCE_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
+const BENCHMARK_LOAD_ROUTING_PROBE_ERROR_GRACE_MS_DEFAULT = null;
 const BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT = 3;
 const BENCHMARK_FORCE_LOCAL_SYSTEM_TABLE_READ_SHORTCUT_DEFAULT = false;
 const QUIESCENCE_DEFAULT_STABLE_WINDOW_MS =
@@ -549,6 +550,11 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
         configured.loadRebalanceMaxReplicaOpsInFlight >= ZERO ?
         configured.loadRebalanceMaxReplicaOpsInFlight :
         BENCHMARK_LOAD_REBALANCE_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT,
+    loadRoutingProbeErrorGraceMs:
+      Number.isInteger(configured.loadRoutingProbeErrorGraceMs) &&
+        configured.loadRoutingProbeErrorGraceMs >= ZERO ?
+        configured.loadRoutingProbeErrorGraceMs :
+        BENCHMARK_LOAD_ROUTING_PROBE_ERROR_GRACE_MS_DEFAULT,
     criticalRebalancingSustainedSamples,
     forceLocalSystemTableReadShortcut:
       configured.forceLocalSystemTableReadShortcut === true ?

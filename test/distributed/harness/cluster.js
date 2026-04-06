@@ -26,6 +26,9 @@ import {
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import {
+  isRetryableControlPlaneError,
+} from '../../../src/control-plane/control-plane-error-classification.js';
+import {
   waitForConvergence,
   assertConsistency,
   waitForConsistencyConvergence,
@@ -37,6 +40,7 @@ import {LogAnalyzer} from './log-analyzer.js';
 import {PlaybackRecorder} from './playback-recorder.js';
 import {TraceArtifactRecorder} from './trace-artifact-recorder.js';
 import {classifyActiveGateClosureWitness} from './active-gate-closure-classification.js';
+import {shouldPreserveTopologyDeferredAdmission} from '../scenarios/postgres-baseline-node-admission.js';
 import {
   BENCHMARK_DEFAULTS,
   PORTS,
@@ -131,6 +135,10 @@ const REACHABILITY_SOURCE_ADMIN_WS = 'admin_ws';
 const REACHABILITY_SOURCE_SQL_PROBE = 'sql_probe';
 const REACHABILITY_STATUS_HTTP = 'http_status_';
 const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
+const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const ADMIN_SOCKET_LANE_LOAD = 'load';
+const BENCHMARK_ADMISSION_PROBE_SQL_PREFIX = 'SELECT 1 FROM ';
+const BENCHMARK_ADMISSION_PROBE_SQL_SUFFIX = ' LIMIT 1';
 const ACTIVE_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
 const ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX = 'admin_probe_error=';
 const ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING =
@@ -222,6 +230,19 @@ const SERVICE_DISCOVERY_READINESS_BENCHMARK_READY_FIELD =
 const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_FIELD = 'state';
 const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_READY = 'ready';
 const SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD = 'routingReady';
+const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_REASONS_FIELD = 'reasons';
+const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_LOCAL_REPLICA_ROLE_FIELD =
+  'localReplicaRole';
+const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_DEGRADED_BY_OPERATION_IDS_FIELD =
+  'degradedByOperationIds';
+const LOAD_LANE_SOFT_ADMISSION_REASON_CODES = new Set([
+  'schema_partition_unavailable',
+  'leadership_unstable',
+]);
+const LOAD_LANE_VOTER_READY_REPLICA_ROLES = new Set([
+  'leader',
+  'follower',
+]);
 const CLUSTER_STAGE_SETUP_NETWORK_CREATING = 'setup.network.creating';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATED = 'setup.network.created';
 const CLUSTER_STAGE_SETUP_SEED_STARTING = 'setup.seed.starting';
@@ -373,13 +394,72 @@ function resolveLocalBenchmarkReadyNodeIdFromDiscovery(
         replica[SERVICE_DISCOVERY_REPLICA_BENCHMARK_ADMISSION_FIELD];
       if (benchmarkAdmission &&
           typeof benchmarkAdmission === 'object') {
+        const routingReady = benchmarkAdmission[
+          SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD
+        ] === true;
+        const localReplicaRole = String(
+          benchmarkAdmission[
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_LOCAL_REPLICA_ROLE_FIELD
+          ] || '',
+        ).toLowerCase();
+        const localReplicaVoterReady =
+          LOAD_LANE_VOTER_READY_REPLICA_ROLES.has(localReplicaRole);
         const admissionState = String(
           benchmarkAdmission[
             SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_FIELD
           ] || '',
         ).toLowerCase();
-        return admissionState ===
-          SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_READY ?
+        if (admissionState ===
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_READY) {
+          return normalizedLocalNodeId;
+        }
+
+        const reasonCodes = normalizeDiscoveryReasonCodes(
+          benchmarkAdmission[
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_REASONS_FIELD
+          ],
+        );
+        const topologyDeferredCandidateReasons = localReplicaVoterReady ||
+          localReplicaRole.length === ZERO ?
+          reasonCodes :
+          [
+            ...reasonCodes,
+            'local_replica_not_voter_ready',
+          ];
+        const topologyDeferredEligible =
+          reasonCodes.every((code) =>
+            LOAD_LANE_SOFT_ADMISSION_REASON_CODES.has(code),
+          ) &&
+          shouldPreserveTopologyDeferredAdmission({
+            requiresConfirmation: true,
+            evaluation: {
+              ready: false,
+              hasAdmission: true,
+              reasons: topologyDeferredCandidateReasons,
+              admissionState: {
+                routingReady,
+                schemaReady:
+                  benchmarkAdmission.schemaReady === true,
+                topologyReady:
+                  benchmarkAdmission.topologyReady === true,
+              },
+            },
+          });
+        if (!topologyDeferredEligible) {
+          return null;
+        }
+        const degradedByOperationIds = Array.isArray(
+          benchmarkAdmission[
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_DEGRADED_BY_OPERATION_IDS_FIELD
+          ],
+        ) ?
+          benchmarkAdmission[
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_DEGRADED_BY_OPERATION_IDS_FIELD
+          ] :
+          [];
+
+        return routingReady &&
+          degradedByOperationIds.length === ZERO ?
           normalizedLocalNodeId :
           null;
       }
@@ -396,6 +476,52 @@ function resolveLocalBenchmarkReadyNodeIdFromDiscovery(
   }
 
   return null;
+}
+
+function normalizeDiscoveryReasonCodes(reasons) {
+  return Array.isArray(reasons) ?
+    [...new Set(reasons
+      .map((reason) => String(reason?.code || '').trim())
+      .filter((code) => code.length > ZERO))] :
+    [];
+}
+
+function buildBenchmarkAdmissionProbeSql(tableName) {
+  const normalizedTableName = typeof tableName === 'string' ?
+    tableName.trim() :
+    '';
+  if (!IDENTIFIER_PATTERN.test(normalizedTableName)) {
+    return null;
+  }
+  return BENCHMARK_ADMISSION_PROBE_SQL_PREFIX +
+    normalizedTableName +
+    BENCHMARK_ADMISSION_PROBE_SQL_SUFFIX;
+}
+
+function isRetryableBenchmarkAdmissionError(error) {
+  if (isRetryableControlPlaneError(error)) {
+    return true;
+  }
+  const message = String(error?.message || error || '');
+  if (BENCHMARK_ADMISSION_RETRYABLE_ERROR_PATTERN.test(message)) {
+    return true;
+  }
+  return String(error?.code || '').toUpperCase() === 'ETIMEDOUT';
+}
+
+async function verifyBenchmarkLoadLaneAdmission(node, probeSql, timeoutMs) {
+  if (!probeSql || typeof node?.queryWithTimeout !== 'function') {
+    return true;
+  }
+  try {
+    await node.queryWithTimeout(probeSql, [], {
+      lane: ADMIN_SOCKET_LANE_LOAD,
+      timeoutMs,
+    });
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }
 const DOCKER_HOST_CONFIG_BINDS_KEY = 'Binds';
 const CONTAINER_RUNNING_STATUS = 'running';
@@ -431,6 +557,8 @@ const ADMIN_QUERY_TRACE_OUTCOME_PENDING = 'pending';
 const ADMIN_QUERY_TRACE_OUTCOME_OK = 'ok';
 const ADMIN_QUERY_TRACE_OUTCOME_ERROR = 'error';
 const ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT = 'timeout';
+const BENCHMARK_ADMISSION_RETRYABLE_ERROR_PATTERN =
+  /timeout|timed out|deadline exceeded|etimedout/i;
 const ADMIN_QUERY_TRACE_ERROR_UNKNOWN = 'unknown admin query error';
 const ERROR_MESSAGE_TIMEOUT_FRAGMENT = 'timed out';
 
@@ -556,6 +684,37 @@ function resolvePositiveTimeoutMs(value, fallback) {
 }
 
 /**
+ * Reserve a fair share of one remaining deadline for sequential probes so late
+ * nodes do not inherit a nearly exhausted per-node timeout budget.
+ * @param {number} deadline
+ * @param {number} remainingProbeCount
+ * @param {number} maxTimeoutMs
+ * @returns {number}
+ */
+function resolveSequentialProbeTimeoutMs(
+  deadline,
+  remainingProbeCount,
+  maxTimeoutMs,
+) {
+  const normalizedRemainingProbeCount = Number.isInteger(remainingProbeCount) &&
+    remainingProbeCount > ZERO ?
+    remainingProbeCount :
+    ONE;
+  const remainingBudgetMs = Math.max(
+    MIN_TIMEOUT_MS,
+    Math.floor(Number(deadline) - Date.now()),
+  );
+  const fairShareTimeoutMs = Math.max(
+    MIN_TIMEOUT_MS,
+    Math.floor(remainingBudgetMs / normalizedRemainingProbeCount),
+  );
+  return Math.min(
+    Math.max(MIN_TIMEOUT_MS, Math.floor(maxTimeoutMs || MIN_TIMEOUT_MS)),
+    fairShareTimeoutMs,
+  );
+}
+
+/**
  * Resolve/reject with timeout protection for potentially hanging operations.
  * @param {Promise<*>} promise
  * @param {number} timeoutMs
@@ -665,6 +824,19 @@ function formatSnapshotCoverage(snapshotCoverage) {
       snapshotCoverage.selectedReachabilityError.length > ZERO ?
       snapshotCoverage.selectedReachabilityError :
       null;
+  const selectedSnapshotTimeoutMs = Number.isFinite(
+    snapshotCoverage.selectedSnapshotTimeoutMs,
+  ) ?
+    Math.max(MIN_TIMEOUT_MS, Math.floor(snapshotCoverage.selectedSnapshotTimeoutMs)) :
+    null;
+  const selectedReachabilityTimeoutMs = Number.isFinite(
+    snapshotCoverage.selectedReachabilityTimeoutMs,
+  ) ?
+    Math.max(
+      MIN_TIMEOUT_MS,
+      Math.floor(snapshotCoverage.selectedReachabilityTimeoutMs),
+    ) :
+    null;
   const selectedPublicationConvergence =
     snapshotCoverage.selectedPublicationConvergence &&
       typeof snapshotCoverage.selectedPublicationConvergence === 'object' ?
@@ -715,6 +887,14 @@ function formatSnapshotCoverage(snapshotCoverage) {
       '') +
     (selectedReachabilityError ?
       '#adminError=' + selectedReachabilityError :
+      '') +
+    (selectedSnapshotTimeoutMs !== null &&
+      selectedSnapshotTimeoutMs < CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS ?
+      '#probeMs=' + String(selectedSnapshotTimeoutMs) :
+      '') +
+    (selectedReachabilityTimeoutMs !== null &&
+      selectedReachabilityTimeoutMs < CONTROL_SNAPSHOT_REACHABILITY_PROBE_TIMEOUT_MS ?
+      '#reachabilityProbeMs=' + String(selectedReachabilityTimeoutMs) :
       '') +
     (publicationEpoch !== null ?
       '#epoch=' + String(publicationEpoch) :
@@ -1048,7 +1228,12 @@ function resolveActiveWaitPublicationStatusRank(status) {
 function buildActiveWaitProgressSnapshot(
   probeResult = {},
   expectedNodeCount = ZERO,
+  options = {},
 ) {
+  const readinessMode =
+    options?.readinessMode === CLUSTER_READINESS_MODE_LOAD ?
+      CLUSTER_READINESS_MODE_LOAD :
+      CLUSTER_READINESS_MODE_STARTUP;
   const nodeDiagnostics = Array.isArray(probeResult?.nodeDiagnostics) ?
     probeResult.nodeDiagnostics :
     [];
@@ -1228,15 +1413,22 @@ function buildActiveWaitProgressSnapshot(
 
   const closureWitness = classifyActiveGateClosureWitness({
     progressSnapshot: {
+      activeNodeCount,
+      inactiveNodeCount,
+      snapshotCoverageNodeCount,
       snapshotCoverageComplete,
       publicationStatus,
       pendingAckCount: pendingAckNodeIds.length,
       missingPublishedCount: missingPublishedNodeIds.length,
       gateReasons,
       prioritySpreadSatisfied,
+      selectedSnapshotAdminReady,
+      selectedSnapshotReachableBy,
+      selectedSnapshotError,
     },
     publicationConvergence,
     publicationConvergenceGate,
+    readinessMode,
   });
 
   return {
@@ -4981,6 +5173,9 @@ class Cluster {
       tableName: options?.tableName,
       tableId: options?.tableId,
     });
+    const loadAdmissionProbeSql = buildBenchmarkAdmissionProbeSql(
+      options?.tableName,
+    );
     const requiredPublicationEpoch = Number.isInteger(
       options?.requiredPublicationEpoch,
     ) && options.requiredPublicationEpoch > ZERO ?
@@ -4993,24 +5188,29 @@ class Cluster {
         continue;
       }
       try {
-        const discoverySnapshot =
-          typeof node.queryWithTimeout === 'function' ?
-            await node.queryWithTimeout(
-              discoverySql,
-              [],
-              {
-                lane: ADMIN_SOCKET_LANE_SNAPSHOT,
-                timeoutMs,
-              },
-            ) :
-            await node.query(discoverySql, []);
-        const readyNodeId = resolveLocalBenchmarkReadyNodeIdFromDiscovery(
-          discoverySnapshot,
-          node.id,
-        );
-        if (readyNodeId !== String(node.id || '')) {
-          continue;
+        let discoverySnapshot = null;
+        let discoveryError = null;
+        try {
+          discoverySnapshot =
+            typeof node.queryWithTimeout === 'function' ?
+              await node.queryWithTimeout(
+                discoverySql,
+                [],
+                {
+                  lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+                  timeoutMs,
+                },
+              ) :
+              await node.query(discoverySql, []);
+        } catch (error) {
+          discoveryError = error;
         }
+        const readyNodeId = discoverySnapshot ?
+          resolveLocalBenchmarkReadyNodeIdFromDiscovery(
+            discoverySnapshot,
+            node.id,
+          ) :
+          null;
         let diagnostics = null;
         if (typeof node.getReachabilityDiagnostics === 'function') {
           try {
@@ -5024,6 +5224,14 @@ class Cluster {
         if (!diagnostics ||
             diagnostics.adminReady === true ||
             diagnostics.controlPlaneRecoveryReady === true) {
+          const localDiscoveryReady = readyNodeId === String(node.id || '');
+          const softDiscoveryFallback =
+            !localDiscoveryReady &&
+            discoverySnapshot === null &&
+            isRetryableBenchmarkAdmissionError(discoveryError);
+          if (!localDiscoveryReady && !softDiscoveryFallback) {
+            continue;
+          }
           if (requiredPublicationEpoch !== null) {
             const publishedControlPlaneEpoch = Number(
               diagnostics?.publishedControlPlaneEpoch,
@@ -5031,6 +5239,16 @@ class Cluster {
             if (publishedControlPlaneEpoch !== requiredPublicationEpoch) {
               continue;
             }
+          }
+          // Under retryable discovery pressure, the direct load-lane probe is
+          // the authoritative admission check.
+          const loadLaneAdmitted = await verifyBenchmarkLoadLaneAdmission(
+            node,
+            loadAdmissionProbeSql,
+            timeoutMs,
+          );
+          if (!loadLaneAdmitted) {
+            continue;
           }
           readyNodes.push(node);
         }
@@ -5345,11 +5563,11 @@ class Cluster {
         options :
         {};
     const explicitNodes = Array.isArray(requestedOptions.nodes) ?
-      requestedOptions.nodes.filter((node) =>
-        node && typeof node === 'object') :
+      requestedOptions.nodes :
       null;
-    const nodes = explicitNodes && explicitNodes.length > ZERO ?
-      [...explicitNodes] :
+    const nodes = explicitNodes !== null ?
+      explicitNodes.filter((node) =>
+        node && typeof node === 'object') :
       Array.from(this._nodes.values());
     const benchmarkConfig =
       this._config?.benchmark && typeof this._config.benchmark === 'object' ?
@@ -6619,11 +6837,12 @@ class Cluster {
     });
 
     const snapshotProbeResults = [];
-    for (const node of nodes) {
-      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
-      const snapshotTimeoutMs = Math.min(
+    for (const [index, node] of nodes.entries()) {
+      const remainingProbeCount = nodes.length - index;
+      const snapshotTimeoutMs = resolveSequentialProbeTimeoutMs(
+        deadline,
+        remainingProbeCount,
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
-        remainingMs,
       );
       const reachabilityTimeoutMs = Math.min(
         snapshotTimeoutMs,
@@ -6699,6 +6918,8 @@ class Cluster {
         snapshotProbeResults.push({
           nodeId: node.id,
           error: null,
+          snapshotTimeoutMs,
+          reachabilityTimeoutMs,
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
           reachableBy:
@@ -6740,6 +6961,8 @@ class Cluster {
         snapshotProbeResults.push({
           nodeId: node.id,
           error: normalizeProbeError(error),
+          snapshotTimeoutMs,
+          reachabilityTimeoutMs,
           adminReady: reachabilityDiagnostics?.adminReady === true,
           reachable: reachabilityDiagnostics?.reachable === true,
           reachableBy:
@@ -6819,6 +7042,14 @@ class Cluster {
       selectedReachable: selectedResult?.reachable === true,
       selectedReachableBy: selectedResult?.reachableBy || null,
       selectedReachabilityError: selectedResult?.reachabilityError || null,
+      selectedSnapshotTimeoutMs: Number.isFinite(selectedResult?.snapshotTimeoutMs) ?
+        Math.max(MIN_TIMEOUT_MS, Math.floor(selectedResult.snapshotTimeoutMs)) :
+        null,
+      selectedReachabilityTimeoutMs:
+        Number.isFinite(selectedResult?.reachabilityTimeoutMs) ?
+          Math.max(MIN_TIMEOUT_MS,
+            Math.floor(selectedResult.reachabilityTimeoutMs)) :
+          null,
       selectedCapturedAtMs: Number.isFinite(selectedResult?.capturedAtMs) ?
         selectedResult.capturedAtMs :
         null,
@@ -6910,11 +7141,11 @@ class Cluster {
 
     let selectedSnapshot = null;
     let lastError = null;
-    for (const node of nodes) {
-      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
-      const snapshotTimeoutMs = Math.min(
+    for (const [index, node] of nodes.entries()) {
+      const snapshotTimeoutMs = resolveSequentialProbeTimeoutMs(
+        deadline,
+        nodes.length - index,
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
-        remainingMs,
       );
       try {
         const snapshotResult = await node.getControlSnapshot({
@@ -7047,11 +7278,11 @@ class Cluster {
     const discoverySql = buildServiceDiscoverySql({tableName});
     let selectedSummary = null;
     let lastError = null;
-    for (const node of nodes) {
-      const remainingMs = Math.max(MIN_TIMEOUT_MS, deadline - Date.now());
-      const timeoutMs = Math.min(
+    for (const [index, node] of nodes.entries()) {
+      const timeoutMs = resolveSequentialProbeTimeoutMs(
+        deadline,
+        nodes.length - index,
         CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS,
-        remainingMs,
       );
       try {
         const discoverySnapshot =
@@ -7350,6 +7581,7 @@ class Cluster {
       const progressSnapshot = buildActiveWaitProgressSnapshot(
         lastResult,
         this._nodes.size,
+        {readinessMode},
       );
       const invariantBreaches = summarizeInvariantBreaches(
         lastResult?.priorityRecoveryInvariants?.invariants,
@@ -7407,20 +7639,18 @@ class Cluster {
       };
     };
 
-    const isLoadModePrioritySpreadSoftSuccess = (result) => {
-      if (readinessMode !== CLUSTER_READINESS_MODE_LOAD ||
-          !result ||
-          typeof result !== 'object') {
-        return false;
-      }
-      if (result?.priorityRecoveryInvariants?.passed !== true) {
+    const isActiveGateSoftSuccess = (result) => {
+      if (!result || typeof result !== 'object' ||
+          result?.priorityRecoveryInvariants?.passed !== true) {
         return false;
       }
       const progressSnapshot = buildActiveWaitProgressSnapshot(
         result,
         this._nodes.size,
+        {readinessMode},
       );
-      return progressSnapshot?.closureRecordId === 'CL-003';
+      return progressSnapshot?.closureRecordId === 'CL-003' ||
+        progressSnapshot?.closureRecordId === 'CL-004';
     };
 
     let pollResult;
@@ -7443,7 +7673,7 @@ class Cluster {
         },
         isSuccess: (result) => {
           return result.allActive === true ||
-            isLoadModePrioritySpreadSoftSuccess(result);
+            isActiveGateSoftSuccess(result);
         },
         onAttempt: ({attempts, elapsedMs, lastResult}) => {
           for (const diagnostic of lastResult.nodeDiagnostics || []) {
@@ -7644,6 +7874,7 @@ class Cluster {
       buildActiveWaitProgressSnapshot(
         pollResult.lastResult || {},
         this._nodes.size,
+        {readinessMode},
       );
     const finalAttemptsSinceProgress = Math.max(
       ZERO,

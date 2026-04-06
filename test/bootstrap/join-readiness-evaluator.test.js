@@ -267,3 +267,263 @@ test(
     );
   },
 );
+
+test(
+  'JoinReadinessEvaluator - excludes non-discovery partition operations from topology blockers',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    const cache = {
+      getAll(tableName) {
+        switch (tableName) {
+          case 'nodes':
+            return [{
+              node_id: 'seed-node',
+              status: 'active',
+            }, {
+              node_id: 'target-node',
+              status: 'active',
+            }];
+          case 'partitions':
+            return [{
+              partition_id: 'services-p1',
+              table_name: 'services',
+            }, {
+              partition_id: 'sql_transactions-p1',
+              table_name: 'sql_transactions',
+            }];
+          case 'services':
+            return [];
+          case 'replica_operations':
+            return [{
+              operation_id: 'svc-op-1',
+              type: 'MOVE_REPLICA',
+              partition_id: 'services-p1',
+              replica_id: 'services-p1-r2',
+              source_node_id: 'seed-node',
+              target_node_id: 'target-node',
+              status: 'creating',
+              workflow_step: 'PENDING',
+              updated_at: 1234,
+            }, {
+              operation_id: 'tx-op-1',
+              type: 'MOVE_REPLICA',
+              partition_id: 'sql_transactions-p1',
+              replica_id: 'sql_transactions-p1-r2',
+              source_node_id: 'seed-node',
+              target_node_id: 'target-node',
+              status: 'creating',
+              workflow_step: 'PENDING',
+              updated_at: 1235,
+            }];
+          default:
+            return [];
+        }
+      },
+    };
+    harness.evaluator.delegates.getMissingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+    harness.evaluator.delegates.getBlockingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+
+    const result =
+      harness.evaluator.collectCanonicalInFlightReplicaOperationDetails(
+        cache,
+      );
+
+    t.equal(
+      result.inFlightOperations.length,
+      1,
+      'topology gating should keep only discovery-critical partition operations',
+    );
+    t.equal(
+      result.inFlightOperations[0]?.partitionId,
+      'services-p1',
+      'topology gating should continue to count discovery-critical service partitions',
+    );
+    t.equal(
+      result.excludedNonDiscoveryPartitionCount,
+      1,
+      'topology gating should exclude unrelated transaction-recovery partitions',
+    );
+  },
+);
+
+test(
+  'JoinReadinessEvaluator - topology can converge with only unrelated transaction partitions in flight',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    const cache = {
+      getAll(tableName) {
+        switch (tableName) {
+          case 'nodes':
+            return [{
+              node_id: 'seed-node',
+              status: 'active',
+            }, {
+              node_id: 'target-node',
+              status: 'active',
+            }];
+          case 'partitions':
+            return [{
+              partition_id: 'sql_transactions-p1',
+              table_name: 'sql_transactions',
+            }];
+          case 'services':
+            return [];
+          case 'replica_operations':
+            return [{
+              operation_id: 'tx-op-1',
+              type: 'MOVE_REPLICA',
+              partition_id: 'sql_transactions-p1',
+              replica_id: 'sql_transactions-p1-r2',
+              source_node_id: 'seed-node',
+              target_node_id: 'target-node',
+              status: 'creating',
+              workflow_step: 'PENDING',
+              updated_at: 1234,
+            }];
+          default:
+            return [];
+        }
+      },
+    };
+    harness.evaluator.delegates.getMissingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+    harness.evaluator.delegates.getBlockingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+
+    const result =
+      harness.evaluator.evaluateCanonicalJoinTopologyReadiness(
+        cache,
+      );
+
+    t.equal(
+      result.ready,
+      true,
+      'topology gating should not strand join readiness on unrelated transaction partitions',
+    );
+    t.equal(
+      result.inFlightReplicaOperations,
+      0,
+      'unrelated transaction partitions should not count toward topology in-flight blockers',
+    );
+    t.equal(
+      result.excludedNonDiscoveryPartitionCount,
+      1,
+      'diagnostics should report when unrelated partitions were excluded',
+    );
+  },
+);
+
+test(
+  'JoinReadinessEvaluator - topology can converge while remote priority control-plane recovery is still in flight',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    const cache = {
+      getAll(tableName) {
+        switch (tableName) {
+          case 'nodes':
+            return [{
+              node_id: 'joining-node-readiness-evaluator',
+              status: 'joining',
+            }, {
+              node_id: 'seed-node',
+              status: 'active',
+            }, {
+              node_id: 'target-node',
+              status: 'active',
+            }];
+          case 'partitions':
+            return [{
+              partition_id: 'replica_operations-p1',
+              table_name: 'replica_operations',
+            }];
+          case 'services':
+            return [];
+          case 'replica_operations':
+            return [{
+              operation_id: 'priority-op-1',
+              type: 'REPLACE',
+              partition_id: 'replica_operations-p1',
+              replica_id: 'replica_operations-p1-r4',
+              source_node_id: 'seed-node',
+              target_node_id: 'target-node',
+              status: 'syncing',
+              workflow_step: 'SYNCING',
+              updated_at: 1234,
+            }];
+          default:
+            return [];
+        }
+      },
+    };
+    harness.evaluator.delegates.getMissingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+    harness.evaluator.delegates.getBlockingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+
+    const operationDetails =
+      harness.evaluator.collectCanonicalInFlightReplicaOperationDetails(
+        cache,
+      );
+    t.equal(
+      operationDetails.inFlightOperations.length,
+      0,
+      'join topology blockers should exclude remote priority control-plane recovery after active-peer fan-out begins',
+    );
+    t.equal(
+      operationDetails.excludedRemotePriorityControlPlaneCount,
+      1,
+      'diagnostics should report tolerated remote priority control-plane recovery',
+    );
+    t.match(
+      operationDetails.excludedRemotePriorityControlPlaneOperationDetails,
+      [{
+        operationId: 'priority-op-1',
+        type: 'REPLACE',
+        partitionId: 'replica_operations-p1',
+        replicaId: 'replica_operations-p1-r4',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'target-node',
+        status: 'syncing',
+        workflowStep: 'SYNCING',
+        completedAt: null,
+        ageMs: Number,
+      }],
+      'diagnostics should preserve the tolerated remote priority recovery details',
+    );
+
+    const result =
+      harness.evaluator.evaluateCanonicalJoinTopologyReadiness(
+        cache,
+      );
+
+    t.equal(
+      result.ready,
+      true,
+      'join topology should stay open while unrelated remote priority control-plane recovery continues',
+    );
+    t.equal(
+      result.inFlightReplicaOperations,
+      0,
+      'tolerated remote priority control-plane recovery should not count as a blocking in-flight operation',
+    );
+    t.equal(
+      result.excludedRemotePriorityControlPlaneCount,
+      1,
+      'topology diagnostics should surface the tolerated remote priority control-plane recovery count',
+    );
+  },
+);

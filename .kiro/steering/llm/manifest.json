@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-03-19T05:55:25.554Z",
+  "generatedAt": "2026-04-02T05:59:38.303Z",
   "packs": [
     {
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
-      "ruleCount": 45,
-      "estimatedTokens": 1348,
+      "ruleCount": 48,
+      "estimatedTokens": 1388,
       "domains": [
         "architecture",
         "testing",
@@ -19,7 +19,7 @@
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
       "ruleCount": 140,
-      "estimatedTokens": 4482,
+      "estimatedTokens": 4447,
       "domains": [
         "architecture"
       ]
@@ -29,7 +29,7 @@
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
       "ruleCount": 120,
-      "estimatedTokens": 3426,
+      "estimatedTokens": 3458,
       "domains": [
         "testing"
       ]
@@ -38,8 +38,8 @@
       "name": "style",
       "title": "Style Steering Pack",
       "description": "Load for coding-style and lint policy enforcement.",
-      "ruleCount": 23,
-      "estimatedTokens": 573,
+      "ruleCount": 14,
+      "estimatedTokens": 258,
       "domains": [
         "style"
       ]
@@ -48,8 +48,8 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 3,
-      "estimatedTokens": 91,
+      "ruleCount": 7,
+      "estimatedTokens": 199,
       "domains": [
         "governance"
       ]

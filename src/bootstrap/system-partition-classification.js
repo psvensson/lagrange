@@ -17,6 +17,11 @@ const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
 ]);
 
+const CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS = new Set([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+]);
+
 const INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID = new Map(
   Object.entries(INITIAL_PARTITION_IDS).map(([tableId, partitionId]) => [
     partitionId,
@@ -103,6 +108,12 @@ function isSystemTablePartition(options = {}) {
 function isPriorityControlPlanePartition(options = {}) {
   const tableId = resolvePartitionTableId(options);
   return tableId !== null && PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId);
+}
+
+function isCriticalTransportControlPlanePartition(options = {}) {
+  const tableId = resolvePartitionTableId(options);
+  return tableId !== null &&
+    CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS.has(tableId);
 }
 
 function getPartitionRowFromCache(systemTableCache, partitionId) {
@@ -231,9 +242,11 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
 }
 
 export {
+  CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   buildPartitionRowByPartitionId,
   getPartitionRowFromCache,
+  isCriticalTransportControlPlanePartition,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
   resolvePartitionTableId,

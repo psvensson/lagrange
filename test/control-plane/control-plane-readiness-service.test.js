@@ -1169,6 +1169,129 @@ async (t) => {
   );
 });
 
+test('ControlPlaneReadinessService getAllNodeReadiness includes authoritative-only nodes during bulk refresh',
+async (t) => {
+  const now = 365000;
+  const cacheVisibleNode = {
+    ...createActiveNode('node-cache-visible'),
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now - 250,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  };
+  const authoritativeOnlyNode = {
+    ...createActiveNode('node-authoritative-only'),
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.LAST_HEARTBEAT]: now - 250,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+  };
+  let authoritativeNodeListCalls = 0;
+  let cachedNodeListCalls = 0;
+  let authoritativeServiceListCalls = 0;
+  let cachedServiceListCalls = 0;
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache({
+      nodes: [cacheVisibleNode],
+      services: [createMessageGroupService('node-cache-visible')],
+    }),
+    nodesOwner: {
+      async listNodes() {
+        authoritativeNodeListCalls += 1;
+        return {
+          success: true,
+          rows: [cacheVisibleNode, authoritativeOnlyNode],
+        };
+      },
+      async listNodesFromCache() {
+        cachedNodeListCalls += 1;
+        return {
+          success: true,
+          rows: [cacheVisibleNode],
+        };
+      },
+    },
+    servicesOwner: {
+      async listServices() {
+        authoritativeServiceListCalls += 1;
+        return {
+          success: true,
+          rows: [
+            createMessageGroupService('node-cache-visible'),
+            createMessageGroupService('node-authoritative-only'),
+          ],
+        };
+      },
+      async listServicesFromCache() {
+        cachedServiceListCalls += 1;
+        return {
+          success: true,
+          rows: [createMessageGroupService('node-cache-visible')],
+        };
+      },
+    },
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'node-cache-visible': {
+        nodeId: 'node-cache-visible',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'node-authoritative-only': {
+        nodeId: 'node-authoritative-only',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readinessEntries = await readinessService.getAllNodeReadiness({
+    allowAuthoritativeRefresh: true,
+  });
+
+  t.same(
+    readinessEntries.map((entry) => entry.nodeId).sort(),
+    ['node-authoritative-only', 'node-cache-visible'],
+    'bulk readiness should include nodes that are only visible on the authoritative owner path',
+  );
+  t.equal(
+    authoritativeNodeListCalls,
+    1,
+    'bulk readiness should enumerate nodes from the authoritative owner path',
+  );
+  t.equal(
+    authoritativeServiceListCalls,
+    1,
+    'bulk readiness should enumerate services from the authoritative owner path',
+  );
+  t.equal(
+    cachedNodeListCalls,
+    0,
+    'bulk readiness should not fall back to cached node enumeration during authoritative refresh',
+  );
+  t.equal(
+    cachedServiceListCalls,
+    0,
+    'bulk readiness should not fall back to cached service enumeration during authoritative refresh',
+  );
+  t.equal(
+    readinessEntries.find((entry) => entry.nodeId === 'node-authoritative-only')
+      ?.dimensions.clusterMemberHealthy,
+    true,
+    'the authoritative-only node should be evaluated as healthy once it is discovered',
+  );
+});
+
 test('ControlPlaneReadinessService repairs medium-stale connected heartbeats ' +
   'before the node becomes unhealthy',
 async (t) => {
@@ -2955,6 +3078,96 @@ test('ControlPlaneReadinessService clears priority control-plane recovery mode a
     t.equal(readiness.priorityControlPlaneRecovery.active, false);
     t.same(readiness.priorityControlPlaneRecovery.reasonCodes, []);
     t.equal(readiness.priorityControlPlaneRecovery.publicationStatus, 'PUBLISHED');
+    t.end();
+  });
+
+test('ControlPlaneReadinessService exposes a normalized membership publication planning snapshot',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-planning-snapshot',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 21,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-planning-snapshot'],
+            priorityPartitionSummary: {
+              satisfied: false,
+              missingPartitionIds: ['replica_operations-p1'],
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const snapshot = readinessService.getMembershipPublicationPlanningSnapshotSync(
+      'node-planning-snapshot',
+      1500,
+    );
+
+    t.equal(snapshot?.publicationEpoch, 21);
+    t.equal(snapshot?.publicationStatus, 'PUBLISHED');
+    t.equal(snapshot?.publicationPending, false);
+    t.equal(snapshot?.publicationExcludesTargetNode, false);
+    t.equal(snapshot?.publishedMembershipIncludesTargetNode, true);
+    t.equal(snapshot?.publishedPlanningEpoch, 21);
+    t.same(
+      snapshot?.priorityRecoveryReasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD],
+      'planning snapshot should preserve shared publication-recovery reasons',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService preserves source snapshot version in membership publication diagnostics',
+  async (t) => {
+    const nodeId = 'node-publication-source-version';
+    const cache = createCache({
+      nodes: [createActiveNode(nodeId)],
+      services: [createMessageGroupService(nodeId)],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId,
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        [nodeId]: {
+          nodeId,
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      membershipPublicationService: {
+        getLatestPublicationForNode(targetNodeId) {
+          if (targetNodeId !== nodeId) {
+            return null;
+          }
+          return {
+            publicationEpoch: 12,
+            status: 'PUBLISHED',
+            publishedActiveNodeIds: [nodeId],
+            requiredAckNodeIds: [nodeId],
+            acknowledgedNodeIds: [nodeId],
+            sourceTopologyEpoch: 8,
+            sourceSnapshotVersion: 34,
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness(nodeId);
+
+    t.equal(readiness.membershipPublication.publicationEpoch, 12);
+    t.equal(readiness.membershipPublication.sourceSnapshotVersion, 34);
     t.end();
   });
 

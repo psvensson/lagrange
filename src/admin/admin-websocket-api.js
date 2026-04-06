@@ -1402,6 +1402,34 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Determine whether transient schema/leadership drift can be treated as
+   * soft blockers when only legacy readiness evidence is available.
+   * @param {Object|null} readiness
+   * @param {Array<string>} reasonCodes
+   * @return {boolean}
+   * @private
+   */
+  shouldAdmitLoadLaneSoftReadinessBlockers(
+    readiness,
+    reasonCodes,
+  ) {
+    if (!readiness ||
+        typeof readiness !== TYPEOF.OBJECT) {
+      return false;
+    }
+    if (!Array.isArray(reasonCodes) ||
+        reasonCodes.length <= NUM.ZERO) {
+      return false;
+    }
+    if (!reasonCodes.every((code) =>
+      LOAD_LANE_SOFT_ADMISSION_REASON_CODES.has(code))) {
+      return false;
+    }
+
+    return readiness.routingReady === true;
+  }
+
+  /**
    * Resolve local benchmark admission for one routed load-lane table.
    * @param {string} tableName
    * @return {Object|null}
@@ -1488,10 +1516,18 @@ class AdminWebSocketAPI {
               readiness.reasons,
               'benchmark_readiness_blocked',
             );
+          const softBlockerAdmitted =
+            !benchmarkReady &&
+            this.shouldAdmitLoadLaneSoftReadinessBlockers(
+              readiness,
+              reasonCodes,
+            );
           resolvedState = {
-            ready: benchmarkReady && reasonCodes.length === NUM.ZERO,
+            ready:
+              (benchmarkReady && reasonCodes.length === NUM.ZERO) ||
+              softBlockerAdmitted,
             tableName: normalizedTableName,
-            reasonCodes,
+            reasonCodes: softBlockerAdmitted ? [] : reasonCodes,
           };
           break;
         }

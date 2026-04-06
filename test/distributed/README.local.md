@@ -4,6 +4,9 @@
 
 This README documents local usage of the distributed test harness in `test/distributed/`.
 
+It is also the home for distributed-harness local procedures that do not belong
+in repo-wide steering policy.
+
 ## Prerequisites
 
 1. Docker daemon running locally.
@@ -16,6 +19,33 @@ Run harness scenarios with:
 
 ```bash
 node test/distributed/run.js --config <config-path> [--scenario <scenario-name>] [--output <report-path>] [--verbose]
+```
+
+## Failure Triage
+
+After a distributed harness failure, start from the auto-generated triage
+summary before sampling logs by hand. These files are written under the run
+artifact directory (typically
+`test-output/reports/.playback/<report-basename>/<scenario>/`):
+
+1. `triage-summary.md`
+2. `triage-summary.json`
+
+For deeper cross-scenario analysis, use the consolidated diagnostics script:
+
+```bash
+npm run analyze:distributed-failure -- --report test-output/reports/<report>.report.json
+```
+
+## Scenario Policy SQL Ownership Guard
+
+Distributed scenario code routes `tables.table_policies` mutations through the
+canonical helper in `test/distributed/scenarios/table-distribution-helpers.js`.
+
+When changing distributed scenarios, run:
+
+```bash
+npm run guard:scenario-policy:file
 ```
 
 Examples:
@@ -302,7 +332,7 @@ Compare latest run against prior run for both `3node` and `7node` profiles:
 scripts/compare-latest-baseline-runs.sh --report-dir test-output/reports
 ```
 
-To keep local artifact growth under control, prune stale `test-output/`
+To keep local artifact growth under control, prune stale local generated
 artifacts after debugging sessions:
 
 ```bash
@@ -313,11 +343,16 @@ npm run test-output:prune
 Default retention policy:
 - keep pinned names such as `current`, `latest`, `acceptance`, `summary`, and
   `validation`
-- keep anything newer than 3 days
-- keep at least the latest 40 report JSON files
-- keep at least the latest 24 report playback bundles
-- keep at least the latest 16 legacy playback bundles under `test-output/.playback`
-- keep at least the latest 12 other top-level scenario output directories
+- scope includes `test-output/`, `.tmp/`, `.playback/`, `.tap/test-results/`,
+  `data/partitions/logs-p1`, `data3/partitions/logs-p1`, and
+  `data/examples/movielens-lagrange-node/partitions/logs-p1`
+- defaults are count-based; `--keep-days` defaults to `0`
+- keep at least the latest `4` report JSON files
+- keep at least the latest `4` report playback bundles
+- keep at least the latest `4` legacy playback bundles under
+  `test-output/.playback`, `.tmp/.playback`, and `.playback/.playback`
+- keep at least the latest `4` other run-like entries in each scoped artifact
+  directory, or the latest `4` replica file sets in each `logs-p1` directory
 ```
 
 The comparison output includes:

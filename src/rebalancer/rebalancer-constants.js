@@ -285,6 +285,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
 });
 
 const REBALANCE_COORDINATOR_DEFER_REASON = Object.freeze({
+  REMOVE_SAFETY_BLOCKED:
+    'remove_safety_blocked',
   REPLACE_REMOVE_SAFETY_BLOCKED:
     'replace_remove_safety_blocked',
 });

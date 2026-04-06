@@ -30,6 +30,9 @@ import {
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+} from '../../src/raft/constants.js';
+import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
@@ -1663,6 +1666,165 @@ test('PartitionService - handleTransportMessage routes Raft packets to liferaft'
 
   await partition.shutdown();
 });
+
+test('PartitionService - non-critical Raft peer writes use background delivery',
+  async (t) => {
+    const deliveries = [];
+    const mockTransport = {
+      register: () => {},
+      unregister: () => {},
+      deliver: async (_address, _payload, options) => {
+        deliveries.push(options);
+        return {acknowledged: true};
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'sql_transaction_participants-p1',
+      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+      replicaId: 'sql_transaction_participants-p1-r1',
+      replicaIds: [
+        'sql_transaction_participants-p1-r1',
+        'sql_transaction_participants-p1-r4',
+      ],
+      peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
+      transport: mockTransport,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    try {
+      await new Promise((resolve, reject) => {
+        partition.raft.nodes[0].write({
+          type: 'append',
+          term: 1,
+          address: 'node-1/partition/sql_transaction_participants-p1-r1',
+          leader: 'node-1/partition/sql_transaction_participants-p1-r1',
+          state: 1,
+          last: {term: 1, index: 1},
+          data: [{index: 2, term: 1, command: 'noop'}],
+        }, (error) => error ? reject(error) : resolve());
+      });
+
+      t.same(
+        deliveries,
+        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+        'non-critical transaction-state append traffic should not consume the critical lane',
+      );
+    } finally {
+      await partition.shutdown();
+    }
+  });
+
+test('PartitionService - append-fail peer writes prefer target priority over ' +
+  'sender address', async (t) => {
+    const deliveries = [];
+    const mockTransport = {
+      register: () => {},
+      unregister: () => {},
+      deliver: async (_address, _payload, options) => {
+        deliveries.push(options);
+        return {acknowledged: true};
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'tbl-bench-p1',
+      tableId: 'tbl-bench',
+      replicaId: 'tbl-bench-p1-r1',
+      replicaIds: ['tbl-bench-p1-r1', 'tbl-bench-p1-r2'],
+      peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
+      transport: mockTransport,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    try {
+      await new Promise((resolve, reject) => {
+        partition.raft.nodes[0].write({
+          type: 'append fail',
+          term: 1,
+          address: 'node-1/partition/control_plane_publications-p1-r1',
+          leader: 'node-1/partition/control_plane_publications-p1-r1',
+          state: 1,
+          last: {term: 1, index: 1},
+          data: {index: 2, term: 1},
+        }, (error) => error ? reject(error) : resolve());
+      });
+
+      t.same(
+        deliveries,
+        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+        'append-fail replication should follow the target partition lane',
+      );
+    } finally {
+      await partition.shutdown();
+    }
+  });
+
+test('PartitionService - non-critical Raft responses use background delivery',
+  async (t) => {
+    const deliveries = [];
+    const mockTransport = {
+      register: () => {},
+      unregister: () => {},
+      deliver: async (_address, _payload, options) => {
+        deliveries.push(options);
+        return {acknowledged: true};
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'sql_transaction_participants-p1',
+      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+      replicaId: 'sql_transaction_participants-p1-r1',
+      replicaIds: ['sql_transaction_participants-p1-r1'],
+      transport: mockTransport,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    try {
+      const originalEmit = partition.raft.emit.bind(partition.raft);
+      partition.raft.emit = (event, data, write) => {
+        if (event === 'data' && typeof write === 'function') {
+          write({
+            type: 'append',
+            term: 1,
+            address: 'node-1/partition/sql_transaction_participants-p1-r1',
+            leader: 'node-1/partition/sql_transaction_participants-p1-r1',
+            state: 1,
+            last: {term: 1, index: 1},
+            data: [{index: 2, term: 1, command: 'noop'}],
+          });
+          return true;
+        }
+        return originalEmit(event, data, write);
+      };
+
+      await partition.handleTransportMessage({
+        payload: {
+          type: 'vote',
+          term: 1,
+          address: 'node-2/partition/sql_transaction_participants-p1-r4',
+          state: 1,
+          leader: '',
+          last: {term: 0, index: 0},
+        },
+      });
+
+      t.same(
+        deliveries,
+        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+        'non-critical transaction-state responses should also avoid the critical lane',
+      );
+    } finally {
+      await partition.shutdown();
+    }
+  });
 
 test('PartitionService - handleTransportMessage handles application messages', async (t) => {
   const schema = {
@@ -4766,6 +4928,102 @@ test('PartitionService - executeQuery keeps non-transactional writes out of unre
   );
 
   await partition.rollbackTransaction('tx-active');
+  partition.shutdown();
+});
+
+test('PartitionService - beginTransaction is idempotent for the same active session', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  const firstResult = await partition.beginTransaction('tx-active', 101);
+  const secondResult = await partition.beginTransaction('tx-active', 101);
+
+  t.equal(firstResult.success, true, 'initial transaction should begin');
+  t.equal(secondResult.success, true, 'same-session begin retry should succeed');
+  t.equal(secondResult.idempotent, true,
+    'same-session begin retry should be marked idempotent');
+  t.equal(partition.activeTransactions.size, 1,
+    'same-session begin retry should not create a second active transaction');
+
+  await partition.rollbackTransaction('tx-active');
+  partition.shutdown();
+});
+
+test('PartitionService - beginTransaction is idempotent for the same prepared session', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
+
+  const beginResult = await partition.beginTransaction('tx-prepared', 202);
+  t.equal(beginResult.success, true, 'initial transaction should begin');
+
+  await partition.executeQuery(
+    'INSERT INTO test_data (id, name) VALUES (?, ?)',
+    [1, 'Alice'],
+    {sessionId: 'tx-prepared'},
+  );
+
+  const prepareResult = await partition.prepareTransaction('tx-prepared');
+  t.equal(prepareResult.success, true, 'transaction should prepare');
+  t.equal(partition.isInTransaction(), true,
+    'prepared transaction should still count as in-flight');
+
+  const retryResult = await partition.beginTransaction('tx-prepared', 202);
+  t.equal(retryResult.success, true, 'same-session begin retry should succeed');
+  t.equal(retryResult.idempotent, true,
+    'same-session begin retry should be marked idempotent');
+  t.equal(partition.preparedTransactions.size, 1,
+    'same-session begin retry should not create a second prepared transaction');
+
+  await partition.rollbackTransaction('tx-prepared');
+  partition.shutdown();
+});
+
+test('PartitionService - beginTransaction rejects other sessions while a prepared transaction is open', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
+
+  await partition.beginTransaction('tx-prepared', 202);
+  await partition.executeQuery(
+    'INSERT INTO test_data (id, name) VALUES (?, ?)',
+    [1, 'Alice'],
+    {sessionId: 'tx-prepared'},
+  );
+  const prepareResult = await partition.prepareTransaction('tx-prepared');
+  t.equal(prepareResult.success, true, 'transaction should prepare');
+
+  await t.rejects(
+    () => partition.beginTransaction('tx-other', 303),
+    /Transaction already active on this partition/,
+    'different-session begin should fail before SQLite re-entry',
+  );
+
+  await partition.rollbackTransaction('tx-prepared');
   partition.shutdown();
 });
 

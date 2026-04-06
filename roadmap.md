@@ -22,6 +22,9 @@ Lagrange evolves in stages:
 The roadmap preserves Lagrange's core advantage: data locality + programmable
 execution + strong distributed semantics.
 
+Broad rows may guide implementation only when they are paired with a linked spec
+or architecture document that makes the intended scope concrete.
+
 ## Status Legend
 
 | Symbol | Meaning      |
@@ -149,6 +152,11 @@ Focus shifts to developer experience.
 | `docker-compose` cluster | 🔲 |
 | Kubernetes Helm chart | 🔧 |
 
+`Kubernetes Helm chart` is the active row in this section. Further
+implementation work stays tied to a deployment description that covers values
+surface, networking, storage, bootstrap flow, and upgrade behavior before more
+task expansion begins.
+
 ### 2. Developer Workflow
 
 | Item | Status |
@@ -215,18 +223,18 @@ also enable future paid system services.
 | Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` run on the service substrate |
 | `native_js` runtime | ✅ | Active runtime for first-party system services |
 | `wasm_component` runtime | ✅ | Available runtime for replicated services |
-| Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility for first-party and packaged services |
-| Manifest validation rules | 🔲 | Required fields, version format, capability recognition, dependency validation |
-| Service catalog system tables | 🔲 | Desired/actual installed-service state and failure recording |
-| Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence for service revisions |
-| Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall` |
-| Replicated service state API | 🔲 | Stable service-owned state surface above replicated storage |
-| CDC subscription API | 🔲 | Change-stream consumption for service workflows |
-| Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces |
-| Capability enforcement | 🔲 | Kernel gates service access to privileged APIs |
-| Consistent snapshot API | 🔲 | Required for cluster-consistent reads and service barriers |
-| Topology API | 🔲 | Required for service placement and orchestration |
-| Event emission API | 🔲 | Structured progress and failure reporting for system services |
+| Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility. Architecture: `architecture/lagrange-service-manifest.md` |
+| Manifest validation rules | 🔲 | Required fields, format and capability validation. Architecture: `architecture/lagrange-service-manifest.md` |
+| Service catalog system tables | 🔲 | Desired/actual installed-service state and failure recording. Architecture: `architecture/lagrange-service-registry.md` |
+| Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence for service revisions. Architecture: `architecture/lagrange-service-registry.md` |
+| Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall`. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Replicated service state API | 🔲 | Stable service-owned state surface above replicated storage. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| CDC subscription API | 🔲 | Change-stream consumption for service workflows. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Capability enforcement | 🔲 | Kernel gates service access to privileged APIs. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Consistent snapshot API | 🔲 | Required for cluster-consistent reads and service barriers. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Topology API | 🔲 | Required for service placement and orchestration. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
+| Event emission API | 🔲 | Structured progress and failure reporting for system services. Architecture: `architecture/lagrange-kernel-platform-api-v0.md` |
 
 ### 2. PostgreSQL Compatibility
 
@@ -243,14 +251,14 @@ also enable future paid system services.
 
 ### 3. Production Guarantees
 
-| Item | Status |
-|------|--------|
-| Replica count guarantees | ✅ |
-| Replica recovery | ✅ |
-| Failure detection | ✅ |
-| Node reintegration | ✅ |
-| Failover SLO definition | 🔲 |
-| Durability SLO definition | 🔲 |
+| Item | Status | Notes |
+|------|--------|-------|
+| Replica count guarantees | ✅ | |
+| Replica recovery | ✅ | |
+| Failure detection | ✅ | |
+| Node reintegration | ✅ | |
+| Failover SLO definition | 🔲 | Requires a dedicated spec defining metric, measurement window, reporting surface, and test gate before implementation starts |
+| Durability SLO definition | 🔲 | Requires a dedicated spec defining durability target, failure envelope, reporting surface, and test gate before implementation starts |
 
 ---
 
@@ -275,7 +283,7 @@ also enable future paid system services.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services |
+| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services. Align active work with `architecture/lagrange-service-registry.md`, `architecture/lagrange-service-manifest.md`, and `.kiro/specs/activation-cost-aware-placement/` |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
 | Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `.kiro/specs/activation-cost-aware-placement/`. Architecture: `architecture/future/activation-cost-aware-placement.md` |
@@ -290,6 +298,10 @@ use `wasm_component` or `oci_container`, both packaged as OCI artifacts.
 Phase 1.0 establishes the internal substrate for first-party system services.
 This phase externalizes that substrate into a small, stable API surface for
 installable replicated services.
+
+Rows in this section are design-preparation scoped until each item is backed by
+a linked architecture or spec document that defines the contract boundary well
+enough for direct implementation tasks.
 
 #### Phase A — Stable External Service Contract
 
@@ -314,6 +326,10 @@ installable replicated services.
 
 Builds on the earlier first-party service substrate. Focus here is artifact
 distribution, operator UX, and external installability at scale.
+
+This section is not ready for direct task creation from row title alone. Each
+broad row must first gain a linked spec or architecture note that defines the
+operator flow, desired durable state, and success criteria for the active slice.
 
 #### Artifact and Package Registry
 

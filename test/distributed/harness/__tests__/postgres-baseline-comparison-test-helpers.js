@@ -7,6 +7,7 @@ import {
   run,
   resolveBenchmarkConfig,
   buildComparison,
+  probeLoadLaneReadiness,
 } from '../../scenarios/postgres-baseline-comparison.js';
 import {
   NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
@@ -646,6 +647,7 @@ export {
   installVirtualScenarioTiming,
   resolveBenchmarkConfig,
   buildComparison,
+  probeLoadLaneReadiness,
   NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,

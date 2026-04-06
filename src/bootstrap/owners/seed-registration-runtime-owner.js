@@ -11,7 +11,7 @@ class SeedRegistrationRuntimeOwner {
     this.delegates = options.delegates || {};
   }
 
-  getLeaderPartition(tableName) {
+  findLeaderPartition(tableName) {
     const replicaIds = INITIAL_REPLICA_IDS[tableName];
     assertCritical(
       replicaIds,
@@ -26,6 +26,14 @@ class SeedRegistrationRuntimeOwner {
       }
     }
 
+    return null;
+  }
+
+  getLeaderPartition(tableName) {
+    const partition = this.findLeaderPartition(tableName);
+    if (partition) {
+      return partition;
+    }
     throw new Error(BOOTSTRAP_ERROR.PARTITION_LEADER_MISSING);
   }
 }

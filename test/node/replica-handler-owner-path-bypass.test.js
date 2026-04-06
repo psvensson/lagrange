@@ -381,6 +381,111 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
   );
 
   await t.test(
+    'remove completion waits for service row delete before emitter ' +
+    'signals completion (uses control-plane gateway owner path)',
+    async (t) => {
+      const emitter = new ExecutorOutcomeEmitter({logger: console});
+      const emittedOutcomes = [];
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        emittedOutcomes.push(outcome);
+      });
+
+      const cache = createSeededCache();
+      const cdcService = createMockCDCService(cache);
+      const tempDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'rh-bypass-delete-fail-'),
+      );
+      const handler = new ReplicaHandler({
+        nodeId: TEST_NODE_ID,
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: cdcService,
+        createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: emitter,
+      });
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        REPLICA_HANDLER_EVENT.CREATED,
+        REPLICA_HANDLER_EVENT.CREATION_FAILED,
+      );
+
+      await handler.handleMessage(buildEnvelope(
+        ReplicaOperationMessageType.CREATE_REPLICA,
+        {
+          operationId: TEST_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      ));
+      await created;
+
+      const partitionDir = path.join(
+        tempDir, 'partitions', TEST_PARTITION_ID,
+      );
+      fs.mkdirSync(partitionDir, {recursive: true});
+
+      cdcService.operations.length = 0;
+      emittedOutcomes.length = 0;
+
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+          service_id: TEST_REPLICA_ID,
+          service_type: 'partition',
+          partition_id: TEST_PARTITION_ID,
+          node_id: TEST_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          address:
+            `${TEST_NODE_ID}/partition/${TEST_REPLICA_ID}`,
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        },
+      );
+
+      handler.controlPlaneSystemTableGateway = {
+        submitMutation: async () => {
+          throw new Error('simulated service row delete failure');
+        },
+      };
+
+      const removalFailed = new Promise((resolve) => {
+        handler.once(REPLICA_HANDLER_EVENT.REMOVAL_FAILED, resolve);
+      });
+
+      await handler.handleMessage(buildEnvelope(
+        ReplicaOperationMessageType.REMOVE_REPLICA,
+        {
+          operationId: TEST_REMOVE_OPERATION_ID,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      ));
+      await removalFailed;
+
+      const outcomeTypes =
+        emittedOutcomes.map((o) => o.outcomeType);
+      t.notOk(
+        outcomeTypes.includes(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
+        ),
+        'remove completion must not emit before source row delete succeeds',
+      );
+      t.ok(
+        outcomeTypes.includes(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
+        ),
+        'remove failure must be emitted when source row delete fails',
+      );
+
+      await handler.shutdown();
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, {recursive: true, force: true});
+      }
+    },
+  );
+
+  await t.test(
     'create failure emits REPLICA_CREATE_FAILED through emitter, ' +
     'not direct replica_operations writes ' +
     '(uses executorOutcomeEmitter.emitOutcome)',

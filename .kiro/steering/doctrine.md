@@ -1,8 +1,28 @@
 # Lagrange Engineering Doctrine
 
+## Document Role
+
+This document governs the short-form implementation doctrine for all coding
+work in this repository.
+
+Use this file for:
+
+- the durable architectural intent behind code changes
+- the rule that one concern has one owner
+- the rule that one semantic decision uses one path
+
+Do not use this file for:
+
+- current concrete component owner maps
+- workstream-local testing procedure
+- style and lint details
+- roadmap scope decisions
+
+Read it together with [`.kiro/steering/system guidelines.md`](system%20guidelines.md),
+[`.kiro/steering/testing-guidelines.md`](testing-guidelines.md), and the
+canonical [`architecture.md`](../../architecture.md).
+
 This document is the short-form design doctrine for all implementation work.
-Read it together with `system guidelines.md`, `testing-guidelines.md`, and the
-canonical `architecture.md`.
 
 The doctrine is intentionally simple:
 
@@ -120,3 +140,19 @@ Prefer:
 
 Do not respond to repeated distributed failures by adding more scattered local
 special cases. Collapse the behavior into stronger shared building blocks.
+
+## 9. Normalize Evidence Before Adjudicating Decisions
+
+When one decision depends on several live signals, separate observation from
+policy.
+
+- Collect evidence first.
+- Normalize it into one immutable snapshot per entity.
+- Let one canonical adjudicator emit the final state, reasons, and retryability.
+- Treat weaker or cross-plane signals as degraded evidence unless the spec says
+  they are equivalent.
+- Never let degraded evidence promote a blocked entity to ready or admitted.
+
+If fixes keep arriving as new boolean exemptions, the decision boundary is not
+modeled yet. Replace the branch pile with an explicit state model and decision
+table.

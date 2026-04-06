@@ -1603,6 +1603,335 @@ test('AdminControlSnapshot forced authoritative repair uses authoritative publis
     );
   });
 
+test('AdminControlSnapshot forced authoritative repair retries after stale publication leader routing failures',
+  async (t) => {
+    const cacheRowsByTable = {
+      [TABLES.NODES]: [{
+        node_id: 'node-1',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: 900,
+        ready_lease_expires_at: 2000,
+      }, {
+        node_id: 'node-2',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: 900,
+        ready_lease_expires_at: 2000,
+      }],
+      [TABLES.TABLES]: [{
+        table_id: 'tbl-bench',
+        table_name: 'benchmark_events',
+      }],
+      [TABLES.PARTITIONS]: [{
+        partition_id: 'tbl-bench-p1',
+        table_id: 'tbl-bench',
+        table_name: 'benchmark_events',
+        partition_version: 1,
+        leader_node_id: 'node-1',
+        state: 'NORMAL',
+      }],
+      [TABLES.SERVICES]: [{
+        service_id: 'tbl-bench-p1-r1',
+        service_type: 'partition',
+        node_id: 'node-1',
+        partition_id: 'tbl-bench-p1',
+        replica_id: 'tbl-bench-p1-r1',
+        raft_role: 'leader',
+        status: 'active',
+        address: 'node-1/partition/tbl-bench-p1-r1',
+      }],
+      [TABLES.NODE_ENDPOINTS]: [],
+      [TABLES.CONTROL_PLANE_PUBLICATIONS]: [],
+      [TABLES.REPLICA_OPERATIONS]: [],
+    };
+    let repairApplied = false;
+    let repairCallCount = 0;
+    let authoritativePublicationReadCount = 0;
+
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll(tableName) {
+          return cacheRowsByTable[tableName] || [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      ensureAuthoritativeDiscoveryCacheRepair: async () => {
+        repairCallCount += 1;
+        repairApplied = true;
+        cacheRowsByTable[TABLES.PARTITIONS] = [
+          ...cacheRowsByTable[TABLES.PARTITIONS],
+          {
+            partition_id: 'tbl-bench-left',
+            table_id: 'tbl-bench',
+            table_name: 'benchmark_events',
+            partition_version: 1,
+            leader_node_id: 'node-1',
+            state: 'NORMAL',
+          },
+          {
+            partition_id: 'tbl-bench-right',
+            table_id: 'tbl-bench',
+            table_name: 'benchmark_events',
+            partition_version: 1,
+            leader_node_id: 'node-2',
+            state: 'NORMAL',
+          },
+        ];
+        cacheRowsByTable[TABLES.SERVICES] = [
+          ...cacheRowsByTable[TABLES.SERVICES],
+          {
+            service_id: 'tbl-bench-left-r1',
+            service_type: 'partition',
+            node_id: 'node-1',
+            partition_id: 'tbl-bench-left',
+            replica_id: 'tbl-bench-left-r1',
+            raft_role: 'leader',
+            status: 'active',
+            address: 'node-1/partition/tbl-bench-left-r1',
+          },
+          {
+            service_id: 'tbl-bench-right-r1',
+            service_type: 'partition',
+            node_id: 'node-2',
+            partition_id: 'tbl-bench-right',
+            replica_id: 'tbl-bench-right-r1',
+            raft_role: 'leader',
+            status: 'active',
+            address: 'node-2/partition/tbl-bench-right-r1',
+          },
+        ];
+        return {
+          applied: true,
+          tableNames: [TABLES.PARTITIONS, TABLES.SERVICES],
+        };
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [];
+        },
+        membershipPublicationService: {
+          async getLatestClusterPublication(options = {}) {
+            authoritativePublicationReadCount += 1;
+            t.same(
+              options,
+              {preferAuthoritativeRead: true},
+              'forced repair should retry authoritative membership publication reads',
+            );
+            if (!repairApplied) {
+              throw new Error('No handler registered for partition service');
+            }
+            return {
+              publication_id: 'publication-2',
+              publication_kind: 'cluster_membership',
+              publication_epoch: 2,
+              status: 'PUBLISHED',
+              published_active_node_ids: ['node-1', 'node-2'],
+              required_ack_node_ids: ['node-1', 'node-2'],
+              acknowledged_node_ids: ['node-1', 'node-2'],
+            };
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      repairCallCount,
+      1,
+      'forced repair should run authoritative discovery repair after a stale publication read failure',
+    );
+    t.equal(
+      authoritativePublicationReadCount,
+      2,
+      'forced repair should retry the authoritative publication read after repair',
+    );
+    t.same(
+      result.partitions.sort(),
+      ['tbl-bench-left', 'tbl-bench-p1', 'tbl-bench-right'],
+      'repaired control snapshots should publish the split child partitions',
+    );
+    t.match(
+      result.authoritativeRepair,
+      {
+        applied: true,
+        forced: true,
+      },
+      'recovered snapshots should report that authoritative repair was applied',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.publishedMembershipObservation,
+      {
+        publicationEpoch: 2,
+        status: 'PUBLISHED',
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+      },
+      'recovered snapshots should still surface the authoritative published membership observation',
+    );
+  });
+
+test('AdminControlSnapshot forced authoritative repair refreshes split topology even when stale table versions mask a local gap',
+  async (t) => {
+    const cacheRowsByTable = {
+      [TABLES.NODES]: [{
+        node_id: 'node-1',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: 900,
+        ready_lease_expires_at: 2000,
+      }, {
+        node_id: 'node-2',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: 900,
+        ready_lease_expires_at: 2000,
+      }],
+      [TABLES.TABLES]: [{
+        table_id: 'tbl-bench',
+        table_name: 'benchmark_events',
+        active_partition_version: 1,
+        partition_count: 1,
+      }],
+      [TABLES.PARTITIONS]: [{
+        partition_id: 'tbl-bench-p1',
+        table_id: 'tbl-bench',
+        table_name: 'benchmark_events',
+        partition_version: 1,
+        leader_node_id: 'node-1',
+        state: 'NORMAL',
+      }],
+      [TABLES.SERVICES]: [{
+        service_id: 'tbl-bench-p1-r1',
+        service_type: 'partition',
+        node_id: 'node-1',
+        partition_id: 'tbl-bench-p1',
+        replica_id: 'tbl-bench-p1-r1',
+        raft_role: 'leader',
+        status: 'active',
+        address: 'node-1/partition/tbl-bench-p1-r1',
+      }],
+      [TABLES.NODE_ENDPOINTS]: [{
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      }, {
+        endpoint_id: 'node-2-ws',
+        node_id: 'node-2',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-2:8082',
+      }],
+      [TABLES.CONTROL_PLANE_PUBLICATIONS]: [],
+      [TABLES.REPLICA_OPERATIONS]: [],
+    };
+    let repairCallCount = 0;
+
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll(tableName) {
+          return cacheRowsByTable[tableName] || [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      ensureAuthoritativeDiscoveryCacheRepair: async () => {
+        repairCallCount += 1;
+        cacheRowsByTable[TABLES.TABLES] = [{
+          table_id: 'tbl-bench',
+          table_name: 'benchmark_events',
+          active_partition_version: 2,
+          partition_count: 2,
+        }];
+        cacheRowsByTable[TABLES.PARTITIONS] = [
+          ...cacheRowsByTable[TABLES.PARTITIONS],
+          {
+            partition_id: 'tbl-bench-left',
+            table_id: 'tbl-bench',
+            table_name: 'benchmark_events',
+            partition_version: 2,
+            leader_node_id: 'node-1',
+            state: 'NORMAL',
+          },
+          {
+            partition_id: 'tbl-bench-right',
+            table_id: 'tbl-bench',
+            table_name: 'benchmark_events',
+            partition_version: 2,
+            leader_node_id: 'node-2',
+            state: 'NORMAL',
+          },
+        ];
+        cacheRowsByTable[TABLES.SERVICES] = [
+          ...cacheRowsByTable[TABLES.SERVICES],
+          {
+            service_id: 'tbl-bench-left-r1',
+            service_type: 'partition',
+            node_id: 'node-1',
+            partition_id: 'tbl-bench-left',
+            replica_id: 'tbl-bench-left-r1',
+            raft_role: 'leader',
+            status: 'active',
+            address: 'node-1/partition/tbl-bench-left-r1',
+          },
+          {
+            service_id: 'tbl-bench-right-r1',
+            service_type: 'partition',
+            node_id: 'node-2',
+            partition_id: 'tbl-bench-right',
+            replica_id: 'tbl-bench-right-r1',
+            raft_role: 'leader',
+            status: 'active',
+            address: 'node-2/partition/tbl-bench-right-r1',
+          },
+        ];
+        return {
+          applied: true,
+          tableNames: [TABLES.TABLES, TABLES.PARTITIONS, TABLES.SERVICES],
+        };
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [];
+        },
+      },
+    });
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      forceAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      repairCallCount,
+      1,
+      'forced repair should still run when stale table versions hide the split from local topology heuristics',
+    );
+    t.same(
+      result.partitions.sort(),
+      ['tbl-bench-left', 'tbl-bench-right'],
+      'forced repair should rebuild the active split topology from authoritative table and partition rows',
+    );
+    t.match(
+      result.authoritativeRepair,
+      {
+        applied: true,
+        forced: true,
+      },
+      'forced repair snapshots should report the authoritative refresh',
+    );
+  });
+
 test('AdminControlSnapshot builds priority-recovery decision snapshots with cross-service blockers',
   async (t) => {
     const snapshot = new AdminControlSnapshot({

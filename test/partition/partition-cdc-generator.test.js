@@ -141,6 +141,34 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents[0].data.name, 'updated');
     });
 
+    it('should generate UPDATE event from the authoritative stored row', async () => {
+      const receivedEvents = [];
+      generator.subscribe((event) => receivedEvents.push(event));
+
+      db.prepare(
+        'INSERT INTO test_table (id, name, value) VALUES (?, ?, ?)',
+      ).run('upd-direct-1', 'original', 50);
+      db.prepare(
+        'UPDATE test_table SET name = ? WHERE id = ?',
+      ).run('updated', 'upd-direct-1');
+
+      const entry = {
+        type: 'UPDATE',
+        tableName: 'test_table',
+        data: {name: 'updated'},
+        whereClause: {id: 'upd-direct-1'},
+        timestamp: Date.now(),
+      };
+
+      await generator.generateEvent(entry);
+
+      assert.strictEqual(receivedEvents.length, 1);
+      assert.strictEqual(receivedEvents[0].operation, CDC_OPERATION.UPDATE);
+      assert.strictEqual(receivedEvents[0].data.id, 'upd-direct-1');
+      assert.strictEqual(receivedEvents[0].data.name, 'updated');
+      assert.strictEqual(receivedEvents[0].data.value, 50);
+    });
+
     it('should generate DELETE event with whereClause as data', async () => {
       const receivedEvents = [];
       generator.subscribe((event) => receivedEvents.push(event));

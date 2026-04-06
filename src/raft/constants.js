@@ -1,3 +1,8 @@
+import {ADDRESS} from '../constants/index.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
+import {isCriticalTransportControlPlanePartition} from
+  '../bootstrap/system-partition-classification.js';
+
 const RAFT_PACKET_TYPE = Object.freeze({
   VOTE: 'vote',
   VOTED: 'voted',
@@ -70,6 +75,89 @@ const RAFT_TRANSPORT_LOG_MSG = Object.freeze({
   WRITE_ERROR: '[RaftTransportAdapter] write error:',
 });
 
+const RAFT_TRANSPORT_DELIVERY_OPTIONS = Object.freeze({
+  deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
+});
+
+const RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS = Object.freeze({
+  deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
+});
+
+const REPLICA_SERVICE_SUFFIX_PATTERN = /-r\d+$/;
+
+function extractServiceIdFromUnifiedAddress(address) {
+  if (typeof address !== 'string' || address.length === 0) {
+    return null;
+  }
+  const separatorIndex = address.lastIndexOf(ADDRESS.SEPARATOR);
+  if (separatorIndex <= 0 || separatorIndex === address.length - 1) {
+    return null;
+  }
+  return address.slice(separatorIndex + ADDRESS.SEPARATOR.length);
+}
+
+function extractPartitionIdFromUnifiedAddress(address) {
+  const serviceId = extractServiceIdFromUnifiedAddress(address);
+  if (!serviceId) {
+    return null;
+  }
+  const partitionId = serviceId.replace(REPLICA_SERVICE_SUFFIX_PATTERN, '');
+  if (!partitionId || partitionId === serviceId) {
+    return null;
+  }
+  return partitionId;
+}
+
+function resolveExplicitTargetPartitionId(packet = null) {
+  for (const address of [packet?.targetAddress, packet?.destination]) {
+    const partitionId = extractPartitionIdFromUnifiedAddress(address);
+    if (partitionId) {
+      return partitionId;
+    }
+  }
+  return null;
+}
+
+function resolvePriorityControlPlanePartitionId(packet = null) {
+  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
+  if (explicitTargetPartitionId) {
+    return isCriticalTransportControlPlanePartition({
+      partitionId: explicitTargetPartitionId,
+    }) ?
+      explicitTargetPartitionId :
+      null;
+  }
+  const senderPartitionId = extractPartitionIdFromUnifiedAddress(packet?.address);
+  if (!senderPartitionId) {
+    return null;
+  }
+  return isCriticalTransportControlPlanePartition({partitionId: senderPartitionId}) ?
+    senderPartitionId :
+    null;
+}
+
+function resolveRaftTransportDeliveryOptions(packet = null) {
+  const packetType = typeof packet?.type === 'string' ?
+    packet.type.toLowerCase() :
+    null;
+  const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
+  if (resolvePriorityControlPlanePartitionId(packet)) {
+    return RAFT_TRANSPORT_DELIVERY_OPTIONS;
+  }
+  const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
+    Array.isArray(packet?.data) &&
+    packet.data.length > 0;
+  if (explicitTargetPartitionId) {
+    return hasAppendEntries || packetType === RAFT_PACKET_TYPE.APPEND_FAIL ?
+      RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS :
+      RAFT_TRANSPORT_DELIVERY_OPTIONS;
+  }
+  if (hasAppendEntries || packetType === RAFT_PACKET_TYPE.APPEND_FAIL) {
+    return RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
+  }
+  return RAFT_TRANSPORT_DELIVERY_OPTIONS;
+}
+
 export {
   RAFT_ELECTION_TIMING,
   RAFT_PACKET_MESSAGE_TYPE,
@@ -80,5 +168,8 @@ export {
   RAFT_ROLE,
   RAFT_ERROR_NAME,
   RAFT_TRANSPORT_ERROR_MSG,
+  RAFT_TRANSPORT_DELIVERY_OPTIONS,
+  RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+  resolveRaftTransportDeliveryOptions,
   RAFT_TRANSPORT_LOG_MSG,
 };

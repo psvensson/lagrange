@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import {
+  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
@@ -353,6 +354,25 @@ function buildPrioritySpreadEligibleNodeIdSet(options = {}) {
   return new Set(promotableNodeIds);
 }
 
+function isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId = {}) {
+  if (!normalizedService || typeof normalizedService !== TYPEOF.OBJECT) {
+    return false;
+  }
+  if (normalizedService.serviceType !== SERVICE_TYPE.PARTITION ||
+      normalizedService.status !== SERVICE_STATUS.ACTIVE ||
+      !normalizedService.raftRole ||
+      !normalizedService.address ||
+      !normalizedService.nodeId) {
+    return false;
+  }
+  if (normalizedService.raftRole !== RAFT_ROLE.LEARNER) {
+    return true;
+  }
+  return isReadinessPromotable(
+    readinessByNodeId[normalizedService.nodeId] || null,
+  );
+}
+
 function buildDerivedPriorityPartitionSummary(options = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
   if (serviceRows.length === 0) {
@@ -361,6 +381,10 @@ function buildDerivedPriorityPartitionSummary(options = {}) {
   const partitionRows = Array.isArray(options.partitionRows) ?
     options.partitionRows :
     [];
+  const readinessByNodeId =
+    options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
+      options.readinessByNodeId :
+      {};
   const partitionRowByPartitionId = buildPartitionRowByPartitionId(partitionRows);
   const readyReplicaStatsByPartitionId = new Map();
   let observedPriorityServiceRow = false;
@@ -377,12 +401,7 @@ function buildDerivedPriorityPartitionSummary(options = {}) {
       continue;
     }
     observedPriorityServiceRow = true;
-    if (normalizedService.serviceType !== SERVICE_TYPE.PARTITION ||
-        normalizedService.status !== SERVICE_STATUS.ACTIVE ||
-        normalizedService.raftRole === RAFT_ROLE.LEARNER ||
-        !normalizedService.raftRole ||
-        !normalizedService.address ||
-        !normalizedService.nodeId) {
+    if (!isPrioritySpreadReadyReplica(normalizedService, readinessByNodeId)) {
       continue;
     }
     if (eligibleNodeIds.size > 0 && !eligibleNodeIds.has(normalizedService.nodeId)) {
@@ -565,6 +584,27 @@ function shouldAllowRecoveryEligibleProjection(options = {}) {
     !defaultObservedNodeIds.includes(nodeId) &&
     isReadinessPromotable(options.readinessByNodeId?.[nodeId] || null),
   );
+}
+
+function shouldPreferAuthoritativeMembershipState(options = {}) {
+  if (options.preferAuthoritativeRead === true ||
+      options.requireAuthoritative === true) {
+    return true;
+  }
+  const publicationRows = [
+    normalizeLatestPublicationRow(options.latestPublicationRow),
+    normalizeLatestPublicationRow(options.latestPublishedPublicationRow),
+  ];
+  return publicationRows.some((row) => {
+    if (!row ||
+        String(row.status || '').toUpperCase() !==
+          MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED) {
+      return false;
+    }
+    return row.priorityPartitionSummary &&
+      typeof row.priorityPartitionSummary === TYPEOF.OBJECT &&
+      row.priorityPartitionSummary.satisfied === false;
+  });
 }
 
 function buildPublishedMemberStates(options = {}) {
@@ -1051,6 +1091,8 @@ function acknowledgeMembershipPublication(options = {}) {
         normalizedPublication.membershipLifecycleSummary?.recoveryEpochByNodeId,
       membershipFreeze:
         normalizedPublication.membershipLifecycleSummary?.membershipFreeze,
+      projectionDiagnostics:
+        normalizedPublication.membershipLifecycleSummary?.projectionDiagnostics,
     }),
     transition_history: transitionHistory,
   };
@@ -1303,20 +1345,30 @@ class MembershipPublicationCoordinator {
         MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED ?
         latestPublicationRow :
         await this.getLatestPublishedPublicationRow(options));
+    const preferAuthoritativeMembershipState =
+      shouldPreferAuthoritativeMembershipState({
+        ...options,
+        latestPublicationRow,
+        latestPublishedPublicationRow,
+      });
     const nodeRows = await this.readTableRows(TABLES.NODES, {
       ...options,
+      preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.nodeRows,
     });
     const nodeEndpointRows = await this.readTableRows(TABLES.NODE_ENDPOINTS, {
       ...options,
+      preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.nodeEndpointRows,
     });
     const serviceRows = await this.readTableRows(TABLES.SERVICES, {
       ...options,
+      preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.serviceRows,
     });
     const partitionRows = await this.readTableRows(TABLES.PARTITIONS, {
       ...options,
+      preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.partitionRows,
     });
     const readinessEntries = Array.isArray(options.readinessEntries) ?
@@ -1324,7 +1376,7 @@ class MembershipPublicationCoordinator {
       (this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService.getAllNodeReadiness === TYPEOF.FUNCTION ?
         await this.controlPlaneReadinessService.getAllNodeReadiness({
-          allowAuthoritativeRefresh: false,
+          allowAuthoritativeRefresh: preferAuthoritativeMembershipState,
         }) :
         []);
     const recoveryEpochsByNodeId =

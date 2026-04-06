@@ -12,7 +12,6 @@
 
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
-import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -45,7 +44,6 @@ import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinat
 import {OperationLane} from '../workflow/operation-lane.js';
 import {
   WORKFLOW_STEP, NUM, TIME_MS, METRICS_LOG_TAG,
-  ENTITY_TYPE,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
@@ -101,6 +99,9 @@ import {
 import {ReplicaOperationRepository} from './replica-operation-repository.js';
 import {OperationWorkflowOwner} from './operation-workflow-owner.js';
 import {ProvisioningAdmissionPolicy} from './provisioning-admission-policy.js';
+import {
+  buildReplicatedServiceBootstrapTopology,
+} from '../service/replicated-service-topology.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -706,6 +707,48 @@ class RebalanceCoordinator extends EventEmitter {
     return this.repository.queryIncompleteOperations({
       skipSqlFallbackWhenCacheEmpty,
       preferAuthoritativeRead,
+    });
+  }
+
+  /**
+   * Merge cache-visible and authoritative incomplete operation sets.
+   * Authoritative rows win when both sources contain the same operation ID.
+   *
+   * Cache observation boundaries can lag individual rows. Timeout/recovery
+   * loops must not stall just because one local cache snapshot only contains a
+   * subset of the owner-authoritative in-flight operations.
+   *
+   * @param {Array<Object>} cachedIncompleteOps
+   * @param {Array<Object>} authoritativeIncompleteOps
+   * @return {Array<Object>}
+   * @private
+   */
+  mergeIncompleteOperations(
+    cachedIncompleteOps = [],
+    authoritativeIncompleteOps = [],
+  ) {
+    const mergedByOperationId = new Map();
+    for (const operation of cachedIncompleteOps) {
+      if (!operation?.operationId) {
+        continue;
+      }
+      mergedByOperationId.set(operation.operationId, operation);
+    }
+    for (const operation of authoritativeIncompleteOps) {
+      if (!operation?.operationId) {
+        continue;
+      }
+      mergedByOperationId.set(operation.operationId, operation);
+    }
+    return [...mergedByOperationId.values()].sort((left, right) => {
+      const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
+      const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
+      if (leftUpdatedAt !== rightUpdatedAt) {
+        return leftUpdatedAt - rightUpdatedAt;
+      }
+      return String(left?.operationId || '').localeCompare(
+        String(right?.operationId || ''),
+      );
     });
   }
 
@@ -1364,13 +1407,46 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   getCurrentPublishedMembershipEpoch() {
-    const diagnostics =
+    const observedAt = Date.now();
+    let planningSnapshot =
+      this.controlPlaneReadinessService &&
+      typeof this.controlPlaneReadinessService
+        .getMembershipPublicationPlanningSnapshotSync === 'function' ?
+        this.controlPlaneReadinessService
+          .getMembershipPublicationPlanningSnapshotSync(
+            this.nodeId,
+            observedAt,
+          ) :
+        null;
+    const diagnostics = !planningSnapshot &&
       this.controlPlaneReadinessService &&
       typeof this.controlPlaneReadinessService
         .getMembershipPublicationDiagnosticsSync === 'function' ?
-        this.controlPlaneReadinessService
-          .getMembershipPublicationDiagnosticsSync(this.nodeId, Date.now()) :
-        null;
+      this.controlPlaneReadinessService
+        .getMembershipPublicationDiagnosticsSync(
+          this.nodeId,
+          observedAt,
+        ) :
+      null;
+    if (!planningSnapshot &&
+        diagnostics &&
+        this.controlPlaneReadinessService &&
+        typeof this.controlPlaneReadinessService
+          .buildMembershipPublicationPlanningSnapshot === 'function') {
+      planningSnapshot = this.controlPlaneReadinessService
+        .buildMembershipPublicationPlanningSnapshot({
+          nodeId: this.nodeId,
+          observedAt,
+          membershipPublication: diagnostics,
+        });
+    }
+    const publishedPlanningEpoch = Number(
+      planningSnapshot?.publishedPlanningEpoch,
+    );
+    if (Number.isInteger(publishedPlanningEpoch) &&
+        publishedPlanningEpoch >= 0) {
+      return publishedPlanningEpoch;
+    }
     const publicationEpoch = Number(diagnostics?.publicationEpoch);
     const publicationStatus = String(
       diagnostics?.status ?? diagnostics?.publicationStatus ?? '',
@@ -1594,9 +1670,10 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
-   * Build canonical bootstrap topology for message-group create dispatch.
-   * Existing message-group replicas must never bootstrap from a target-local
-   * one-replica view; the coordinator must carry authoritative topology.
+   * Build canonical bootstrap topology for create dispatch.
+   * Message-group operations fail closed when canonical topology is missing.
+   * Partition operations derive topology when visible, but tolerate cache lag
+   * so explicit bootstrap hints or local restore paths can still proceed.
    *
    * @param {Object} context
    * @return {{replicaIds: string[], peerAddresses: string[]}|null}
@@ -1607,12 +1684,14 @@ class RebalanceCoordinator extends EventEmitter {
       normalizedMoveType,
       entityType,
       entityId,
+      excludeReplicaIds,
       partitionId,
       targetNodeId,
       targetReplicaId,
     } = context;
 
-    if (entityType !== SERVICE_TYPE.MESSAGE_GROUP ||
+    if ((entityType !== SERVICE_TYPE.MESSAGE_GROUP &&
+        entityType !== SERVICE_TYPE.PARTITION) ||
         (normalizedMoveType !== OperationType.ADD &&
           normalizedMoveType !== OperationType.REPLACE)) {
       return null;
@@ -1624,54 +1703,29 @@ class RebalanceCoordinator extends EventEmitter {
       entityId,
     });
     if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
+      if (entityType === SERVICE_TYPE.PARTITION) {
+        return null;
+      }
       throw new Error(
         `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
       );
     }
 
-    const addressManager = AddressManager.getInstance();
-    const replicaIds = [];
-    const peerAddresses = [];
-    const seenReplicaIds = new Set();
-    const seenPeerAddresses = new Set();
-
-    const appendReplicaTopology = (replicaId, nodeId, address) => {
-      if (typeof replicaId === 'string' &&
-          replicaId.length > NUM.ZERO &&
-          !seenReplicaIds.has(replicaId)) {
-        seenReplicaIds.add(replicaId);
-        replicaIds.push(replicaId);
-      }
-
-      const resolvedAddress = address ||
-        (typeof nodeId === 'string' && nodeId.length > NUM.ZERO &&
-        typeof replicaId === 'string' && replicaId.length > NUM.ZERO ?
-          addressManager.format(
-            nodeId,
-            ENTITY_TYPE.MESSAGE_GROUP,
-            replicaId,
-          ) :
-          null);
-      if (typeof resolvedAddress === 'string' &&
-          resolvedAddress.length > NUM.ZERO &&
-          !seenPeerAddresses.has(resolvedAddress)) {
-        seenPeerAddresses.add(resolvedAddress);
-        peerAddresses.push(resolvedAddress);
-      }
-    };
-
-    for (const row of serviceRows) {
-      appendReplicaTopology(
-        row?.service_id || row?.replica_id || null,
-        row?.node_id || null,
-        row?.address || null,
-      );
-    }
-
-    appendReplicaTopology(targetReplicaId, targetNodeId, null);
+    const topology = buildReplicatedServiceBootstrapTopology({
+      serviceType: entityType,
+      serviceRows,
+      excludeReplicaIds,
+      targetReplicaId,
+      targetNodeId,
+    });
+    const replicaIds = topology?.replicaIds || [];
+    const peerAddresses = topology?.peerAddresses || [];
 
     if (replicaIds.length <= NUM.ONE ||
         peerAddresses.length < replicaIds.length) {
+      if (entityType === SERVICE_TYPE.PARTITION) {
+        return null;
+      }
       throw new Error(
         `Canonical topology for ${entityType} ${entityId} is incomplete`,
       );
@@ -1722,6 +1776,14 @@ class RebalanceCoordinator extends EventEmitter {
         entityType,
         entityId,
       });
+    } else if (normalizedMoveType === OperationType.REPLACE &&
+        (!operationReplicaId || operationReplicaId === sourceReplicaId)) {
+      operationReplicaId = await this.allocateCanonicalReplicaId({
+        partitionId,
+        entityType,
+        entityId,
+        excludeReplicaIds: sourceReplicaId ? [sourceReplicaId] : [],
+      });
     }
 
     // Create operation using the helper from replica-status.js
@@ -1741,6 +1803,11 @@ class RebalanceCoordinator extends EventEmitter {
       normalizedMoveType,
       entityType,
       entityId,
+      excludeReplicaIds: normalizedMoveType === OperationType.REPLACE &&
+        typeof sourceReplicaId === 'string' &&
+        sourceReplicaId.length > NUM.ZERO ?
+          [sourceReplicaId] :
+          [],
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
@@ -1867,8 +1934,7 @@ class RebalanceCoordinator extends EventEmitter {
       if (!operation || this.isOperationTerminal(operation)) {
         return false;
       }
-      return operation.type === OperationType.ADD ||
-        operation.type === OperationType.REPLACE;
+      return this.isConcurrentAddBudgetOperation(operation);
     });
     if (!conflictingOperation) {
       return;
@@ -2240,8 +2306,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async persistOperationUpdate(operation, options = {}) {
-    return this.repository.persistOperationUpdate(
-      operation, options,
+    return this.runReplicaOperationTransitionExclusive(
+      () => this.repository.persistOperationUpdate(
+        operation, options,
+      ),
     );
   }
 
@@ -2992,7 +3060,12 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     const incompleteOps = cachedIncompleteOps.length > NUM.ZERO ?
-      cachedIncompleteOps :
+      this.mergeIncompleteOperations(
+        cachedIncompleteOps,
+        await this.queryIncompleteOperations({
+          preferAuthoritativeRead: true,
+        }),
+      ) :
       await this.queryIncompleteOperations();
     if (incompleteOps.length === NUM.ZERO) {
       this.markEmptyIncompleteOperationQueryAt(now);
@@ -3206,7 +3279,9 @@ class RebalanceCoordinator extends EventEmitter {
     };
 
     const incompleteOps =
-      await this.queryIncompleteOperations();
+      await this.queryIncompleteOperations({
+        preferAuthoritativeRead: true,
+      });
     result.totalIncomplete = incompleteOps.length;
 
     this.logger.info(

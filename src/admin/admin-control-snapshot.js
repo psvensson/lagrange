@@ -99,6 +99,14 @@ const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;
 const MEMBERSHIP_PUBLICATION_KIND = 'cluster_membership';
 const AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP =
   'leader_resolution_gap';
+const CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS = Object.freeze([
+  'leader is unknown',
+  'leader unknown',
+  'no handler',
+  'no leader',
+  'partition_service_not_found',
+  'partition service not found',
+]);
 const PRIORITY_RECOVERY_DECISION_SNAPSHOT_SCHEMA_VERSION = 1;
 const PRIORITY_RECOVERY_REPLICA_OPERATION_ENTITY_TYPE_PARTITION = 'partition';
 const PRIORITY_RECOVERY_RAFT_ROLE_LEARNER = 'learner';
@@ -187,6 +195,27 @@ function hasOnlyLeaderResolutionGapRepairCause(repair = null) {
     causeChain.every((value) =>
       value === AUTHORITATIVE_REPAIR_CAUSE_LEADER_RESOLUTION_GAP,
     );
+}
+
+function isRecoverableControlSnapshotPublicationReadError(error = null) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.length > NUM.ZERO &&
+    CONTROL_SNAPSHOT_PUBLICATION_READ_REPAIR_ERROR_FRAGMENTS
+      .some((fragment) => message.includes(fragment));
+}
+
+function buildAuthoritativeControlSnapshotRepairFailure(
+  detail,
+  cause = null,
+) {
+  const error = new Error(
+    'Authoritative control snapshot repair failed: ' +
+    String(detail || 'unknown_error'),
+  );
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
 }
 
 function isReadyLocalQueryTransportDiagnostic(localQueryTransport = null) {
@@ -1025,21 +1054,72 @@ class AdminControlSnapshot {
    * @return {Promise<Object>}
    */
   async resolveLocalControlSnapshot(options = {}) {
-    const snapshot = await this.buildLocalControlSnapshot(options);
     const forceAuthoritativeRepair =
       options.forceAuthoritativeRepair === true;
     const allowAuthoritativeRepair =
       options.allowAuthoritativeRepair === true;
+    let snapshot = null;
+    try {
+      snapshot = await this.buildLocalControlSnapshot(options);
+    } catch (error) {
+      if (!forceAuthoritativeRepair ||
+          !this.canRunAuthoritativeControlSnapshotRepair() ||
+          !isRecoverableControlSnapshotPublicationReadError(error)) {
+        throw error;
+      }
+      let repair = null;
+      try {
+        repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
+          reason: CONTROL_SNAPSHOT_REPAIR_REASON,
+          bypassReuse: true,
+        });
+      } catch (repairError) {
+        throw buildAuthoritativeControlSnapshotRepairFailure(
+          repairError?.message || repairError,
+          repairError,
+        );
+      }
+      if (repair?.applied !== true) {
+        const errors = Array.isArray(repair?.errors) ?
+          repair.errors :
+          ADMIN_CACHE_DUMP.EMPTY;
+        const detail =
+          errors[NUM.ZERO] ||
+          repair?.error ||
+          (repair?.skipped === true ?
+            'repair_skipped' :
+            'repair_not_applied');
+        throw buildAuthoritativeControlSnapshotRepairFailure(detail);
+      }
+      const repairedSnapshot =
+        await this.buildLocalControlSnapshot({
+          ...options,
+          preferAuthoritativePublicationRead: true,
+        });
+      const repairedEvaluation =
+        this.evaluateAuthoritativeControlSnapshotRepair(
+          repairedSnapshot,
+        );
+      return attachAuthoritativeRepairDiagnostics(
+        repairedSnapshot,
+        {
+          repair,
+          repairEvaluation: repairedEvaluation,
+          forceAuthoritativeRepair,
+        },
+      );
+    }
     const repairEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair(snapshot);
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return snapshot;
     }
-    if (!shouldAttemptAuthoritativeRepair({
-      repairEvaluation,
-      forceAuthoritativeRepair,
-      allowAuthoritativeRepair,
-    })) {
+    if (forceAuthoritativeRepair !== true &&
+        !shouldAttemptAuthoritativeRepair({
+          repairEvaluation,
+          forceAuthoritativeRepair,
+          allowAuthoritativeRepair,
+        })) {
       return snapshot;
     }
 
@@ -1060,16 +1140,12 @@ class AdminControlSnapshot {
       if (canDegradeRepairFailure) {
         return snapshot;
       }
-      const wrappedError = new Error(
-        'Authoritative control snapshot repair failed: ' +
-        String(
-          error?.message ||
-          error ||
-          'unknown_error',
-        ),
+      throw buildAuthoritativeControlSnapshotRepairFailure(
+        error?.message ||
+        error ||
+        'unknown_error',
+        error,
       );
-      wrappedError.cause = error;
-      throw wrappedError;
     }
 
     if (repair?.applied !== true) {
@@ -1092,10 +1168,7 @@ class AdminControlSnapshot {
         (repair?.skipped === true ?
           'repair_skipped' :
           'repair_not_applied');
-      throw new Error(
-        'Authoritative control snapshot repair failed: ' +
-        String(detail),
-      );
+      throw buildAuthoritativeControlSnapshotRepairFailure(detail);
     }
     const repairedSnapshot =
       await this.buildLocalControlSnapshot({

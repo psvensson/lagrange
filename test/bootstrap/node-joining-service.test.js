@@ -596,6 +596,121 @@ test('NodeJoiningService - durable rejoin restore fails closed until restored pa
     );
   });
 
+test('NodeJoiningService - durable rejoin restore skips ambiguous over-target ' +
+  'partition replicas without a live replica-operation owner', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'durable-join-node',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    dataDir: '/tmp/durable-join-data',
+  });
+
+  const calls = [];
+  service.initializeJoiningLifecycleOwners = async () => {
+    calls.push('init');
+  };
+  service.triggerJoinReconciler = async () => {
+    calls.push('reconcile');
+  };
+  service.cdcIntegrationService = {
+    updateSystemTableRow: async () => {
+      calls.push('activate:update');
+    },
+    upsertSystemTableRow: async () => {
+      calls.push('activate:upsert');
+    },
+  };
+
+  const schemaDefinition = {
+    tableName: 'control_plane_publications',
+    columns: [{name: 'publication_id', type: 'TEXT', primaryKey: true}],
+  };
+  const rowsByTable = new Map([
+    [TABLES.TABLES, [{
+      table_id: 'control_plane_publications',
+      table_name: 'control_plane_publications',
+      schema_definition: JSON.stringify(schemaDefinition),
+    }]],
+    [TABLES.PARTITIONS, [{
+      partition_id: 'control_plane_publications-p1',
+      table_id: 'control_plane_publications',
+      table_name: 'control_plane_publications',
+      partition_key_start: null,
+      partition_key_end: null,
+      leader_node_id: 'seed-node',
+      replica_count: 3,
+    }]],
+    [TABLES.SERVICES, [{
+      service_id: 'control_plane_publications-p1-r1',
+      replica_id: 'control_plane_publications-p1-r1',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'seed-node',
+      partition_id: 'control_plane_publications-p1',
+      status: 'active',
+      address: 'seed-node/partition/control_plane_publications-p1-r1',
+    }, {
+      service_id: 'control_plane_publications-p1-r2',
+      replica_id: 'control_plane_publications-p1-r2',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'peer-node-2',
+      partition_id: 'control_plane_publications-p1',
+      status: 'active',
+      address: 'peer-node-2/partition/control_plane_publications-p1-r2',
+    }, {
+      service_id: 'control_plane_publications-p1-r3',
+      replica_id: 'control_plane_publications-p1-r3',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'peer-node-3',
+      partition_id: 'control_plane_publications-p1',
+      status: 'active',
+      address: 'peer-node-3/partition/control_plane_publications-p1-r3',
+    }, {
+      service_id: 'control_plane_publications-p1-r4',
+      replica_id: 'control_plane_publications-p1-r4',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'durable-join-node',
+      partition_id: 'control_plane_publications-p1',
+      status: 'active',
+      address: 'durable-join-node/partition/control_plane_publications-p1-r4',
+    }]],
+    [TABLES.REPLICA_OPERATIONS, []],
+  ]);
+  const systemTableCache = {
+    getAll(tableName) {
+      return rowsByTable.get(tableName) || [];
+    },
+    get(tableName, key) {
+      const rows = rowsByTable.get(tableName) || [];
+      return rows.find((row) =>
+        row.partition_id === key ||
+        row.table_id === key ||
+        row.service_id === key,
+      ) || null;
+    },
+  };
+
+  const restored =
+    await service.restoreDurableRejoinLocalPartitionServices(
+      systemTableCache,
+    );
+
+  t.same(
+    restored,
+    [],
+    'durable rejoin should not restore an over-target partition when no ' +
+      'replica operation still owns the topology',
+  );
+  t.same(
+    calls,
+    [],
+    'ambiguous over-target restore should not initialize join lifecycle ' +
+      'owners or activate service rows',
+  );
+});
+
 test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY',
   async (t) => {
     initializeTestEnvironment();
@@ -1471,6 +1586,114 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
       state: 'ready',
     },
   ], 'NODE_STATE_UPDATE should use the local ingress replica even before it becomes leader');
+});
+
+test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
+  'authoritative ingress before local self-target', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-ready-heartbeat',
+    nodeAddress: 'ws://localhost:909411',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r2',
+      peerAddresses: [
+        'seed-node-1/message-group/mg-1-r1',
+      ],
+    },
+  };
+  const deliveries = [];
+  service.messageRouter = {
+    getConnectionState() {
+      return 'connected';
+    },
+    async deliver(targetAddress, message) {
+      deliveries.push({targetAddress, state: message.state});
+      return {acknowledged: true};
+    },
+  };
+  service.messageGroupServices.set('mg-1-r2', {
+    groupId: 'mg-1',
+    unifiedAddress: 'joining-node-ready-heartbeat/message-group/mg-1-r2',
+    isLeaderReplica: () => false,
+    getLeaderId: () => 'mg-1-r1',
+    isMetadataIngressReady: () => true,
+  });
+
+  await service.sendControlPlaneNodeStateUpdate({
+    state: STATE.READY,
+    heartbeatAt: Date.now(),
+  });
+
+  t.same(deliveries, [
+    {
+      targetAddress: 'seed-node-1/message-group/mg-1-r1',
+      state: STATE.READY,
+    },
+  ], 'READY heartbeats should prefer remote authoritative ingress before local self-target');
+});
+
+test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
+  'local ingress when no remote target is reachable', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-ready-heartbeat-local-fallback',
+    nodeAddress: 'ws://localhost:909412',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r2',
+      peerAddresses: [
+        'seed-node-1/message-group/mg-1-r1',
+      ],
+    },
+  };
+  const deliveries = [];
+  service.messageRouter = {
+    getConnectionState(nodeId) {
+      return nodeId === 'joining-node-ready-heartbeat-local-fallback' ?
+        'connected' :
+        'disconnected';
+    },
+    async deliver(targetAddress, message) {
+      deliveries.push({targetAddress, state: message.state});
+      return {acknowledged: true};
+    },
+  };
+  service.messageGroupServices.set('mg-1-r2', {
+    groupId: 'mg-1',
+    unifiedAddress:
+      'joining-node-ready-heartbeat-local-fallback/message-group/mg-1-r2',
+    isLeaderReplica: () => false,
+    getLeaderId: () => 'mg-1-r1',
+    isMetadataIngressReady: () => true,
+  });
+
+  await service.sendControlPlaneNodeStateUpdate({
+    state: STATE.READY,
+    heartbeatAt: Date.now(),
+  });
+
+  t.same(deliveries, [
+    {
+      targetAddress:
+        'joining-node-ready-heartbeat-local-fallback/message-group/mg-1-r2',
+      state: STATE.READY,
+    },
+  ], 'READY heartbeats should retain local fallback when no remote ingress is reachable');
 });
 
 test('NodeJoiningService - query transport selection uses initialized local ' +

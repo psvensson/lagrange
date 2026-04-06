@@ -1140,6 +1140,91 @@ async (t) => {
   }
 });
 
+test('HeartbeatService does not coalesce reporter heartbeats before canonical ' +
+  'visibility is proven',
+async (t) => {
+  initEnv();
+
+  let reporterAttempts = 0;
+  let authoritativeReads = 0;
+  let now = 1000;
+  const scheduledVerifications = [];
+  const flushScheduledVerifications = async () => {
+    while (scheduledVerifications.length > 0) {
+      const verification = scheduledVerifications.shift();
+      await verification();
+    }
+  };
+  const service = new HeartbeatService({
+    nodeId: 'node-reporter-confirmation-gap',
+    nodeAddress: '10.0.0.30:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+      executeAuthoritativeSystemTableRead: async () => {
+        authoritativeReads += 1;
+        return {
+          success: true,
+          rows: [{
+            node_id: 'node-reporter-confirmation-gap',
+            last_heartbeat: now,
+          }],
+        };
+      },
+    },
+    systemTableCache: createMockCache(),
+    nodeMetadataMinUpdateIntervalMs: 0,
+    nodeMetadataMaxStalenessMs: 5000,
+    nodeStateReporter: async () => {
+      reporterAttempts += 1;
+      return {
+        publicationPath: 'node_state_reporter',
+        targetAddress: 'seed-1/message-group/mg-1',
+      };
+    },
+    verifyReporterVisibilityOnSuccess: true,
+    reporterVisibilitySuccessTtlMs: 10000,
+    now: () => now,
+    setTimeoutFn: (fn) => {
+      scheduledVerifications.push(fn);
+      return {unref() {}};
+    },
+  });
+
+  try {
+    await service.sendHeartbeat(null, ['partition_replica']);
+    now += 1000;
+    await service.sendHeartbeat(null, ['partition_replica']);
+
+    t.equal(
+      reporterAttempts,
+      2,
+      'unverified reporter heartbeats must not advance coalescing state',
+    );
+    t.equal(
+      authoritativeReads,
+      0,
+      'verification should remain off the heartbeat hot path until flushed',
+    );
+
+    await flushScheduledVerifications();
+    t.equal(authoritativeReads, 1,
+      'flush should perform one authoritative visibility proof');
+
+    now += 1000;
+    await service.sendHeartbeat(null, ['partition_replica']);
+
+    t.equal(
+      reporterAttempts,
+      2,
+      'verified reporter proof should allow later identical heartbeats to coalesce',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
 test('HeartbeatService reuses a recent successful reporter visibility proof',
   async (t) => {
     initEnv();

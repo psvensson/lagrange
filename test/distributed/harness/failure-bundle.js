@@ -18,6 +18,8 @@ const FAILURE_BUNDLE_SCHEMA_VERSION = 1;
 const FAILURE_BUNDLE_RUN_DIRNAME = 'failure-bundles';
 const FAILURE_BUNDLE_JSON_FILENAME = 'failure-bundle.json';
 const FAILURE_BUNDLE_MARKDOWN_FILENAME = 'failure-bundle.md';
+const TRIAGE_SUMMARY_JSON_FILENAME = 'triage-summary.json';
+const TRIAGE_SUMMARY_MARKDOWN_FILENAME = 'triage-summary.md';
 const RUN_FAILURE_BUNDLE_JSON_FILENAME = 'run-failure-bundle.json';
 const RUN_FAILURE_BUNDLE_MARKDOWN_FILENAME = 'run-failure-bundle.md';
 const LOG_FILE_EXTENSION = '.log';
@@ -37,6 +39,9 @@ const PLAYBACK_EVENT_TYPE_LOAD_STARTED = 'load.started';
 const PLAYBACK_EVENT_TYPE_LOAD_PROGRESS = 'load.progress';
 const PLAYBACK_EVENT_TYPE_LOAD_COMPLETED = 'load.completed';
 const PLAYBACK_EVENT_TYPE_NODE_RESTART_BOUNDARY = 'node.restart.boundary';
+const PLAYBACK_EVENT_TYPE_PARTITION_CREATED = 'partition.created';
+const PLAYBACK_EVENT_TYPE_REPLICA_CREATED = 'replica.created';
+const PLAYBACK_EVENT_TYPE_REPLICA_REMOVED = 'replica.removed';
 const PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE =
   'setup.cluster.waiting-active';
 const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
@@ -72,6 +77,9 @@ const FAILURE_CLASS_UNKNOWN = 'unknown';
 const FAILURE_CLASS_CONFIDENCE_HIGH = 'high';
 const FAILURE_CLASS_CONFIDENCE_MEDIUM = 'medium';
 const FAILURE_CLASS_CONFIDENCE_LOW = 'low';
+const TRIAGE_CLUSTER_STAGE_LIMIT = 12;
+const TRIAGE_RECENT_TOPOLOGY_EVENT_LIMIT = 10;
+const TRIAGE_TOP_LOAD_NODE_LIMIT = 5;
 
 const LOAD_WAIT_REASON_KEYS = Object.freeze([
   LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
@@ -1196,6 +1204,103 @@ function buildFirstFaultTimelineFromPlaybackEvents(events) {
   };
 }
 
+function buildPlaybackEventSummary(events) {
+  const sortedEvents = [...(Array.isArray(events) ? events : [])]
+    .filter((event) => isRecord(event))
+    .sort((left, right) =>
+      Number(left.timestamp || ZERO) - Number(right.timestamp || ZERO),
+    );
+  if (sortedEvents.length === ZERO) {
+    return null;
+  }
+
+  const clusterStages = [];
+  const recentTopologyEvents = [];
+  let loadStartedAtMs = null;
+  let loadCompletedAtMs = null;
+  let loadProgressEventCount = ZERO;
+  let lastLoadMetrics = null;
+  let partitionCreatedCount = ZERO;
+  let replicaCreatedCount = ZERO;
+  let replicaRemovedCount = ZERO;
+
+  for (const event of sortedEvents) {
+    const timestampMs = normalizeNonNegativeCount(event?.timestamp);
+    const details = isRecord(event?.details) ? event.details : {};
+    if (event.type === PLAYBACK_EVENT_TYPE_CLUSTER_STAGE) {
+      clusterStages.push({
+        timestampMs,
+        timestamp: toIsoTimestamp(timestampMs),
+        stage: typeof details.stage === 'string' ? details.stage : UNKNOWN_VALUE,
+        nodeId: typeof details.nodeId === 'string' ? details.nodeId : null,
+        attempts: normalizeNonNegativeCount(details.attempts),
+        elapsedMs: normalizeNonNegativeCount(details.elapsedMs),
+      });
+      continue;
+    }
+
+    if (event.type === PLAYBACK_EVENT_TYPE_LOAD_STARTED) {
+      loadStartedAtMs = timestampMs;
+      lastLoadMetrics = resolveLoadMetricsFromPlaybackEvent(event) || lastLoadMetrics;
+      continue;
+    }
+    if (event.type === PLAYBACK_EVENT_TYPE_LOAD_PROGRESS) {
+      loadProgressEventCount += 1;
+      lastLoadMetrics = resolveLoadMetricsFromPlaybackEvent(event) || lastLoadMetrics;
+      continue;
+    }
+    if (event.type === PLAYBACK_EVENT_TYPE_LOAD_COMPLETED) {
+      loadCompletedAtMs = timestampMs;
+      lastLoadMetrics = resolveLoadMetricsFromPlaybackEvent(event) || lastLoadMetrics;
+      continue;
+    }
+
+    if (event.type === PLAYBACK_EVENT_TYPE_PARTITION_CREATED) {
+      partitionCreatedCount += 1;
+    } else if (event.type === PLAYBACK_EVENT_TYPE_REPLICA_CREATED) {
+      replicaCreatedCount += 1;
+    } else if (event.type === PLAYBACK_EVENT_TYPE_REPLICA_REMOVED) {
+      replicaRemovedCount += 1;
+    } else {
+      continue;
+    }
+
+    recentTopologyEvents.push({
+      type: event.type,
+      timestampMs,
+      timestamp: toIsoTimestamp(timestampMs),
+      entityId: typeof event?.entityId === 'string' ? event.entityId : null,
+      partitionId: typeof details.partitionId === 'string' ? details.partitionId : null,
+      nodeId: typeof details.nodeId === 'string' ?
+        details.nodeId :
+        (typeof details.targetNodeId === 'string' ? details.targetNodeId : null),
+      status: typeof details.status === 'string' ? details.status : null,
+      tableName: typeof details.tableName === 'string' ? details.tableName : null,
+      tableId: typeof details.tableId === 'string' ? details.tableId : null,
+    });
+  }
+
+  return {
+    eventCount: sortedEvents.length,
+    clusterStages: clusterStages.slice(-TRIAGE_CLUSTER_STAGE_LIMIT),
+    load: {
+      startedAtMs: loadStartedAtMs,
+      startedAt: toIsoTimestamp(loadStartedAtMs),
+      completedAtMs: loadCompletedAtMs,
+      completedAt: toIsoTimestamp(loadCompletedAtMs),
+      progressEventCount: loadProgressEventCount,
+      lastMetrics: lastLoadMetrics || null,
+    },
+    topology: {
+      partitionCreatedCount,
+      replicaCreatedCount,
+      replicaRemovedCount,
+      recentEvents:
+        recentTopologyEvents.slice(-TRIAGE_RECENT_TOPOLOGY_EVENT_LIMIT),
+    },
+  };
+}
+
 function buildReadinessFromPlaybackEvents(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
     .filter((event) => isRecord(event))
@@ -1615,6 +1720,7 @@ async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
         playbackEventsAbsolutePath,
         workspaceRoot,
       ),
+      playbackEventSummary: buildPlaybackEventSummary(events),
       firstFaultTimeline: buildFirstFaultTimelineFromPlaybackEvents(events),
       readiness: buildReadinessFromPlaybackEvents(events),
       restartBoundariesByNodeId:
@@ -2252,6 +2358,7 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
     timelinePath: null,
     analysisPath: null,
     playbackEventsPath: null,
+    playbackEventSummary: null,
     firstFaultTimeline: null,
     playbackReadiness: null,
     restartBoundariesByNodeId: null,
@@ -2320,6 +2427,7 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
   );
   if (playbackInsights) {
     result.playbackEventsPath = playbackInsights.playbackEventsPath;
+    result.playbackEventSummary = playbackInsights.playbackEventSummary || null;
     result.firstFaultTimeline = playbackInsights.firstFaultTimeline || null;
     result.playbackReadiness = playbackInsights.readiness || null;
     result.restartBoundariesByNodeId =
@@ -3355,6 +3463,282 @@ function buildScenarioFailureBundle({
     playback: entry.playback || null,
     trace: entry.trace || null,
   };
+}
+
+function buildTriageLoadSummary(loadMetrics) {
+  if (!isRecord(loadMetrics)) {
+    return null;
+  }
+  const perNodeEntries = Object.entries(
+    isRecord(loadMetrics.perNode) ? loadMetrics.perNode : {},
+  )
+    .map(([nodeId, metrics]) => ({
+      nodeId,
+      dispatched: normalizeNonNegativeCount(metrics?.dispatched) || ZERO,
+      success: normalizeNonNegativeCount(metrics?.success) || ZERO,
+      attemptErrors: normalizeNonNegativeCount(metrics?.attemptErrors) || ZERO,
+      admissionSignals:
+        normalizeNonNegativeCount(metrics?.admissionSignals) || ZERO,
+      queuePressureSignals:
+        normalizeNonNegativeCount(metrics?.queuePressureSignals) || ZERO,
+    }))
+    .sort((left, right) => right.attemptErrors - left.attemptErrors)
+    .slice(ZERO, TRIAGE_TOP_LOAD_NODE_LIMIT);
+  return {
+    total: normalizeNonNegativeCount(loadMetrics.total),
+    success: normalizeNonNegativeCount(loadMetrics.success),
+    failed: normalizeNonNegativeCount(loadMetrics.failed),
+    errors: normalizeNonNegativeCount(loadMetrics.errors),
+    attemptErrors: normalizeNonNegativeCount(loadMetrics.attemptErrors),
+    opsPerSec: Number.isFinite(Number(loadMetrics.opsPerSec)) ?
+      Number(loadMetrics.opsPerSec) :
+      null,
+    dispatchedOperations:
+      normalizeNonNegativeCount(loadMetrics.dispatchedOperations),
+    undispatchedOperations:
+      normalizeNonNegativeCount(loadMetrics.undispatchedOperations),
+    waitReasons: isRecord(loadMetrics.waitReasons) ? loadMetrics.waitReasons : {},
+    perNodeTopAttemptErrors: perNodeEntries,
+  };
+}
+
+function resolvePartitioningDiagnosticsForTriage(bundleJson) {
+  const artifacts = isRecord(bundleJson?.diagnostics?.failedPhase?.artifacts) ?
+    bundleJson.diagnostics.failedPhase.artifacts :
+    {};
+  const partitionGrowth = isRecord(artifacts.partitionGrowth) ?
+    artifacts.partitionGrowth :
+    null;
+  const planner = isRecord(artifacts.partitioningPlanner) ?
+    artifacts.partitioningPlanner :
+    null;
+  if (!partitionGrowth && !planner) {
+    return null;
+  }
+  return {
+    failureMode: typeof partitionGrowth?.failureMode === 'string' ?
+      partitionGrowth.failureMode :
+      null,
+    baselinePartitionCount:
+      normalizeNonNegativeCount(partitionGrowth?.baselinePartitionCount),
+    currentPartitionCount:
+      normalizeNonNegativeCount(partitionGrowth?.currentPartitionCount),
+    additionalPartitionCount:
+      normalizeNonNegativeCount(partitionGrowth?.additionalPartitionCount),
+    replicaNodeCount:
+      normalizeNonNegativeCount(partitionGrowth?.replicaNodeCount),
+    sampleCount: normalizeNonNegativeCount(partitionGrowth?.sampleCount),
+    transientQueryErrors:
+      normalizeNonNegativeCount(partitionGrowth?.transientQueryErrors),
+    lastQueryError: typeof partitionGrowth?.lastQueryError === 'string' ?
+      partitionGrowth.lastQueryError :
+      null,
+    selectedNodeIds:
+      normalizeDistinctStringArray(planner?.selectedNodeIds),
+    readyReplicaNodeIds:
+      normalizeDistinctStringArray(planner?.readyReplicaNodeIds),
+    admissionReadyNodeIds:
+      normalizeDistinctStringArray(planner?.admissionReadyNodeIds),
+    readinessReasonHistogram:
+      isRecord(planner?.readinessReasonHistogram) ?
+        planner.readinessReasonHistogram :
+        {},
+  };
+}
+
+function buildRoutingDiagnosticsSummary(nodeDiagnostics) {
+  const summaryByNodeId = {};
+  for (const [nodeId, diagnostic] of Object.entries(
+    isRecord(nodeDiagnostics) ? nodeDiagnostics : {},
+  )) {
+    const routingDiagnostics = isRecord(diagnostic?.routingDiagnostics) ?
+      diagnostic.routingDiagnostics :
+      null;
+    const timelineCorrelation = isRecord(diagnostic?.timelineCorrelation) ?
+      diagnostic.timelineCorrelation :
+      null;
+    if (!routingDiagnostics && !timelineCorrelation) {
+      continue;
+    }
+    summaryByNodeId[nodeId] = {
+      routingDiagnostics,
+      timelineCorrelation: timelineCorrelation ? {
+        firstLoadFailureAt: timelineCorrelation.firstLoadFailureAt || null,
+        firstSplitStartedAt: timelineCorrelation.firstSplitStartedAt || null,
+        firstSplitRejectedAt: timelineCorrelation.firstSplitRejectedAt || null,
+        firstSplitFailedAt: timelineCorrelation.firstSplitFailedAt || null,
+      } : null,
+    };
+  }
+  return Object.keys(summaryByNodeId).length > ZERO ? summaryByNodeId : null;
+}
+
+function buildScenarioTriageSummary(bundleJson, links = {}) {
+  return {
+    schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    scenario: bundleJson?.scenario || UNKNOWN_VALUE,
+    summary: {
+      error: bundleJson?.summary?.error || null,
+      phase: bundleJson?.summary?.phase || null,
+      rootCauseClass: bundleJson?.summary?.rootCauseClass || null,
+      dominantReason: bundleJson?.summary?.dominantReason || null,
+      failureClass:
+        bundleJson?.summary?.failureClassification?.failureClass || null,
+      bottleneckKind: bundleJson?.summary?.bottleneckEstimate?.kind || null,
+      affectedNodeIds:
+        normalizeDistinctStringArray(bundleJson?.topFailures?.affectedNodeIds),
+      topReasons: Array.isArray(bundleJson?.topFailures?.topReasons) ?
+        bundleJson.topFailures.topReasons :
+        [],
+    },
+    artifacts: {
+      reportPath: bundleJson?.reportPath || null,
+      analysisPath: bundleJson?.logs?.analysisPath || null,
+      timelinePath: bundleJson?.logs?.timelinePath || null,
+      playbackEventsPath: bundleJson?.logs?.playbackEventsPath || null,
+      nodeLogPaths: isRecord(bundleJson?.logs?.nodeLogPaths) ?
+        bundleJson.logs.nodeLogPaths :
+        {},
+      failureBundleJsonPath: links.jsonPath || null,
+      failureBundleMarkdownPath: links.markdownPath || null,
+    },
+    load: buildTriageLoadSummary(bundleJson?.topFailures?.loadMetrics),
+    playback: {
+      firstFaultTimeline: isRecord(bundleJson?.diagnostics?.firstFaultTimeline) ?
+        bundleJson.diagnostics.firstFaultTimeline :
+        null,
+      eventSummary: isRecord(bundleJson?.logs?.playbackEventSummary) ?
+        bundleJson.logs.playbackEventSummary :
+        null,
+    },
+    partitioning: resolvePartitioningDiagnosticsForTriage(bundleJson),
+    routingDiagnosticsByNodeId:
+      buildRoutingDiagnosticsSummary(bundleJson?.nodeDiagnostics),
+    recoveryReadiness: isRecord(bundleJson?.recoveryReadiness) ?
+      {
+        pendingAckBlockedNodeIds:
+          normalizeDistinctStringArray(
+            bundleJson.recoveryReadiness.pendingAckBlockedNodeIds,
+          ),
+        routingDimensionCounts:
+          isRecord(bundleJson.recoveryReadiness.routingDimensionCounts) ?
+            bundleJson.recoveryReadiness.routingDimensionCounts :
+            {},
+      } :
+      null,
+  };
+}
+
+function renderScenarioTriageSummaryMarkdown(summary) {
+  const lines = [
+    '# Scenario Triage Summary',
+    '',
+    `- Scenario: ${summary?.scenario || UNKNOWN_VALUE}`,
+    `- Phase: ${summary?.summary?.phase || UNKNOWN_VALUE}`,
+    `- Root Cause Class: ${summary?.summary?.rootCauseClass || UNKNOWN_VALUE}`,
+    `- Dominant Reason: ${summary?.summary?.dominantReason || UNKNOWN_VALUE}`,
+    `- Failure Class: ${summary?.summary?.failureClass || UNKNOWN_VALUE}`,
+    `- Bottleneck: ${summary?.summary?.bottleneckKind || UNKNOWN_VALUE}`,
+    '',
+    '## Artifact Paths',
+    '',
+    `- Report: ${summary?.artifacts?.reportPath || UNKNOWN_VALUE}`,
+    `- Failure Bundle JSON: ${summary?.artifacts?.failureBundleJsonPath || UNKNOWN_VALUE}`,
+    `- Failure Bundle Markdown: ${summary?.artifacts?.failureBundleMarkdownPath || UNKNOWN_VALUE}`,
+    `- Playback Events: ${summary?.artifacts?.playbackEventsPath || UNKNOWN_VALUE}`,
+    `- Timeline: ${summary?.artifacts?.timelinePath || UNKNOWN_VALUE}`,
+    `- Analysis: ${summary?.artifacts?.analysisPath || UNKNOWN_VALUE}`,
+  ];
+
+  const topReasons = Array.isArray(summary?.summary?.topReasons) ?
+    summary.summary.topReasons :
+    [];
+  lines.push('', '## Top Reasons', '');
+  if (topReasons.length === ZERO) {
+    lines.push('- none');
+  } else {
+    for (const reason of topReasons) {
+      lines.push(
+        `- ${String(reason?.reason || UNKNOWN_VALUE)}: ` +
+          `${String(reason?.count ?? UNKNOWN_VALUE)}`,
+      );
+    }
+  }
+
+  const playbackEventSummary = summary?.playback?.eventSummary || null;
+  lines.push('', '## Playback', '');
+  lines.push(
+    `- Load Started: ${playbackEventSummary?.load?.startedAt || UNKNOWN_VALUE}`,
+  );
+  lines.push(
+    `- Load Completed: ${playbackEventSummary?.load?.completedAt || UNKNOWN_VALUE}`,
+  );
+  lines.push(
+    `- Load Progress Events: ${String(playbackEventSummary?.load?.progressEventCount ?? UNKNOWN_VALUE)}`,
+  );
+  lines.push(
+    `- Partition Created Events: ${String(playbackEventSummary?.topology?.partitionCreatedCount ?? UNKNOWN_VALUE)}`,
+  );
+  lines.push(
+    `- Replica Created Events: ${String(playbackEventSummary?.topology?.replicaCreatedCount ?? UNKNOWN_VALUE)}`,
+  );
+  lines.push(
+    `- Replica Removed Events: ${String(playbackEventSummary?.topology?.replicaRemovedCount ?? UNKNOWN_VALUE)}`,
+  );
+
+  const partitioning = summary?.partitioning || null;
+  if (partitioning) {
+    lines.push('', '## Partitioning', '');
+    lines.push(`- Failure Mode: ${partitioning.failureMode || UNKNOWN_VALUE}`);
+    lines.push(
+      `- Baseline -> Current Partitions: ` +
+        `${String(partitioning.baselinePartitionCount ?? UNKNOWN_VALUE)} -> ` +
+        `${String(partitioning.currentPartitionCount ?? UNKNOWN_VALUE)}`,
+    );
+    lines.push(
+      `- Additional Partitions Seen: ` +
+        `${String(partitioning.additionalPartitionCount ?? UNKNOWN_VALUE)}`,
+    );
+    lines.push(
+      `- Replica Spread Nodes: ${String(partitioning.replicaNodeCount ?? UNKNOWN_VALUE)}`,
+    );
+    lines.push(
+      `- Selected Nodes: ${
+        partitioning.selectedNodeIds?.join(', ') || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Ready Replica Nodes: ${
+        partitioning.readyReplicaNodeIds?.join(', ') || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Admission-Ready Nodes: ${
+        partitioning.admissionReadyNodeIds?.join(', ') || UNKNOWN_VALUE
+      }`,
+    );
+  }
+
+  const routingDiagnosticsByNodeId =
+    isRecord(summary?.routingDiagnosticsByNodeId) ?
+      summary.routingDiagnosticsByNodeId :
+      {};
+  lines.push('', '## Routing Diagnostics', '');
+  if (Object.keys(routingDiagnosticsByNodeId).length === ZERO) {
+    lines.push('- none');
+  } else {
+    for (const [nodeId, entry] of Object.entries(routingDiagnosticsByNodeId)) {
+      lines.push(
+        `- ${nodeId}: reason=${String(entry?.routingDiagnostics?.reasonCode || UNKNOWN_VALUE)}, ` +
+          `services=${String(entry?.routingDiagnostics?.serviceRowCount ?? UNKNOWN_VALUE)}, ` +
+          `routable=${String(entry?.routingDiagnostics?.routableServiceCount ?? UNKNOWN_VALUE)}, ` +
+          `leader=${String(entry?.routingDiagnostics?.canonicalLeaderNodeId || UNKNOWN_VALUE)}`,
+      );
+    }
+  }
+
+  return lines.join('\n') + '\n';
 }
 
 function formatList(values) {
@@ -4414,6 +4798,11 @@ export async function writeFailureBundlesForReport({
     applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
     const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
     const markdownAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_MARKDOWN_FILENAME);
+    const triageJsonAbsolutePath = join(scenarioDir, TRIAGE_SUMMARY_JSON_FILENAME);
+    const triageMarkdownAbsolutePath = join(
+      scenarioDir,
+      TRIAGE_SUMMARY_MARKDOWN_FILENAME,
+    );
     await writeFile(
       jsonAbsolutePath,
       JSON.stringify(bundleJson, null, 2),
@@ -4424,9 +4813,26 @@ export async function writeFailureBundlesForReport({
       renderScenarioFailureBundleMarkdown(bundleJson),
       UTF8_ENCODING,
     );
-    const links = {
+    const triageLinks = {
       jsonPath: toWorkspaceRelative(jsonAbsolutePath, workspaceRoot),
       markdownPath: toWorkspaceRelative(markdownAbsolutePath, workspaceRoot),
+    };
+    const triageSummary = buildScenarioTriageSummary(bundleJson, triageLinks);
+    await writeFile(
+      triageJsonAbsolutePath,
+      JSON.stringify(triageSummary, null, 2),
+      UTF8_ENCODING,
+    );
+    await writeFile(
+      triageMarkdownAbsolutePath,
+      renderScenarioTriageSummaryMarkdown(triageSummary),
+      UTF8_ENCODING,
+    );
+    const links = {
+      ...triageLinks,
+      triageJsonPath: toWorkspaceRelative(triageJsonAbsolutePath, workspaceRoot),
+      triageMarkdownPath:
+        toWorkspaceRelative(triageMarkdownAbsolutePath, workspaceRoot),
     };
     entry.failureBundle = links;
     scenarioBundles.push({

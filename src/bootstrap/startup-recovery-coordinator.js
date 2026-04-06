@@ -7,7 +7,10 @@ import {
   isBackgroundWorkReadySnapshot,
   isMetadataPublicationReadySnapshot,
 } from './traffic-readiness-utils.js';
-import {LIFECYCLE_PHASE} from './lifecycle-controller-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from './lifecycle-controller-constants.js';
 
 function normalizePartitionId(value) {
   return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
@@ -46,6 +49,34 @@ const STARTUP_RECOVERY_STAGE_RANK = Object.freeze({
   [STARTUP_RECOVERY_STAGE.BACKGROUND_WORK_READY]: NUM.THREE,
   [STARTUP_RECOVERY_STAGE.TRAFFIC_READY]: NUM.FOUR,
 });
+
+const BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS = Object.freeze([
+  LIFECYCLE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+  LIFECYCLE_REASON.SQL_ENGINE_UNAVAILABLE,
+  LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE,
+  LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+]);
+
+function canBypassBootstrapInitPriorityReasons(reasonCodes, snapshot) {
+  if (!snapshot || snapshot.draining === true) {
+    return false;
+  }
+  if (snapshot.phase !== LIFECYCLE_PHASE.INIT) {
+    return false;
+  }
+  if (!Array.isArray(reasonCodes) || reasonCodes.length === 0) {
+    return false;
+  }
+  if (!reasonCodes.includes(
+    LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+  )) {
+    return false;
+  }
+  return reasonCodes.every((reason) =>
+    BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS.includes(reason),
+  );
+}
 
 function resolveStartupRecoveryStage(options = {}) {
   if (options.managed !== true) {
@@ -112,16 +143,21 @@ class StartupRecoveryCoordinator {
     const metadataPublicationReady = managed ?
       isMetadataPublicationReadySnapshot(snapshot) :
       true;
+    const reasonCodes = managed ? normalizeReasonCodes(snapshot) : [];
     const backgroundWorkReady = managed ?
       isBackgroundWorkReadySnapshot(snapshot, {partitionId}) :
       true;
     const controlPlaneRecoveryReady = trafficReady || metadataPublicationReady;
     const priorityControlPlaneRecoveryReady =
       isPriorityControlPlanePartition && controlPlaneRecoveryReady;
+    const bootstrapInitPriorityBypassReady =
+      isPriorityControlPlanePartition &&
+      options.allowBootstrapInitPriorityBypass === true &&
+      this.canBypassPriorityPartitionDuringBootstrapInit(reasonCodes, snapshot);
     const shouldBypassLocalPriorityControlPlaneStartupReadiness = Boolean(
-      priorityControlPlaneRecoveryReady && !trafficReady,
+      (priorityControlPlaneRecoveryReady && !trafficReady) ||
+      bootstrapInitPriorityBypassReady,
     );
-    const reasonCodes = managed ? normalizeReasonCodes(snapshot) : [];
     const recoveryStage = resolveStartupRecoveryStage({
       managed,
       trafficReady,
@@ -166,6 +202,7 @@ class StartupRecoveryCoordinator {
       backgroundWorkReady,
       controlPlaneRecoveryReady,
       priorityControlPlaneRecoveryReady,
+      bootstrapInitPriorityBypassReady,
       recoveryStage,
       recoveryStageRank,
       recoveryBlocked:
@@ -174,9 +211,15 @@ class StartupRecoveryCoordinator {
       snapshot: managed ? snapshot : null,
     });
   }
+
+  canBypassPriorityPartitionDuringBootstrapInit(reasonCodes, snapshot) {
+    return canBypassBootstrapInitPriorityReasons(reasonCodes, snapshot);
+  }
 }
 
 export {
+  BOOTSTRAP_INIT_PRIORITY_BYPASS_REASONS,
   STARTUP_RECOVERY_STAGE,
   StartupRecoveryCoordinator,
+  canBypassBootstrapInitPriorityReasons,
 };

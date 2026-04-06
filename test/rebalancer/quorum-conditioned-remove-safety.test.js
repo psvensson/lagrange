@@ -577,6 +577,116 @@ test('RebalanceCoordinator - defers REPLACE remove until replacement is voter-re
     }
   });
 
+test('RebalanceCoordinator - defers over-replicated REMOVE until quorum is voter-ready',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const deliveries = [];
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-a',
+      enableTimeouts: false,
+      messageRouter: {
+        deliver: async () => {
+          deliveries.push('deliver');
+          return {acknowledged: true, status: 'initiated'};
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3}),
+      },
+      cacheData: {
+        nodes: [
+          createReadyNode('node-a'),
+          createReadyNode('node-b'),
+          createReadyNode('node-c'),
+          createReadyNode('node-d'),
+        ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r1',
+            nodeId: 'node-a',
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r2',
+            nodeId: 'node-b',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r3',
+            nodeId: 'node-c',
+            raftRole: 'learner',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'nodes-p1',
+            replicaId: 'nodes-p1-r4',
+            nodeId: 'node-d',
+            raftRole: 'follower',
+          }),
+        ],
+      },
+    });
+
+    coordinator.initialize();
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.REMOVE,
+        partitionId: 'nodes-p1',
+        nodeId: 'node-d',
+        replicaId: 'nodes-p1-r4',
+      });
+
+      const result = await coordinator.executeOperation(operation);
+
+      t.equal(result.success, false,
+        'over-replicated REMOVE should not dispatch while the remaining quorum is still below voter-ready minimum');
+      t.equal(result.skipped, true,
+        'over-replicated REMOVE safety block should be deferred');
+      t.equal(result.reason, REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
+        'defer should return canonical safety blocked reason code');
+      t.equal(
+        result.deferReason,
+        REBALANCE_COORDINATOR_DEFER_REASON
+          .REMOVE_SAFETY_BLOCKED,
+        'defer should report canonical remove safety reason',
+      );
+      t.match(result.error, /below minimum/,
+        'defer should preserve the quorum safety explanation');
+      t.equal(deliveries.length, 0,
+        'should not dispatch blocked REMOVE while quorum is still converging');
+      t.equal(operation.workflowStep, WORKFLOW_STEP.SENDING,
+        'deferred REMOVE should stay in dispatch phase for retry');
+
+      const recoveringReplica = coordinator.systemTableCache.get(
+        'services',
+        'nodes-p1-r3',
+      );
+      t.ok(recoveringReplica, 'recovering replica row should exist in cache');
+      recoveringReplica.raft_role = 'follower';
+
+      const retryResult = await coordinator.executeOperation(operation);
+      t.equal(retryResult.success, true,
+        'REMOVE should dispatch once quorum remains safe after trimming the extra replica');
+      t.equal(deliveries.length, 1,
+        'remove dispatch should proceed after the temporary learner becomes voter-ready');
+      t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+        'dispatched REMOVE should transition into STOPPING');
+    } finally {
+      await coordinator.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('RebalanceCoordinator - deduplicates concurrent executeOperation calls', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

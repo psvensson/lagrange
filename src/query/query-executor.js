@@ -52,6 +52,12 @@ import {
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
 } from '../control-plane/eligibility-snapshot.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../partition/partition-service-constants.js';
 
 const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = 'splitMirrorOrigin';
 const QUERY_MESSAGE_FIELD_MIGRATION_OPERATION = 'migrationOperation';
@@ -59,6 +65,7 @@ const QUERY_MESSAGE_FIELD_MIGRATION_ID = 'migrationId';
 const QUERY_MESSAGE_FIELD_SESSION_ID = 'sessionId';
 const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
 const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
+const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
 
 function normalizeParticipantFailureString(value) {
   return typeof value === 'string' && value.length > NUM.ZERO ?
@@ -192,6 +199,7 @@ class QueryExecutor {
         Math.floor(options.noHandlerAddressQuarantineMs) :
         this.noServiceWarnThrottleMs;
     this.temporarilyUnroutableAddressesByPartition = new Map();
+    this.sessionPartitionAddresses = new Map();
   }
 
   /**
@@ -228,6 +236,127 @@ class QueryExecutor {
     if (this.parallelQueryCoordinator) {
       this.parallelQueryCoordinator.setSystemCache(cache);
     }
+  }
+
+  /**
+   * Build one stable affinity key for session-bound partition routing.
+   * @param {string|null|undefined} sessionId
+   * @param {string|null|undefined} partitionId
+   * @return {string|null}
+   * @private
+   */
+  buildSessionPartitionAddressKey(sessionId, partitionId) {
+    if (typeof sessionId !== 'string' ||
+        sessionId.length === NUM.ZERO ||
+        typeof partitionId !== 'string' ||
+        partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    return `${sessionId}::${partitionId}`;
+  }
+
+  /**
+   * Get the currently pinned address for one session-bound partition.
+   * @param {string|null|undefined} sessionId
+   * @param {string|null|undefined} partitionId
+   * @return {string|null}
+   * @private
+   */
+  getSessionPartitionAddress(sessionId, partitionId) {
+    const key = this.buildSessionPartitionAddressKey(sessionId, partitionId);
+    if (!key) {
+      return null;
+    }
+    return this.sessionPartitionAddresses.get(key) || null;
+  }
+
+  /**
+   * Pin one session-bound partition to the replica address that actually
+   * accepted the previous transactional step.
+   * @param {string|null|undefined} sessionId
+   * @param {string|null|undefined} partitionId
+   * @param {string|null|undefined} address
+   * @private
+   */
+  setSessionPartitionAddress(sessionId, partitionId, address) {
+    const key = this.buildSessionPartitionAddressKey(sessionId, partitionId);
+    if (!key ||
+        typeof address !== 'string' ||
+        address.length === NUM.ZERO) {
+      return;
+    }
+    this.sessionPartitionAddresses.set(key, address);
+  }
+
+  /**
+   * Clear a stale session-bound partition address pin.
+   * @param {string|null|undefined} sessionId
+   * @param {string|null|undefined} partitionId
+   * @private
+   */
+  clearSessionPartitionAddress(sessionId, partitionId) {
+    const key = this.buildSessionPartitionAddressKey(sessionId, partitionId);
+    if (!key) {
+      return;
+    }
+    this.sessionPartitionAddresses.delete(key);
+  }
+
+  /**
+   * Prefer the previously successful transactional replica when it is still
+   * among the current routable candidates.
+   * @param {Array<Object>} candidates
+   * @param {string|null|undefined} sessionId
+   * @param {string|null|undefined} partitionId
+   * @return {Array<Object>}
+   * @private
+   */
+  prioritizeSessionPartitionAddress(
+    candidates,
+    routingSnapshot,
+    sessionId,
+    partitionId,
+  ) {
+    if (!Array.isArray(candidates)) {
+      return [];
+    }
+    const preferredAddress =
+      this.getSessionPartitionAddress(sessionId, partitionId);
+    if (!preferredAddress) {
+      return candidates;
+    }
+    const preferredCandidateIndex = candidates.findIndex((candidate) =>
+      candidate?.address === preferredAddress);
+    if (preferredCandidateIndex <= NUM.ZERO) {
+      if (preferredCandidateIndex === NUM.ZERO) {
+        return candidates;
+      }
+      const preferredService = Array.isArray(routingSnapshot?.routableServices) ?
+        routingSnapshot.routableServices.find((service) =>
+          service?.address === preferredAddress) :
+        null;
+      if (!preferredService ||
+          this.isTemporarilyUnroutableAddress(partitionId, preferredAddress)) {
+        return candidates;
+      }
+      return [
+        {
+          address: preferredAddress,
+          nodeId: preferredService.node_id || preferredService.nodeId || null,
+          replicaId:
+            preferredService.service_id ||
+            preferredService.replica_id ||
+            preferredService.replicaId ||
+            null,
+        },
+        ...candidates,
+      ];
+    }
+    return [
+      candidates[preferredCandidateIndex],
+      ...candidates.slice(NUM.ZERO, preferredCandidateIndex),
+      ...candidates.slice(preferredCandidateIndex + NUM.ONE),
+    ];
   }
 
   /**
@@ -1076,6 +1205,47 @@ class QueryExecutor {
     const routingReadinessDimension =
       executionOptions.routingReadinessDimension ||
       this.defaultRoutingReadinessDimension;
+    const buildRequest = typeof executionOptions.buildRequest === 'function' ?
+      executionOptions.buildRequest :
+      () => {
+        const request = {
+          type: QUERY_MESSAGE_TYPE.QUERY,
+          sql,
+          params,
+        };
+        if (typeof executionOptions.sessionId === 'string' &&
+            executionOptions.sessionId.length > NUM.ZERO) {
+          request[QUERY_MESSAGE_FIELD_SESSION_ID] =
+            executionOptions.sessionId;
+        }
+        if (executionOptions.splitMirrorOrigin) {
+          request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
+            executionOptions.splitMirrorOrigin;
+        }
+        if (executionOptions.migrationOperation ===
+          MIGRATION_PARTITION_OPERATION.ALTER_TABLE) {
+          request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
+            executionOptions.migrationOperation;
+          if (executionOptions.migrationId) {
+            request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
+              executionOptions.migrationId;
+          }
+        }
+        return request;
+      };
+    const isSuccessfulResponse =
+      typeof executionOptions.isSuccessfulResponse === 'function' ?
+        executionOptions.isSuccessfulResponse :
+        (response) => response?.acknowledged && response?.success;
+    const buildSuccessResult =
+      typeof executionOptions.buildSuccessResult === 'function' ?
+        executionOptions.buildSuccessResult :
+        (response) => ({
+          partitionId,
+          success: true,
+          rows: response.rows || [],
+          changes: response.changes,
+        });
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
@@ -1105,6 +1275,12 @@ class QueryExecutor {
             routingReadinessDimension,
           ));
       }
+      serviceCandidates = this.prioritizeSessionPartitionAddress(
+        serviceCandidates,
+        routingSnapshot,
+        executionOptions.sessionId,
+        partitionId,
+      );
       if (serviceCandidates.length === 0) {
         const hasRoutableService = routingSnapshot.routableServiceCount >
           NUM.ZERO;
@@ -1167,6 +1343,7 @@ class QueryExecutor {
 
       const candidateQueue = [...serviceCandidates];
       const attemptedAddresses = new Set();
+      let retryCurrentAddressOnNextAttempt = false;
       let leaderRecoveryQueued = false;
       const queueLeaderRecoveryCandidates = () => {
         if (forRead || leaderRecoveryQueued) {
@@ -1197,29 +1374,13 @@ class QueryExecutor {
 
         try {
           this.throwIfCancelled(cancellationToken);
-          const request = {
-            type: QUERY_MESSAGE_TYPE.QUERY,
+          const request = buildRequest({
+            partitionId,
+            address,
             sql,
             params,
-          };
-          if (typeof executionOptions.sessionId === 'string' &&
-              executionOptions.sessionId.length > NUM.ZERO) {
-            request[QUERY_MESSAGE_FIELD_SESSION_ID] =
-              executionOptions.sessionId;
-          }
-          if (executionOptions.splitMirrorOrigin) {
-            request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
-              executionOptions.splitMirrorOrigin;
-          }
-          if (executionOptions.migrationOperation ===
-            MIGRATION_PARTITION_OPERATION.ALTER_TABLE) {
-            request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
-              executionOptions.migrationOperation;
-            if (executionOptions.migrationId) {
-              request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
-                executionOptions.migrationId;
-            }
-          }
+            executionOptions,
+          });
           const response = await this.messageRouter.deliver(
             address,
             request,
@@ -1227,17 +1388,29 @@ class QueryExecutor {
           );
           this.throwIfCancelled(cancellationToken);
 
-          if (response.acknowledged && response.success) {
+          if (isSuccessfulResponse(response)) {
             this.clearTemporarilyUnroutableAddress(
               partitionId,
               address,
             );
-            return {
+            if (executionOptions.clearSessionPartitionAffinityOnSuccess === true) {
+              this.clearSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              );
+            } else {
+              this.setSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+                address,
+              );
+            }
+            return buildSuccessResult(response, {
               partitionId,
-              success: true,
-              rows: response.rows || [],
-              changes: response.changes,
-            };
+              address,
+              request,
+              executionOptions,
+            });
           }
 
           // Handle leader redirect response - immediately retry with provided address
@@ -1251,34 +1424,41 @@ class QueryExecutor {
 
             const redirectResponse = await this.messageRouter.deliver(
               response.leaderAddress,
-              {
-                type: QUERY_MESSAGE_TYPE.QUERY,
+              buildRequest({
+                partitionId,
+                address: response.leaderAddress,
+                redirectedFromAddress: address,
+                leaderAddress: response.leaderAddress,
                 sql,
                 params,
-                [QUERY_MESSAGE_FIELD_SESSION_ID]:
-                  executionOptions.sessionId || null,
-                [QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN]:
-                  executionOptions.splitMirrorOrigin || null,
-                [QUERY_MESSAGE_FIELD_MIGRATION_OPERATION]:
-                  executionOptions.migrationOperation ||
-                  null,
-                [QUERY_MESSAGE_FIELD_MIGRATION_ID]:
-                  executionOptions.migrationId || null,
-              },
+                executionOptions,
+              }),
               {deliveryPriority: executionOptions.deliveryPriority},
             );
 
-            if (redirectResponse.acknowledged && redirectResponse.success) {
+            if (isSuccessfulResponse(redirectResponse)) {
               this.clearTemporarilyUnroutableAddress(
                 partitionId,
                 response.leaderAddress,
               );
-              return {
+              if (executionOptions.clearSessionPartitionAffinityOnSuccess === true) {
+                this.clearSessionPartitionAddress(
+                  executionOptions.sessionId,
+                  partitionId,
+                );
+              } else {
+                this.setSessionPartitionAddress(
+                  executionOptions.sessionId,
+                  partitionId,
+                  response.leaderAddress,
+                );
+              }
+              return buildSuccessResult(redirectResponse, {
                 partitionId,
-                success: true,
-                rows: redirectResponse.rows || [],
-                changes: redirectResponse.changes,
-              };
+                address: response.leaderAddress,
+                redirectedFromAddress: address,
+                executionOptions,
+              });
             }
 
             // Redirect target also failed - continue to next candidate
@@ -1303,6 +1483,15 @@ class QueryExecutor {
               address,
             });
             this.markTemporarilyUnroutableAddress(partitionId, address);
+            if (this.getSessionPartitionAddress(
+              executionOptions.sessionId,
+              partitionId,
+            ) === address) {
+              this.clearSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              );
+            }
             if (!awaitedRuntimeRoutingRepair &&
                 await this.maybeAwaitRuntimeRoutingRepair(
                   routingSnapshot,
@@ -1369,6 +1558,52 @@ class QueryExecutor {
               participantAddress: address,
               backpressured: resolveParticipantBackpressureState(response),
             };
+            if (this.getSessionPartitionAddress(
+              executionOptions.sessionId,
+              partitionId,
+            ) === address) {
+              this.clearSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              );
+            }
+            queueLeaderRecoveryCandidates();
+            continue;
+          }
+
+          if (this.isRetryableControlPlaneWriteFailure(
+            partitionId,
+            {
+              error: errorMessage,
+              errorCode: response?.errorCode,
+              retryAfterMs: response?.retryAfterMs,
+              deferRetry: response?.deferRetry,
+            },
+            forRead,
+          )) {
+            lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: response?.errorCode,
+              retryAfterMs: response?.retryAfterMs,
+              deferRetry: response?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(response),
+            };
+            if (this.shouldRetryTransactionActiveWriteOnSameAddress(
+              partitionId,
+              executionOptions,
+              {
+                error: errorMessage,
+                errorCode: response?.errorCode,
+                retryAfterMs: response?.retryAfterMs,
+                deferRetry: response?.deferRetry,
+              },
+              forRead,
+            )) {
+              retryCurrentAddressOnNextAttempt = true;
+              break;
+            }
             queueLeaderRecoveryCandidates();
             continue;
           }
@@ -1419,6 +1654,15 @@ class QueryExecutor {
               address,
             });
             this.markTemporarilyUnroutableAddress(partitionId, address);
+            if (this.getSessionPartitionAddress(
+              executionOptions.sessionId,
+              partitionId,
+            ) === address) {
+              this.clearSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              );
+            }
             if (!awaitedRuntimeRoutingRepair &&
                 await this.maybeAwaitRuntimeRoutingRepair(
                   routingSnapshot,
@@ -1460,6 +1704,15 @@ class QueryExecutor {
               backpressured: resolveParticipantBackpressureState(error),
             };
             if (!forRead) {
+              if (this.getSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              ) === address) {
+                this.clearSessionPartitionAddress(
+                  executionOptions.sessionId,
+                  partitionId,
+                );
+              }
               queueLeaderRecoveryCandidates();
             }
             continue;
@@ -1479,6 +1732,42 @@ class QueryExecutor {
               participantAddress: address,
               backpressured: resolveParticipantBackpressureState(error),
             };
+            if (this.getSessionPartitionAddress(
+              executionOptions.sessionId,
+              partitionId,
+            ) === address) {
+              this.clearSessionPartitionAddress(
+                executionOptions.sessionId,
+                partitionId,
+              );
+            }
+            queueLeaderRecoveryCandidates();
+            continue;
+          }
+
+          if (this.isRetryableControlPlaneWriteFailure(
+            partitionId,
+            error,
+            forRead,
+          )) {
+            lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: error?.code || error?.errorCode,
+              retryAfterMs: error?.retryAfterMs,
+              deferRetry: error?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(error),
+            };
+            if (this.shouldRetryTransactionActiveWriteOnSameAddress(
+              partitionId,
+              executionOptions,
+              error,
+              forRead,
+            )) {
+              retryCurrentAddressOnNextAttempt = true;
+              break;
+            }
             queueLeaderRecoveryCandidates();
             continue;
           }
@@ -1509,6 +1798,20 @@ class QueryExecutor {
           });
           throw error;
         }
+      }
+
+      if (retryCurrentAddressOnNextAttempt) {
+        if (attempt < maxAttempts) {
+          await this.delay(this.leaderRetryDelayMs);
+          this.throwIfCancelled(cancellationToken);
+          continue;
+        }
+        return {
+          ...buildFailureResult(
+            lastError || ERRORS.QUERY_FAILED,
+            lastFailureDetails,
+          ),
+        };
       }
 
       if (attempt < maxAttempts) {
@@ -1752,6 +2055,91 @@ class QueryExecutor {
         errorMessage.includes('No connection to node') ||
         errorMessage.includes('Failed to forward write to leader')
       );
+  }
+
+  /**
+   * Resolve the logical table name for one partition.
+   * @param {string} partitionId
+   * @return {string|null}
+   * @private
+   */
+  resolvePartitionTableName(partitionId) {
+    const partition = this.getPartitionRecord(partitionId);
+    const tableName =
+      partition?.[COLUMN.TABLE_NAME] ??
+      partition?.table_name ??
+      partition?.tableName ??
+      partition?.table_id ??
+      partition?.tableId ??
+      null;
+    if (typeof tableName === 'string' && tableName.length > NUM.ZERO) {
+      return tableName;
+    }
+    if (typeof partitionId !== 'string' || partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    const fallbackTableName = partitionId.replace(/-p\d+$/, '');
+    return fallbackTableName.length > NUM.ZERO ? fallbackTableName : null;
+  }
+
+  /**
+   * Check whether one routed failure should widen to alternative live
+   * candidates for system-table writes.
+   * @param {string} partitionId
+   * @param {Object} failure
+   * @param {boolean} forRead
+   * @return {boolean}
+   * @private
+   */
+  isRetryableControlPlaneWriteFailure(
+    partitionId,
+    failure,
+    forRead = false,
+  ) {
+    if (forRead) {
+      return false;
+    }
+    const tableName = this.resolvePartitionTableName(partitionId);
+    if (!SYSTEM_TABLE_NAMES.has(String(tableName || ''))) {
+      return false;
+    }
+    return isRetryableControlPlaneError(failure);
+  }
+
+  /**
+   * Session-bound transactional control-plane writes must stay on the replica
+   * that already owns the in-flight transaction instead of widening to a
+   * different live replica mid-attempt.
+   * @param {string} partitionId
+   * @param {Object} executionOptions
+   * @param {Object} failure
+   * @param {boolean} forRead
+   * @return {boolean}
+   * @private
+   */
+  shouldRetryTransactionActiveWriteOnSameAddress(
+    partitionId,
+    executionOptions,
+    failure,
+    forRead = false,
+  ) {
+    if (!this.isRetryableControlPlaneWriteFailure(
+      partitionId,
+      failure,
+      forRead,
+    )) {
+      return false;
+    }
+    if (typeof executionOptions?.sessionId !== 'string' ||
+        executionOptions.sessionId.length <= NUM.ZERO) {
+      return false;
+    }
+    const failureMessage =
+      typeof failure?.message === 'string' ? failure.message :
+        (typeof failure?.error === 'string' ? failure.error : '');
+    return failureMessage.includes(
+      PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+    );
   }
 
   /**
@@ -2360,8 +2748,9 @@ class QueryExecutor {
 
   /**
    * Return true when authoritative node/service repair should refresh the
-   * canonical leader node because its service rows are missing locally while
-   * peer replicas remain visible.
+   * canonical leader node because its service rows are missing locally, either
+   * while peer replicas remain visible or when the local cache has no service
+   * rows for the partition at all.
    * @param {Object|null} routingSnapshot
    * @return {boolean}
    * @private
@@ -2373,7 +2762,10 @@ class QueryExecutor {
       typeof routingSnapshot.canonicalLeaderNodeId === 'string' &&
       routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO &&
       Number(routingSnapshot.canonicalLeaderServiceCount) === NUM.ZERO &&
-      Number(routingSnapshot.activeAddressedServiceCount) > NUM.ZERO,
+      (
+        Number(routingSnapshot.activeAddressedServiceCount) > NUM.ZERO ||
+        Number(routingSnapshot.serviceRowCount) === NUM.ZERO
+      ),
     );
   }
 
@@ -2472,8 +2864,15 @@ class QueryExecutor {
    * @param {string} partitionId - Partition ID.
    * @return {string|null} Leader address or null if not found.
    */
-  findPartitionLeaderAddress(partitionId) {
-    const service = this.findPartitionService(partitionId);
+  findPartitionLeaderAddress(
+    partitionId,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    const service = this.findPartitionService(
+      partitionId,
+      false,
+      routingReadinessDimension,
+    );
     if (!service || typeof service.address !== 'string' || service.address.length === 0) {
       this.logger.debug(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {partitionId});
       return null;
@@ -2490,8 +2889,18 @@ class QueryExecutor {
    * @return {Object|null} {address, nodeId, replicaId} or null if not found.
    * @private
    */
-  findPartitionService(partitionId, forRead = false) {
-    const candidates = this.getPartitionServiceCandidates(partitionId, forRead);
+  findPartitionService(
+    partitionId,
+    forRead = false,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    const candidates = this.getPartitionServiceCandidates(
+      partitionId,
+      forRead,
+      false,
+      false,
+      routingReadinessDimension,
+    );
     return candidates[0] || null;
   }
 

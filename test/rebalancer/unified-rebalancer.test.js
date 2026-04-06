@@ -676,6 +676,57 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 
       rebalancer.shutdown();
     });
+
+  await t.test('binds coordinator move creation to the shared publication planning snapshot epoch',
+    async (t) => {
+      const mockCache = createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
+      ]);
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-0',
+        systemTableCache: mockCache,
+        cdcIntegrationService: createMockCdcService(),
+        tablePolicyService: createMockPolicyService(),
+        messageRouter: createMockMessageRouter(),
+        controlPlaneReadinessService: {
+          getMembershipPublicationPlanningSnapshotSync() {
+            return {
+              publishedPlanningEpoch: 12,
+            };
+          },
+        },
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async createOperation(move) {
+            t.equal(
+              move.membershipPublicationEpoch,
+              12,
+              'rebalancer should use the shared planning snapshot epoch when available',
+            );
+            return {
+              operationId: 'op-shared-epoch-bound',
+              replicaId: move.replicaId,
+            };
+          },
+        },
+      });
+
+      const result = await rebalancer.executeMoveViaCoordinator({
+        type: MoveType.ADD,
+        nodeId: 'node-1',
+        replicaId: 'partition-1-r4',
+      });
+
+      t.equal(
+        result.success,
+        true,
+        'shared planning snapshot epoch should still allow move creation',
+      );
+
+      rebalancer.shutdown();
+    });
 });
 
 test('UnifiedRebalancer defers background planning when local control-plane mutation readiness is unhealthy',
@@ -4670,6 +4721,77 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
     },
   );
+
+  await t.test(
+    'checkRebalance allows non-system entities once priority control-plane partitions reach quorum spread',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        membershipPublicationService: createMockMembershipPublicationService(
+          ['node-1', 'node-2', 'node-3'],
+          7,
+          {
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [
+                {
+                  partitionId: 'replica_operations-p1',
+                  readyReplicaCount: 2,
+                  readyDistinctNodeCount: 2,
+                  spreadGap: 1,
+                },
+              ],
+            },
+          },
+        ),
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'benchmark_events-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'non-system rebalancing should resume once priority control-plane partitions have quorum spread',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'quorum-satisfied priority spread should not reschedule the short blocker retry',
+      );
+    },
+  );
 });
 
 
@@ -4835,6 +4957,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         rebalancer.getControlPlanePrioritySpreadBlocker(),
         {
           requiredDistinctNodeCount: 3,
+          requiredQuorumDistinctNodeCount: 2,
           blockedPartitions: [{
             partitionId: 'replica_operations-p1',
             readyReplicaCount: null,

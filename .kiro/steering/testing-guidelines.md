@@ -1,5 +1,29 @@
 # Testing Guidelines
 
+## Document Role
+
+This document governs stable testing policy for all code changes.
+
+Use this file for:
+
+- durable expectations for bug-fix testing
+- owner-path regression policy
+- test execution discipline
+- durable policies that apply across workstreams
+
+Do not use this file for:
+
+- exact script names
+- narrow threshold tables tied to one suite
+- single-scenario closure ladders
+- local command examples
+
+Local procedures live next to the relevant suites and workflows:
+
+- [`../../test/README.local.md`](../../test/README.local.md)
+- [`../../test/integration/README.local.md`](../../test/integration/README.local.md)
+- [`../../test/distributed/README.local.md`](../../test/distributed/README.local.md)
+
 ## Test-First Bug Fix Policy
 
 **All bug fixes MUST be preceded by a failing test that reproduces the bug.**
@@ -289,51 +313,16 @@ Required behavior:
    artifacts used for diagnosis.
 
 ## Distributed Harness Failure Triage Script
-
-After any distributed harness failure, run the consolidated diagnostics script
-before implementing a fix:
-
-```bash
-npm run analyze:distributed-failure -- --report test-output/reports/<report>.report.json
-```
-
-This is required so every failure investigation starts from the same
-structured signal set (phase reason counts, channel metrics, load metrics,
-consistency mismatches, and cluster-stage timing) instead of ad hoc log
-sampling.
+Distributed-harness local procedure lives in
+`test/distributed/README.local.md`.
 
 ## Distributed Scenario Policy SQL Ownership Gate
-
-Distributed scenario code must route `tables.table_policies` mutations through
-the canonical owner helper in
-`test/distributed/scenarios/table-distribution-helpers.js`.
-
-Do not introduce raw policy-update SQL in other scenario files.
-
-Run this guard when changing distributed scenarios:
-
-```bash
-npm run guard:scenario-policy:file
-```
+Distributed-scenario local procedure lives in
+`test/distributed/README.local.md`.
 
 ## Property-Based Test Iteration Limit
-
-Property-based tests using fast-check must limit iterations to keep test runs fast:
-
-- **Maximum 10 iterations** - Use `{numRuns: 10}` for all `fc.assert()` calls
-- This applies to all property tests in the project
-- Do not use higher values like `numRuns: 100` or the default
-
-Example:
-```javascript
-fc.assert(
-  fc.property(
-    fc.string(),
-    (str) => str.length >= 0
-  ),
-  {numRuns: 10}  // Always limit to 10
-);
-```
+Project-local property-test iteration guidance lives in
+`test/README.local.md`.
 
 ## No Skipped Tests Policy
 
@@ -379,12 +368,14 @@ test-friendly fork of it works.
 
 ## Fix Failing Tests Immediately
 
-**All test failures and timeouts must be fixed when discovered, even if pre-existing.**
+Failures discovered in the touched area, or discovered by the test runs chosen
+for the current change, must be resolved before the task closes.
 
 When you discover failing or timing-out tests:
 
 1. **DO NOT IGNORE** - Failing tests indicate broken functionality
-2. **DO NOT DEFER** - Fix the issue immediately, even if it appears to be pre-existing
+2. **DO NOT DEFER** - Resolve the failure before closing the current task when
+   it is in the touched area or surfaced by the runs you chose to perform
 3. **INVESTIGATE** - Determine the root cause:
    - Is the test incorrect?
    - Is the implementation broken?
@@ -395,7 +386,8 @@ When you discover failing or timing-out tests:
    - Fix timing issues or clean up resources properly
 5. **VERIFY** - Re-run the test to confirm it passes
 
-**Rationale:** Broken tests erode confidence in the test suite. If tests are allowed to fail, developers stop trusting test results and the suite becomes worthless. Every test must pass, every time.
+**Rationale:** Broken tests erode confidence in the suite. Work must not close
+while the touched area remains red.
 
 ## System-Table Mutation Test Requirements
 
@@ -455,58 +447,8 @@ distributed baseline:
    local fixes.
 
 ## Node Join Convergence SLO Strategy
-
-All cluster join changes must include or update a convergence SLO integration
-test. The purpose is to prove the system settles after topology change and does
-not enter sustained churn.
-
-### Required Assertions
-
-After a node joins:
-
-1. **Settle within fixed window** - Cluster must settle before a strict timeout
-2. **Bounded leadership churn** - Leader-election events must stay below a
-   partition-count-scaled cap
-3. **No sustained over-target voters** - Any partition with voter count above
-   target must return within a bounded duration
-4. **Final state converged** - No partition may remain above target voter count
-   at the end of the test
-
-### Measurement Rules
-
-1. Track leadership changes by subscribing to partition `LEADER_ELECTED` events
-2. Sample voter counts at fixed interval from `services` system-table rows
-3. Count only voter-ready partition replicas:
-   - `service_type === 'partition'`
-   - `status === ACTIVE`
-   - explicit `raft_role` exists and is not `learner`
-   - `address` is present
-4. Record max continuous over-target duration per partition and assert it stays
-   below threshold
-5. Require a quiet window (no leader changes) before declaring settled
-
-### Baseline Thresholds
-
-Use these defaults unless a test has a justified reason to differ:
-
-- `targetVoterCount = 3`
-- `settleTimeoutMs = 20000`
-- `quietWindowMs = 5000`
-- `maxSustainedOverTargetMs = 2000`
-- `sampleIntervalMs = 250`
-- `maxLeaderChanges = partitionCount * 4`
-
-### Required Coverage
-
-For any change affecting rebalancing, learner promotion, leader election, or
-node join flow:
-
-1. Add or update convergence assertions in
-   `test/integration/node-join-convergence-slo.integration.test.js`
-2. Run the targeted test:
-   `npm test -- test/integration/node-join-convergence-slo.integration.test.js`
-3. If the test fails, treat it as a correctness regression, not just a timing
-   issue
+Integration-specific node-join convergence procedure lives in
+`test/integration/README.local.md`.
 
 ## When to Run Full Test Suite
 
@@ -516,55 +458,18 @@ Only run the complete test suite (`npm test`) at:
 - When explicitly requested by the user
 
 ## Full Test Suite Execution
-
-The full test suite can take a very long time to run. Follow these guidelines:
-
-1. **Use adequate timeout** - Set timeout to at least 150 seconds (150000ms)
-2. **Dump output to file** - Save test output to a temporary file for analysis
-3. **Analyze from file** - Perform multiple operations on the saved output instead of re-running tests
-
-**Example workflow:**
-```bash
-# Run full suite once, save output to temp file
-npm test 2>&1 > /tmp/test-output.txt
-
-# Analyze the output multiple times without re-running
-grep "# fail" /tmp/test-output.txt
-grep "Error:" /tmp/test-output.txt
-tail -50 /tmp/test-output.txt
-
-# Clean up when done
-rm /tmp/test-output.txt
-```
-
-**DO NOT:**
-- Run the full test suite multiple times in a row
-- Run the full suite without adequate timeout
-- Try to parse output in real-time if it times out
+Full-suite local execution procedure lives in `test/README.local.md`.
 
 ## Test Output Management
-
-- Avoid verbose test output that can overflow context
-- If a test run produces too much output, re-run with specific test file or pattern
-- Summarize test results rather than showing full output when possible
+Output-handling procedure lives in `test/README.local.md`.
 
 ## Example Commands
-
-```bash
-# Run specific test file
-npm test -- test/storage/partition.test.js
-
-# Run tests matching a pattern
-npm test -- --grep "should insert"
-
-# Run a single test
-npm test -- --grep "exact test name"
-```
+Command examples live in `test/README.local.md`.
 
 ## Distributed test harness
 
 Used for lifelike testing scenarios with multiple nodes and for efficiency testing.
-See; test/distributed/README.local.md
+See `test/distributed/README.local.md`.
 
 ## Availability Under Pressure Test Policy
 

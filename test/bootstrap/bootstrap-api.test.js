@@ -1490,6 +1490,65 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
     await api.shutdown();
   });
 
+test('BootstrapAPI - bootstrap join readiness allows bootstrap-init recovery bypass reasons',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'INIT',
+      state: 'warming',
+      reasons: [
+        BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
+        BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
+        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+      ],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(strictReadyResponse.statusCode, 503,
+      'strict readiness should stay blocked during bootstrap-init recovery');
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay open for bootstrap-init recovery fan-out');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true for bootstrap-init recovery fan-out');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated bootstrap-init recovery blockers');
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - readyz fails closed when published membership excludes the local node',
   async (t) => {
     initializeTestEnvironment();

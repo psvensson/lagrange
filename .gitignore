@@ -9,10 +9,13 @@ node_modules/
 coverage/
 .nyc_output/
 dist/
+.gc/
 build/
 data/
 data2/
 .tap/
+.tmp/
+.playback/
 test-output/
 
 # Beads / Dolt files (added by bd init)

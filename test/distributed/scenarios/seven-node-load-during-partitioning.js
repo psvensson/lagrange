@@ -7,7 +7,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS, TIMEOUTS} from '../harness/constants.js';
+import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
 } from '../harness/scenario-config.js';
@@ -22,6 +22,7 @@ import {
   sleep,
   queryTableDistribution,
   rowsFromResult,
+  waitForPostSplitConsistencyConvergence,
 } from './table-distribution-helpers.js';
 
 const ZERO = 0;
@@ -93,6 +94,50 @@ function incrementHistogram(histogram, key) {
     return;
   }
   histogram[normalizedKey] = (histogram[normalizedKey] || ZERO) + 1;
+}
+
+/**
+ * Clone a JSON-serializable diagnostics payload.
+ * @param {*} value
+ * @return {*}
+ */
+function cloneDiagnosticsValue(value) {
+  if (value === null || typeof value === 'undefined') {
+    return null;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * Normalize one ID collection into a sorted array.
+ * @param {*} value
+ * @return {Array<string>}
+ */
+function normalizeIdCollection(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry)).sort();
+  }
+  if (value instanceof Set) {
+    return Array.from(value, (entry) => String(entry)).sort();
+  }
+  return [];
+}
+
+/**
+ * Build a compact partition distribution snapshot.
+ * @param {Object|null} distribution
+ * @return {Object|null}
+ */
+function buildDistributionSnapshot(distribution) {
+  if (!distribution || typeof distribution !== 'object') {
+    return null;
+  }
+  return {
+    partitionCount: Number(distribution.partitionCount || ZERO),
+    partitionIds: normalizeIdCollection(distribution.partitionIds),
+    replicaNodeCount: Number(distribution.replicaNodeCount || ZERO),
+    replicaNodeIds: normalizeIdCollection(distribution.replicaNodeIds),
+  };
 }
 
 /**
@@ -209,6 +254,55 @@ function summarizeSplitWorkflowAdmissions(
 }
 
 /**
+ * Summarize split-manager evaluation diagnostics from control snapshot.
+ * Workflow admissions only appear after table transition metadata is written,
+ * so split-manager candidate/deferred/error counts provide earlier evidence
+ * that the product has started evaluating real split work.
+ * @param {Object|null} splitEvaluation
+ * @return {Object}
+ */
+function summarizeSplitEvaluation(splitEvaluation) {
+  const diagnostics = splitEvaluation && typeof splitEvaluation === 'object' ?
+    splitEvaluation :
+    null;
+  const lastSummary = diagnostics?.lastSummary &&
+    typeof diagnostics.lastSummary === 'object' ?
+    diagnostics.lastSummary :
+    null;
+  const splitCandidateCount = Number(lastSummary?.splitCandidateCount || ZERO);
+  const executedSplitCount = Number(lastSummary?.executedSplitCount || ZERO);
+  const splitDeferredCount = Number(lastSummary?.splitDeferredCount || ZERO);
+  const splitErrorCount = Number(lastSummary?.splitErrorCount || ZERO);
+  const attemptEvidenceCount =
+    splitCandidateCount +
+    executedSplitCount +
+    splitDeferredCount +
+    splitErrorCount;
+
+  return {
+    available: diagnostics !== null,
+    lastTrigger: diagnostics?.lastTrigger || null,
+    requestedReasonCodes: normalizeIdCollection(
+      diagnostics?.requestedReasonCodes,
+    ),
+    requestedPartitionIds: normalizeIdCollection(
+      diagnostics?.requestedPartitionIds,
+    ),
+    lastSummary: lastSummary ? {
+      evaluated: lastSummary.evaluated === true,
+      partitionsEvaluated: Number(lastSummary.partitionsEvaluated || ZERO),
+      splitCandidateCount,
+      executedSplitCount,
+      splitDeferredCount,
+      splitErrorCount,
+      mergeCandidateCount: Number(lastSummary.mergeCandidateCount || ZERO),
+    } : null,
+    attemptEvidenceCount,
+    hasAttemptEvidence: attemptEvidenceCount > ZERO,
+  };
+}
+
+/**
  * Query split progress diagnostics from control snapshot.
  * @param {Object} seedNode
  * @param {string} tableName
@@ -244,6 +338,9 @@ async function querySplitProgressDiagnostics(seedNode, tableName, tableId) {
         controlPlaneDiagnostics.workflowAdmissionsByWorkflowId,
         tableName,
         tableId,
+      ),
+      splitEvaluationSummary: summarizeSplitEvaluation(
+        controlPlaneDiagnostics.splitEvaluation,
       ),
       placementSummary: summarizePlacementEligibility(
         controlPlaneDiagnostics.placementEligibilityByNodeId,
@@ -282,6 +379,11 @@ function buildPartitioningFailure(options) {
       replicaNodeCount: options.replicaNodeCount,
       metricsTotal: options.metricsTotal,
       metricsAtFirstPartitioning: options.metricsAtFirstPartitioning,
+      loadMetrics: cloneDiagnosticsValue(options.loadMetrics),
+      loadMetricsAtFirstPartitioning:
+        cloneDiagnosticsValue(options.loadMetricsAtFirstPartitioning),
+      distributionSnapshot:
+        buildDistributionSnapshot(options.distributionSnapshot),
       splitProgress: options.splitProgress || null,
     },
   };
@@ -360,37 +462,17 @@ async function run(cluster, options = {}) {
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-load-during-partitioning',
   });
-  let loadNodePlan;
-  let loadNodeAdmissionFallback = null;
-  try {
-    loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
-      seedNode,
-      cluster,
-      {
-        tableName: effectiveTableName,
-        tableId: tablePreparation.tableId,
-        requiredNodeCount: minDistinctReplicaNodes,
-        timeoutMs: Math.max(partitioningTimeoutMs, convergenceTimeoutMs),
-        queryNodes: nodes,
-      },
-    );
-    if (loadNodePlan?.admissionFallbackWarning) {
-      loadNodeAdmissionFallback = {
-        warning: loadNodePlan.admissionFallbackWarning,
-      };
-    }
-  } catch (error) {
-    loadNodeAdmissionFallback = {
-      warning: error instanceof Error ? error.message : String(error),
-    };
-    loadNodePlan = {
-      initialNodes: [seedNode],
-      nodeResolver: () => [seedNode],
-      stop: () => {},
-      bootstrapRequiredNodeCount: 1,
-      targetNodeCount: 1,
-    };
-  }
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      timeoutMs: Math.max(partitioningTimeoutMs, convergenceTimeoutMs),
+      queryNodes: nodes,
+    },
+  );
   const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
     loadOpsPerSec,
     loadNodePlan.initialNodes.length,
@@ -431,6 +513,7 @@ async function run(cluster, options = {}) {
 
     let sampleCount = ZERO;
     let metricsAtFirstPartitioning = null;
+    let loadMetricsAtFirstPartitioning = null;
     let latestDistribution = baseline;
     let latestMetrics = loadRun.getMetrics();
     let latestSplitProgress = null;
@@ -458,8 +541,14 @@ async function run(cluster, options = {}) {
         latestDistribution.partitionIds,
       );
 
+      const splitAttemptEvidenceObserved =
+        latestSplitProgress.available === true &&
+        (latestSplitProgress.workflowSummary.workflowCount > ZERO ||
+          latestSplitProgress.splitEvaluationSummary?.hasAttemptEvidence ===
+            true);
+
       if (latestSplitProgress.available === true &&
-          latestSplitProgress.workflowSummary.workflowCount === ZERO &&
+          splitAttemptEvidenceObserved !== true &&
           Date.now() >= splitAttemptDeadline) {
         throw buildPartitioningFailure({
           reasonCode: FAILURE_REASON_NO_SPLIT_ATTEMPTS,
@@ -467,6 +556,11 @@ async function run(cluster, options = {}) {
             'Timed out waiting for split-attempt evidence. ' +
             'workflowCount=0, placement.ineligible=' +
             latestSplitProgress.placementSummary.ineligibleNodeCount +
+            ', splitEval.attempts=' +
+            Number(
+              latestSplitProgress.splitEvaluationSummary
+                ?.attemptEvidenceCount || ZERO,
+            ) +
             ', additionalPartitions=' + additionalPartitionIds.size +
             ', spread=' + latestDistribution.replicaNodeCount +
             ', metrics.total=' + latestMetrics.total,
@@ -477,6 +571,9 @@ async function run(cluster, options = {}) {
           replicaNodeCount: latestDistribution.replicaNodeCount,
           metricsTotal: latestMetrics.total,
           metricsAtFirstPartitioning,
+          loadMetrics: latestMetrics,
+          loadMetricsAtFirstPartitioning,
+          distributionSnapshot: latestDistribution,
           splitProgress: latestSplitProgress,
         });
       }
@@ -484,6 +581,7 @@ async function run(cluster, options = {}) {
       if (metricsAtFirstPartitioning === null &&
           additionalPartitionIds.size > ZERO) {
         metricsAtFirstPartitioning = latestMetrics.total;
+        loadMetricsAtFirstPartitioning = cloneDiagnosticsValue(latestMetrics);
       }
 
       const growthSatisfied =
@@ -512,7 +610,9 @@ async function run(cluster, options = {}) {
           replicaNodeIds:
             Array.from(latestDistribution.replicaNodeIds).sort(),
           metricsAtFirstPartitioning,
+          loadMetricsAtFirstPartitioning,
           metricsAtSuccess: latestMetrics.total,
+          loadMetricsAtSuccess: cloneDiagnosticsValue(latestMetrics),
           operationsAfterPartitioning,
           sampleCount,
           splitProgress: latestSplitProgress,
@@ -543,6 +643,9 @@ async function run(cluster, options = {}) {
         replicaNodeCount: latestDistribution.replicaNodeCount,
         metricsTotal: latestMetrics.total,
         metricsAtFirstPartitioning,
+        loadMetrics: latestMetrics,
+        loadMetricsAtFirstPartitioning,
+        distributionSnapshot: latestDistribution,
         splitProgress: latestSplitProgress,
       });
     }
@@ -570,9 +673,7 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
   );
 
-  await cluster.waitForConsistencyConvergence({
-    timeoutMs: TIMEOUTS.CONSISTENCY_CONVERGENCE_POST_SPLIT,
-  });
+  await waitForPostSplitConsistencyConvergence(cluster);
 
   return {
     expectedNodeCount,
@@ -580,7 +681,6 @@ async function run(cluster, options = {}) {
     tablePreparation,
     convergenceTiming: convergence,
     controlPlaneQuiescence,
-    loadNodeAdmissionFallback,
     partitioningEvidence,
     loadMetrics: metrics,
     successRate,

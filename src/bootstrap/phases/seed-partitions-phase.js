@@ -14,9 +14,12 @@ import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
 import {EPOCH_CONFIG_KEY} from '../../cdc/cdc-integration-service.js';
 import {StartupRecoveryCoordinator} from '../startup-recovery-coordinator.js';
+import {isPriorityControlPlanePartition} from
+  '../system-partition-classification.js';
 import {resolveCanonicalLeaderService} from
   '../../cache/leader-readiness-gate.js';
 import {
+  BOOTSTRAP_PHASE,
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
@@ -57,6 +60,7 @@ class SeedPartitionsPhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.satisfiedPartitionLeadershipSetKey = null;
   }
 
   /**
@@ -357,16 +361,18 @@ class SeedPartitionsPhase {
    * Wait for all system table partitions to establish leadership.
    * @return {Promise<void>}
    */
-  async waitForPartitionLeadership() {
+  async waitForPartitionLeadership(options = {}) {
     const d = this.delegates;
     const logger = d.getLogger();
     const config = d.getConfig();
     const startTime = Date.now();
-    const timeoutMs = Math.min(
+    const configuredTimeoutMs =
       config.leadershipWaitTimeoutMs ||
-        BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs,
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-    );
+      BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
+    const timeoutMs = Number.isFinite(configuredTimeoutMs) &&
+      configuredTimeoutMs > NUM.ZERO ?
+      Math.floor(configuredTimeoutMs) :
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
     let delay = config.leadershipWaitInitialDelayMs ||
       BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
     const maxDelay =
@@ -374,10 +380,22 @@ class SeedPartitionsPhase {
     const backoffMultiplier =
       BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
 
-    const partitionIds = new Set();
-    for (const partition of d.getPartitionServices().values()) {
-      partitionIds.add(partition.partitionId);
+    const requestedPartitionIds = Array.isArray(options.partitionIds) ?
+      options.partitionIds :
+      options.partitionIds instanceof Set ?
+        [...options.partitionIds] :
+        null;
+    const partitionIds = requestedPartitionIds ?
+      new Set(requestedPartitionIds.filter((partitionId) =>
+        typeof partitionId === 'string' && partitionId.length > NUM.ZERO,
+      )) :
+      new Set();
+    if (!requestedPartitionIds) {
+      for (const partition of d.getPartitionServices().values()) {
+        partitionIds.add(partition.partitionId);
+      }
     }
+    const partitionSetKey = this.buildPartitionLeadershipSetKey(partitionIds);
 
     logger.debug(BOOTSTRAP_LOG_MSG.WAITING_PARTITION_LEADERS, {
       partitionCount: partitionIds.size,
@@ -385,8 +403,18 @@ class SeedPartitionsPhase {
       nodeId: d.getNodeId(),
     });
 
+    if (this.satisfiedPartitionLeadershipSetKey === partitionSetKey) {
+      logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_IMMEDIATE, {
+        partitionCount: partitionIds.size,
+        elapsedMs: NUM.ZERO,
+        cached: true,
+      });
+      return;
+    }
+
     const leadersFound = this.checkPartitionLeaders(partitionIds);
     if (leadersFound.size === partitionIds.size) {
+      this.satisfiedPartitionLeadershipSetKey = partitionSetKey;
       logger.debug(
         BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_IMMEDIATE, {
           partitionCount: partitionIds.size,
@@ -401,6 +429,7 @@ class SeedPartitionsPhase {
 
       const leaders = this.checkPartitionLeaders(partitionIds);
       if (leaders.size === partitionIds.size) {
+        this.satisfiedPartitionLeadershipSetKey = partitionSetKey;
         logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_FOUND, {
           partitionCount: partitionIds.size,
           elapsedMs: Date.now() - startTime,
@@ -457,10 +486,17 @@ class SeedPartitionsPhase {
     return leadersFound;
   }
 
+  buildPartitionLeadershipSetKey(partitionIds) {
+    return [...partitionIds].sort().join(STRING.COMMA);
+  }
+
   canBypassLocalPriorityPartitionLeadership(partitionId) {
     const d = this.delegates;
     if (!this.hasInitializedLocalPartitionReplica(partitionId)) {
       return false;
+    }
+    if (this.canBypassDirectBootstrapPriorityPartitionLeadership(partitionId)) {
+      return true;
     }
 
     const readinessState =
@@ -473,8 +509,30 @@ class SeedPartitionsPhase {
 
     const startupRecoveryCoordinator =
       new StartupRecoveryCoordinator({readinessState});
-    return startupRecoveryCoordinator.evaluate({partitionId})
+    return startupRecoveryCoordinator.evaluate({
+      partitionId,
+      allowBootstrapInitPriorityBypass: true,
+    })
       .shouldBypassLocalPriorityControlPlaneStartupReadiness === true;
+  }
+
+  canBypassDirectBootstrapPriorityPartitionLeadership(partitionId) {
+    const d = this.delegates;
+    if (!isPriorityControlPlanePartition({partitionId})) {
+      return false;
+    }
+    const phase = typeof d.getPhase === 'function' ?
+      d.getPhase() :
+      null;
+    if (phase !== BOOTSTRAP_PHASE.PARTITIONS &&
+        phase !== BOOTSTRAP_PHASE.REGISTRATION) {
+      return false;
+    }
+    const cdcIntegrationService =
+      typeof d.getCdcIntegrationService === 'function' ?
+        d.getCdcIntegrationService() :
+        null;
+    return cdcIntegrationService?.sqlQueryEngine == null;
   }
 
   canBypassCanonicalPartitionLeadership(partitionId) {

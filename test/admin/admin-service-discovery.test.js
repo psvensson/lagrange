@@ -4,6 +4,8 @@ import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js'
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {PRESSURE_WORK_CLASS} from
+  '../../src/control-plane/pressure-governor.js';
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
@@ -87,6 +89,72 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
       ),
       true,
       'authoritative discovery repair should route gateway reads as control-plane recovery work',
+    );
+  });
+
+test('AdminServiceDiscovery control snapshot repair reads bypass pressure degradation',
+  async (t) => {
+    const readCalls = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent, options) {
+          readCalls.push({
+            tableName: readIntent?.tableName,
+            allowPressureDegrade: options?.allowPressureDegrade,
+            workClass: options?.workClass,
+            deliveryPriority: options?.deliveryPriority,
+            routingReadinessDimension: options?.routingReadinessDimension,
+          });
+          return {
+            success: true,
+            tableName: readIntent?.tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 0};
+        },
+      },
+    });
+
+    await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'control_snapshot',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.equal(readCalls.length > 0, true,
+      'control snapshot repair should issue authoritative discovery reads');
+    t.equal(
+      readCalls.every((call) => call.allowPressureDegrade === false),
+      true,
+      'control snapshot repair should fail closed instead of degrading on pressure',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.workClass === PRESSURE_WORK_CLASS.CRITICAL),
+      true,
+      'control snapshot repair should use the critical work class',
+    );
+    t.equal(
+      readCalls.every((call) => call.deliveryPriority === 'critical'),
+      true,
+      'control snapshot repair should use critical delivery priority',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.routingReadinessDimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE),
+      true,
+      'control snapshot repair should keep recovery-eligible routing semantics',
     );
   });
 

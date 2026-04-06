@@ -664,14 +664,24 @@ async function run(cluster, options = {}) {
     loadRunCompleted = true;
 
     const admissionSignals = Number(metrics?.admissionSignals || ZERO_FAILURES);
+    const nodeAdmissionBlockedWaits = Number(
+      metrics?.waitReasons?.nodeAdmissionBlocked || ZERO_FAILURES,
+    );
+    const retryableControlPlanePressureWaits = Number(
+      metrics?.waitReasons?.retryableControlPlanePressure || ZERO_FAILURES,
+    );
     const nonAdmissionAttemptErrors = Number(
       metrics?.nonAdmissionAttemptErrors || ZERO_FAILURES,
     );
     const dispatchedOperations = Number(
       metrics?.dispatchedOperations || ZERO_FAILURES,
     );
+    const admissionPressureSignalsPresent =
+      admissionSignals > ZERO_FAILURES ||
+      nodeAdmissionBlockedWaits > ZERO_FAILURES ||
+      retryableControlPlanePressureWaits > ZERO_FAILURES;
     const admissionPressureDominant =
-      admissionSignals > ZERO_FAILURES &&
+      admissionPressureSignalsPresent &&
       nonAdmissionAttemptErrors <= ZERO_FAILURES;
 
     if (metrics.total <= ZERO_FAILURES &&

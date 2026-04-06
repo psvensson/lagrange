@@ -2,12 +2,16 @@
 
 Load for roadmap and edition-scope checks.
 
-Generated rules: 3
-Estimated tokens: 93
+Generated rules: 7
+Estimated tokens: 204
 Domains: governance
 
 ## Rules
 
-1. [GOV-0001] ../../product-roadmap.md is visibility-only and must not be used as an implementation source here.
-2. [GOV-0002] ../../roadmap.md is the only roadmap that may drive specs, tasks, or code in this repository.
-3. [GOV-0003] Any feature whose Implementation home is not AGPL repo in ../../edition-matrix.md is out of scope for implementation in this repository.
+1. [GOV-0001] The row must be in scope for this repository under ../../edition-matrix.md.
+2. [GOV-0002] Broad rows must gain a linked spec or architecture document before active implementation starts.
+3. [GOV-0003] The implementation home remains AGPL repo, or the user explicitly asks for AGPL-scoped preparatory work only.
+4. [GOV-0004] The work does not implement paid-only behavior, paid-only operator flows, or paid-only control surfaces in this repository.
+5. [GOV-0005] A row may move to active implementation only when the intended behavior is sharp enough to produce tasks without inventing scope locally.
+6. [GOV-0006] Shared substrate work may happen in this repository only when all of the following are true:
+7. [GOV-0007] The work remains consistent with ../../roadmap.md and ../../edition-matrix.md.

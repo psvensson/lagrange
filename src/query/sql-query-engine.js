@@ -23,6 +23,8 @@
 import {createHash} from 'node:crypto';
 import {SQLParser} from './sql-parser.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {isPriorityControlPlanePartition} from
+  '../bootstrap/system-partition-classification.js';
 import {PartitionResolver} from './partition-resolver.js';
 import {QueryExecutor} from './query-executor.js';
 import {TableCreationService} from './table-creation-service.js';
@@ -32,7 +34,10 @@ import {
   DistributedTransactionCoordinator,
   WRITE_OPERATION_STATUS,
 } from './distributed/distributed-transaction-coordinator.js';
-import {OperationType} from '../rebalancer/replica-status.js';
+import {
+  OperationType,
+  OPERATION_METADATA_KEY,
+} from '../rebalancer/replica-status.js';
 import {
   ReplicaOperationField,
 } from '../rebalancer/replica-operation-constants.js';
@@ -1767,6 +1772,8 @@ class SQLQueryEngine {
    *   replica cohort required before provisioning can continue.
    * @param {string[]} [context.targetNodeIds] - Explicit provisioning target
    *   nodes for split child bootstrapping.
+   * @param {string} [context.routingReadinessDimension] - Optional routing
+   *   readiness dimension used while waiting for bootstrap quorum visibility.
    * @return {Promise<void>}
    * @private
    */
@@ -1812,6 +1819,11 @@ class SQLQueryEngine {
       context?.partitionMetadata && typeof context.partitionMetadata === 'object' ?
         context.partitionMetadata :
         null;
+    const routingReadinessDimension =
+      typeof context?.routingReadinessDimension === 'string' &&
+        context.routingReadinessDimension.length > 0 ?
+        context.routingReadinessDimension :
+        this.queryExecutor?.defaultRoutingReadinessDimension;
     const timeoutBudget = context?.timeoutBudget || this.createControlPlaneTimeoutBudget(
       this.tablePartitionProvisioningTimeoutMs,
     );
@@ -1828,7 +1840,10 @@ class SQLQueryEngine {
       );
     let admissionConvergence = null;
 
-    const routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
+    const routableNodeIds = this.getRoutablePartitionServiceNodeIds(
+      partitionId,
+      routingReadinessDimension,
+    );
     if (routableNodeIds.length >= minimumRoutableReplicaCount) {
       return;
     }
@@ -2154,6 +2169,28 @@ class SQLQueryEngine {
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
         bootstrapTopology.peerAddresses;
+      const initialStepEntry = Array.isArray(operation.stepsHistory) &&
+        operation.stepsHistory.length > 0 &&
+        operation.stepsHistory[0] &&
+        typeof operation.stepsHistory[0] === 'object' ?
+          operation.stepsHistory[0] :
+          null;
+      if (initialStepEntry) {
+        initialStepEntry[OPERATION_METADATA_KEY.REPLICA_IDS] =
+          bootstrapTopology.replicaIds;
+        initialStepEntry[OPERATION_METADATA_KEY.PEER_ADDRESSES] =
+          bootstrapTopology.peerAddresses;
+        if (bootstrapTableMetadata) {
+          initialStepEntry[
+            OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA
+          ] = bootstrapTableMetadata;
+        }
+        if (bootstrapPartitionMetadata) {
+          initialStepEntry[
+            OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA
+          ] = bootstrapPartitionMetadata;
+        }
+      }
       if (bootstrapTableMetadata) {
         operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
           bootstrapTableMetadata;
@@ -2161,6 +2198,11 @@ class SQLQueryEngine {
       if (bootstrapPartitionMetadata) {
         operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
           bootstrapPartitionMetadata;
+      }
+      if (typeof this.rebalanceCoordinator.dispatchOperation === 'function' &&
+          typeof this.rebalanceCoordinator.persistOperationUpdate ===
+            'function') {
+        await this.rebalanceCoordinator.persistOperationUpdate(operation);
       }
       const executionResult =
         typeof this.rebalanceCoordinator.dispatchOperation === 'function' ?
@@ -2218,6 +2260,7 @@ class SQLQueryEngine {
           uniqueMetadataWaitReplicaIds,
           minimumRoutableReplicaCount,
           timeoutBudget,
+          routingReadinessDimension,
         );
       }
     }
@@ -2226,6 +2269,7 @@ class SQLQueryEngine {
       partitionId,
       minimumRoutableReplicaCount,
       timeoutBudget,
+      routingReadinessDimension,
     );
     await this.waitForPartitionLeaderService(
       partitionId,
@@ -2233,6 +2277,7 @@ class SQLQueryEngine {
       {
         partitionMetadata: bootstrapPartitionMetadata,
         bootstrapLeaderNodeId,
+        routingReadinessDimension,
       },
     );
   }
@@ -2942,6 +2987,7 @@ class SQLQueryEngine {
     replicaIds,
     minimumRoutableReplicaCount,
     timeoutBudget = null,
+    routingReadinessDimension = this.queryExecutor?.defaultRoutingReadinessDimension,
   ) {
     const uniqueReplicaIds = [...new Set(
       (Array.isArray(replicaIds) ? replicaIds : [])
@@ -2954,7 +3000,10 @@ class SQLQueryEngine {
     }
 
     for (const replicaId of uniqueReplicaIds) {
-      if (this.getRoutablePartitionServiceNodeIds(partitionId).length >=
+      if (this.getRoutablePartitionServiceNodeIds(
+        partitionId,
+        routingReadinessDimension,
+      ).length >=
         minimumRoutableReplicaCount) {
         return;
       }
@@ -2980,19 +3029,26 @@ class SQLQueryEngine {
     partitionId,
     minimumCount,
     timeoutBudget = null,
+    routingReadinessDimension = this.queryExecutor?.defaultRoutingReadinessDimension,
   ) {
     const requiredCount = Number.isInteger(minimumCount) &&
       minimumCount > 0 ?
       minimumCount :
       1;
     const hasRequiredRoutableCount = () =>
-      this.getRoutablePartitionServiceNodeIds(partitionId).length >=
+      this.getRoutablePartitionServiceNodeIds(
+        partitionId,
+        routingReadinessDimension,
+      ).length >=
         requiredCount;
     const checkRoutableCountWithRepair = async () => {
       if (hasRequiredRoutableCount()) {
         return true;
       }
-      return await this.maybeAwaitPartitionRoutingRepair(partitionId) &&
+      return await this.maybeAwaitPartitionRoutingRepair(
+        partitionId,
+        routingReadinessDimension,
+      ) &&
         hasRequiredRoutableCount();
     };
     if (await checkRoutableCountWithRepair()) {
@@ -3028,7 +3084,10 @@ class SQLQueryEngine {
    * @return {Promise<boolean>}
    * @private
    */
-  async maybeAwaitPartitionRoutingRepair(partitionId) {
+  async maybeAwaitPartitionRoutingRepair(
+    partitionId,
+    routingReadinessDimension = this.queryExecutor?.defaultRoutingReadinessDimension,
+  ) {
     if (!partitionId ||
         !this.queryExecutor ||
         typeof this.queryExecutor.getPartitionRoutingSnapshot !== 'function' ||
@@ -3041,6 +3100,7 @@ class SQLQueryEngine {
     try {
       routingSnapshot = this.queryExecutor.getPartitionRoutingSnapshot(
         partitionId,
+        routingReadinessDimension,
       );
     } catch (_error) {
       return false;
@@ -3066,13 +3126,21 @@ class SQLQueryEngine {
     timeoutBudget = null,
     options = {},
   ) {
+    const routingReadinessDimension =
+      typeof options?.routingReadinessDimension === 'string' &&
+        options.routingReadinessDimension.length > 0 ?
+        options.routingReadinessDimension :
+        this.queryExecutor?.defaultRoutingReadinessDimension;
     const hasLeaderRoute = () => {
       this.maybeInstallBootstrapLeaderOverlay(partitionId, options);
       if (!this.queryExecutor ||
           typeof this.queryExecutor.findPartitionLeaderAddress !== 'function') {
         return false;
       }
-      const address = this.queryExecutor.findPartitionLeaderAddress(partitionId);
+      const address = this.queryExecutor.findPartitionLeaderAddress(
+        partitionId,
+        routingReadinessDimension,
+      );
       return typeof address === 'string' && address.length > 0;
     };
     if (hasLeaderRoute()) {
@@ -3236,12 +3304,18 @@ class SQLQueryEngine {
    * @return {Array<string>} Unique node IDs.
    * @private
    */
-  getRoutablePartitionServiceNodeIds(partitionId) {
+  getRoutablePartitionServiceNodeIds(
+    partitionId,
+    routingReadinessDimension = undefined,
+  ) {
     if (!this.queryExecutor ||
         typeof this.queryExecutor.getRoutablePartitionServices !== 'function') {
       return [];
     }
-    const services = this.queryExecutor.getRoutablePartitionServices(partitionId);
+    const services = this.queryExecutor.getRoutablePartitionServices(
+      partitionId,
+      routingReadinessDimension,
+    );
     const nodeIds = new Set();
     for (const service of services) {
       const nodeId = service?.node_id || service?.nodeId || null;
@@ -5552,10 +5626,10 @@ class SQLQueryEngine {
         updated_at: record.updatedAt,
       },
     }, {
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      // Distributed transaction bookkeeping is durable recovery metadata, but
-      // it should not consume the same reserved transport lane used for
-      // replica operations and topology settlement under load.
+      // Durable transaction state must bypass interactive admission pressure,
+      // but it still stays on the background transport lane so replica and
+      // topology settlement keep the reserved critical queue capacity.
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
       deliveryPriority: this.resolveRoutedDeliveryPriority(
         TABLES.SQL_TRANSACTIONS,
       ),
@@ -5585,7 +5659,7 @@ class SQLQueryEngine {
         updated_at: record.updatedAt,
       },
     }, {
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
       deliveryPriority: this.resolveRoutedDeliveryPriority(
         TABLES.SQL_TRANSACTION_PARTICIPANTS,
       ),
@@ -5846,6 +5920,24 @@ class SQLQueryEngine {
   }
 
   /**
+   * Resolve the routing readiness dimension for transaction control delivery.
+   * Priority control-plane partitions must stay routable during recovery so
+   * distributed transaction replay can complete even while normal serve traffic
+   * is still blocked.
+   * @param {string} partitionId - Partition ID.
+   * @return {string}
+   * @private
+   */
+  resolveTransactionOperationRoutingReadinessDimension(partitionId) {
+    if (isPriorityControlPlanePartition({partitionId})) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return this.queryExecutor?.defaultRoutingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+  }
+
+  /**
    * Deliver one transaction control operation to a partition service.
    * @param {string} sessionId - Session ID.
    * @param {string} partitionId - Partition ID.
@@ -5856,10 +5948,8 @@ class SQLQueryEngine {
    * @private
    */
   async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
-    const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
-    if (!serviceInfo) {
-      throw new Error(`${QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND_PREFIX}${partitionId}`);
-    }
+    const routingReadinessDimension =
+      this.resolveTransactionOperationRoutingReadinessDimension(partitionId);
     const payload = {
       type: QUERY_OPERATION.TRANSACTION,
       operation,
@@ -5868,20 +5958,36 @@ class SQLQueryEngine {
     if (Number.isFinite(options.transactionEpoch)) {
       payload.transactionEpoch = Math.floor(options.transactionEpoch);
     }
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
-      ...payload,
-    });
-    if (!response.acknowledged || !response.success) {
+    const result = await this.queryExecutor.executeOnPartition(
+      partitionId,
+      '',
+      [],
+      false,
+      false,
+      false,
+      {
+        buildRequest: () => ({...payload}),
+        buildSuccessResult: () => ({success: true}),
+        isSuccessfulResponse: (response) =>
+          response?.acknowledged === true &&
+          response?.success === true,
+        routingReadinessDimension,
+        clearSessionPartitionAffinityOnSuccess:
+          operation === QUERY_OPERATION.COMMIT ||
+          operation === QUERY_OPERATION.ROLLBACK,
+      },
+    );
+    if (!result.success) {
       if (operation === QUERY_OPERATION.BEGIN) {
-        throw new Error(response.error || QUERY_ERROR_MSG.BEGIN_FAILED);
+        throw new Error(result.error || QUERY_ERROR_MSG.BEGIN_FAILED);
       }
       if (operation === QUERY_OPERATION.PREPARE) {
-        throw new Error(response.error || QUERY_ERROR_MSG.PREPARE_FAILED);
+        throw new Error(result.error || QUERY_ERROR_MSG.PREPARE_FAILED);
       }
       if (operation === QUERY_OPERATION.COMMIT) {
-        throw new Error(response.error || QUERY_ERROR_MSG.COMMIT_FAILED);
+        throw new Error(result.error || QUERY_ERROR_MSG.COMMIT_FAILED);
       }
-      throw new Error(response.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
+      throw new Error(result.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
     }
   }
 

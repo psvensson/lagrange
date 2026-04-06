@@ -156,6 +156,20 @@ test('REPLACE replica workflow', async (t) => {
           ReplicaOperationMessageType.CREATE_REPLICA,
           'first REPLACE phase should issue CREATE_REPLICA to target node',
         );
+        t.same(
+          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
+          ['nodes-p1-r2', 'nodes-p1-r3', 'nodes-p1-r4'],
+          'REPLACE create phase should exclude the retiring source replica from bootstrap replica ids',
+        );
+        t.same(
+          deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
+          [
+            'seed-node/partition/nodes-p1-r2',
+            'seed-node/partition/nodes-p1-r3',
+            'node-2/partition/nodes-p1-r4',
+          ],
+          'REPLACE create phase should exclude the retiring source replica from bootstrap peer addresses',
+        );
         t.equal(
           deliveries[0]?.options?.deliveryPriority,
           'critical',
@@ -327,6 +341,137 @@ test('REPLACE replica workflow', async (t) => {
     },
   );
 
+  await t.test(
+    'REPLACE STOPPING reconciliation completes when the source replica is already failed',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.FAILED}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.sourceReplicaId = 'users-p1-r1';
+        operation.workflowStep = WORKFLOW_STEP.STOPPING;
+        operation.status = ReplicaStatus.ACTIVE;
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(progressed, true,
+          'STOPPING reconciliation should treat a failed source replica as terminal progress for REPLACE');
+        t.equal(
+          deliveries.length,
+          0,
+          'terminal failed source state should not redispatch source removal',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.REMOVED,
+          'REPLACE should complete once the source replica is already non-serving',
+        );
+        t.equal(
+          operation.status,
+          ReplicaStatus.REMOVED,
+          'completed REPLACE should persist the removed terminal status',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'RebalanceCoordinator reconcileSyncingOperation advances REPLACE into source removal',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.ACTIVE}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
+
+        await coordinator.reconcileSyncingOperation(operation);
+
+        t.equal(deliveries.length, 1,
+          'syncing reconciliation should dispatch the source removal phase');
+        t.equal(
+          deliveries[0]?.payload?.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'syncing reconciliation should remove the source replica for REPLACE',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'syncing reconciliation should advance REPLACE into STOPPING',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
   await t.test('RebalanceCoordinator routes REPLACE creation through storage admission',
     async (t) => {
       const admissionCalls = [];
@@ -360,6 +505,7 @@ test('REPLACE replica workflow', async (t) => {
           sourceNodeId: 'seed-node',
           targetNodeId: 'node-2',
           estimatedBytes: 1,
+          isCritical: true,
         }, 'REPLACE admission should use the canonical replace owner path');
       } finally {
         await coordinator.shutdown();
@@ -863,6 +1009,7 @@ test('REPLACE replica workflow', async (t) => {
         t.same(admissionCalls[0], {
           targetNodeId: 'node-2',
           estimatedBytes: 1,
+          isCritical: true,
         }, 'ADD admission should use the canonical add owner path');
         t.equal(result.skipped, true,
           'blocked admission should skip scheduling instead of throwing');

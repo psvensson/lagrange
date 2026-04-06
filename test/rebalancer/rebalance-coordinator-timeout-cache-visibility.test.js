@@ -313,6 +313,185 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
     );
   });
 
+test('checkTimeouts merges authoritative incomplete operations when the ' +
+  'local cache only exposes a subset', async (t) => {
+  const nowMs = Date.now();
+  const staleUpdatedAtMs = nowMs - 70000;
+  const cacheVisibleOperationRow = {
+    operation_id: 'op-cache-visible-syncing',
+    type: 'ADD',
+    partition_id: 'partition-cache-visible',
+    replica_id: 'partition-cache-visible-r2',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    created_at: staleUpdatedAtMs - 5000,
+    updated_at: staleUpdatedAtMs,
+    completed_at: null,
+    error_message: null,
+    steps_history: '[]',
+    entity_type: 'partition',
+    entity_id: 'partition-cache-visible',
+  };
+  const authoritativeOnlyOperationRow = {
+    operation_id: 'op-authoritative-only-syncing',
+    type: 'ADD',
+    partition_id: 'partition-authoritative-only',
+    replica_id: 'partition-authoritative-only-r2',
+    source_node_id: 'node-1',
+    target_node_id: 'node-3',
+    status: 'syncing',
+    workflow_step: 'SYNCING',
+    created_at: staleUpdatedAtMs - 5000,
+    updated_at: staleUpdatedAtMs,
+    completed_at: null,
+    error_message: null,
+    steps_history: '[]',
+    entity_type: 'partition',
+    entity_id: 'partition-authoritative-only',
+  };
+  const operationRows = new Map([
+    [cacheVisibleOperationRow.operation_id, cacheVisibleOperationRow],
+    [authoritativeOnlyOperationRow.operation_id, authoritativeOnlyOperationRow],
+  ]);
+  const serviceRowsByReplicaId = new Map([
+    [cacheVisibleOperationRow.replica_id, {
+      service_id: cacheVisibleOperationRow.replica_id,
+      replica_id: cacheVisibleOperationRow.replica_id,
+      partition_id: cacheVisibleOperationRow.partition_id,
+      node_id: cacheVisibleOperationRow.target_node_id,
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'follower',
+    }],
+    [authoritativeOnlyOperationRow.replica_id, {
+      service_id: authoritativeOnlyOperationRow.replica_id,
+      replica_id: authoritativeOnlyOperationRow.replica_id,
+      partition_id: authoritativeOnlyOperationRow.partition_id,
+      node_id: authoritativeOnlyOperationRow.target_node_id,
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'follower',
+    }],
+  ]);
+  const authoritativeReplicaOperationReads = [];
+
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      if (sql.includes('FROM replica_operations')) {
+        authoritativeReplicaOperationReads.push({
+          sql: String(sql),
+          params: [...params],
+        });
+        return {
+          success: true,
+          rows: [...operationRows.values()].map((row) => ({...row})),
+          affectedRows: 0,
+        };
+      }
+      if (sql.startsWith('UPDATE replica_operations SET')) {
+        const operationRow = operationRows.get(params[7]);
+        operationRow.status = params[0];
+        operationRow.workflow_step = params[1];
+        operationRow.updated_at = params[2];
+        operationRow.completed_at = params[3];
+        operationRow.error_message = params[4];
+        operationRow.steps_history = params[5];
+        operationRow.replica_id = params[6];
+        return {
+          success: true,
+          affectedRows: 1,
+        };
+      }
+      if (sql.includes('FROM services WHERE service_id = ?')) {
+        const serviceRow = serviceRowsByReplicaId.get(params[0]) || null;
+        return {
+          success: true,
+          rows: serviceRow ? [{...serviceRow}] : [],
+          affectedRows: serviceRow ? 1 : 0,
+        };
+      }
+      if (sql.includes('FROM services') &&
+          sql.includes('WHERE partition_id = ? AND node_id = ?')) {
+        const serviceRow = [...serviceRowsByReplicaId.values()].find((row) =>
+          row.partition_id === params[0] &&
+          row.node_id === params[1],
+        ) || null;
+        return {
+          success: true,
+          rows: serviceRow ? [{...serviceRow}] : [],
+          affectedRows: serviceRow ? 1 : 0,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: 0,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: 'node-1',
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName !== 'replica_operations') {
+          return null;
+        }
+        return key === cacheVisibleOperationRow.operation_id ?
+          cacheVisibleOperationRow :
+          null;
+      },
+      getAll(tableName) {
+        if (tableName !== 'replica_operations') {
+          return [];
+        }
+        return [cacheVisibleOperationRow];
+      },
+      filter(tableName, predicate) {
+        if (tableName !== 'replica_operations') {
+          return [];
+        }
+        return [cacheVisibleOperationRow].filter(predicate);
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    sqlQueryEngine,
+    enableTimeouts: false,
+  });
+
+  coordinator.initialize();
+  try {
+    await coordinator.checkTimeouts();
+  } finally {
+    await coordinator.shutdown();
+  }
+
+  t.equal(
+    authoritativeReplicaOperationReads.length > 0,
+    true,
+    'timeout reconciliation should still consult authoritative owner rows when cache visibility is partial',
+  );
+  t.equal(cacheVisibleOperationRow.workflow_step, 'ACTIVE');
+  t.equal(cacheVisibleOperationRow.status, 'active');
+  t.equal(authoritativeOnlyOperationRow.workflow_step, 'ACTIVE');
+  t.equal(authoritativeOnlyOperationRow.status, 'active');
+});
+
 test('checkTimeouts applies bounded SYNCING timeout to priority control-plane partitions',
   async (t) => {
     const nowMs = Date.now();
@@ -368,7 +547,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
     };
 
     const coordinator = createCoordinator({
-      nodeId: 'node-1',
+      nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
@@ -466,7 +645,7 @@ test('checkTimeouts keeps non-priority SYNCING operations pending within configu
     };
 
     const coordinator = createCoordinator({
-      nodeId: 'node-1',
+      nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
@@ -605,7 +784,7 @@ test('coordinator SQL reads use shared control-plane timeout options',
   async (t) => {
     const executeQueryCalls = [];
     const coordinator = createCoordinator({
-      nodeId: 'node-1',
+      nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
@@ -1253,7 +1432,7 @@ test(
   async (t) => {
     let sqlQueryCalls = 0;
     const coordinator = createCoordinator({
-      nodeId: 'node-1',
+      nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         filter(tableName) {
@@ -1434,7 +1613,7 @@ test(
   async (t) => {
     let sqlQueryCalls = 0;
     const coordinator = createCoordinator({
-      nodeId: 'node-1',
+      nodeId: 'node-2',
       transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         filter(tableName) {
@@ -1825,9 +2004,10 @@ test('queryIncompleteOperations scopes reads to local operation owner',
       'queryIncompleteOperations should execute SQL read',
     );
     t.equal(
-      operationQuery.sql.includes('source_node_id = ?'),
+      operationQuery.sql.includes('source_node_id = ?') &&
+        operationQuery.sql.includes('target_node_id = ?'),
       true,
-      'query should scope results to local source owner',
+      'query should scope results to the local operation owner set',
     );
     t.equal(
       operationQuery.sql.includes("source_node_id IS NULL OR source_node_id = ''"),
@@ -2089,6 +2269,164 @@ test(
   },
 );
 
+test(
+  'checkTimeouts completes sending operations from exact cache-visible ' +
+    'services rows when authoritative reads miss',
+  async (t) => {
+    const nowMs = Date.now();
+    const staleUpdatedAtMs = nowMs - 70000;
+    const observedServiceRow = {
+      service_id: 'partition-1-r2',
+      replica_id: 'partition-1-r2',
+      partition_id: 'partition-1',
+      node_id: 'node-2',
+      status: 'active',
+      raft_role: 'follower',
+      service_type: 'partition',
+    };
+    const operationRow = {
+      operation_id: 'op-cache-visible-sending-active',
+      type: 'ADD',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r2',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: 'SENDING',
+      created_at: staleUpdatedAtMs - 5000,
+      updated_at: staleUpdatedAtMs,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([
+        {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
+        {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
+      ]),
+      entity_type: 'partition',
+      entity_id: 'partition-1',
+    };
+    const gatewayCalls = [];
+
+    const sqlQueryEngine = {
+      async executeQuery(sql, params) {
+        if (sql.includes('UPDATE replica_operations SET')) {
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
+          operationRow.completed_at = params[3];
+          operationRow.error_message = params[4];
+          operationRow.steps_history = params[5];
+          operationRow.replica_id = params[6];
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        if (sql.includes('FROM replica_operations')) {
+          return {
+            success: true,
+            rows: [{...operationRow}],
+            affectedRows: 0,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: 0,
+        };
+      },
+    };
+
+    const coordinator = createCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName === 'replica_operations') {
+            return key === operationRow.operation_id ? operationRow : null;
+          }
+          if (tableName === 'services') {
+            return key === observedServiceRow.service_id ? observedServiceRow : null;
+          }
+          return null;
+        },
+        getAll(tableName) {
+          if (tableName === 'replica_operations') {
+            return [operationRow];
+          }
+          if (tableName === 'services') {
+            return [observedServiceRow];
+          }
+          return [];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async readRows(tableName, sql, params, options) {
+          gatewayCalls.push({
+            tableName,
+            sql: String(sql),
+            params: [...(Array.isArray(params) ? params : [])],
+            options,
+          });
+          return {
+            success: true,
+            rows: [],
+            affectedRows: 0,
+          };
+        },
+        async executeQuery(sql, params) {
+          return sqlQueryEngine.executeQuery(sql, params);
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine,
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      await coordinator.checkTimeouts();
+
+      t.equal(
+        operationRow.workflow_step,
+        'ACTIVE',
+        'timeout reconciliation should complete stale SENDING operations when observed target state is already active',
+      );
+      t.equal(
+        operationRow.status,
+        'active',
+        'completed ADD should persist active status from observed target service state',
+      );
+      t.equal(
+        operationRow.error_message,
+        null,
+        'cache-visible convergence should avoid timeout failure metadata',
+      );
+      t.equal(
+        gatewayCalls.length >= 2,
+        true,
+        'timeout reconciliation should still attempt authoritative service reads before using observed cache state',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
 test('timeout checker backs off empty incomplete-operation scans', async (t) => {
   let incompleteQueryAttempts = 0;
   const coordinator = createCoordinator({
@@ -2214,3 +2552,241 @@ test(
     );
   },
 );
+
+test('observed progress reconciles REPLACE workflows when strict owner-rpc ' +
+  'reads are unavailable', async (t) => {
+  const nowMs = Date.now();
+  const operationRow = {
+    operation_id: 'op-observed-progress-owner-rpc-fallback',
+    type: 'REPLACE',
+    partition_id: 'control_plane_publications-p1',
+    replica_id: 'control_plane_publications-p1-r4',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'creating',
+    workflow_step: 'PENDING',
+    created_at: nowMs - 5000,
+    updated_at: nowMs - 5000,
+    completed_at: null,
+    error_message: null,
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
+    steps_history: JSON.stringify([{
+      step: 'PENDING',
+      timestamp: nowMs - 5000,
+      sourceReplicaId: 'control_plane_publications-p1-r1',
+    }]),
+  };
+  const serviceRow = {
+    service_id: 'control_plane_publications-p1-r4',
+    replica_id: 'control_plane_publications-p1-r4',
+    partition_id: 'control_plane_publications-p1',
+    node_id: 'node-2',
+    service_type: 'partition',
+    status: 'active',
+    raft_role: 'follower',
+    address: 'node-2/partition/control_plane_publications-p1-r4',
+  };
+  const authoritativeReadCalls = [];
+  const dispatchedMessages = [];
+
+  const cdcIntegrationService = {
+    async waitForCacheUpdate() {},
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      options = {},
+    ) {
+      authoritativeReadCalls.push({
+        tableName,
+        sql: String(sql),
+        params: [...(Array.isArray(params) ? params : [])],
+        options: {...options},
+      });
+
+      if (tableName === 'replica_operations') {
+        if (options.requireOwnerRpcRead === true) {
+          return {
+            success: false,
+            error: 'owner-rpc-read-failed',
+            rows: [],
+          };
+        }
+        return {
+          success: true,
+          source: 'local_partition_replica',
+          rows: [{...operationRow}],
+        };
+      }
+
+      if (tableName === 'services') {
+        if (String(sql).includes('WHERE service_id = ?')) {
+          return {
+            success: true,
+            source: 'local_partition_replica',
+            rows: [{...serviceRow}],
+          };
+        }
+        if (String(sql).includes('WHERE partition_id = ? AND node_id = ?')) {
+          return {
+            success: true,
+            source: 'local_partition_replica',
+            rows:
+              serviceRow.partition_id === params?.[0] &&
+                serviceRow.node_id === params?.[1] ?
+                [{...serviceRow}] :
+                [],
+          };
+        }
+      }
+
+      return {
+        success: true,
+        source: 'local_partition_replica',
+        rows: [],
+      };
+    },
+  };
+
+  const controlPlaneSystemTableGateway = {
+    async readRows(tableName, sql, params = [], options = {}) {
+      return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      );
+    },
+    async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+      return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      );
+    },
+    async executeQuery(sql, params = []) {
+      if (String(sql).startsWith('UPDATE replica_operations SET')) {
+        operationRow.status = params[0];
+        operationRow.workflow_step = params[1];
+        operationRow.updated_at = params[2];
+        operationRow.completed_at = params[3];
+        operationRow.error_message = params[4];
+        operationRow.steps_history = params[5];
+        operationRow.replica_id = params[6];
+        return {
+          success: true,
+          affectedRows: 1,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: 0,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: 'node-1',
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName === 'replica_operations') {
+          return key === operationRow.operation_id ?
+            operationRow :
+            null;
+        }
+        if (tableName === 'services') {
+          return key === serviceRow.service_id ?
+            serviceRow :
+            null;
+        }
+        return null;
+      },
+      getAll(tableName) {
+        if (tableName === 'replica_operations') {
+          return [operationRow];
+        }
+        if (tableName === 'services') {
+          return [serviceRow];
+        }
+        return [];
+      },
+      filter(tableName, predicate) {
+        const rows = this.getAll(tableName);
+        return rows.filter(predicate);
+      },
+    },
+    cdcIntegrationService,
+    controlPlaneSystemTableGateway,
+    messageRouter: {
+      async deliver(target, request) {
+        dispatchedMessages.push({target, request});
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 3};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  coordinator.initialize();
+  try {
+    coordinator.handleObservedReplicaStateChange(
+      'services',
+      'UPSERT',
+      serviceRow,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    await coordinator.shutdown();
+  }
+
+  t.equal(
+    operationRow.workflow_step,
+    'STOPPING',
+    'observed progress should advance REPLACE beyond PENDING even when ' +
+      'strict owner-rpc reads are unavailable',
+  );
+  t.equal(
+    operationRow.status,
+    'removing',
+    'observed progress should dispatch source removal after promoting the ' +
+      'replacement replica to ACTIVE',
+  );
+  t.same(
+    dispatchedMessages.map(({target, request}) => ({
+      target,
+      type: request.type,
+      replicaId: request.replicaId,
+    })),
+    [{
+      target: 'node-1/service/replica-handler',
+      type: 'REMOVE_REPLICA',
+      replicaId: 'control_plane_publications-p1-r1',
+    }],
+    'observed REPLACE progress should replay the remove-source phase through ' +
+      'the canonical owner path',
+  );
+  t.ok(
+    authoritativeReadCalls.some((call) =>
+      call.tableName === 'replica_operations' &&
+      call.options.requireOwnerRpcRead === true,
+    ),
+    'observed progress should attempt the strict owner-rpc read first',
+  );
+  t.ok(
+    authoritativeReadCalls.some((call) =>
+      call.tableName === 'replica_operations' &&
+      call.options.requireOwnerRpcRead !== true,
+    ),
+    'observed progress should fall back to a non-strict authoritative read ' +
+      'when the strict owner-rpc path is unavailable',
+  );
+});

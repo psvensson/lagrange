@@ -1885,6 +1885,9 @@ class CDCIntegrationService extends EventEmitter {
     }
     const queryOptions = {
       sessionId: this.resolveSystemWriteSessionId(options),
+      workClass: options?.workClass,
+      allowPressureDefer: options?.allowPressureDefer,
+      pressureRetryAfterMs: options?.pressureRetryAfterMs,
       deliveryPriority: normalizeDeliveryPriority(
         options?.deliveryPriority,
         pressureDecision.action === PRESSURE_GOVERNOR_ACTION.ALLOW ||
@@ -2282,8 +2285,9 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
-   * Confirm one cache visibility gap authoritatively and emit divergence
-   * diagnostics without mutating projection state directly.
+    * Confirm one cache visibility gap authoritatively, emit divergence
+    * diagnostics, and repair the local projection when a writable cache
+    * target is available.
    * @param {string} tableName
    * @param {string} key
    * @param {boolean} expectPresent
@@ -2317,6 +2321,7 @@ class CDCIntegrationService extends EventEmitter {
     const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
     const cachedRecord = this.getCacheRecord(tableName, key);
     const phase = this.resolveAuthoritativeFallbackPhase(options?.fallbackPhase);
+    let outcome = AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED;
 
     if (expectPresent) {
       const matchingRow = rows.find((row) => {
@@ -2352,13 +2357,28 @@ class CDCIntegrationService extends EventEmitter {
           ),
           phase,
         );
+        const repaired = this.applyAuthoritativeCacheRepair(
+          tableName,
+          CDC_OPERATION.UPSERT,
+          matchingRow,
+          key,
+        );
+        if (repaired && this.isCacheExpectationSatisfied(
+          tableName,
+          key,
+          expectPresent,
+          expectedFields,
+          minimumFields,
+        )) {
+          outcome = AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
+        }
       }
       this.recordAuthoritativeFallbackSignal({
         tableName,
         key,
         expectPresent,
         phase,
-        outcome: AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED,
+        outcome,
       });
       return true;
     }
@@ -2377,6 +2397,15 @@ class CDCIntegrationService extends EventEmitter {
         [primaryKeyField],
         phase,
       );
+      const repaired = this.applyAuthoritativeCacheRepair(
+        tableName,
+        CDC_OPERATION.DELETE,
+        {[primaryKeyField]: key},
+        key,
+      );
+      if (repaired && !this.hasCacheRecord(tableName, key)) {
+        outcome = AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
+      }
     }
 
     this.recordAuthoritativeFallbackSignal({
@@ -2384,8 +2413,36 @@ class CDCIntegrationService extends EventEmitter {
       key,
       expectPresent,
       phase,
-      outcome: AUTHORITATIVE_FALLBACK_OUTCOME.DIAGNOSED,
+      outcome,
     });
+    return true;
+  }
+
+  /**
+   * Apply one authoritative repair row into the writable cache target.
+   * @param {string} tableName
+   * @param {string} operation
+   * @param {Object} row
+   * @param {string} key
+   * @return {boolean}
+   * @private
+   */
+  applyAuthoritativeCacheRepair(tableName, operation, row, key) {
+    if (!this.cacheMutationTarget ||
+      typeof this.cacheMutationTarget.applySystemTableChange !==
+        TYPEOF.FUNCTION ||
+      !row || typeof row !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    const canonicalRow = canonicalizeSystemTableRow(tableName, row);
+    const causeId = `authoritative-repair:${tableName}:${key}`;
+    this.cacheMutationTarget.applySystemTableChange(
+      tableName,
+      operation,
+      canonicalRow,
+      {causeId},
+    );
     return true;
   }
 

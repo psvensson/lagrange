@@ -13,6 +13,7 @@ import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {LeaderActivationGate} from './leader-activation-gate.js';
 import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
+import {resolveRaftTransportDeliveryOptions} from './constants.js';
 import {
   RAFT_GROUP_ADDRESS,
   RAFT_GROUP_DEFAULT,
@@ -210,7 +211,14 @@ class RaftGroup extends EventEmitter {
         this.peerAddresses,
       ),
       deliverPacket: (peerAddress, packet) =>
-        this.transport.deliver(peerAddress, packet),
+        this.transport.deliver(
+          peerAddress,
+          packet,
+          resolveRaftTransportDeliveryOptions({
+            ...packet,
+            targetAddress: peerAddress,
+          }),
+        ),
     });
 
     const raftOptions = {
@@ -430,7 +438,14 @@ class RaftGroup extends EventEmitter {
             term: resolvedPacket.term,
           });
 
-          return transport.deliver(senderAddress, resolvedPacket);
+          return transport.deliver(
+            senderAddress,
+            resolvedPacket,
+            resolveRaftTransportDeliveryOptions({
+              ...resolvedPacket,
+              targetAddress: senderAddress,
+            }),
+          );
         })
         .catch((err) => {
           logger.error(RAFT_GROUP_LOG_MSG.FAILED_RAFT_RESPONSE, {

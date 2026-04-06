@@ -207,6 +207,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
     );
   });
 
+
 test('active-node projection can require published membership and suppress derived fallback',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({

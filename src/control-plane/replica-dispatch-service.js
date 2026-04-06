@@ -25,6 +25,7 @@ import {
 import {
   OperationType,
   OPERATION_METADATA_KEY,
+  getOperationMetadataObject,
   getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
 } from '../rebalancer/replica-status.js';
@@ -131,6 +132,7 @@ class ReplicaDispatchService extends EventEmitter {
     this.retryInFlightNodes = new Set();
     this.nodeStateUpdateWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
+    this.dispatchFailureSignaturesByOperationId = new Map();
     this.nodeStateUpdateDeferredRetries = new Map();
     this.nodeStateUpdateQueueAssignments = new Map();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
@@ -390,32 +392,12 @@ class ReplicaDispatchService extends EventEmitter {
         return;
       }
 
-      const row = event?.data;
-      if (!row || !row.operation_id) {
-        return;
-      }
-      if (!isCoordinatorOwnedOperationType(row.type)) {
-        return;
-      }
-
-      if (row.type === OperationType.REPLACE &&
-          row.workflow_step === WORKFLOW_STEP.ACTIVE) {
-        this.operationDispatchQueue.enqueue(
-          row.operation_id,
-          RECONCILE_REASON.CDC_REPLACE_ACTIVE,
-          {row},
-        );
-        return;
-      }
-
-      if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
-        return;
-      }
-
-      this.operationDispatchQueue.enqueue(
-        row.operation_id,
-        RECONCILE_REASON.CDC_OPERATION_PENDING,
-        {row},
+      this.enqueueReplicaOperationRow(
+        event?.data,
+        {
+          pendingReason: RECONCILE_REASON.CDC_OPERATION_PENDING,
+          replaceActiveReason: RECONCILE_REASON.CDC_REPLACE_ACTIVE,
+        },
       );
     }
 
@@ -753,10 +735,19 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     const targetNodeId = row.target_node_id;
+    const rowOperation = this.buildOperationFromRow(row);
     const dispatchReadiness = this.captureDispatchReadiness(
       targetNodeId,
     );
     if (!dispatchReadiness.ready) {
+      this.recordDispatchFailure({
+        operationId: row.operation_id,
+        targetNodeId,
+        workflowStep: row.workflow_step || null,
+        skipped: true,
+        reason: 'target_node_not_ready',
+        readinessSnapshot: dispatchReadiness.snapshot,
+      });
       return;
     }
 
@@ -767,7 +758,7 @@ class ReplicaDispatchService extends EventEmitter {
       if (typeof this.rebalanceCoordinator.dispatchOperation ===
         TYPEOF.FUNCTION) {
         dispatchResult = await this.rebalanceCoordinator.dispatchOperation(
-          operationId,
+          rowOperation,
         );
       } else {
         const claimedOperation = await this.rebalanceCoordinator
@@ -779,7 +770,6 @@ class ReplicaDispatchService extends EventEmitter {
           });
           return;
         }
-        const rowOperation = this.buildOperationFromRow(row);
         const operation = {
           ...claimedOperation,
         };
@@ -802,8 +792,19 @@ class ReplicaDispatchService extends EventEmitter {
       }
 
       if (!dispatchResult || dispatchResult.success !== true) {
+        this.recordDispatchFailure({
+          operationId,
+          targetNodeId,
+          workflowStep: row.workflow_step || null,
+          skipped: dispatchResult?.skipped === true,
+          reason: dispatchResult?.reason || 'dispatch_unsuccessful',
+          error: dispatchResult?.error || null,
+          readinessSnapshot: dispatchReadiness.snapshot,
+        });
         return;
       }
+
+      this.dispatchFailureSignaturesByOperationId.delete(operationId);
 
       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
         operationId,
@@ -873,9 +874,38 @@ class ReplicaDispatchService extends EventEmitter {
       );
     return cacheRows.filter((row) => {
       return isCoordinatorOwnedOperationType(row?.type) &&
+        this.isReplicaOperationLocallyOwned(row) &&
         row?.target_node_id === nodeId &&
         row?.workflow_step === WORKFLOW_STEP.PENDING;
     });
+  }
+
+  /**
+   * Check whether one replica operation row is owned by this node.
+   * Ready-node retries must only re-enter operations through the canonical
+   * owner, even though replica_operations rows are globally replicated.
+   * @param {Object} operation - Replica operation row or object.
+   * @return {boolean}
+   * @private
+   */
+  isReplicaOperationLocallyOwned(operation) {
+    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+      return false;
+    }
+    if (this.rebalanceCoordinator &&
+        typeof this.rebalanceCoordinator.isOperationLocallyOwned ===
+          TYPEOF.FUNCTION) {
+      return this.rebalanceCoordinator.isOperationLocallyOwned(operation);
+    }
+    if (this.rebalanceCoordinator &&
+        typeof this.rebalanceCoordinator.resolveOperationOwnerNodeId ===
+          TYPEOF.FUNCTION) {
+      return this.rebalanceCoordinator.resolveOperationOwnerNodeId(operation) ===
+        this.nodeId;
+    }
+    return String(
+      operation?.sourceNodeId || operation?.source_node_id || '',
+    ) === this.nodeId;
   }
 
   /**
@@ -1018,6 +1048,9 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   handleCacheNodeChange(tableName, operationOrRecord, recordInput) {
+      const operation = typeof operationOrRecord === TYPEOF.STRING ?
+        operationOrRecord :
+        null;
       const record = recordInput || operationOrRecord;
       if (!record) {
         return;
@@ -1032,6 +1065,22 @@ class ReplicaDispatchService extends EventEmitter {
           nodeId,
           RECONCILE_REASON.NODES_CACHE_READY,
           {nodeRow: record},
+        );
+        return;
+      }
+
+      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        if (operation === 'DELETE') {
+          return;
+        }
+        this.enqueueReplicaOperationRow(
+          record,
+          {
+            pendingReason: RECONCILE_REASON
+              .REPLICA_OPERATIONS_CACHE_PENDING,
+            replaceActiveReason: RECONCILE_REASON
+              .REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
+          },
         );
         return;
       }
@@ -1054,6 +1103,48 @@ class ReplicaDispatchService extends EventEmitter {
         RECONCILE_REASON.SERVICES_CACHE_ACTIVE,
       );
     }
+
+  /**
+   * Enqueue a locally owned replica operation row for dispatch reconciliation.
+   * Cache and CDC visibility can arrive on different nodes or at different
+   * times, so both paths must converge on the same local-owner gate.
+   * @param {Object} row - Replica operation row.
+   * @param {Object} reasons - Reconcile reason overrides.
+   * @param {string} reasons.pendingReason - Reason for pending rows.
+   * @param {string} reasons.replaceActiveReason - Reason for active REPLACE rows.
+   * @return {boolean} True when a reconcile item was enqueued.
+   * @private
+   */
+  enqueueReplicaOperationRow(row, reasons) {
+    if (!row || !row.operation_id) {
+      return false;
+    }
+    if (!isCoordinatorOwnedOperationType(row.type) ||
+        !this.isReplicaOperationLocallyOwned(row)) {
+      return false;
+    }
+
+    if (row.type === OperationType.REPLACE &&
+        row.workflow_step === WORKFLOW_STEP.ACTIVE) {
+      this.operationDispatchQueue.enqueue(
+        row.operation_id,
+        reasons.replaceActiveReason,
+        {row},
+      );
+      return true;
+    }
+
+    if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
+      return false;
+    }
+
+    this.operationDispatchQueue.enqueue(
+      row.operation_id,
+      reasons.pendingReason,
+      {row},
+    );
+    return true;
+  }
 
   /**
    * Resolve node id from a system row shape.
@@ -1263,7 +1354,7 @@ class ReplicaDispatchService extends EventEmitter {
     const isReady = nextState === STATE.READY;
     return {
       allowCoalescing: true,
-      allowPressureDefer: true,
+      allowPressureDefer: !isReady,
       coalescingKey: `node-state:${nodeId}`,
       deliveryPriority: isReady ? 'critical' : 'background',
       pressureRetryAfterMs: this.nodeStateUpdateRetryAfterMs,
@@ -1678,6 +1769,22 @@ class ReplicaDispatchService extends EventEmitter {
     if (peerAddresses.length > NUM.ZERO) {
       operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
     }
+    const bootstrapTableMetadata = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
+    );
+    if (bootstrapTableMetadata) {
+      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+        bootstrapTableMetadata;
+    }
+    const bootstrapPartitionMetadata = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
+    );
+    if (bootstrapPartitionMetadata) {
+      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+        bootstrapPartitionMetadata;
+    }
     return operation;
   }
 
@@ -1817,6 +1924,47 @@ class ReplicaDispatchService extends EventEmitter {
         decisionDimension,
       );
     return {ready, snapshot};
+  }
+
+  /**
+   * Emit one dispatch failure diagnostic and dedupe exact repeats.
+   * @param {Object} payload
+   * @return {void}
+   * @private
+   */
+  recordDispatchFailure(payload = {}) {
+    const operationId = payload.operationId || null;
+    if (!operationId) {
+      return;
+    }
+
+    const signature = JSON.stringify({
+      skipped: payload.skipped === true,
+      reason: payload.reason || null,
+      error: payload.error || null,
+      readinessSnapshot: payload.readinessSnapshot || null,
+    });
+    if (this.dispatchFailureSignaturesByOperationId.get(operationId) ===
+      signature) {
+      return;
+    }
+    this.dispatchFailureSignaturesByOperationId.set(operationId, signature);
+
+    const eventPayload = {
+      operationId,
+      targetNodeId: payload.targetNodeId || null,
+      workflowStep: payload.workflowStep || null,
+      skipped: payload.skipped === true,
+      reason: payload.reason || null,
+      error: payload.error || null,
+      readinessSnapshot: payload.readinessSnapshot || null,
+    };
+
+    this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_FAILED, {
+      nodeId: this.nodeId,
+      ...eventPayload,
+    });
+    this.emit(DISPATCH_EVENT.OPERATION_FAILED, eventPayload);
   }
 
   /**

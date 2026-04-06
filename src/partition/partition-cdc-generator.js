@@ -205,12 +205,16 @@ class PartitionCDCGenerator {
    * @private
    */
   extractCDCData(entry, entryType) {
+    const tableName = this.extractTableName(entry);
+    const isUpdateOperation =
+      entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
+      entryType === PARTITION_SERVICE_OPERATION.UPDATE;
+
     // For UPDATE operations, merge whereClause (contains primary key) with data
     // This ensures CDC events always include the primary key field
     // For DELETE operations, use whereClause as the data (contains primary key)
     let cdcData = entry.data || {};
-    if ((entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
-      entryType === PARTITION_SERVICE_OPERATION.UPDATE) && entry.whereClause) {
+    if (isUpdateOperation && entry.whereClause) {
       cdcData = {...entry.whereClause, ...cdcData};
     } else if ((entry.type === PARTITION_SERVICE_OPERATION.DELETE ||
       entryType === PARTITION_SERVICE_OPERATION.DELETE) && entry.whereClause) {
@@ -219,8 +223,6 @@ class PartitionCDCGenerator {
 
     // For raw SQL queries, extract data from SQL
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
-      const tableName = this.extractTableNameFromSQL(entry.sql);
-
       // For parameterized queries (SQL with ? placeholders), build data from params
       const hasParams = entry.params && entry.params.length > NUM.ZERO;
       const hasPlaceholders = entry.sql.includes(
@@ -250,6 +252,13 @@ class PartitionCDCGenerator {
       if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
         Object.keys(cdcData).length === NUM.ZERO) {
         cdcData = this.extractDeleteDataFromSQL(entry.sql);
+      }
+    }
+
+    if (isUpdateOperation && entry.whereClause) {
+      const authoritativeRow = this.fetchUpdatedRow(tableName, entry.whereClause);
+      if (authoritativeRow) {
+        return authoritativeRow;
       }
     }
 

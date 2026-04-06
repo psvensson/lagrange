@@ -1,9 +1,39 @@
 # Distributed Database System Architecture
 
+## Document Role
+
+This document governs the current architecture of the repository.
+
+Use this file for:
+
+- current concrete owner maps
+- current runtime boundaries
+- current data-flow descriptions
+- links to deeper subsystem architecture documents
+
+Do not use this file for:
+
+- the short-form implementation doctrine
+- stable implementation rules
+- stable testing policy
+- roadmap scope decisions
+
+For those concerns, use:
+
+- [`.kiro/steering/doctrine.md`](.kiro/steering/doctrine.md)
+- [`.kiro/steering/system guidelines.md`](.kiro/steering/system%20guidelines.md)
+- [`.kiro/steering/testing-guidelines.md`](.kiro/steering/testing-guidelines.md)
+- [`.kiro/steering/roadmap.md`](.kiro/steering/roadmap.md)
+- [`roadmap.md`](roadmap.md)
+
 This document describes the architecture of the distributed database system.
 It is the canonical root entrypoint for system description and should be
 updated as features are added or changed. Supporting architecture documents may
 live under `architecture/` and should be linked from here when needed.
+
+Current owner-map supplement:
+
+- [`architecture/current-owner-maps.md`](architecture/current-owner-maps.md)
 
 ## Overview
 

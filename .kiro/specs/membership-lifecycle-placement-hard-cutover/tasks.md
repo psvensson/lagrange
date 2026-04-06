@@ -183,3 +183,19 @@ exist alongside old runtime paths.
     in `closure-ledger.md` with witness, repro, and guard evidence.
   - Verify documentation, tests, and deletion inventory all match runtime.
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 12.5, 13.1_
+
+## Current Progress Notes
+
+- 2026-04-02: Partition `REPLACE` bootstrap topology now uses the shared
+  replicated-service topology helper and excludes the retiring source replica
+  from bootstrap replica ids and peer addresses.
+- 2026-04-02: Durable rejoin partition restore planning moved out of
+  `NodeJoiningService` into
+  `src/bootstrap/shared/durable-rejoin-partition-restore-planner.js`.
+- 2026-04-02: Publication, readiness, and placement now share
+  `ControlPlaneReadinessService` membership-publication planning snapshots for
+  published epoch binding and priority recovery semantics.
+- 2026-04-02: Focused deterministic suites for readiness, bootstrap API, and
+  unified rebalancer are green after the above changes; the distributed
+  closure ladder remains open and the broader coordinator ownership suite is
+  still red on separate authoritative replica-operation persistence failures.

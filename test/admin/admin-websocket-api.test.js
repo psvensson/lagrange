@@ -1770,6 +1770,65 @@ test('AdminWebSocketAPI - load lane admits local voter-ready benchmark queries t
     await api.shutdown();
   });
 
+test('AdminWebSocketAPI - load lane admits readiness-only benchmark queries through transient schema and leadership jitter',
+  async (t) => {
+    let executedQueryCount = 0;
+    const cache = createPopulatedCache();
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-2',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executedQueryCount += 1;
+          return {
+            success: true,
+            rows: [{count: 1}],
+            count: 1,
+            tableName: 'benchmark_events',
+          };
+        },
+      },
+    });
+
+    api.serviceDiscovery.resolveServiceDiscoverySnapshot = async () => ({
+      services: [{
+        replicas: [{
+          nodeId: 'node-2',
+          readiness: {
+            benchmarkReady: false,
+            routingReady: true,
+            reasons: [
+              {code: 'schema_partition_unavailable'},
+              {code: 'leadership_unstable'},
+            ],
+          },
+        }],
+      }],
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api, 2000, {
+      query: {lane: 'load'},
+    });
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-load-benchmark-soft-blocker-readiness-only',
+      sql: 'SELECT count(*) FROM benchmark_events WHERE payload = 1',
+    }));
+
+    const result = await waitForMessage(ws);
+    t.equal(result.type, MessageType.QUERY_RESULT,
+      'should return query_result envelope');
+    t.equal(result.error, undefined,
+      'load lane should execute through transient schema+leadership jitter when only readiness fallback is available');
+    t.equal(executedQueryCount, 1,
+      'readiness-only soft blockers should not reject before SQL execution');
+
+    ws.close();
+    await api.shutdown();
+  });
+
 test('AdminWebSocketAPI - query execution INSERT', async (t) => {
   const api = new AdminWebSocketAPI({
     nodeId: 'test-node',
@@ -5524,6 +5583,115 @@ test(
       admissionByNodeId.get('node-2')?.state,
       'ready',
       'benchmark admission should stay ready on routed peers',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery honors fresh bootstrap leader routing when cache leader metadata lags',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
+      id: 'partition-benchmark-events-1',
+      partition_id: 'partition-benchmark-events-1',
+      leader_node_id: null,
+      created_at: 123,
+      updated_at: 123,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+      id: 'service-benchmark-events-node-1',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-1',
+      status: 'active',
+      raft_role: 'follower',
+      address: '10.0.0.1:7001',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+      id: 'service-benchmark-events-node-2',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-2',
+      status: 'active',
+      raft_role: 'follower',
+      address: '10.0.0.2:7001',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        ...createMockQueryEngine(),
+        queryExecutor: {
+          getPartitionRoutingSnapshot(partitionId) {
+            t.equal(
+              partitionId,
+              'partition-benchmark-events-1',
+              'discovery should consult routing metadata for the benchmark partition',
+            );
+            return {
+              partitionId,
+              canonicalLeaderNodeId: 'node-1',
+              canonicalLeaderServiceCount: 1,
+            };
+          },
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.leadershipStable,
+      true,
+      'bootstrap routing leader should keep leadership stable before cache convergence',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'leader-hosting node should remain benchmark ready during fresh bootstrap',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'local follower should remain benchmark ready during fresh bootstrap',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'leadership_unstable'),
+      false,
+      'fresh bootstrap routing should suppress leadership instability',
+    );
+    t.equal(
+      admissionByNodeId.get('node-1')?.state,
+      'ready',
+      'benchmark admission should stay ready on the bootstrap leader host',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'ready',
+      'benchmark admission should stay ready on the bootstrap follower host',
     );
 
     await api.shutdown();

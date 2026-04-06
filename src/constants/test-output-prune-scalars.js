@@ -4,12 +4,12 @@ import {NUM} from './numbers.js';
 // These tokens and labels are specific to prune-test-output.js after reuse of
 // existing shared constants such as NUM, ENTRYPOINT flags, file text, and
 // test-output path/suffix owners.
-const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_DAYS = NUM.THREE;
+const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_DAYS = NUM.ZERO;
 const TEST_OUTPUT_PRUNE_ARGV_USER_START_INDEX = NUM.TWO;
-const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_REPORTS = NUM.THIRTY + NUM.TEN;
-const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_REPORT_PLAYBACKS = NUM.SIXTEEN + NUM.EIGHT;
-const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_LEGACY_PLAYBACKS = NUM.SIXTEEN;
-const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_TOP_LEVEL = NUM.EIGHT + NUM.FOUR;
+const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_REPORTS = NUM.FOUR;
+const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_REPORT_PLAYBACKS = NUM.FOUR;
+const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_LEGACY_PLAYBACKS = NUM.FOUR;
+const TEST_OUTPUT_PRUNE_DEFAULT_KEEP_TOP_LEVEL = NUM.FOUR;
 const TEST_OUTPUT_PRUNE_HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const TEST_OUTPUT_PRUNE_MINUTES_PER_HOUR = NUM.THIRTY * NUM.TWO;
 const TEST_OUTPUT_PRUNE_SECONDS_PER_MINUTE = NUM.THIRTY * NUM.TWO;
@@ -40,10 +40,12 @@ const TEST_OUTPUT_PRUNE_USAGE_HEADER = 'Usage:';
 const TEST_OUTPUT_PRUNE_USAGE_SCRIPT = '  node scripts/prune-test-output.js [options]';
 const TEST_OUTPUT_PRUNE_USAGE_OPTIONS = 'Options:';
 const TEST_OUTPUT_PRUNE_USAGE_ROOT_PREFIX =
-  '  --root <dir>                     Artifact root (default: ';
+  '  --root <dir>                     Primary test-output root (default: ';
 const TEST_OUTPUT_PRUNE_USAGE_APPLY =
   '  --apply                          Delete matching files instead of dry-run';
 const TEST_OUTPUT_PRUNE_USAGE_JSON = '  --json                           Emit JSON summary';
+const TEST_OUTPUT_PRUNE_USAGE_SCOPE =
+  '  Default scope also includes sibling generated dirs under the workspace root';
 const TEST_OUTPUT_PRUNE_USAGE_KEEP_DAYS_PREFIX =
   '  --keep-days <n>                  Keep items newer than N days (default: ';
 const TEST_OUTPUT_PRUNE_USAGE_KEEP_REPORTS_PREFIX =
@@ -102,6 +104,7 @@ const TEST_OUTPUT_PRUNE_USAGE_TEXT = Object.freeze({
   ROOT_PREFIX: TEST_OUTPUT_PRUNE_USAGE_ROOT_PREFIX,
   APPLY: TEST_OUTPUT_PRUNE_USAGE_APPLY,
   JSON: TEST_OUTPUT_PRUNE_USAGE_JSON,
+  SCOPE: TEST_OUTPUT_PRUNE_USAGE_SCOPE,
   KEEP_DAYS_PREFIX: TEST_OUTPUT_PRUNE_USAGE_KEEP_DAYS_PREFIX,
   KEEP_REPORTS_PREFIX: TEST_OUTPUT_PRUNE_USAGE_KEEP_REPORTS_PREFIX,
   KEEP_REPORT_PLAYBACKS_PREFIX:

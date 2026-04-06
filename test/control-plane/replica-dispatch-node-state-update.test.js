@@ -23,6 +23,7 @@ import {
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -170,8 +171,8 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
     );
     t.equal(
       updates[0].options?.allowPressureDefer,
-      true,
-      'node-state updates should defer through the owner queue when backpressured',
+      false,
+      'READY node-state updates should not opt into pressure deferral',
     );
     t.equal(
       updates[0].options?.allowCoalescing,
@@ -490,6 +491,7 @@ test('ReplicaDispatchService uses injected owners for shared metadata cache read
     };
     const operationRow = {
       operation_id: 'op-1',
+      source_node_id: 'node-1',
       target_node_id: 'node-2',
       type: 'ADD',
       workflow_step: WORKFLOW_STEP.PENDING,
@@ -617,6 +619,11 @@ test('ReplicaDispatchService demotes non-ready node-state churn to the ' +
     updates[0].options?.deliveryPriority,
     'background',
     'non-ready node-state churn should not claim critical transport capacity',
+  );
+  t.equal(
+    updates[0].options?.allowPressureDefer,
+    true,
+    'non-ready node-state churn should remain deferrable under pressure',
   );
 
   service.stop();
@@ -820,6 +827,7 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
     };
     const pendingRow = {
       operation_id: 'op-ready-retry-1',
+      source_node_id: 'node-1',
       target_node_id: 'node-2',
       workflow_step: WORKFLOW_STEP.PENDING,
       type: 'ADD',
@@ -875,6 +883,72 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
       dispatchCalls,
       [],
       'ready-node retries must not dispatch operations inline',
+    );
+
+    service.operationDispatchQueue = originalOperationDispatchQueue;
+    service.stop();
+  });
+
+test('ReplicaDispatchService ready-node retry ignores remote-owned pending ' +
+  'operations',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const readyNode = {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      last_heartbeat: now,
+      ready_lease_expires_at: now + 60000,
+    };
+    const remoteOwnedPendingRow = {
+      operation_id: 'op-ready-retry-remote',
+      source_node_id: 'node-remote-owner',
+      target_node_id: 'node-2',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      type: 'ADD',
+    };
+    const enqueueCalls = [];
+    const service = createService({
+      cacheNodes: [readyNode],
+      cacheReplicaOperations: [remoteOwnedPendingRow],
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: {
+        isOperationLocallyOwned(operation) {
+          return operation?.source_node_id === 'node-1';
+        },
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+          };
+        },
+      },
+    });
+    const originalOperationDispatchQueue = service.operationDispatchQueue;
+    service.operationDispatchQueue = {
+      enqueue(...args) {
+        enqueueCalls.push(args);
+      },
+    };
+
+    await service.retryPendingDispatchesForReadyNode({
+      nodeId: 'node-2',
+      nodeRow: readyNode,
+    });
+
+    t.equal(
+      enqueueCalls.length,
+      NUM.ZERO,
+      'ready-node retry must ignore pending operations owned by another node',
     );
 
     service.operationDispatchQueue = originalOperationDispatchQueue;
@@ -980,6 +1054,101 @@ test('ReplicaDispatchService ignores bootstrap-owned MOVE_ASSIGNMENT rows ' +
     service.operationDispatchQueue = originalOperationDispatchQueue;
     service.stop();
   });
+
+test('ReplicaDispatchService enqueues locally owned pending ' +
+  'replica_operations cache rows',
+async (t) => {
+  initEnv();
+
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+  });
+  const enqueueCalls = [];
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(...args) {
+      enqueueCalls.push(args);
+    },
+  };
+
+  service.handleCacheNodeChange('replica_operations', 'INSERT', {
+    operation_id: 'add-op-1',
+    source_node_id: 'node-1',
+    target_node_id: 'node-1',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.ADD,
+  });
+
+  t.same(
+    enqueueCalls,
+    [[
+      'add-op-1',
+      RECONCILE_REASON.REPLICA_OPERATIONS_CACHE_PENDING,
+      {
+        row: {
+          operation_id: 'add-op-1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-1',
+          workflow_step: WORKFLOW_STEP.PENDING,
+          type: OperationType.ADD,
+        },
+      },
+    ]],
+    'cache visibility must wake the owning node for pending operations',
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
+
+test('ReplicaDispatchService ignores non-owner replica_operations cache rows',
+async (t) => {
+  initEnv();
+
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+  });
+  const enqueueCalls = [];
+  const originalOperationDispatchQueue = service.operationDispatchQueue;
+  service.operationDispatchQueue = {
+    enqueue(...args) {
+      enqueueCalls.push(args);
+    },
+  };
+
+  service.handleCdcApplied(null, {
+    tableName: 'replica_operations',
+    data: {
+      operation_id: 'add-op-2',
+      source_node_id: 'node-2',
+      target_node_id: 'node-1',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      type: OperationType.ADD,
+    },
+  });
+  service.handleCacheNodeChange('replica_operations', 'INSERT', {
+    operation_id: 'add-op-2',
+    source_node_id: 'node-2',
+    target_node_id: 'node-1',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    type: OperationType.ADD,
+  });
+
+  t.equal(
+    enqueueCalls.length,
+    NUM.ZERO,
+    'non-owner nodes must not enqueue replica operation dispatch work',
+  );
+
+  service.operationDispatchQueue = originalOperationDispatchQueue;
+  service.stop();
+});
 
 test('ReplicaDispatchService rejects NODE_STATE_UPDATE first-insert attempts ' +
   'even when startup payload carries storage budget fields',

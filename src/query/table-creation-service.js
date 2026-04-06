@@ -24,6 +24,13 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 
+const TABLE_CREATION_SQL = Object.freeze({
+  SELECT_TABLE_BY_NAME:
+    `SELECT * FROM ${TABLES.TABLES} WHERE table_name = ? LIMIT 1`,
+  SELECT_PARTITION_BY_ID:
+    `SELECT * FROM ${TABLES.PARTITIONS} WHERE partition_id = ? LIMIT 1`,
+});
+
 /**
  * TableCreationService handles table creation with automatic partition key
  * derivation from PRIMARY KEY and ensures partition transparency.
@@ -414,9 +421,10 @@ class TableCreationService {
     }
 
     // Check if table already exists
-    if (this.tableExists(tableName)) {
+    const existingTable = await this.findExistingTableRecord(tableName);
+    if (existingTable) {
       if (ifNotExists) {
-        await this.reconcileExistingInitialPartition(tableName);
+        await this.reconcileExistingInitialPartition(tableName, existingTable);
         this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {tableName});
         return {
           success: true,
@@ -737,22 +745,83 @@ class TableCreationService {
    * @private
    */
   tableExists(tableName) {
-    if (!this.systemCache) {
-      return false;
+    return this.getTableRecord(tableName) !== null;
+  }
+
+  /**
+   * Resolve one table metadata row, preferring cache and falling back to an
+   * authoritative control-plane read when cache visibility lags.
+   * @param {string} tableName
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async findExistingTableRecord(tableName) {
+    const cachedTable = this.getTableRecord(tableName);
+    if (cachedTable) {
+      return cachedTable;
+    }
+
+    const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
+    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== 'function') {
+      return null;
     }
 
     try {
-      if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find(TABLES.TABLES, (t) =>
-          t.table_name === tableName || t.tableName === tableName,
-        );
-        return !!table;
-      }
+      const result = await controlPlaneGateway.readRows(
+        TABLES.TABLES,
+        TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME,
+        [tableName],
+        {
+          requireAuthoritative: true,
+          allowSqlFallback: true,
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: 'critical',
+        },
+      );
+      return Array.isArray(result?.rows) && result.rows.length > 0 ?
+        result.rows[0] :
+        null;
     } catch {
-      // Cache not available
+      return null;
+    }
+  }
+
+  /**
+   * Resolve one partition metadata row, preferring cache and falling back to
+   * an authoritative control-plane read when cache visibility lags.
+   * @param {string} partitionId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async findExistingPartitionRecord(partitionId) {
+    const cachedPartition = this.getPartitionRecord(partitionId);
+    if (cachedPartition) {
+      return cachedPartition;
     }
 
-    return false;
+    const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
+    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== 'function') {
+      return null;
+    }
+
+    try {
+      const result = await controlPlaneGateway.readRows(
+        TABLES.PARTITIONS,
+        TABLE_CREATION_SQL.SELECT_PARTITION_BY_ID,
+        [partitionId],
+        {
+          requireAuthoritative: true,
+          allowSqlFallback: true,
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: 'critical',
+        },
+      );
+      return Array.isArray(result?.rows) && result.rows.length > 0 ?
+        result.rows[0] :
+        null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -762,18 +831,21 @@ class TableCreationService {
    * @return {Promise<void>}
    * @private
    */
-  async reconcileExistingInitialPartition(tableName) {
-    const existingTable = this.getTableRecord(tableName);
-    if (!existingTable) {
+  async reconcileExistingInitialPartition(tableName, existingTable = null) {
+    const existingTableRecord = existingTable ||
+      await this.findExistingTableRecord(tableName);
+    if (!existingTableRecord) {
       return;
     }
 
-    const tableId = existingTable.table_id || existingTable.tableId || null;
+    const tableId = existingTableRecord.table_id ||
+      existingTableRecord.tableId ||
+      null;
     if (!tableId) {
       return;
     }
     const partitionId = `${tableId}-p1`;
-    const existingPartition = this.getPartitionRecord(partitionId);
+    const existingPartition = await this.findExistingPartitionRecord(partitionId);
     if (!existingPartition) {
       return;
     }
@@ -784,7 +856,7 @@ class TableCreationService {
     await this.provisionInitialPartition({
       tableId,
       tableName,
-      tableMetadata: existingTable,
+      tableMetadata: existingTableRecord,
       partitionId,
       partitionMetadata: existingPartition,
       replicaCount: Number.isInteger(replicaCount) && replicaCount > 0 ?

@@ -22,6 +22,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -357,6 +358,137 @@ test('SQLQueryEngine - query routing repair avoids stale no-handler retry ' +
     QUERY_ROUTING_REPAIR_REASON.NO_HANDLER_STALE_SERVICE,
     'engine-composed overlay refresh should keep stale-service repair reason',
   );
+});
+
+test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
+  'through recovery eligibility', async (t) => {
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], [], []),
+    messageRouter: {
+      deliver: async () => ({acknowledged: true, success: true}),
+    },
+    nodeId: 'local-node',
+  });
+  const routingCalls = [];
+  engine.queryExecutor.executeOnPartition = async (
+    partitionId,
+    sql,
+    params,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+    executionOptions = {},
+  ) => {
+    routingCalls.push({
+      partitionId,
+      sql,
+      params,
+      forRead,
+      preferLeader,
+      preferSameLatencyGroup,
+      routingReadinessDimension: executionOptions.routingReadinessDimension,
+    });
+    return {success: true};
+  };
+
+  await engine.deliverTransactionOperation(
+    'session-1',
+    'replica_operations-p1',
+    'COMMIT',
+  );
+
+  t.equal(routingCalls.length, 1,
+    'transaction delivery should perform a single routing lookup');
+  t.same(routingCalls[0], {
+    partitionId: 'replica_operations-p1',
+    sql: '',
+    params: [],
+    forRead: false,
+    preferLeader: false,
+    preferSameLatencyGroup: false,
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  }, 'priority control-plane transaction delivery should use recovery routing');
+});
+
+test('SQLQueryEngine - keeps user transaction delivery on the default ' +
+  'routing dimension', async (t) => {
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], [], []),
+    messageRouter: {
+      deliver: async () => ({acknowledged: true, success: true}),
+    },
+    nodeId: 'local-node',
+  });
+  const routingCalls = [];
+  engine.queryExecutor.executeOnPartition = async (
+    partitionId,
+    sql,
+    params,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+    executionOptions = {},
+  ) => {
+    routingCalls.push({
+      partitionId,
+      sql,
+      params,
+      forRead,
+      preferLeader,
+      preferSameLatencyGroup,
+      routingReadinessDimension: executionOptions.routingReadinessDimension,
+    });
+    return {success: true};
+  };
+
+  await engine.deliverTransactionOperation(
+    'session-2',
+    'users-p1',
+    'COMMIT',
+  );
+
+  t.equal(routingCalls.length, 1,
+    'user transaction delivery should perform a single routing lookup');
+  t.same(routingCalls[0], {
+    partitionId: 'users-p1',
+    sql: '',
+    params: [],
+    forRead: false,
+    preferLeader: false,
+    preferSameLatencyGroup: false,
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+  }, 'user transaction delivery should keep the default serve routing');
+});
+
+test('SQLQueryEngine - transaction delivery repairs stale no-handler owner ' +
+  'handoff before retrying control-plane commit', async (t) => {
+  const fixture = createStaleOverlayOwnerHandoffFixture({
+    sameServiceId: true,
+    refreshedAddress: 'new-owner/partition/replica_operations-p1-r1',
+  });
+
+  const engine = new SQLQueryEngine({
+    systemCache: fixture.systemCache,
+    messageRouter: fixture.messageRouter,
+    routingMetadataOverlay: fixture.routingMetadataOverlay,
+    nodeId: 'local-node',
+  });
+
+  await engine.deliverTransactionOperation(
+    'session-3',
+    fixture.partitionId,
+    'COMMIT',
+  );
+
+  assertNoHandlerRepairConverged(t, {
+    deliveries: fixture.deliveries,
+    staleAddress: fixture.staleAddress,
+    refreshedAddress: fixture.refreshedAddress,
+    overlayRefreshCalls: fixture.overlayRefreshCalls,
+    context: 'transaction delivery routing repair',
+  });
 });
 
 test('SQLQueryEngine - executes SELECT query', async (t) => {

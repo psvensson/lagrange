@@ -743,6 +743,33 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * Resolve the quorum-sized distinct-node target for priority control-plane
+   * spread. Non-system entities may resume once priority partitions have
+   * escaped single-node concentration, even if the final spread target is
+   * still converging.
+   *
+   * @param {number} readyNodeCount
+   * @return {number}
+   * @private
+   */
+  resolvePriorityControlPlaneQuorumDistinctNodeCount(readyNodeCount) {
+    const normalizedReadyNodeCount =
+      Number.isInteger(readyNodeCount) && readyNodeCount > NUM.ZERO ?
+        readyNodeCount :
+        NUM.ZERO;
+    if (normalizedReadyNodeCount === NUM.ZERO) {
+      return NUM.ZERO;
+    }
+    const quorumTarget = Math.max(
+      NUM.ONE,
+      Math.floor(
+        PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT / NUM.TWO,
+      ) + NUM.ONE,
+    );
+    return Math.min(quorumTarget, normalizedReadyNodeCount);
+  }
+
+  /**
    * Resolve the configured voter target for this priority control-plane
    * partition from the canonical partitions owner row.
    *
@@ -1442,6 +1469,10 @@ class UnifiedRebalancer extends EventEmitter {
     if (requiredDistinctNodeCount <= NUM.ONE) {
       return null;
     }
+    const requiredQuorumDistinctNodeCount =
+      this.resolvePriorityControlPlaneQuorumDistinctNodeCount(
+        requiredDistinctNodeCount,
+      );
 
     const summaryBlockedPartitions = Array.isArray(
       priorityPartitionSummary.blockedPartitions,
@@ -1474,9 +1505,18 @@ class UnifiedRebalancer extends EventEmitter {
         spreadGap: null,
       })).filter((partition) => partition.partitionId.length > NUM.ZERO);
 
+    const quorumBlockedPartitions = blockedPartitions.filter((partition) => {
+      return !Number.isFinite(partition.readyDistinctNodeCount) ||
+        partition.readyDistinctNodeCount < requiredQuorumDistinctNodeCount;
+    });
+    if (quorumBlockedPartitions.length === NUM.ZERO) {
+      return null;
+    }
+
     return Object.freeze({
       requiredDistinctNodeCount,
-      blockedPartitions: Object.freeze(blockedPartitions),
+      requiredQuorumDistinctNodeCount,
+      blockedPartitions: Object.freeze(quorumBlockedPartitions),
     });
   }
 
@@ -2867,14 +2907,42 @@ class UnifiedRebalancer extends EventEmitter {
    */
   resolvePublishedMembershipPlanningEpoch() {
     const readinessService = this.controlPlaneReadinessService;
-    const diagnostics = readinessService &&
+    const observedAt = Date.now();
+    let planningSnapshot = readinessService &&
+      typeof readinessService.getMembershipPublicationPlanningSnapshotSync ===
+        TYPEOF.FUNCTION ?
+      readinessService.getMembershipPublicationPlanningSnapshotSync(
+        this.nodeId,
+        observedAt,
+      ) :
+      null;
+    const diagnostics = !planningSnapshot &&
+      readinessService &&
       typeof readinessService.getMembershipPublicationDiagnosticsSync ===
         TYPEOF.FUNCTION ?
       readinessService.getMembershipPublicationDiagnosticsSync(
         this.nodeId,
-        Date.now(),
+        observedAt,
       ) :
       null;
+    if (!planningSnapshot &&
+        diagnostics &&
+        readinessService &&
+        typeof readinessService.buildMembershipPublicationPlanningSnapshot ===
+          TYPEOF.FUNCTION) {
+      planningSnapshot = readinessService.buildMembershipPublicationPlanningSnapshot({
+        nodeId: this.nodeId,
+        observedAt,
+        membershipPublication: diagnostics,
+      });
+    }
+    const publishedPlanningEpoch = Number(
+      planningSnapshot?.publishedPlanningEpoch,
+    );
+    if (Number.isInteger(publishedPlanningEpoch) &&
+        publishedPlanningEpoch >= 0) {
+      return publishedPlanningEpoch;
+    }
     const publicationEpoch = Number(diagnostics?.publicationEpoch);
     const publicationStatus = String(
       diagnostics?.status ?? diagnostics?.publicationStatus ?? '',

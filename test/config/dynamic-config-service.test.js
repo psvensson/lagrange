@@ -563,6 +563,37 @@ test('DynamicConfigService seedConfiguration from env vars',
     delete process.env.NODE_HEARTBEAT_INTERVAL_MS;
   });
 
+test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    service.getControlPlaneSystemTableGateway = () => {
+      throw new Error('gateway should not be used');
+    };
+
+    const result = await service.seedConfiguration('system', {
+      skipExistingCheck: true,
+      useDirectCdcMutations: true,
+    });
+
+    t.equal(
+      result.seeded.length,
+      Object.keys(CONFIG_DEFINITIONS).length,
+      'should seed all definitions without per-key reads',
+    );
+    t.same(result.skipped, [], 'should not skip keys when table is known empty');
+    t.equal(
+      mockCDC.insertedRows.length,
+      Object.keys(CONFIG_DEFINITIONS).length,
+      'should write directly through CDC for each definition',
+    );
+  });
+
 
 test('DynamicConfigService hot reload notification', async (t) => {
   const mockCDC = createMockCDCService();

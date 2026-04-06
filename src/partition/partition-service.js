@@ -50,6 +50,7 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
+import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
@@ -1392,7 +1393,14 @@ class PartitionService extends EventEmitter {
         // Send packet unchanged - no type conversion
         // Only add destination address for routing, preserve all packet fields
         // Requirements: 10.2, 10.3
-        self.transport.deliver(peerAddress, packet)
+        self.transport.deliver(
+          peerAddress,
+          packet,
+          resolveRaftTransportDeliveryOptions({
+            ...packet,
+            targetAddress: peerAddress,
+          }),
+        )
           .then((result) => callback(null, result))
           .catch((err) => callback(err));
       }
@@ -2057,7 +2065,14 @@ class PartitionService extends EventEmitter {
               term: responsePacket.term,
             });
             // Send response to the sender
-            this.transport.deliver(senderAddress, responsePacket)
+            this.transport.deliver(
+              senderAddress,
+              responsePacket,
+              resolveRaftTransportDeliveryOptions({
+                ...responsePacket,
+                targetAddress: senderAddress,
+              }),
+            )
               .catch((err) => {
                 this.logger.error(PARTITION_SERVICE_LOG_MSG.FAILED_RAFT_RESPONSE, {
                   error: err.message,
@@ -2674,7 +2689,16 @@ class PartitionService extends EventEmitter {
     const fallbackState = this.activeTransactions.size === NUM.ONE ?
       this.activeTransactions.values().next().value :
       null;
-    const activeState = defaultState || fallbackState || null;
+    const defaultPreparedState =
+      this.preparedTransactions.get(DEFAULT_TRANSACTION_SESSION_ID);
+    const fallbackPreparedState = this.preparedTransactions.size === NUM.ONE ?
+      this.preparedTransactions.values().next().value :
+      null;
+    const activeState = defaultState ||
+      fallbackState ||
+      defaultPreparedState ||
+      fallbackPreparedState ||
+      null;
     this.activeTransaction = activeState;
     this.transactionOperations = activeState?.operations || [];
   }
@@ -2738,6 +2762,18 @@ class PartitionService extends EventEmitter {
       sessionId: resolvedSessionId,
       state,
     };
+  }
+
+  /**
+   * Resolve one open transaction state by session across active and prepared
+   * phases.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {{sessionId: string, state: Object}|null} Resolved state.
+   * @private
+   */
+  resolveOpenTransactionState(sessionId = null) {
+    return this.resolveActiveTransactionState(sessionId) ||
+      this.resolvePreparedTransactionState(sessionId);
   }
 
   /**
@@ -3116,8 +3152,31 @@ class PartitionService extends EventEmitter {
     }
 
     const transactionSessionId = this.normalizeTransactionSessionId(sessionId);
-    if (this.activeTransactions.has(transactionSessionId) ||
-      this.activeTransactions.size > NUM.ZERO) {
+    const openTransaction =
+      this.resolveOpenTransactionState(transactionSessionId);
+    if (openTransaction) {
+      const requestedEpoch = Number.isFinite(transactionEpoch) ?
+        transactionEpoch :
+        null;
+      const openEpoch = Number.isFinite(openTransaction.state.transactionEpoch) ?
+        openTransaction.state.transactionEpoch :
+        null;
+      if (requestedEpoch === null || openEpoch === null ||
+          requestedEpoch === openEpoch) {
+        return {
+          success: true,
+          operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
+          partitionId: this.partitionId,
+          inTransaction: true,
+          idempotent: true,
+          sessionId: transactionSessionId,
+          transactionEpoch: openTransaction.state.transactionEpoch,
+        };
+      }
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
+    }
+    if (this.activeTransactions.size > NUM.ZERO ||
+        this.preparedTransactions.size > NUM.ZERO) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
     }
     this.preparedStateLostSessions.delete(transactionSessionId);
@@ -3429,7 +3488,8 @@ class PartitionService extends EventEmitter {
    * @return {boolean} True if transaction is active.
    */
   isInTransaction() {
-    return this.activeTransactions.size > NUM.ZERO;
+    return this.activeTransactions.size > NUM.ZERO ||
+      this.preparedTransactions.size > NUM.ZERO;
   }
 
   /**
@@ -4319,12 +4379,15 @@ class PartitionService extends EventEmitter {
       return;
     }
 
+    const isUpdateOperation =
+      entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
+      entryType === PARTITION_SERVICE_OPERATION.UPDATE;
+
     // For UPDATE operations, merge whereClause (contains primary key) with data
     // This ensures CDC events always include the primary key field
     // For DELETE operations, use whereClause as the data (contains primary key)
     let cdcData = entry.data || {};
-    if ((entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
-      entryType === PARTITION_SERVICE_OPERATION.UPDATE) && entry.whereClause) {
+    if (isUpdateOperation && entry.whereClause) {
       cdcData = {...entry.whereClause, ...cdcData};
     } else if ((entry.type === PARTITION_SERVICE_OPERATION.DELETE ||
       entryType === PARTITION_SERVICE_OPERATION.DELETE) && entry.whereClause) {
@@ -4361,6 +4424,16 @@ class PartitionService extends EventEmitter {
       if (entryType === PARTITION_SERVICE_OPERATION.DELETE &&
         Object.keys(cdcData).length === NUM.ZERO) {
         cdcData = this.extractDeleteDataFromSQL(entry.sql);
+      }
+    }
+
+    if (isUpdateOperation && entry.whereClause) {
+      const authoritativeRow = this.fetchUpdatedCDCRow(
+        tableName,
+        entry.whereClause,
+      );
+      if (authoritativeRow) {
+        cdcData = authoritativeRow;
       }
     }
 
@@ -4601,6 +4674,75 @@ class PartitionService extends EventEmitter {
     return extractDataFromParameterizedSQLImpl(
       sql, params, tableName, operationType, this.logger,
     );
+  }
+
+  /**
+   * Fetch the stored row after an UPDATE so CDC emits canonical data.
+   * @param {string} tableName - Table name.
+   * @param {Object} whereClause - WHERE clause values for the updated row.
+   * @return {Object|null} Canonical row or null when unavailable.
+   * @private
+   */
+  fetchUpdatedCDCRow(tableName, whereClause) {
+    if (!this.db ||
+      !whereClause ||
+      typeof whereClause !== 'object' ||
+      Object.keys(whereClause).length === NUM.ZERO) {
+      return null;
+    }
+
+    const entries = Object.entries(whereClause)
+      .filter(([_key, value]) => value !== null && value !== undefined);
+    if (entries.length === NUM.ZERO) {
+      return null;
+    }
+
+    if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
+      const [keyColumn, keyValue] = entries[NUM.ZERO];
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+        tableName,
+        keyColumn,
+        keyValue,
+      });
+    }
+
+    const whereSql = entries
+      .map(([key]) => `${key} = ?`)
+      .join(' AND ');
+    const whereValues = entries.map(([_key, value]) => value);
+
+    try {
+      const stmt = this.db.prepare(
+        `SELECT * FROM ${tableName} WHERE ${whereSql}`,
+      );
+      const row = stmt.get(...whereValues);
+      if (row) {
+        if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+          });
+        }
+        return row;
+      }
+
+      if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
+        const [keyColumn, keyValue] = entries[NUM.ZERO];
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
+          tableName,
+          keyColumn,
+          keyValue,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
+        tableName,
+        error: err.message,
+      });
+      throw err;
+    }
+
+    return null;
   }
 
   /**

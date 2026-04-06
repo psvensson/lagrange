@@ -90,6 +90,8 @@ const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
 
 const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
   new Set([
+    WORKFLOW_STEP.PENDING,
+    WORKFLOW_STEP.SENDING,
     WORKFLOW_STEP.CREATING,
     WORKFLOW_STEP.SYNCING,
     WORKFLOW_STEP.STOPPING,
@@ -198,6 +200,31 @@ class OperationWorkflowOwner {
     return this._isInitialized();
   }
 
+  /**
+   * Resolve the best available replica status for workflow reconciliation.
+   * Prefer authoritative reads, but fall back to the observed services cache
+   * when the exact target row becomes visible there first.
+   *
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {string} targetNodeId
+   * @return {Promise<string|null>}
+   */
+  async getReconciledReplicaStatus(
+    replicaId, partitionId, targetNodeId,
+  ) {
+    const actualStatus =
+      await this.getActualReplicaStatus(
+        replicaId, partitionId, targetNodeId,
+      );
+    if (actualStatus !== null) {
+      return actualStatus;
+    }
+    return this.repository.getObservedReplicaStatusFromCache(
+      replicaId, partitionId, targetNodeId,
+    );
+  }
+
   // --- Single-flight key construction ---
 
   /**
@@ -285,6 +312,47 @@ class OperationWorkflowOwner {
    */
   clearEmptyIncompleteOperationQueryDelay() {
     this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+  }
+
+  /**
+   * Merge cache-visible and authoritative incomplete operation sets.
+   * Authoritative rows win when both sources contain the same operation ID.
+   *
+   * Timeout and recovery reconciliation must not assume a non-empty local
+   * cache is complete. Cache observation boundaries can lag individual
+   * replica_operations rows even while some in-flight work is already visible.
+   *
+   * @param {Array<Object>} cachedIncompleteOps
+   * @param {Array<Object>} authoritativeIncompleteOps
+   * @return {Array<Object>}
+   */
+  mergeIncompleteOperations(
+    cachedIncompleteOps = [],
+    authoritativeIncompleteOps = [],
+  ) {
+    const mergedByOperationId = new Map();
+    for (const operation of cachedIncompleteOps) {
+      if (!operation?.operationId) {
+        continue;
+      }
+      mergedByOperationId.set(operation.operationId, operation);
+    }
+    for (const operation of authoritativeIncompleteOps) {
+      if (!operation?.operationId) {
+        continue;
+      }
+      mergedByOperationId.set(operation.operationId, operation);
+    }
+    return [...mergedByOperationId.values()].sort((left, right) => {
+      const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
+      const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
+      if (leftUpdatedAt !== rightUpdatedAt) {
+        return leftUpdatedAt - rightUpdatedAt;
+      }
+      return String(left?.operationId || '').localeCompare(
+        String(right?.operationId || ''),
+      );
+    });
   }
 
 
@@ -405,6 +473,37 @@ class OperationWorkflowOwner {
   }
 
   /**
+   * Clamp transition-owned replica_operations writes to the enclosing
+   * distributed transaction deadline so inner retry loops do not outlive
+   * the parent transaction and mask the original contention boundary.
+   * @param {string} sessionId
+   * @return {Object|null}
+   */
+  buildTransitionMutationTimeoutBudget(sessionId) {
+    if (typeof this.transactionCoordinator?.getTransaction !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const transactionState =
+      this.transactionCoordinator.getTransaction(sessionId);
+    const deadlineMs = Number.isFinite(transactionState?.timeoutDeadline) ?
+      Math.floor(transactionState.timeoutDeadline) :
+      null;
+    if (!Number.isFinite(deadlineMs)) {
+      return null;
+    }
+    const startedAtMs = Date.now();
+    return Object.freeze({
+      configuredBudgetMs: Math.max(
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
+        deadlineMs - startedAtMs,
+      ),
+      startedAtMs,
+      deadlineMs,
+      operationName: 'transaction',
+    });
+  }
+
+  /**
    * Execute a step transition atomically using the distributed
    * transaction coordinator.
    * @param {Object} operation
@@ -413,6 +512,7 @@ class OperationWorkflowOwner {
    * @param {Function} persistFn
    * @param {Object} [options]
    * @param {Function} [options.onIdempotentTransition]
+   * @param {Function} [options.afterCommit]
    * @return {Promise<boolean>} True when this call committed the transition.
    */
   async executeAtomicTransition(
@@ -448,6 +548,9 @@ class OperationWorkflowOwner {
             );
           }
 
+          const afterCommit = typeof options.afterCommit === TYPEOF.FUNCTION ?
+            options.afterCommit :
+            null;
           const executionAttempt = this.reserveTransitionExecutionAttempt(
             operation.operationId,
             step,
@@ -462,6 +565,7 @@ class OperationWorkflowOwner {
           if (!beginResult.success) {
             throw new Error(beginResult.error);
           }
+          let committed = false;
           try {
             await this.operationWorkflowCoordinator
               .transitionStep(
@@ -476,6 +580,7 @@ class OperationWorkflowOwner {
             if (!commitResult.success) {
               throw new Error(commitResult.error);
             }
+            committed = true;
             this.operationWorkflowCoordinator
               .markTransitionCommitted(
                 operation.operationId,
@@ -485,9 +590,14 @@ class OperationWorkflowOwner {
               operation.operationId,
               step,
             );
+            if (afterCommit) {
+              await afterCommit();
+            }
             return true;
           } catch (error) {
-            await txCoordinator.rollback(sessionId);
+            if (!committed) {
+              await txCoordinator.rollback(sessionId);
+            }
             throw error;
           }
         },
@@ -538,6 +648,17 @@ class OperationWorkflowOwner {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
         readinessSnapshot;
     }
+    const projectedOperation = {
+      ...operation,
+      workflowStep: step,
+      updatedAt: now,
+      status: persistedStatus,
+      stepsHistory: [
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory : []),
+        stepEntry,
+      ],
+    };
     const projectIdempotentTransition = () => {
       operation.workflowStep = step;
       operation.status = persistedStatus;
@@ -548,19 +669,15 @@ class OperationWorkflowOwner {
     };
 
     const persistFn = async (sessionId) => {
+      const timeoutBudget =
+        this.buildTransitionMutationTimeoutBudget(sessionId);
       await this.repository.persistOperationUpdate(
+        projectedOperation,
         {
-          ...operation,
-          workflowStep: step,
-          updatedAt: now,
-          status: persistedStatus,
-          stepsHistory: [
-            ...(Array.isArray(operation.stepsHistory) ?
-              operation.stepsHistory : []),
-            stepEntry,
-          ],
+          sessionId,
+          confirmPersistence: false,
+          timeoutBudget,
         },
-        {sessionId},
       );
     };
 
@@ -571,6 +688,11 @@ class OperationWorkflowOwner {
       persistFn,
       {
         onIdempotentTransition: projectIdempotentTransition,
+        afterCommit: async () => {
+          await this.repository.confirmReplicaOperationPersistence(
+            projectedOperation,
+          );
+        },
       },
     );
 
@@ -643,6 +765,18 @@ class OperationWorkflowOwner {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
         readinessSnapshot;
     }
+    const projectedOperation = {
+      ...operation,
+      workflowStep: finalStep,
+      status: WORKFLOW_STEP_TO_STATUS[finalStep],
+      updatedAt: now,
+      completedAt: now,
+      stepsHistory: [
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory : []),
+        stepEntry,
+      ],
+    };
     const projectIdempotentTransition = () => {
       operation.workflowStep = finalStep;
       operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
@@ -658,19 +792,11 @@ class OperationWorkflowOwner {
 
     const persistFn = async (sessionId) => {
       await this.repository.persistOperationUpdate(
+        projectedOperation,
         {
-          ...operation,
-          workflowStep: finalStep,
-          status: WORKFLOW_STEP_TO_STATUS[finalStep],
-          updatedAt: now,
-          completedAt: now,
-          stepsHistory: [
-            ...(Array.isArray(operation.stepsHistory) ?
-              operation.stepsHistory : []),
-            stepEntry,
-          ],
+          sessionId,
+          confirmPersistence: false,
         },
-        {sessionId},
       );
     };
 
@@ -681,6 +807,11 @@ class OperationWorkflowOwner {
       persistFn,
       {
         onIdempotentTransition: projectIdempotentTransition,
+        afterCommit: async () => {
+          await this.repository.confirmReplicaOperationPersistence(
+            projectedOperation,
+          );
+        },
       },
     );
 
@@ -795,6 +926,19 @@ class OperationWorkflowOwner {
         OPERATION_METADATA_KEY.READINESS_SNAPSHOT
       ] = readinessSnapshot;
     }
+    const projectedOperation = {
+      ...operation,
+      workflowStep: WORKFLOW_STEP.FAILED,
+      status: ReplicaStatus.FAILED,
+      updatedAt: now,
+      completedAt: now,
+      errorMessage: normalizedError,
+      stepsHistory: [
+        ...(Array.isArray(operation.stepsHistory) ?
+          operation.stepsHistory : []),
+        failedStepEntry,
+      ],
+    };
     const projectIdempotentTransition = () => {
       operation.workflowStep = WORKFLOW_STEP.FAILED;
       operation.status = ReplicaStatus.FAILED;
@@ -811,20 +955,11 @@ class OperationWorkflowOwner {
 
     const persistFn = async (sessionId) => {
       await this.repository.persistOperationUpdate(
+        projectedOperation,
         {
-          ...operation,
-          workflowStep: WORKFLOW_STEP.FAILED,
-          status: ReplicaStatus.FAILED,
-          updatedAt: now,
-          completedAt: now,
-          errorMessage: normalizedError,
-          stepsHistory: [
-            ...(Array.isArray(operation.stepsHistory) ?
-              operation.stepsHistory : []),
-            failedStepEntry,
-          ],
+          sessionId,
+          confirmPersistence: false,
         },
-        {sessionId},
       );
     };
 
@@ -835,6 +970,11 @@ class OperationWorkflowOwner {
       persistFn,
       {
         onIdempotentTransition: projectIdempotentTransition,
+        afterCommit: async () => {
+          await this.repository.confirmReplicaOperationPersistence(
+            projectedOperation,
+          );
+        },
       },
     );
 
@@ -1201,21 +1341,23 @@ class OperationWorkflowOwner {
     const removeSafetyError =
       await this.getRemoveSafetyError(operation);
     if (removeSafetyError) {
-      if (this.shouldDeferSafetyBlockedReplaceRemove(
-        operation,
-        replaceRemoveDispatchPhase,
-        removeSafetyError,
-      )) {
-        this.logDeferredSafetyBlockedReplaceRemove(
+      const removeSafetyDeferReason =
+        await this.getRemoveSafetyDeferReason(
+          operation,
+          replaceRemoveDispatchPhase,
+          removeSafetyError,
+        );
+      if (removeSafetyDeferReason) {
+        this.logDeferredSafetyBlockedRemove(
           operation,
           removeSafetyError,
+          removeSafetyDeferReason,
         );
         return {
           success: false,
           skipped: true,
           reason: REBALANCER_SKIP_REASON.SAFETY_BLOCKED,
-          deferReason: REBALANCE_COORDINATOR_DEFER_REASON
-            .REPLACE_REMOVE_SAFETY_BLOCKED,
+          deferReason: removeSafetyDeferReason,
           operationId: operation.operationId,
           error: removeSafetyError,
         };
@@ -1776,6 +1918,7 @@ class OperationWorkflowOwner {
       partitionId: move.partitionId || move.entityId,
       replicaId: move.replicaId,
       targetNodeId: move.nodeId,
+      workflowStep: WORKFLOW_STEP.PENDING,
     };
     return this.getRemoveSafetyError(operation);
   }
@@ -1884,13 +2027,28 @@ class OperationWorkflowOwner {
         operationId.length === NUM.ZERO) {
       return false;
     }
-    const operation =
+    let operation =
       await this.repository.queryAuthoritativeOperationById(
         operationId,
         {
           requireOwnerRpcRead: true,
         },
       );
+    if (!operation) {
+      operation =
+        await this.repository.queryAuthoritativeOperationById(
+          operationId,
+          {
+            requireOwnerRpcRead: false,
+          },
+        );
+    }
+    if (!operation) {
+      operation =
+        await this.repository.queryOperationById(
+          operationId,
+        );
+    }
     if (!this.isObservedProgressOperationCandidate(operation)) {
       return false;
     }
@@ -1986,7 +2144,9 @@ class OperationWorkflowOwner {
           removingNodeId,
         );
 
-      if (actualStatus === null) {
+      if (actualStatus === null ||
+          (operation.type === OperationType.REPLACE &&
+            actualStatus === ReplicaStatus.FAILED)) {
         await this.completeOperation(operation);
         return true;
       }
@@ -2009,20 +2169,33 @@ class OperationWorkflowOwner {
       return false;
     }
 
-    if (operation.workflowStep !== WORKFLOW_STEP.CREATING &&
+    if (operation.workflowStep !== WORKFLOW_STEP.PENDING &&
+        operation.workflowStep !== WORKFLOW_STEP.SENDING &&
+        operation.workflowStep !== WORKFLOW_STEP.CREATING &&
         operation.workflowStep !== WORKFLOW_STEP.SYNCING) {
       return false;
     }
 
     const actualStatus =
-      await this.getActualReplicaStatus(
+      await this.getReconciledReplicaStatus(
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
       );
 
+    if (actualStatus === ReplicaStatus.CREATING &&
+        (operation.workflowStep === WORKFLOW_STEP.PENDING ||
+          operation.workflowStep === WORKFLOW_STEP.SENDING)) {
+      await this.updateStep(
+        operation, WORKFLOW_STEP.CREATING,
+      );
+      return true;
+    }
+
     if (actualStatus === ReplicaStatus.SYNCING &&
-        operation.workflowStep === WORKFLOW_STEP.CREATING) {
+        (operation.workflowStep === WORKFLOW_STEP.PENDING ||
+          operation.workflowStep === WORKFLOW_STEP.SENDING ||
+          operation.workflowStep === WORKFLOW_STEP.CREATING)) {
       await this.updateStep(
         operation, WORKFLOW_STEP.SYNCING,
       );
@@ -2215,7 +2388,12 @@ class OperationWorkflowOwner {
     }
 
     const incompleteOps = cachedIncompleteOps.length > NUM.ZERO ?
-      cachedIncompleteOps :
+      this.mergeIncompleteOperations(
+        cachedIncompleteOps,
+        await this.repository.queryIncompleteOperations({
+          preferAuthoritativeRead: true,
+        }),
+      ) :
       await this.repository.queryIncompleteOperations();
     if (incompleteOps.length === NUM.ZERO) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
@@ -2485,7 +2663,7 @@ class OperationWorkflowOwner {
     );
 
     const actualStatus =
-      await this.getActualReplicaStatus(
+      await this.getReconciledReplicaStatus(
         operation.replicaId,
         operation.partitionId,
         operation.targetNodeId,
@@ -2498,7 +2676,17 @@ class OperationWorkflowOwner {
     );
 
     if (actualStatus === ReplicaStatus.ACTIVE) {
-      await this.completeOperation(operation);
+      if (operation.type === OperationType.REPLACE) {
+        const activeTransitionCommitted = await this.updateStep(
+          operation,
+          WORKFLOW_STEP.ACTIVE,
+        );
+        if (activeTransitionCommitted) {
+          await this.executeOperationFromReconcilePath(operation);
+        }
+      } else {
+        await this.completeOperation(operation);
+      }
       this.logger.info(
         REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_ACTIVE,
         {
@@ -2561,7 +2749,9 @@ class OperationWorkflowOwner {
     };
 
     const incompleteOps =
-      await this.repository.queryIncompleteOperations();
+      await this.repository.queryIncompleteOperations({
+        preferAuthoritativeRead: true,
+      });
     result.totalIncomplete = incompleteOps.length;
 
     this.logger.info(
@@ -2655,17 +2845,51 @@ class OperationWorkflowOwner {
    * @param {string} removeSafetyError
    * @return {boolean}
    */
-  shouldDeferSafetyBlockedReplaceRemove(
+  async getRemoveSafetyDeferReason(
     operation,
     replaceRemovePhase,
     removeSafetyError,
   ) {
-    return Boolean(
-      operation &&
-      operation.type === OperationType.REPLACE &&
-      replaceRemovePhase &&
-      this.isSafetyPolicyFailure(removeSafetyError),
+    if (!operation || !this.isSafetyPolicyFailure(removeSafetyError)) {
+      return null;
+    }
+    if (operation.type === OperationType.REPLACE && replaceRemovePhase) {
+      return REBALANCE_COORDINATOR_DEFER_REASON
+        .REPLACE_REMOVE_SAFETY_BLOCKED;
+    }
+    if (operation.type !== OperationType.REMOVE ||
+        !await this.isCriticalRemoveOverReplicated(operation)) {
+      return null;
+    }
+    return REBALANCE_COORDINATOR_DEFER_REASON
+      .REMOVE_SAFETY_BLOCKED;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   */
+  async isCriticalRemoveOverReplicated(operation) {
+    if (!operation ||
+        operation.type !== OperationType.REMOVE ||
+        !this.isCriticalSystemPartition(operation.partitionId)) {
+      return false;
+    }
+    const systemTableCache = this.repository.systemTableCache;
+    if (!systemTableCache ||
+        typeof systemTableCache.filter !== 'function') {
+      return false;
+    }
+    const criticalReplicaRows = systemTableCache.filter(
+      SYSTEM_TABLE_NAME.SERVICES,
+      (row) =>
+        row.partition_id === operation.partitionId &&
+        row.service_type === SERVICE_TYPE.PARTITION,
+    ) || [];
+    const minReplicaCount = await this.getCriticalMinReplicaCount(
+      operation.partitionId,
     );
+    return criticalReplicaRows.length > minReplicaCount;
   }
 
   /**
@@ -2686,9 +2910,10 @@ class OperationWorkflowOwner {
    * @param {string} errorMessage
    * @return {void}
    */
-  logDeferredSafetyBlockedReplaceRemove(
+  logDeferredSafetyBlockedRemove(
     operation,
     errorMessage,
+    deferReason,
   ) {
     const operationId = operation?.operationId;
     if (typeof operationId !== 'string' ||
@@ -2726,8 +2951,7 @@ class OperationWorkflowOwner {
         sourceNodeId: operation.sourceNodeId,
         targetNodeId: operation.targetNodeId,
         workflowStep: operation.workflowStep,
-        reason: REBALANCE_COORDINATOR_DEFER_REASON
-          .REPLACE_REMOVE_SAFETY_BLOCKED,
+        reason: deferReason,
         errorMessage,
       },
     );

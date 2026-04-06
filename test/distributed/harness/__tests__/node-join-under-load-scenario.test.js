@@ -723,6 +723,43 @@ describe('node-join-under-load scenario', () => {
     assert.equal(result.loadMetrics.undispatchedOperations, 7);
   });
 
+  it('allows mild benchmark under-dispatch when node-admission waits dominate even without aggregated admission signals', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 93,
+          success: 93,
+          failed: 0,
+          errors: 0,
+          attemptErrors: 12,
+          nonAdmissionAttemptErrors: 0,
+          admissionSignals: 0,
+          targetOperations: 100,
+          undispatchedOperations: 7,
+          queueDelay: {p95: 20},
+          waitReasons: {
+            nodeAdmissionBlocked: 40,
+            retryableControlPlanePressure: 0,
+            timeoutWaits: 0,
+          },
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    const result = await run(cluster, {
+      preJoinSettleMs: 0,
+    });
+
+    assert.equal(result.newNodeId, 'joiner-3');
+    assert.equal(result.loadMetrics.undispatchedOperations, 7);
+  });
+
   it('copies retained-object diagnostics from control snapshots into failures',
     async () => {
       const cluster = {

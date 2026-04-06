@@ -42,6 +42,7 @@ import {
   ControlPlaneSystemTableGateway,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
@@ -89,6 +90,8 @@ const AUTHORITATIVE_REPAIR_CAUSE = Object.freeze({
   LEADER_RESOLUTION_GAP: 'leader_resolution_gap',
   REPLAY_BACKLOG: 'replay_backlog',
 });
+const AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT =
+  'control_snapshot';
 
 const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   ROUTING_NOT_READY: 'routing_not_ready',
@@ -537,6 +540,7 @@ class AdminServiceDiscovery {
     this.systemTableCache = deps.systemTableCache || null;
     this.nodeId = deps.nodeId || null;
     this.logger = deps.logger || null;
+    this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.cacheMutationTarget = deps.cacheMutationTarget || null;
     this.partitionServicesProvider =
       typeof deps.partitionServicesProvider === TYPEOF.FUNCTION ?
@@ -1040,6 +1044,9 @@ class AdminServiceDiscovery {
     }
 
     const now = options.nowMs || Date.now();
+    const reason = String(options.reason || '');
+    const controlSnapshotRepairRead =
+      reason === AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT;
     const queryResult =
       await this.controlPlaneSystemTableGateway.executeRead(
         {
@@ -1054,8 +1061,15 @@ class AdminServiceDiscovery {
             AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
           allowSqlFallback: true,
           sessionId:
-            `${String(options.reason || 'repair')}` +
+            `${reason || 'repair'}` +
             `:${tableName}:${now}`,
+          allowPressureDegrade:
+            controlSnapshotRepairRead ? false : undefined,
+          workClass:
+            controlSnapshotRepairRead ?
+              PRESSURE_WORK_CLASS.CRITICAL :
+              undefined,
+          deliveryPriority: controlSnapshotRepairRead ? 'critical' : undefined,
           routingReadinessDimension:
             CONTROL_PLANE_READINESS_DIMENSION
               .CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -1576,12 +1590,62 @@ class AdminServiceDiscovery {
         }
         continue;
       }
+      const bootstrapLeaderNodeId =
+        this.resolveDiscoveryBootstrapLeaderNodeId(partitionId);
+      if (bootstrapLeaderNodeId) {
+        const activeReplicaNodeIds =
+          activeReplicaNodeIdsByPartition.get(partitionId);
+        if (activeReplicaNodeIds instanceof Set &&
+            activeReplicaNodeIds.has(bootstrapLeaderNodeId)) {
+          continue;
+        }
+      }
       if (!advisoryLeaderPartitionIds.has(partitionId)) {
         return false;
       }
     }
 
     return true;
+  }
+
+  /**
+   * Resolve one fresh bootstrap leader from the SQL engine routing overlay
+   * when cache owner metadata still lacks leader_node_id.
+   * @param {string} partitionId
+   * @return {string|null}
+   */
+  resolveDiscoveryBootstrapLeaderNodeId(partitionId) {
+    if (typeof partitionId !== TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return null;
+    }
+
+    const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
+    if (!queryExecutor ||
+        typeof queryExecutor.getPartitionRoutingSnapshot !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    try {
+      const routingSnapshot =
+        queryExecutor.getPartitionRoutingSnapshot(partitionId);
+      const canonicalLeaderNodeId = firstStringField(
+        routingSnapshot,
+        'canonicalLeaderNodeId',
+      );
+      if (!canonicalLeaderNodeId) {
+        return null;
+      }
+      const canonicalLeaderServiceCount = Number(
+        routingSnapshot?.canonicalLeaderServiceCount,
+      );
+      return canonicalLeaderServiceCount > NUM.ZERO ?
+        canonicalLeaderNodeId :
+        null;
+    } catch (_error) {
+      return null;
+    }
   }
 
   /**

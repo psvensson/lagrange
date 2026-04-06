@@ -3,6 +3,10 @@ import {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+} from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
@@ -369,6 +373,66 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
     t.ok(persistedStatuses.includes(TRANSACTION_STATUS.COMMITTED));
     t.equal(coordinator.hasActiveTransaction('recover-commit-1'), false);
   });
+
+test('DistributedTransactionCoordinator - recovery replay treats ' +
+  'idempotent participant commit misses as committed', async (t) => {
+  const commitCalls = [];
+  const retryDiagnostics = [];
+  const coordinator = new DistributedTransactionCoordinator({
+    onParticipantRetry: (diagnostic) => {
+      retryDiagnostics.push(diagnostic);
+    },
+    commitParticipant: async (sessionId, partitionId) => {
+      commitCalls.push(`${sessionId}:${partitionId}`);
+      if (partitionId === 'p1') {
+        const error = new Error(QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT);
+        error.errorCode = QUERY_ERROR_CODE.NO_TRANSACTION;
+        throw error;
+      }
+    },
+  });
+
+  coordinator.recoverFromSystemTables({
+    transactions: [{
+      transaction_id: 'tx-recover-idempotent-commit-1',
+      session_id: 'recover-idempotent-commit-1',
+      status: TRANSACTION_STATUS.COMMITTING,
+      created_at: 1,
+      updated_at: 1,
+    }],
+    participants: [
+      {
+        participant_id: 'tx-recover-idempotent-commit-1:p1',
+        transaction_id: 'tx-recover-idempotent-commit-1',
+        partition_id: 'p1',
+        status: TRANSACTION_STATUS.COMMITTING,
+        created_at: 1,
+        updated_at: 1,
+      },
+      {
+        participant_id: 'tx-recover-idempotent-commit-1:p2',
+        transaction_id: 'tx-recover-idempotent-commit-1',
+        partition_id: 'p2',
+        status: TRANSACTION_STATUS.ACTIVE,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ],
+  });
+
+  const recovery = await coordinator.resumeRecoveredTransactions();
+
+  t.equal(recovery.totalRecovered, 1);
+  t.equal(recovery.resumed, 1);
+  t.equal(recovery.failed, 0);
+  t.equal(retryDiagnostics.length, 0,
+    'idempotent commit misses should not be retried');
+  t.same(commitCalls.sort(), [
+    'recover-idempotent-commit-1:p1',
+    'recover-idempotent-commit-1:p2',
+  ]);
+  t.equal(coordinator.hasActiveTransaction('recover-idempotent-commit-1'), false);
+});
 
 test('DistributedTransactionCoordinator - recovery replay only commits pending participants',
   async (t) => {

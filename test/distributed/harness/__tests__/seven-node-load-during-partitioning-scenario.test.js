@@ -158,8 +158,8 @@ describe('seven-node-load-during-partitioning scenario', () => {
         assertConsistency: async () => {
           calls.push('assertConsistency');
         },
-        waitForConsistencyConvergence: async () => {
-          calls.push('waitForConsistencyConvergence');
+        waitForConsistencyConvergence: async (options) => {
+          calls.push(['waitForConsistencyConvergence', options]);
         },
       };
 
@@ -201,7 +201,7 @@ describe('seven-node-load-during-partitioning scenario', () => {
       assert.equal(calls[2][0], 'startLoad');
       assert.deepEqual(
         calls[2][1].nodes.map((node) => node.id),
-        ['seed-1', 'node-2', 'node-3'],
+        ['node-2', 'node-3', 'seed-1'],
         'scenario should bootstrap load on the current table replica quorum',
       );
       assert.equal(typeof calls[2][1].nodeResolver, 'function');
@@ -220,7 +220,14 @@ describe('seven-node-load-during-partitioning scenario', () => {
         30,
         'scenario should scale partitioning load to the bootstrap node set',
       );
-      assert.deepEqual(calls[3], 'waitForConsistencyConvergence');
+      assert.deepEqual(calls[3], [
+        'waitForConsistencyConvergence',
+        {
+          timeoutMs: 60000,
+          toleratePartitionSkew: true,
+          maxPartitionSkew: 2,
+        },
+      ]);
     });
 
   it('fails early with structured diagnostics when split attempts never start',
@@ -320,6 +327,31 @@ describe('seven-node-load-during-partitioning scenario', () => {
           assert.equal(
             error?.diagnostics?.failure?.dominantReason,
             'no_split_attempt_evidence',
+          );
+          assert.ok(
+            error?.diagnostics?.failure?.loadMetrics?.total >= 1,
+            'failure diagnostics should preserve the latest load total',
+          );
+          assert.equal(
+            error?.diagnostics?.failure?.loadMetrics?.success,
+            error?.diagnostics?.failure?.loadMetrics?.total,
+          );
+          assert.equal(
+            error?.diagnostics?.failure?.loadMetrics?.failed,
+            0,
+          );
+          assert.equal(
+            error?.diagnostics?.failure?.loadMetricsAtFirstPartitioning,
+            null,
+          );
+          assert.deepEqual(
+            error?.diagnostics?.failure?.distributionSnapshot,
+            {
+              partitionCount: 1,
+              partitionIds: ['logs-p1'],
+              replicaNodeCount: 3,
+              replicaNodeIds: ['node-2', 'node-3', 'seed-1'],
+            },
           );
           return true;
         },

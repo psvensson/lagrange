@@ -423,6 +423,81 @@ test('RebalanceCoordinator createOperation rejects stale membership publication 
     }
   });
 
+test('RebalanceCoordinator createOperation rejects stale membership plans using the shared publication planning snapshot',
+  async (t) => {
+    let executeQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneReadinessService: {
+        getMembershipPublicationPlanningSnapshotSync() {
+          return {
+            publishedPlanningEpoch: 9,
+          };
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          executeQueryCalls += 1;
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    try {
+      try {
+        await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'partition-1',
+          entityType: 'partition',
+          entityId: 'partition-1',
+          nodeId: 'node-remote',
+          membershipPublicationEpoch: 8,
+        });
+        t.fail('stale epoch-bound placement should be rejected');
+      } catch (error) {
+        t.equal(
+          error?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_CHANGED,
+          'shared publication planning snapshot should drive stale-epoch rejection',
+        );
+        t.equal(
+          error?.currentMembershipPublicationEpoch,
+          9,
+          'shared publication planning snapshot should define the current epoch',
+        );
+      }
+      t.equal(
+        executeQueryCalls,
+        0,
+        'stale snapshot-bound placement must not persist any operation row',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('RebalanceCoordinator createOperation persists membership publication epoch metadata',
   async (t) => {
     const coordinator = new RebalanceCoordinator({
@@ -633,6 +708,66 @@ test('RebalanceCoordinator critical add-like gate uses authoritative ' +
     await coordinator.shutdown();
   }
 });
+
+test('RebalanceCoordinator critical add-like gate ignores replace remove-phase work',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.repository.getOperationsByEntityAuthoritative = async () => ([
+      {
+        operationId: 'op-critical-remove-phase',
+        type: 'REPLACE',
+        workflowStep: WORKFLOW_STEP.STOPPING,
+        status: 'removing',
+      },
+    ]);
+
+    try {
+      await coordinator.ensureCriticalPartitionCreateLaneAvailable({
+        normalizedMoveType: 'REPLACE',
+        partitionId: 'config-p1',
+        entityType: 'partition',
+        entityId: 'config-p1',
+        move: {
+          enforceConcurrentOperationBudget: true,
+        },
+      });
+
+      t.pass(
+        'critical partitions should admit a new replace once the earlier replace is in remove dispatch',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
 
 test('RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create',
   async (t) => {
@@ -1041,6 +1176,21 @@ test('RebalanceCoordinator checkTimeouts reconciles only local-owner operations'
           stepsHistory: [],
         },
         {
+          operationId: 'op-replace-target-owner',
+          type: OperationType.REPLACE,
+          partitionId: 'sql_transactions-p1',
+          replicaId: 'sql_transactions-p1-r4',
+          sourceNodeId: 'node-remote',
+          targetNodeId: 'node-local',
+          status: 'syncing',
+          workflowStep: WORKFLOW_STEP.SYNCING,
+          createdAt: now - 1000,
+          updatedAt: now - 50,
+          completedAt: null,
+          errorMessage: null,
+          stepsHistory: [],
+        },
+        {
           operationId: 'op-local-owner',
           type: 'ADD',
           partitionId: 'partition-1',
@@ -1070,8 +1220,8 @@ test('RebalanceCoordinator checkTimeouts reconciles only local-owner operations'
       await coordinator.checkTimeouts();
       t.same(
         reconciledOperationIds,
-        ['op-local-owner'],
-        'timeout reconciliation must skip non-owner operations',
+        ['op-replace-target-owner', 'op-local-owner'],
+        'timeout reconciliation must skip non-owner operations but keep target-owned REPLACE reconciliation',
       );
     } finally {
       await coordinator.shutdown();

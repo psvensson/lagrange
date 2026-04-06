@@ -85,6 +85,13 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       bootstrapService.partitionServices = new Map([
         ['nodes', createPartition('nodes-p1', TABLES.NODES)],
         [
+          'control-plane-publications',
+          createPartition(
+            'control_plane_publications-p1',
+            TABLES.CONTROL_PLANE_PUBLICATIONS,
+          ),
+        ],
+        [
           'replica-ops',
           createPartition('replica_operations-p1', null),
         ],
@@ -116,6 +123,10 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
         [
           {
             partitionId: 'nodes-p1',
+            reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          },
+          {
+            partitionId: 'control_plane_publications-p1',
             reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
           },
           {

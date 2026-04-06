@@ -514,6 +514,15 @@ class ControlPlaneReadinessService {
    */
   async getAllNodeReadiness(options = {}) {
     const nodeRows = await this.readNodeRows(options);
+    const serviceRows = await this.readAllNodeServiceRows(options);
+    const bulkNodeRowsAreAuthoritative =
+      options.allowAuthoritativeRefresh === true &&
+      this.nodesOwner &&
+      typeof this.nodesOwner.listNodes === TYPEOF.FUNCTION;
+    const bulkServiceRowsAreAuthoritative =
+      options.allowAuthoritativeRefresh === true &&
+      this.servicesOwner &&
+      typeof this.servicesOwner.listServices === TYPEOF.FUNCTION;
     const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
@@ -521,9 +530,8 @@ class ControlPlaneReadinessService {
         nodeIds.add(nodeId);
       }
     }
-    if (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
-      const serviceRows =
-        this.systemTableCache.getAll(TABLES.SERVICES) || [];
+    if (serviceRows.length > NUM.ZERO ||
+        typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
       const nodeEndpointRows =
         this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
       for (const serviceRow of serviceRows) {
@@ -547,7 +555,11 @@ class ControlPlaneReadinessService {
     const readiness = [];
 
     for (const nodeId of [...nodeIds].sort()) {
-      readiness.push(await this.getNodeReadiness(nodeId, options));
+      readiness.push(await this.getNodeReadiness(nodeId, {
+        ...options,
+        allNodeRows: bulkNodeRowsAreAuthoritative ? nodeRows : null,
+        allServiceRows: bulkServiceRowsAreAuthoritative ? serviceRows : null,
+      }));
     }
 
     return readiness;
@@ -2482,6 +2494,30 @@ class ControlPlaneReadinessService {
     return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
+  async getMembershipPublicationPlanningSnapshot(nodeId, observedAt) {
+    const membershipPublication = await this.getMembershipPublicationDiagnostics(
+      nodeId,
+      observedAt,
+    );
+    return this.buildMembershipPublicationPlanningSnapshot({
+      nodeId,
+      observedAt,
+      membershipPublication,
+    });
+  }
+
+  getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
+    const membershipPublication = this.getMembershipPublicationDiagnosticsSync(
+      nodeId,
+      observedAt,
+    );
+    return this.buildMembershipPublicationPlanningSnapshot({
+      nodeId,
+      observedAt,
+      membershipPublication,
+    });
+  }
+
   async refreshStalePriorityPartitionSummary(row, readOptions) {
     const service = this.membershipPublicationService;
     if (!row || typeof row !== TYPEOF.OBJECT ||
@@ -2514,6 +2550,12 @@ class ControlPlaneReadinessService {
     const publicationEpoch = Number(
       row.publicationEpoch ?? row.publication_epoch,
     );
+    const sourceSnapshotVersion = Number(
+      row.sourceSnapshotVersion ?? row.source_snapshot_version,
+    );
+    const publishedActiveNodeIdsPresent = Array.isArray(
+      row.publishedActiveNodeIds ?? row.published_active_node_ids,
+    );
     const createdAt = normalizeDiagnosticTimestampMs(
       row.createdAt ?? row.created_at ?? observedAt,
     );
@@ -2524,10 +2566,11 @@ class ControlPlaneReadinessService {
       row.priorityPartitionSummary ?? row.priority_partition_summary ?? null;
     return Object.freeze({
       publicationEpoch: Number.isFinite(publicationEpoch) ? publicationEpoch : null,
+      sourceSnapshotVersion:
+        Number.isFinite(sourceSnapshotVersion) ? sourceSnapshotVersion : null,
       status: typeof row.status === TYPEOF.STRING ? row.status : null,
-      publishedActiveNodeIds: Array.isArray(
-        row.publishedActiveNodeIds ?? row.published_active_node_ids,
-      ) ?
+      publishedActiveNodeIdsPresent,
+      publishedActiveNodeIds: publishedActiveNodeIdsPresent ?
         Object.freeze([
           ...(row.publishedActiveNodeIds ?? row.published_active_node_ids),
         ]) :
@@ -2563,6 +2606,93 @@ class ControlPlaneReadinessService {
     });
   }
 
+  buildMembershipPublicationPlanningSnapshot(context = {}) {
+    const membershipPublication =
+      context.membershipPublication &&
+      typeof context.membershipPublication === TYPEOF.OBJECT ?
+        context.membershipPublication :
+        null;
+    if (!membershipPublication) {
+      return null;
+    }
+
+    const publicationEpoch = Number(membershipPublication.publicationEpoch);
+    const publicationStatus =
+      typeof membershipPublication.status === TYPEOF.STRING ?
+        membershipPublication.status :
+        null;
+    const publicationStatusNormalized = publicationStatus ?
+      String(publicationStatus).toUpperCase() :
+      '';
+    const publishedActiveNodeIds = normalizeNodeIdList(
+      membershipPublication.publishedActiveNodeIds,
+    );
+    const publishedActiveNodeIdsPresent =
+      membershipPublication.publishedActiveNodeIdsPresent === true ||
+      Array.isArray(membershipPublication.publishedActiveNodeIds);
+    const targetNodeId =
+      typeof context.nodeId === TYPEOF.STRING ?
+        String(context.nodeId).trim() :
+        '';
+    const priorityPartitionSummary =
+      membershipPublication.priorityPartitionSummary &&
+      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
+        membershipPublication.priorityPartitionSummary :
+        null;
+    const publicationPending = publicationStatusNormalized.length > NUM.ZERO &&
+      publicationStatusNormalized !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    const publicationExcludesTargetNode = publicationStatusNormalized ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+      publishedActiveNodeIdsPresent &&
+      targetNodeId.length > NUM.ZERO &&
+      !publishedActiveNodeIds.includes(targetNodeId);
+    const priorityRecoveryReasonCodes = [];
+    if (publicationPending || publicationExcludesTargetNode) {
+      priorityRecoveryReasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      );
+    }
+    if (priorityPartitionSummary?.satisfied === false) {
+      priorityRecoveryReasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      );
+    }
+    const dedupedReasonCodes = Object.freeze([...new Set(
+      priorityRecoveryReasonCodes,
+    )]);
+    const publishedPlanningEpoch = publicationStatusNormalized ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+      Number.isInteger(publicationEpoch) ?
+      publicationEpoch :
+      null;
+    let publishedMembershipIncludesTargetNode = null;
+    if (publicationStatusNormalized ===
+        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+        targetNodeId.length > NUM.ZERO) {
+      publishedMembershipIncludesTargetNode =
+        !publicationExcludesTargetNode;
+    }
+
+    return Object.freeze({
+      publicationEpoch: Number.isFinite(publicationEpoch) ? publicationEpoch : null,
+      publicationStatus,
+      publicationStatusNormalized,
+      publishedActiveNodeIdsPresent,
+      publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),
+      priorityPartitionSummary:
+        priorityPartitionSummary && typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+          Object.freeze({...priorityPartitionSummary}) :
+          null,
+      targetNodeId: targetNodeId || null,
+      publicationPending,
+      publicationExcludesTargetNode,
+      publishedMembershipIncludesTargetNode,
+      publishedPlanningEpoch,
+      priorityRecoveryActive: dedupedReasonCodes.length > NUM.ZERO,
+      priorityRecoveryReasonCodes: dedupedReasonCodes,
+    });
+  }
+
   getCapacitySnapshotSync(nodeId, _nodeRow) {
     if (this.storageAccountingService &&
         typeof this.storageAccountingService.getCapacitySnapshotForNodeSync ===
@@ -2582,40 +2712,18 @@ class ControlPlaneReadinessService {
       typeof context.membershipPublication === TYPEOF.OBJECT ?
         context.membershipPublication :
         null;
+    const planningSnapshot = this.buildMembershipPublicationPlanningSnapshot({
+      nodeId: context.nodeId,
+      observedAt: context.observedAt,
+      membershipPublication,
+    });
     const priorityPartitionSummary =
-      membershipPublication?.priorityPartitionSummary &&
-      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
-        membershipPublication.priorityPartitionSummary :
-        null;
-    const publicationStatus =
-      typeof membershipPublication?.status === TYPEOF.STRING ?
-        String(membershipPublication.status).toUpperCase() :
-        '';
-    const publishedActiveNodeIds = normalizeNodeIdList(
-      membershipPublication?.publishedActiveNodeIds,
-    );
-    const targetNodeId =
-      typeof context?.nodeId === TYPEOF.STRING ?
-        String(context.nodeId).trim() :
-        '';
-    const reasonCodes = [];
-
-    const publicationPending = publicationStatus.length > NUM.ZERO &&
-      publicationStatus !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-    const publicationExcludesTargetNode = publicationStatus ===
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-      targetNodeId.length > NUM.ZERO &&
-      !publishedActiveNodeIds.includes(targetNodeId);
-    if (publicationPending || publicationExcludesTargetNode) {
-      reasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-      );
-    }
-    if (priorityPartitionSummary && priorityPartitionSummary.satisfied === false) {
-      reasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-      );
-    }
+      planningSnapshot?.priorityPartitionSummary || null;
+    const reasonCodes = Array.isArray(
+      planningSnapshot?.priorityRecoveryReasonCodes,
+    ) ?
+      [...planningSnapshot.priorityRecoveryReasonCodes] :
+      [];
     if (dimensions[
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
     ] !== true) {
@@ -2648,8 +2756,11 @@ class ControlPlaneReadinessService {
     return Object.freeze({
       active: dedupedReasonCodes.length > NUM.ZERO,
       reasonCodes: dedupedReasonCodes,
-      publicationEpoch: membershipPublication?.publicationEpoch ?? null,
-      publicationStatus: membershipPublication?.status || null,
+      publicationEpoch: planningSnapshot?.publicationEpoch ??
+        membershipPublication?.publicationEpoch ??
+        null,
+      publicationStatus: planningSnapshot?.publicationStatus ??
+        (membershipPublication?.status || null),
       priorityPartitionSummary,
       enteredAt,
     });
@@ -2695,6 +2806,16 @@ class ControlPlaneReadinessService {
   }
 
   async readNodeRow(nodeId, options = {}) {
+    if (Array.isArray(options.allNodeRows)) {
+      return options.allNodeRows.find((row) => row?.[COLUMN.NODE_ID] === nodeId) ||
+        null;
+    }
+    if (options.allowAuthoritativeRefresh === true &&
+        this.nodesOwner &&
+        typeof this.nodesOwner.getNode === TYPEOF.FUNCTION) {
+      const result = await this.nodesOwner.getNode(nodeId, options);
+      return result?.rows?.[0] || null;
+    }
     if (this.nodesOwner &&
         typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
       const result = await this.nodesOwner.getNodeFromCache(nodeId, options);
@@ -2704,6 +2825,12 @@ class ControlPlaneReadinessService {
   }
 
   async readNodeRows(options = {}) {
+    if (options.allowAuthoritativeRefresh === true &&
+        this.nodesOwner &&
+        typeof this.nodesOwner.listNodes === TYPEOF.FUNCTION) {
+      const result = await this.nodesOwner.listNodes(options);
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
     if (this.nodesOwner &&
         typeof this.nodesOwner.listNodesFromCache === TYPEOF.FUNCTION) {
       const result = await this.nodesOwner.listNodesFromCache(options);
@@ -2713,6 +2840,17 @@ class ControlPlaneReadinessService {
   }
 
   async readNodeServiceRows(nodeId, options = {}) {
+    if (Array.isArray(options.allServiceRows)) {
+      return options.allServiceRows.filter((row) => row?.[COLUMN.NODE_ID] === nodeId);
+    }
+    if (options.allowAuthoritativeRefresh === true &&
+        this.servicesOwner &&
+        typeof this.servicesOwner.listServices === TYPEOF.FUNCTION) {
+      const result = await this.servicesOwner.listServices(options);
+      return Array.isArray(result?.rows) ?
+        result.rows.filter((row) => row?.[COLUMN.NODE_ID] === nodeId) :
+        [];
+    }
     if (this.servicesOwner &&
         typeof this.servicesOwner.listServicesForNodeFromCache ===
           TYPEOF.FUNCTION) {
@@ -2723,6 +2861,25 @@ class ControlPlaneReadinessService {
       return Array.isArray(result?.rows) ? result.rows : [];
     }
     return this.getNodeServiceRows(nodeId);
+  }
+
+  async readAllNodeServiceRows(options = {}) {
+    if (options.allowAuthoritativeRefresh === true &&
+        this.servicesOwner &&
+        typeof this.servicesOwner.listServices === TYPEOF.FUNCTION) {
+      const result = await this.servicesOwner.listServices(options);
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    if (this.servicesOwner &&
+        typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION) {
+      const result = await this.servicesOwner.listServicesFromCache(options);
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return [];
+    }
+    return this.systemTableCache.getAll(TABLES.SERVICES) || [];
   }
 
   /**

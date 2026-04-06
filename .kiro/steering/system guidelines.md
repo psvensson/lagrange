@@ -4,11 +4,39 @@ inclusion: always
 
 # System Guidelines — Mandatory Rules for All Code Generation
 
+## Document Role
+
+This document governs stable repo-wide implementation rules.
+
+Use this file for:
+
+- durable ownership rules
+- single-path execution rules
+- cache and communication discipline
+- timeout-budget and idempotency rules
+- user-model discipline
+
+Do not use this file for:
+
+- current concrete owner maps
+- workstream-local testing procedure
+- style-only rules
+- roadmap scope decisions
+
+For adjacent concerns, use:
+
+- [`.kiro/steering/doctrine.md`](doctrine.md)
+- [`../../architecture.md`](../../architecture.md)
+- [`../../architecture/current-owner-maps.md`](../../architecture/current-owner-maps.md)
+- [`.kiro/steering/testing-guidelines.md`](testing-guidelines.md)
+- [`.kiro/steering/code-style.md`](code-style.md)
+- [`.kiro/steering/roadmap.md`](roadmap.md)
+
 These rules are non-negotiable. Every rule applies to every code change, every
 new file, and every refactor. When in doubt, the rule wins.
 
-Read this document together with `doctrine.md`. The doctrine defines the
-short-form architectural intent; these rules make it enforceable.
+Read this document together with `.kiro/steering/doctrine.md`. The doctrine
+defines the short-form architectural intent; these rules make it enforceable.
 
 ---
 
@@ -75,23 +103,26 @@ It is FORBIDDEN to:
   (e.g., `m.type` and `m.operation` meaning the same thing).
 - Introduce a "helper" or "utility" that reimplements logic from another module.
 - Create a "wrapper" that silently duplicates the behavior of the thing it wraps.
-- Add a second code path "just in case" or "as a fallback."
+- Add a second code path "just in case" or as an alternate path.
 
-### 1.3 No Fallback Code Paths
+### 1.3 Single-Path Execution
 
 There must be exactly ONE code path for any given operation. Specifically:
 
+- Any given runtime function or semantic concern MUST have one active code path
+  at a time.
 - No "if new way fails, try old way" patterns.
 - No feature flags that keep two implementations alive simultaneously.
-- No "legacy" code sitting alongside "new" code.
-- When something changes, it changes completely. Remove the old path.
+- No "current path plus prior path" layouts for the same semantic concern.
+- When something changes, replace the prior path instead of carrying both
+  forward.
 
 The one scoped exception is explicit recovery sweeps (see §1.8): the cache is
 the steady-state read model, and SQL reads are permitted for authoritative
-writes, recovery sweeps, and diagnostics reconciliation. This is not a
-fallback — it is a separate, explicitly owned recovery path that re-enters the
-canonical owner queue. Do not generalize this exception into ad-hoc "try cache
-then try SQL" patterns.
+writes, recovery sweeps, and diagnostics reconciliation. This is not a second
+steady-state path. It is a separate, explicitly owned recovery path that
+re-enters the canonical owner queue. Do not generalize this exception into
+ad-hoc "try cache then try SQL" patterns.
 
 ### 1.4 Single Source of Truth for State
 
@@ -99,16 +130,9 @@ Each piece of state (node status, replica role, epoch, etc.) is owned by exactly
 one component. Other components that need that state MUST read it from the owner.
 They must NOT maintain their own copy, shadow, or derived version of that state.
 
-Concrete ownership assignments (see architecture.md for full list):
-
-- Node state -> `NodeLifecycleStateMachine`
-- Replica state -> `ReplicaStateMachine`
-- Epoch -> `config.current_epoch` via CDC
-- Placement planning -> `MovePlanner` (only)
-- Operation lifecycle -> `RebalanceCoordinator` + `replica_operations`
-- Dispatch -> `ReplicaDispatchService`
-- Failure detection -> `FailureDetector` (single instance, no duplicates)
-- System cache -> `SystemTableCache` (one per node, fed only by CDC)
+For the current concrete owner map, see
+`architecture/current-owner-maps.md` and the linked sections in
+`architecture.md`.
 
 ### 1.4.1 Injected Owners Must Be Used
 
@@ -442,6 +466,37 @@ It is FORBIDDEN to:
 - Treat repeated boundary failures as unrelated bugs when they share the same
   owner gap or ingress overlap.
 
+### 1.4.16.1 Multi-Signal Admission Must Use One Canonical Adjudicator
+
+When readiness, admission, placement, or cohort selection depends on more than
+one live signal, the system must separate observation from policy.
+
+Required pattern:
+
+1. Collectors fetch evidence and diagnostics, but do not emit the final admit,
+   ready, or select verdict.
+2. One normalized per-entity snapshot records all evidence needed for the
+   decision, including whether each signal is authoritative, equivalent, or
+   degraded.
+3. One canonical adjudicator derives the final state, verdict, retryability,
+   and reason codes from that snapshot.
+4. Equivalent evidence may clear only the blocker classes explicitly declared
+   by spec. Degraded or cross-plane evidence may explain or defer, but it must
+   not upgrade a blocked entity to admitted or ready.
+5. Policy targets such as strict cohort size or parity must remain owned by
+   explicit policy, not be rewritten opportunistically from the survivors of a
+   local fallback branch.
+
+It is FORBIDDEN to:
+
+- Scatter final readiness or admission decisions across helper-specific boolean
+  branches or fallback probes.
+- Use a weaker or cross-plane signal to prove a stronger workload or
+  owner-specific readiness claim unless the spec declares that signal
+  equivalent.
+- Collapse a strict policy target to whichever entities happened to pass local
+  fallbacks in the current attempt.
+
 ### 1.4.17 Shared Pressure Contract Must Span All Ingress Paths
 
 Separate planes may keep separate ingress owners, but they must reuse the same
@@ -553,8 +608,11 @@ Before generating or modifying code, answer these questions:
     canonical gateway owner? -> Stop.
 26. Am I keeping a temporary delegator alive without a removal task and
     structural guard against new callers? -> Stop.
+27. Am I combining observation, fallback probing, and final admission policy in
+  the same retry loop instead of producing one normalized snapshot and one
+  canonical adjudicated verdict per entity? -> Stop.
 
-If the answer to any of 4–26 is yes, you are violating this contract.
+If the answer to any of 4–27 is yes, you are violating this contract.
 
 ### 1.5.1 Owner Wiring and Fallback Elimination Procedure
 
@@ -583,12 +641,17 @@ readiness), complete this procedure before closing the task:
 8. If the code touches phase-established runtime wiring, prove the runtime
    owner remains after phase completion and no phase teardown removes the only
    live path.
+9. If the decision depends on more than one signal, define the normalized
+  decision snapshot and the canonical adjudicator before adding or changing
+  fallback behavior.
 
 Mandatory pre-merge scan for touched files:
 
 - Search for direct owner field mutation where a setter exists.
 - Search for synthetic fallback decisions when owner dependencies are absent.
 - Search for duplicate decision logic that reimplements owner behavior locally.
+- Search for helpers or fallback probes that return final ready/admit/select
+  booleans outside the canonical adjudicator.
 - Search for phase-scoped runtime subscribers, bridges, or retry loops that
   remain required after phase completion.
 - Search for direct shared-metadata reads or writes that bypass the canonical
@@ -611,17 +674,18 @@ path.
 
 ### 1.6.1 Topology Workflow Owner Map
 
-Topology-changing workflows have fixed ownership boundaries:
+Topology-changing workflows have fixed ownership boundaries.
 
-- `RebalanceCoordinator` is the only writer of owner-managed
-  `replica_operations` workflow fields.
-- `ManagedSplitWorkflow` is the only durable owner of split lifecycle phase
-  transitions from admission through cleanup.
-- Executors such as `ReplicaHandler` and `PartitionService` are participants.
-  They emit typed acknowledgements or outcomes and MUST NOT persist owner-owned
-  phase transitions directly.
-- Cache visibility, timer age, or incidental row observation MUST NOT be used
-  as proof that an executor-owned phase completed.
+The current concrete workflow owner map lives in
+`architecture/current-owner-maps.md`.
+
+The durable rule remains:
+
+- owner-managed workflow fields have one writer
+- participant executors emit outcomes and do not persist owner-managed phase
+  transitions directly
+- cache visibility, timer age, or incidental row observation do not prove
+  executor-owned phase completion
 
 ### 1.7 Durable Workflow + Transaction Boundary Rule
 
@@ -674,27 +738,12 @@ It is FORBIDDEN to:
 - Add per-callsite single-flight, retry, or readiness interpretations when a
   shared owner primitive already exists or should exist
 
-Required building blocks for topology and control-plane work:
-
-1. `AuthoritativeControlPlaneView`
-   One owner for authoritative node/service/system-table reads, including
-   freshness evidence and source diagnostics.
-2. `EligibilitySnapshot`
-   One immutable decision object for readiness/admission semantics so serve,
-   repair, split admission, and provisioning do not invent separate truth.
-3. `OperationLane`
-   One owner-key single-flight/concurrency primitive for reconcile and
-   progression work.
-4. `WorkflowStepRunner`
-   One durable workflow-step primitive for claim, execute, classify, and
-   persist transitions through `DurableWorkflowCoordinator`.
-5. `TimeoutPolicy`
-   One timeout contract for top-level budgets, nested allocations, and typed
-   timeout classification.
+The current shared control-plane building blocks live in
+`architecture/current-owner-maps.md`.
 
 Mandatory design rule:
 
-- New topology workflows and control-plane features MUST be composed from these
+- New topology workflows and control-plane features MUST be composed from the
   shared primitives first.
 - If an existing primitive is missing one capability, extend the primitive.
   Do not fork the logic into a feature-local implementation.
@@ -1018,6 +1067,20 @@ is a bug.
   other implementation-planning artifacts for active or archived workstreams.
 - Internal engineering specs and implementation plans belong in `.kiro/specs/`,
   not `docs/` or `examples/`.
+
+### 5.1 Architectural Exceptions Must Be Recorded
+
+Architectural exceptions are allowed only when they are explicit, owned, and
+time-bounded.
+
+- Every exception must name one owning workstream or maintainer.
+- Every exception must be recorded in an active `.kiro/specs/<workstream>/`
+  document, or in a linked architecture note if no active spec exists.
+- Every exception record must include:
+  - the exact rule boundary being excepted
+  - why the normal rule cannot be used yet
+  - the removal checkpoint or closure condition
+- Unrecorded architectural exceptions are not allowed.
 
 ---
 

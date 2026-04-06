@@ -265,12 +265,20 @@ test('split source routability helper uses control-plane recovery eligibility ' 
     messageRouter: {deliver: async () => ({acknowledged: true})},
   });
   const observedCalls = [];
-  engine.getRoutablePartitionServiceNodeIds = (partitionId, readinessDimension) => {
-    observedCalls.push({partitionId, readinessDimension});
-    return [];
+  engine.queryExecutor = {
+    getRoutablePartitionServices(partitionId, readinessDimension) {
+      observedCalls.push({partitionId, readinessDimension});
+      return [{
+        partition_id: partitionId,
+        node_id: 'node-a',
+        status: 'active',
+        address: `node-a/partition/${partitionId}`,
+      }];
+    },
   };
 
-  engine.managedSplitWorkflow.getRoutablePartitionServiceNodeIds('users-p1');
+  const nodeIds =
+    engine.managedSplitWorkflow.getRoutablePartitionServiceNodeIds('users-p1');
 
   t.same(
     observedCalls,
@@ -281,6 +289,12 @@ test('split source routability helper uses control-plane recovery eligibility ' 
     }],
     'ManagedSplitWorkflow source-routability ingress must use recovery ' +
     'dimension during control-plane convergence',
+  );
+  t.same(
+    nodeIds,
+    ['node-a'],
+    'ManagedSplitWorkflow source-routability ingress must return the routed ' +
+    'node cohort from the query executor',
   );
 
   t.end();

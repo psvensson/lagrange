@@ -61,6 +61,9 @@ import {
   JOIN_READINESS_REPAIR,
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
+import {
+  isPriorityControlPlanePartition,
+} from './system-partition-classification.js';
 
 const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.ROUTING_NOT_READY,
@@ -80,6 +83,11 @@ const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
   CONNECTION_STATE.RECONNECTING,
 ]);
 const CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS = 5000;
+const CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES = new Set(
+  JOIN_READINESS_REPAIR.TABLES.map((tableName) =>
+    String(tableName || '').trim().toLowerCase(),
+  ).filter((tableName) => tableName.length > NUM.ZERO),
+);
 
 /**
  * Evaluates join readiness convergence for a joining node.
@@ -176,6 +184,8 @@ class JoinReadinessEvaluator {
           missingLeaders: evaluation?.missingLeaders || {},
           inFlightReplicaOperations:
             evaluation?.inFlightReplicaOperations || NUM.ZERO,
+          excludedRemotePriorityControlPlaneCount:
+            evaluation?.excludedRemotePriorityControlPlaneCount || NUM.ZERO,
           missingNodeEndpointNodeIds:
             evaluation?.missingNodeEndpointNodeIds || [],
           missingPostgresWireNodeIds:
@@ -242,6 +252,16 @@ class JoinReadinessEvaluator {
             terminalEvaluation.inFlightReplicaOperations,
           inFlightReplicaOperationDetails:
             terminalEvaluation.inFlightReplicaOperationDetails,
+          excludedSelfTargetedCount:
+            terminalEvaluation.excludedSelfTargetedCount,
+          excludedWarmingTargetCount:
+            terminalEvaluation.excludedWarmingTargetCount,
+          excludedNonDiscoveryPartitionCount:
+            terminalEvaluation.excludedNonDiscoveryPartitionCount,
+          excludedRemotePriorityControlPlaneCount:
+            terminalEvaluation.excludedRemotePriorityControlPlaneCount,
+          excludedRemotePriorityControlPlaneOperationDetails:
+            terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
           missingNodeEndpointNodeIds:
             terminalEvaluation.missingNodeEndpointNodeIds,
           missingPostgresWireNodeIds:
@@ -280,6 +300,16 @@ class JoinReadinessEvaluator {
               terminalEvaluation.inFlightReplicaOperations,
             inFlightReplicaOperationDetails:
               terminalEvaluation.inFlightReplicaOperationDetails,
+            excludedSelfTargetedCount:
+              terminalEvaluation.excludedSelfTargetedCount,
+            excludedWarmingTargetCount:
+              terminalEvaluation.excludedWarmingTargetCount,
+            excludedNonDiscoveryPartitionCount:
+              terminalEvaluation.excludedNonDiscoveryPartitionCount,
+            excludedRemotePriorityControlPlaneCount:
+              terminalEvaluation.excludedRemotePriorityControlPlaneCount,
+            excludedRemotePriorityControlPlaneOperationDetails:
+              terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
             missingNodeEndpointNodeIds:
               terminalEvaluation.missingNodeEndpointNodeIds,
             missingPostgresWireNodeIds:
@@ -559,6 +589,12 @@ class JoinReadinessEvaluator {
         topology.excludedSelfTargetedCount,
       excludedWarmingTargetCount:
         topology.excludedWarmingTargetCount,
+      excludedNonDiscoveryPartitionCount:
+        topology.excludedNonDiscoveryPartitionCount,
+      excludedRemotePriorityControlPlaneCount:
+        topology.excludedRemotePriorityControlPlaneCount,
+      excludedRemotePriorityControlPlaneOperationDetails:
+        topology.excludedRemotePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds:
         endpointVisibility.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
@@ -702,6 +738,9 @@ class JoinReadinessEvaluator {
    *   inFlightReplicaOperationDetails: Array<Object>,
    *   excludedSelfTargetedCount: number,
    *   excludedWarmingTargetCount: number,
+   *   excludedNonDiscoveryPartitionCount: number,
+   *   excludedRemotePriorityControlPlaneCount: number,
+   *   excludedRemotePriorityControlPlaneOperationDetails: Array<Object>,
    * }}
    */
   evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
@@ -713,6 +752,9 @@ class JoinReadinessEvaluator {
         inFlightReplicaOperationDetails: [],
         excludedSelfTargetedCount: NUM.ZERO,
         excludedWarmingTargetCount: NUM.ZERO,
+        excludedNonDiscoveryPartitionCount: NUM.ZERO,
+        excludedRemotePriorityControlPlaneCount: NUM.ZERO,
+        excludedRemotePriorityControlPlaneOperationDetails: [],
         missingNodeEndpointNodeIds: [],
         missingPostgresWireNodeIds: [],
       };
@@ -745,6 +787,10 @@ class JoinReadinessEvaluator {
       operationDetails.excludedSelfTargetedCount;
     const excludedWarmingTargetCount =
       operationDetails.excludedWarmingTargetCount;
+    const excludedNonDiscoveryPartitionCount =
+      operationDetails.excludedNonDiscoveryPartitionCount;
+    const excludedRemotePriorityControlPlaneCount =
+      operationDetails.excludedRemotePriorityControlPlaneCount;
     return {
       ready: missingCount === NUM.ZERO &&
         inFlightReplicaOperations === NUM.ZERO,
@@ -753,6 +799,10 @@ class JoinReadinessEvaluator {
       inFlightReplicaOperationDetails,
       excludedSelfTargetedCount,
       excludedWarmingTargetCount,
+      excludedNonDiscoveryPartitionCount,
+      excludedRemotePriorityControlPlaneCount,
+      excludedRemotePriorityControlPlaneOperationDetails:
+        operationDetails.excludedRemotePriorityControlPlaneOperationDetails,
       missingNodeEndpointNodeIds: [],
       missingPostgresWireNodeIds: [],
     };
@@ -1053,15 +1103,20 @@ class JoinReadinessEvaluator {
 
   /**
    * Collect non-terminal replica operations from local cache.
-   * Self-targeted operations (where targetNodeId matches this node)
-   * and warming-node-targeted operations (where the target node is
-   * NOT in ACTIVE state) are excluded to prevent join-readiness
-   * deadlock.
+   * Self-targeted operations (where targetNodeId matches this node),
+   * warming-node-targeted operations (where the target node is NOT in ACTIVE
+   * state), partition operations outside the canonical discovery-critical
+   * tables, and remote-to-remote priority control-plane recovery on already
+   * active peers are excluded to prevent join-readiness deadlock on unrelated
+   * recovery work.
    * @param {Object|null} systemTableCache
    * @return {{
    *   inFlightOperations: Array<Object>,
    *   excludedSelfTargetedCount: number,
    *   excludedWarmingTargetCount: number,
+   *   excludedNonDiscoveryPartitionCount: number,
+   *   excludedRemotePriorityControlPlaneCount: number,
+   *   excludedRemotePriorityControlPlaneOperationDetails: Array<Object>,
    * }}
    */
   collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
@@ -1071,20 +1126,28 @@ class JoinReadinessEvaluator {
         inFlightOperations: [],
         excludedSelfTargetedCount: NUM.ZERO,
         excludedWarmingTargetCount: NUM.ZERO,
+        excludedNonDiscoveryPartitionCount: NUM.ZERO,
+        excludedRemotePriorityControlPlaneCount: NUM.ZERO,
+        excludedRemotePriorityControlPlaneOperationDetails: [],
       };
     }
 
     const activeNodeIds = new Set(
       this.getCanonicalJoinActiveNodeIds(systemTableCache),
     );
+    const discoveryCriticalPartitionIds =
+      this.resolveCanonicalDiscoveryCriticalPartitionIds(systemTableCache);
 
     const rows =
       systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
     const serviceRows =
       systemTableCache.getAll(TABLES.SERVICES) || [];
     const inFlightOperations = [];
+    const excludedRemotePriorityControlPlaneOperationDetails = [];
     let excludedSelfTargetedCount = NUM.ZERO;
     let excludedWarmingTargetCount = NUM.ZERO;
+    let excludedNonDiscoveryPartitionCount = NUM.ZERO;
+    let excludedRemotePriorityControlPlaneCount = NUM.ZERO;
     for (const row of rows) {
       const normalizedOperation = normalizeReplicaOperationRecord(row);
       if (isReplicaOperationInFlight(normalizedOperation, {serviceRows})) {
@@ -1096,27 +1159,145 @@ class JoinReadinessEvaluator {
           excludedWarmingTargetCount++;
           continue;
         }
-        inFlightOperations.push({
-          operationId: normalizedOperation.operationId,
-          type: normalizedOperation.type,
-          partitionId: normalizedOperation.partitionGroupId,
-          replicaId: String(
-            row?.replica_id || row?.replicaId || '',
-          ),
-          sourceNodeId: normalizedOperation.sourceNodeId,
-          targetNodeId: normalizedOperation.targetNodeId,
-          status: normalizedOperation.status,
-          workflowStep: normalizedOperation.workflowStep,
-          completedAt: normalizedOperation.completedAt,
-          ageMs: normalizedOperation.ageMs,
-        });
+        if (
+          normalizedOperation.entityType === 'partition' &&
+          discoveryCriticalPartitionIds.size > NUM.ZERO &&
+          normalizedOperation.partitionGroupId.length > NUM.ZERO &&
+          !discoveryCriticalPartitionIds.has(
+            normalizedOperation.partitionGroupId,
+          )
+        ) {
+          excludedNonDiscoveryPartitionCount++;
+          continue;
+        }
+        const operationDetail =
+          this.buildCanonicalJoinReplicaOperationDetail(
+            normalizedOperation,
+            row,
+          );
+        if (this.isRemotePriorityControlPlaneRecoveryOperation(
+          normalizedOperation,
+          activeNodeIds,
+          discoveryCriticalPartitionIds,
+        )) {
+          excludedRemotePriorityControlPlaneCount++;
+          excludedRemotePriorityControlPlaneOperationDetails.push(
+            operationDetail,
+          );
+          continue;
+        }
+        inFlightOperations.push(operationDetail);
       }
     }
     return {
       inFlightOperations,
       excludedSelfTargetedCount,
       excludedWarmingTargetCount,
+      excludedNonDiscoveryPartitionCount,
+      excludedRemotePriorityControlPlaneCount,
+      excludedRemotePriorityControlPlaneOperationDetails,
     };
+  }
+
+  /**
+   * @param {Object} normalizedOperation
+   * @param {Object} row
+   * @return {Object}
+   */
+  buildCanonicalJoinReplicaOperationDetail(
+    normalizedOperation,
+    row,
+  ) {
+    return {
+      operationId: normalizedOperation.operationId,
+      type: normalizedOperation.type,
+      partitionId: normalizedOperation.partitionGroupId,
+      replicaId: String(
+        row?.replica_id || row?.replicaId || '',
+      ),
+      sourceNodeId: normalizedOperation.sourceNodeId,
+      targetNodeId: normalizedOperation.targetNodeId,
+      status: normalizedOperation.status,
+      workflowStep: normalizedOperation.workflowStep,
+      completedAt: normalizedOperation.completedAt,
+      ageMs: normalizedOperation.ageMs,
+    };
+  }
+
+  /**
+   * Remote priority control-plane recovery between already-active peers should
+   * not strand a different joining node once discovery state is otherwise
+   * converged.
+   *
+   * @param {Object} normalizedOperation
+   * @param {Set<string>} activeNodeIds
+   * @param {Set<string>} discoveryCriticalPartitionIds
+   * @return {boolean}
+   */
+  isRemotePriorityControlPlaneRecoveryOperation(
+    normalizedOperation,
+    activeNodeIds,
+    discoveryCriticalPartitionIds,
+  ) {
+    if (!normalizedOperation ||
+        normalizedOperation.entityType !== 'partition') {
+      return false;
+    }
+    const partitionId = normalizedOperation.partitionGroupId;
+    if (!partitionId ||
+        !discoveryCriticalPartitionIds.has(partitionId) ||
+        !isPriorityControlPlanePartition({partitionId})) {
+      return false;
+    }
+    if (normalizedOperation.sourceNodeId === this.nodeId ||
+        normalizedOperation.targetNodeId === this.nodeId) {
+      return false;
+    }
+    return activeNodeIds.has(normalizedOperation.sourceNodeId) &&
+      activeNodeIds.has(normalizedOperation.targetNodeId);
+  }
+
+  /**
+   * Resolve the partition IDs that remain topology-critical for canonical join
+   * readiness. Join convergence must wait on discovery tables, but unrelated
+   * transaction-recovery partitions should not strand a joining node.
+   * @param {Object|null} systemTableCache
+   * @return {Set<string>}
+   * @private
+   */
+  resolveCanonicalDiscoveryCriticalPartitionIds(systemTableCache) {
+    const partitionIds = new Set();
+    for (const tableName of CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES) {
+      partitionIds.add(`${tableName}-p1`);
+    }
+    if (!systemTableCache ||
+        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return partitionIds;
+    }
+
+    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS) || [];
+    for (const row of partitionRows) {
+      const tableName = String(
+        row?.[COLUMN.TABLE_NAME] ||
+        row?.table_name ||
+        row?.tableName ||
+        '',
+      ).trim().toLowerCase();
+      if (!CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES.has(tableName)) {
+        continue;
+      }
+      const partitionId = String(
+        row?.[COLUMN.PARTITION_ID] ||
+        row?.partition_id ||
+        row?.partitionId ||
+        '',
+      ).trim();
+      if (partitionId.length === NUM.ZERO) {
+        continue;
+      }
+      partitionIds.add(partitionId);
+    }
+    return partitionIds;
   }
 
   /**
@@ -1260,6 +1441,26 @@ class JoinReadinessEvaluator {
             Math.floor(source.excludedWarmingTargetCount),
           ) :
           NUM.ZERO,
+      excludedNonDiscoveryPartitionCount:
+        Number.isFinite(source.excludedNonDiscoveryPartitionCount) ?
+          Math.max(
+            NUM.ZERO,
+            Math.floor(source.excludedNonDiscoveryPartitionCount),
+          ) :
+          NUM.ZERO,
+      excludedRemotePriorityControlPlaneCount:
+        Number.isFinite(source.excludedRemotePriorityControlPlaneCount) ?
+          Math.max(
+            NUM.ZERO,
+            Math.floor(source.excludedRemotePriorityControlPlaneCount),
+          ) :
+          NUM.ZERO,
+      excludedRemotePriorityControlPlaneOperationDetails:
+        Array.isArray(
+          source.excludedRemotePriorityControlPlaneOperationDetails,
+        ) ?
+          source.excludedRemotePriorityControlPlaneOperationDetails :
+          [],
       missingNodeEndpointNodeIds:
         Array.isArray(source.missingNodeEndpointNodeIds) ?
           source.missingNodeEndpointNodeIds.filter((value) =>
@@ -1385,6 +1586,12 @@ class JoinReadinessEvaluator {
           evaluation.excludedSelfTargetedCount,
         excludedWarmingTargetCount:
           evaluation.excludedWarmingTargetCount,
+        excludedNonDiscoveryPartitionCount:
+          evaluation.excludedNonDiscoveryPartitionCount,
+        excludedRemotePriorityControlPlaneCount:
+          evaluation.excludedRemotePriorityControlPlaneCount,
+        excludedRemotePriorityControlPlaneOperationDetails:
+          evaluation.excludedRemotePriorityControlPlaneOperationDetails,
         missingNodeEndpointNodeIds:
           evaluation.missingNodeEndpointNodeIds,
         missingPostgresWireNodeIds:

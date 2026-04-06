@@ -9,6 +9,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {
   INITIAL_PARTITION_IDS,
+  INITIAL_REPLICA_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
@@ -155,6 +156,79 @@ test('BootstrapService readiness waiter blocks when required system-table leader
   );
 });
 
+test('BootstrapService readiness waiter accepts local seed leaders before service addresses publish', async (t) => {
+  const bootstrapService = new BootstrapService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    config: TEST_CONFIG,
+  });
+  bootstrapService.systemTableCache = {
+    getAll: (tableName) => {
+      if (tableName === TABLES.PARTITIONS) {
+        return [
+          {
+            [COLUMN.PARTITION_ID]: NODES_PARTITION_ID,
+            [COLUMN.LEADER_NODE_ID]: TEST_NODE_ID,
+          },
+          {
+            [COLUMN.PARTITION_ID]: NODE_ENDPOINTS_PARTITION_ID,
+            [COLUMN.LEADER_NODE_ID]: TEST_NODE_ID,
+          },
+          {
+            [COLUMN.PARTITION_ID]: SERVICES_PARTITION_ID,
+            [COLUMN.LEADER_NODE_ID]: TEST_NODE_ID,
+          },
+        ];
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [
+          {
+            [COLUMN.SERVICE_ID]: 'svc-nodes-leader',
+            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+            [COLUMN.PARTITION_ID]: NODES_PARTITION_ID,
+            [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            [COLUMN.NODE_ID]: TEST_NODE_ID,
+            [COLUMN.ADDRESS]: null,
+          },
+          {
+            [COLUMN.SERVICE_ID]: 'svc-node-endpoints-leader',
+            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+            [COLUMN.PARTITION_ID]: NODE_ENDPOINTS_PARTITION_ID,
+            [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            [COLUMN.NODE_ID]: TEST_NODE_ID,
+            [COLUMN.ADDRESS]: null,
+          },
+          {
+            [COLUMN.SERVICE_ID]: 'svc-services-leader',
+            [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+            [COLUMN.PARTITION_ID]: SERVICES_PARTITION_ID,
+            [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            [COLUMN.NODE_ID]: TEST_NODE_ID,
+            [COLUMN.ADDRESS]: null,
+          },
+        ];
+      }
+      return [];
+    },
+    filter(tableName, predicate) {
+      return this.getAll(tableName).filter(predicate);
+    },
+  };
+
+  for (const tableName of [TABLES.NODES, TABLES.NODE_ENDPOINTS, TABLES.SERVICES]) {
+    for (const replicaId of INITIAL_REPLICA_IDS[tableName] || []) {
+      bootstrapService.partitionServices.set(replicaId, {isLeader: true});
+    }
+  }
+
+  await bootstrapService.seedCacheHydrationPhase
+    .waitForSystemServiceLeadersInCache();
+  t.pass('seed-local leaders should satisfy the pre-registration write gate');
+});
+
 test('BootstrapService readiness waiter ignores missing message-group leaders before activation', async (t) => {
   const bootstrapService = new BootstrapService({
     nodeId: TEST_NODE_ID,
@@ -169,6 +243,32 @@ test('BootstrapService readiness waiter ignores missing message-group leaders be
   await bootstrapService.seedCacheHydrationPhase
     .waitForSystemServiceLeadersInCache();
   t.pass('seed bootstrap waiter should only block on required system-table write leaders');
+});
+
+test('BootstrapService readiness waiter accepts role-based local seed leaders', async (t) => {
+  const bootstrapService = new BootstrapService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    config: TEST_CONFIG,
+  });
+  bootstrapService.systemTableCache = createSeedBootstrapCache({
+    missingRequiredPartitionAddress: true,
+  });
+
+  for (const tableName of [TABLES.NODES, TABLES.NODE_ENDPOINTS, TABLES.SERVICES]) {
+    for (const replicaId of INITIAL_REPLICA_IDS[tableName] || []) {
+      bootstrapService.partitionServices.set(replicaId, {
+        isLeader: false,
+        getRole() {
+          return RAFT_ROLE.LEADER;
+        },
+      });
+    }
+  }
+
+  await bootstrapService.seedCacheHydrationPhase
+    .waitForSystemServiceLeadersInCache();
+  t.pass('seed-local leader fallback should match shared leader detection semantics');
 });
 
 test('NodeJoiningService join waiter allows missing leader_node_id metadata', async (t) => {

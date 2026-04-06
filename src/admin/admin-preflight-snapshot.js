@@ -420,6 +420,12 @@ class AdminPreflightSnapshot {
     const serviceRows =
       this.systemTableCache.getAll(TABLES.SERVICES);
     const requiresAddress = tableName !== TABLES.SERVICES;
+    const canonicalLeaderNodeId = firstStringField(
+      partitionRow,
+      COLUMN.LEADER_NODE_ID,
+      'leader_node_id',
+      'leaderNodeId',
+    );
     const leaderService = serviceRows.find((service) => {
       if (service?.[COLUMN.SERVICE_TYPE] !==
           SERVICE_TYPE_PARTITION) {
@@ -441,7 +447,27 @@ class AdminPreflightSnapshot {
       }
       return true;
     });
-    if (!leaderService) {
+    const canonicalLeaderReplica = canonicalLeaderNodeId ?
+      serviceRows.find((service) => {
+        if (service?.[COLUMN.SERVICE_TYPE] !==
+            SERVICE_TYPE_PARTITION) {
+          return false;
+        }
+        if (service?.[COLUMN.PARTITION_ID] !== partitionId) {
+          return false;
+        }
+        if (String(service?.[COLUMN.STATUS] || EMPTY_STRING)
+          .toLowerCase() !== STATUS_ACTIVE) {
+          return false;
+        }
+        return firstStringField(
+          service,
+          COLUMN.NODE_ID,
+          'nodeId',
+        ) === canonicalLeaderNodeId;
+      }) :
+      null;
+    if (!leaderService && !canonicalLeaderReplica) {
       return {
         leaderKnown: false,
         leaderNodeId: null,
@@ -450,10 +476,7 @@ class AdminPreflightSnapshot {
       };
     }
 
-    const leaderNodeId = firstStringField(
-      partitionRow,
-      COLUMN.LEADER_NODE_ID,
-    ) ||
+    const leaderNodeId = canonicalLeaderNodeId ||
       firstStringField(
         leaderService, COLUMN.NODE_ID, 'nodeId',
       );

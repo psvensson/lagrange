@@ -32,6 +32,9 @@ import {
 import {
   REBALANCE_COORDINATOR_EVENT,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const TEST_NODE_ID = 'test-node-1';
@@ -409,6 +412,87 @@ test('executeReplicaOperationsRead routes authoritative owner reads through ' +
     'replica_operations owner reads should route on control-plane recovery readiness',
   );
 });
+
+test('queryAuthoritativeOperationById retries retryable authoritative read ' +
+  'failures before returning null', async (t) => {
+  let readCalls = 0;
+  const waitCalls = [];
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async () => {
+        readCalls += 1;
+        if (readCalls < 3) {
+          return {
+            success: false,
+            error: 'Distributed operation failed due to participant failures',
+            retryAfterMs: 25,
+          };
+        }
+        return {
+          success: true,
+          rows: [makeRow()],
+        };
+      },
+    },
+  });
+  repo.waitForReplicaOperationReadRetry = async (delayMs) => {
+    waitCalls.push(delayMs);
+  };
+
+  const operation = await repo.queryAuthoritativeOperationById(
+    TEST_OPERATION_ID,
+  );
+
+  t.equal(operation?.operationId, TEST_OPERATION_ID,
+    'authoritative operation reads should recover after bounded retryable failures');
+  t.equal(readCalls, 3,
+    'authoritative operation reads should retry until one read succeeds');
+  t.equal(waitCalls.length, 2,
+    'authoritative operation reads should wait between retryable failures');
+});
+
+test('queryIncompleteOperations retries retryable authoritative read failures',
+  async (t) => {
+    let readCalls = 0;
+    const waitCalls = [];
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        readAuthoritativeRows: async () => {
+          readCalls += 1;
+          if (readCalls < 3) {
+            return {
+              success: false,
+              error: 'Distributed operation failed due to participant failures',
+              retryAfterMs: 25,
+            };
+          }
+          return {
+            success: true,
+            rows: [makeRow()],
+          };
+        },
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      },
+    });
+    repo.waitForReplicaOperationReadRetry = async (delayMs) => {
+      waitCalls.push(delayMs);
+    };
+
+    const operations = await repo.queryIncompleteOperations({
+      preferAuthoritativeRead: true,
+    });
+
+    t.equal(operations.length, 1,
+      'authoritative incomplete-operation reads should recover after bounded retry');
+    t.equal(readCalls, 3,
+      'authoritative incomplete-operation reads should retry until one read succeeds');
+    t.equal(waitCalls.length, 2,
+      'authoritative incomplete-operation reads should wait between retryable failures');
+  });
 
 test('buildReplicaOperationReadParticipationFailure evaluates owner reads ' +
   'against control-plane recovery readiness', async (t) => {
@@ -1060,6 +1144,114 @@ test('executeOperationMutationWithRetry retries no-handler owner handoff errors'
       'repository should retry once after no-handler owner handoff');
     t.equal(waitCalls, 1,
       'retry loop should wait exactly once before succeeding');
+  });
+
+test('executeOperationMutationWithRetry retries control-plane admission defers',
+  async (t) => {
+    let attempts = 0;
+    let waitCalls = 0;
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => {
+          attempts += 1;
+          if (attempts === 1) {
+            return {
+              success: false,
+              error: 'query_admission_deferred',
+              reasonCode: 'transport_backpressure',
+              retryAfterMs: 250,
+              deferRetry: true,
+            };
+          }
+          return {success: true, changes: 1};
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async () => {
+      waitCalls += 1;
+    };
+
+    const result = await repo.executeOperationMutationWithRetry(
+      'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+      [Date.now(), TEST_OPERATION_ID],
+      {ownerId: TEST_OPERATION_ID},
+    );
+
+    t.equal(result.success, true,
+      'retryable control-plane admission defers should be retried');
+    t.equal(attempts, 2,
+      'repository should retry once after a retryable admission defer');
+    t.equal(waitCalls, 1,
+      'retry loop should wait exactly once before retrying the defer');
+  });
+
+test('executeOperationMutationWithRetry stops at the enclosing timeout budget',
+  async (t) => {
+    const originalDateNow = Date.now;
+    let nowMs = 1000;
+    Date.now = () => nowMs;
+    let attempts = 0;
+    let waitCalls = 0;
+    const observedTimeoutBudgets = [];
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        executeQuery: async (_sql, _params, options = {}) => {
+          attempts += 1;
+          observedTimeoutBudgets.push(options.timeoutBudget || null);
+          nowMs += 450;
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async (delayMs) => {
+      waitCalls += 1;
+      nowMs += delayMs;
+    };
+
+    try {
+      const timeoutBudget = {
+        configuredBudgetMs: 1000,
+        startedAtMs: nowMs,
+        deadlineMs: nowMs + 1000,
+        operationName: 'transaction',
+      };
+      const result = await repo.executeOperationMutationWithRetry(
+        'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+        [Date.now(), TEST_OPERATION_ID],
+        {
+          ownerId: TEST_OPERATION_ID,
+          timeoutBudget,
+        },
+      );
+
+      t.equal(result.success, false,
+        'retryable mutation should still fail when the enclosing budget runs out');
+      t.equal(
+        result.error,
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        'the original contention boundary should surface instead of a later timeout-shaped miss',
+      );
+      t.equal(
+        attempts,
+        2,
+        'repository retry loop should stop once the enclosing transition budget is exhausted',
+      );
+      t.equal(
+        waitCalls,
+        1,
+        'repository should only sleep while budget remains',
+      );
+      t.same(
+        observedTimeoutBudgets,
+        [timeoutBudget, timeoutBudget],
+        'gateway retries should receive the same enclosing timeout budget',
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
   });
 
 // ── Coordinator delegates to repository ─────────────────────────

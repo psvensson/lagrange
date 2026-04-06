@@ -782,9 +782,9 @@ class BootstrapService extends EventEmitter {
           .waitForMessageGroupLeadership(
             groupId, replicaIds,
           ),
-      waitForPartitionLeadership: () =>
+      waitForPartitionLeadership: (options) =>
         self.seedPartitionsPhase
-          .waitForPartitionLeadership(),
+          .waitForPartitionLeadership(options),
       stopUnifiedLifecycleOwners: () =>
         self.seedInfrastructurePhase
           .stopUnifiedLifecycleOwners(),

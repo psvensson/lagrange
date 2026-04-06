@@ -17,6 +17,7 @@ import {NUM, STRING, TABLES} from '../constants/index.js';
 import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
+import {resolveRaftTransportDeliveryOptions} from './constants.js';
 import {
   applyReplicaDemotion,
   clearReplicaLeaderUpdateState,
@@ -270,7 +271,14 @@ class RaftReplicaBase extends EventEmitter {
       replicaId: this.replicaId,
       resolvePeerAddress: (peerId) => this.buildPeerAddress(peerId),
       deliverPacket: (peerAddress, packet) =>
-        this.transport.deliver(peerAddress, packet),
+        this.transport.deliver(
+          peerAddress,
+          packet,
+          resolveRaftTransportDeliveryOptions({
+            ...packet,
+            targetAddress: peerAddress,
+          }),
+        ),
     });
 
     const raftOptions = {
@@ -476,7 +484,14 @@ class RaftReplicaBase extends EventEmitter {
             type: responsePacket.type,
             term: responsePacket.term,
           });
-          this.transport.deliver(senderAddress, responsePacket)
+          this.transport.deliver(
+            senderAddress,
+            responsePacket,
+            resolveRaftTransportDeliveryOptions({
+              ...responsePacket,
+              targetAddress: senderAddress,
+            }),
+          )
             .catch((err) => {
               this.logger.error(RAFT_REPLICA_BASE_LOG_MSG.FAILED_RAFT_RESPONSE, {
                 error: err.message,

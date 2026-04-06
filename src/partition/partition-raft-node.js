@@ -7,6 +7,7 @@
  */
 
 import LifeRaft from '../raft/liferaft.js';
+import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {
   PARTITION_RAFT_NODE_LOG_MSG,
 } from './partition-raft-node-constants.js';
@@ -110,7 +111,14 @@ function createPartitionRaftNodeClass(context) {
       // Send packet unchanged - no type conversion
       // Only add destination address for routing, preserve all packet fields
       // Requirements: 10.2, 10.3
-      transport.deliver(peerAddress, packet)
+      transport.deliver(
+        peerAddress,
+        packet,
+        resolveRaftTransportDeliveryOptions({
+          ...packet,
+          targetAddress: peerAddress,
+        }),
+      )
         .then((result) => callback(null, result))
         .catch((err) => callback(err));
     }

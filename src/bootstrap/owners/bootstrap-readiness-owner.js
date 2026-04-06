@@ -32,6 +32,9 @@ import {
 import {
   getLocalQueryTransportReadiness,
 } from '../shared/local-query-transport-readiness.js';
+import {
+  canBypassBootstrapInitPriorityReasons,
+} from '../startup-recovery-coordinator.js';
 
 const BOOTSTRAP_READINESS_DEPENDENCY = Object.freeze({
   SQL_ENGINE_READY: 'sql_engine_ready',
@@ -218,6 +221,10 @@ class BootstrapReadinessOwner {
           LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
     }
 
+    if (snapshot.phase === LIFECYCLE_PHASE.INIT) {
+      return canBypassBootstrapInitPriorityReasons(reasons, snapshot);
+    }
+
     if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY ||
         snapshot.phase === LIFECYCLE_PHASE.DEGRADED) {
       if (reasons.length === NUM.ZERO) {
@@ -379,6 +386,78 @@ class BootstrapReadinessOwner {
     } catch (_error) {
       return null;
     }
+  }
+
+  buildMembershipPublicationPlanningSnapshot(
+    membershipPublication,
+    observedAt = Date.now(),
+  ) {
+    const service = this.getControlPlaneReadinessService();
+    if (service &&
+        typeof service.buildMembershipPublicationPlanningSnapshot ===
+          TYPEOF.FUNCTION) {
+      try {
+        return service.buildMembershipPublicationPlanningSnapshot({
+          nodeId: this.getSeedNodeId(),
+          observedAt,
+          membershipPublication,
+        });
+      } catch (_error) {
+        // Fall back to local normalization when the readiness service does not
+        // expose the shared helper contract cleanly.
+      }
+    }
+    if (!membershipPublication ||
+        typeof membershipPublication !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    const publicationStatus =
+      typeof membershipPublication.status === TYPEOF.STRING ?
+        membershipPublication.status :
+        null;
+    const publicationStatusNormalized = publicationStatus ?
+      String(publicationStatus).toUpperCase() :
+      '';
+    const priorityPartitionSummary =
+      membershipPublication.priorityPartitionSummary &&
+      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
+        membershipPublication.priorityPartitionSummary :
+        null;
+    const localNodeId = String(this.getSeedNodeId() || '').trim();
+    const publishedActiveNodeIdsPresent =
+      membershipPublication.publishedActiveNodeIdsPresent === true ||
+      Array.isArray(membershipPublication.publishedActiveNodeIds);
+    const publishedActiveNodeIds = publishedActiveNodeIdsPresent ?
+      membershipPublication.publishedActiveNodeIds
+        .map((nodeId) => String(nodeId || '').trim())
+        .filter((nodeId) => nodeId.length > NUM.ZERO) :
+      [];
+    const publicationPending = publicationStatusNormalized.length > NUM.ZERO &&
+      publicationStatusNormalized !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+    const publicationExcludesTargetNode = publicationStatusNormalized ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
+      publishedActiveNodeIdsPresent &&
+      localNodeId.length > NUM.ZERO &&
+      !publishedActiveNodeIds.includes(localNodeId);
+    const reasonCodes = [];
+    if (publicationPending || publicationExcludesTargetNode) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+      );
+    }
+    if (priorityPartitionSummary?.satisfied === false) {
+      reasonCodes.push(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      );
+    }
+
+    return {
+      publicationEpoch: membershipPublication.publicationEpoch ?? null,
+      publicationStatus,
+      priorityPartitionSummary,
+      priorityRecoveryReasonCodes: Object.freeze([...new Set(reasonCodes)]),
+    };
   }
 
   logBootstrapJoinReadinessProjection(snapshot, response) {
@@ -636,7 +715,13 @@ class BootstrapReadinessOwner {
         PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.DIAGNOSTICS_UNAVAILABLE,
       );
     }
-    const publicationStatus = membershipPublication?.status || null;
+    const planningSnapshot = this.buildMembershipPublicationPlanningSnapshot(
+      membershipPublication,
+    );
+    const publicationStatus =
+      planningSnapshot?.publicationStatus ??
+      membershipPublication?.status ??
+      null;
     if (typeof publicationStatus !== TYPEOF.STRING ||
         publicationStatus.length === NUM.ZERO) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
@@ -649,10 +734,11 @@ class BootstrapReadinessOwner {
       );
     }
     const priorityPartitionSummary =
-      membershipPublication?.priorityPartitionSummary &&
+      planningSnapshot?.priorityPartitionSummary ??
+      (membershipPublication?.priorityPartitionSummary &&
         typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
         membershipPublication.priorityPartitionSummary :
-        null;
+        null);
     if (!priorityPartitionSummary ||
         typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN) {
       return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
@@ -665,37 +751,19 @@ class BootstrapReadinessOwner {
         },
       );
     }
-
-    const publicationPending = String(publicationStatus).toUpperCase() !==
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-    const localNodeId = String(this.getSeedNodeId() || '').trim();
-    const publishedActiveNodeIds = Array.isArray(
-      membershipPublication?.publishedActiveNodeIds,
+    const reasonCodes = Array.isArray(
+      planningSnapshot?.priorityRecoveryReasonCodes,
     ) ?
-      membershipPublication.publishedActiveNodeIds
-        .map((nodeId) => String(nodeId || '').trim())
-        .filter((nodeId) => nodeId.length > NUM.ZERO) :
+      [...planningSnapshot.priorityRecoveryReasonCodes] :
       [];
-    const publicationExcludesLocalNode = !publicationPending &&
-      localNodeId.length > NUM.ZERO &&
-      !publishedActiveNodeIds.includes(localNodeId);
-    const reasonCodes = [];
-    if (publicationPending || publicationExcludesLocalNode) {
-      reasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
-      );
-    }
-    if (priorityPartitionSummary.satisfied === false) {
-      reasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
-      );
-    }
 
     return {
       healthy: reasonCodes.length === NUM.ZERO,
       reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
       details: reasonCodes.length > NUM.ZERO ? {
-        publicationEpoch: membershipPublication?.publicationEpoch ?? null,
+        publicationEpoch: planningSnapshot?.publicationEpoch ??
+          membershipPublication?.publicationEpoch ??
+          null,
         publicationStatus,
         priorityPartitionSummary,
         priorityRecoveryReasonCodes: Object.freeze([...reasonCodes]),

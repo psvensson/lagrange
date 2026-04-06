@@ -784,6 +784,7 @@ test('deriveMembershipPublicationCandidate reopens a stale published membership 
     );
   });
 
+
 test('deriveMembershipPublicationCandidate keeps the latest in-flight publication membership as a convergence floor',
   async (t) => {
     const candidate = deriveMembershipPublicationCandidate({
@@ -1655,6 +1656,13 @@ test('acknowledgeMembershipPublication is idempotent and only closes the epoch a
       status: 'ACK_PENDING',
       required_ack_node_ids: ['node-1', 'node-2'],
       acknowledged_node_ids: ['node-1'],
+      membership_lifecycle_summary: {
+        projectionDiagnostics: {
+          readinessDecisionMode: 'cluster_member_or_recovery_eligible',
+          recoveryEligibleProjectionEnabled: true,
+          recoveryEligibleIncludedNodeIds: ['node-2'],
+        },
+      },
       transition_history: [
         {state: 'OPEN', at: 1000, reasonCode: 'authoritative_membership_changed'},
         {state: 'ACK_PENDING', at: 1100, reasonCode: 'authoritative_membership_changed'},
@@ -1700,6 +1708,11 @@ test('acknowledgeMembershipPublication is idempotent and only closes the epoch a
         memberStatesByNodeId: {
           'node-1': 'serving',
           'node-2': 'serving',
+        },
+        projectionDiagnostics: {
+          readinessDecisionMode: 'cluster_member_or_recovery_eligible',
+          recoveryEligibleProjectionEnabled: true,
+          recoveryEligibleIncludedNodeIds: ['node-2'],
         },
       },
       'the lifecycle summary should advance to published-active when the final acknowledgement closes the epoch',
@@ -2090,6 +2103,117 @@ test('reconcileClusterMembership reuses an unchanged published row instead of re
     );
   });
 
+test('deriveMembershipPublicationCandidate counts promotable learners toward priority spread quorum',
+  async (t) => {
+    const priorityTableIds = [
+      'control_plane_publications',
+      'replica_operations',
+      'sql_transaction_participants',
+      'sql_transactions',
+      'sql_write_operations',
+    ];
+    const serviceRows = priorityTableIds.flatMap((tableId, index) => {
+      const partitionId = `${tableId}-p1`;
+      return [{
+        service_id: `${tableId}-leader-${index}`,
+        node_id: 'node-1',
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: 'active',
+        raft_role: 'leader',
+        address: `node-1/partition/${partitionId}-r1`,
+      }, {
+        service_id: `${tableId}-learner-${index}`,
+        node_id: 'node-2',
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: 'active',
+        raft_role: 'learner',
+        address: `node-2/partition/${partitionId}-r2`,
+      }];
+    });
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: 'seed-node',
+      latestPublicationRow: {
+        publication_epoch: 12,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1'],
+        required_ack_node_ids: ['node-1'],
+        acknowledged_node_ids: ['node-1'],
+      },
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlaneRecoveryEligible: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+      ],
+      serviceRows,
+      nowMs: 1000,
+    });
+
+    t.same(
+      candidate.publishedActiveNodeIds,
+      ['node-1', 'node-2'],
+      'promotable learners should be included in the published active set while priority spread recovery is pending',
+    );
+    t.match(
+      candidate.priorityPartitionSummary,
+      {
+        satisfied: true,
+        requiredDistinctNodeCount: 2,
+        missingPartitionIds: [],
+        blockedPartitions: [],
+      },
+      'active promotable learners should satisfy the derived priority spread quorum',
+    );
+  });
+
 test('reconcileClusterMembership refreshes priority spread metadata when membership is unchanged',
   async (t) => {
     const latestPublicationRow = {
@@ -2237,6 +2361,165 @@ test('reconcileClusterMembership refreshes priority spread metadata when members
         },
       },
       'metadata-only refreshes should update the existing epoch rather than reopening membership publication',
+    );
+  });
+
+test('reconcileClusterMembership uses authoritative readiness when published priority spread is still blocked',
+  async (t) => {
+    const latestPublicationRow = {
+      publication_id: 'publication-12',
+      publication_kind: 'cluster_membership',
+      publication_epoch: 12,
+      published_active_node_ids: ['node-1', 'node-2'],
+      required_ack_node_ids: ['node-1', 'node-2'],
+      acknowledged_node_ids: ['node-1', 'node-2'],
+      priority_partition_summary: {
+        satisfied: false,
+        requiredDistinctNodeCount: 2,
+        readyEligibleNodeCount: 2,
+      },
+      membership_lifecycle_summary: {
+        lifecycleState: MEMBERSHIP_LIFECYCLE_STATE.PUBLISHED_ACTIVE,
+        epochBoundary: 'published_membership',
+      },
+      status: 'PUBLISHED',
+      updated_at: 1200,
+      published_at: 1200,
+      closed_at: 1200,
+    };
+    const persistedRows = [];
+    const readinessRefreshModes = [];
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId: 'node-1',
+      controlPlanePublicationsOwner: {
+        async listPublications() {
+          return {rows: [latestPublicationRow]};
+        },
+        async upsertPublication(row) {
+          persistedRows.push(row);
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness(options = {}) {
+          readinessRefreshModes.push(options.allowAuthoritativeRefresh === true);
+          if (options.allowAuthoritativeRefresh === true) {
+            return [{
+              nodeId: 'node-1',
+              dimensions: {clusterMemberHealthy: true},
+            }, {
+              nodeId: 'node-2',
+              dimensions: {clusterMemberHealthy: true},
+            }, {
+              nodeId: 'node-3',
+              dimensions: {
+                clusterMemberHealthy: false,
+                controlPlaneRecoveryEligible: true,
+                controlPlaneWritable: true,
+              },
+            }];
+          }
+          return [{
+            nodeId: 'node-1',
+            dimensions: {clusterMemberHealthy: true},
+          }, {
+            nodeId: 'node-2',
+            dimensions: {clusterMemberHealthy: true},
+          }];
+        },
+        getRecoveryEpochHistoryByNodeId() {
+          return {};
+        },
+      },
+      systemTableCache: {
+        getAll(tableName) {
+          if (tableName === 'nodes') {
+            return [{
+              node_id: 'node-1',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: 5000,
+            }, {
+              node_id: 'node-2',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: 5000,
+            }, {
+              node_id: 'node-3',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: 5000,
+            }];
+          }
+          if (tableName === 'node_endpoints') {
+            return [{
+              endpoint_id: 'node-1-ws',
+              node_id: 'node-1',
+              transport_type: 'ws',
+              status: 'active',
+              address: 'ws://node-1:8082',
+            }, {
+              endpoint_id: 'node-2-ws',
+              node_id: 'node-2',
+              transport_type: 'ws',
+              status: 'active',
+              address: 'ws://node-2:8082',
+            }, {
+              endpoint_id: 'node-3-ws',
+              node_id: 'node-3',
+              transport_type: 'ws',
+              status: 'active',
+              address: 'ws://node-3:8082',
+            }];
+          }
+          if (tableName === 'services') {
+            return [{
+              service_id: 'svc-1',
+              node_id: 'node-1',
+              status: 'active',
+            }, {
+              service_id: 'svc-2',
+              node_id: 'node-2',
+              status: 'active',
+            }, {
+              service_id: 'svc-3',
+              node_id: 'node-3',
+              status: 'active',
+            }];
+          }
+          if (tableName === 'control_plane_publications') {
+            return [latestPublicationRow];
+          }
+          return [];
+        },
+      },
+      now: () => 1500,
+    });
+
+    const result = await coordinator.reconcileClusterMembership();
+
+    t.same(
+      readinessRefreshModes,
+      [true],
+      'priority-spread recovery should refresh readiness authoritatively before re-deriving membership',
+    );
+    t.equal(
+      persistedRows.length,
+      1,
+      'reconciliation should persist a new publication once authoritative readiness exposes a promotable recovery node',
+    );
+    t.match(
+      result.candidate,
+      {
+        publicationEpoch: 13,
+        publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+        requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+      },
+      'the reopened publication candidate should promote the recovery-eligible node into the published membership set',
+    );
+    t.equal(
+      result.publicationRow?.status,
+      'OPEN',
+      'the persisted publication row should reopen the membership epoch',
     );
   });
 

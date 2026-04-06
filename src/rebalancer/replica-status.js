@@ -162,6 +162,8 @@ const OPERATION_METADATA_KEY = Object.freeze({
   MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
   REPLICA_IDS: 'replicaIds',
   PEER_ADDRESSES: 'peerAddresses',
+  BOOTSTRAP_TABLE_METADATA: 'bootstrapTableMetadata',
+  BOOTSTRAP_PARTITION_METADATA: 'bootstrapPartitionMetadata',
 });
 
 function getOperationMetadataValue(stepsHistory, metadataKey) {
@@ -208,6 +210,14 @@ function getOperationMetadataStringArray(stepsHistory, metadataKey) {
     normalized.push(entry);
   }
   return normalized;
+}
+
+function getOperationMetadataObject(stepsHistory, metadataKey) {
+  const value = getOperationMetadataValue(stepsHistory, metadataKey);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value;
 }
 
 /**
@@ -400,4 +410,5 @@ export {
   getOperationMetadataValue,
   getOperationMetadataString,
   getOperationMetadataStringArray,
+  getOperationMetadataObject,
 };

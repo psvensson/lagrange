@@ -14,6 +14,9 @@ import {
   DistributedTransactionCoordinator,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
@@ -622,12 +625,24 @@ test('ManagedSplitWorkflow uses source-routable nodes when active target ' +
     ['node-a', 'node-b'],
   );
   t.same(
-    provisionCalls.map((context) => context.targetNodeIds),
+    provisionCalls.map((context) => ({
+      targetNodeIds: context.targetNodeIds,
+      routingReadinessDimension: context.routingReadinessDimension,
+    })),
     [
-      ['node-a', 'node-b'],
-      ['node-a', 'node-b'],
+      {
+        targetNodeIds: ['node-a', 'node-b'],
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      },
+      {
+        targetNodeIds: ['node-a', 'node-b'],
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      },
     ],
-    'child provisioning should reuse the admission-selected target nodes',
+    'child provisioning should reuse the admission-selected target nodes ' +
+      'under recovery-eligible bootstrap routing',
   );
 });
 
@@ -662,12 +677,40 @@ test('ManagedSplitWorkflow spreads child bootstrap cohorts across newly ' +
 
   t.equal(result.success, true);
   t.same(
-    provisionCalls.map((context) => context.targetNodeIds),
+    provisionCalls.map((context) => ({
+      targetNodeIds: context.targetNodeIds,
+      routingReadinessDimension: context.routingReadinessDimension,
+    })),
     [
-      ['node-a', 'node-d', 'node-e', 'node-f', 'node-g', 'node-b', 'node-c'],
-      ['node-a', 'node-f', 'node-g', 'node-d', 'node-e', 'node-b', 'node-c'],
+      {
+        targetNodeIds: [
+          'node-a',
+          'node-d',
+          'node-e',
+          'node-f',
+          'node-g',
+          'node-b',
+          'node-c',
+        ],
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      },
+      {
+        targetNodeIds: [
+          'node-a',
+          'node-f',
+          'node-g',
+          'node-d',
+          'node-e',
+          'node-b',
+          'node-c',
+        ],
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      },
     ],
-    'child provisioning should expand onto newly eligible nodes and preserve ordered fallbacks instead of cloning the source cohort',
+    'child provisioning should expand onto newly eligible nodes and preserve ' +
+      'ordered fallbacks under recovery-eligible bootstrap routing',
   );
   const preparingUpdate = updateCalls.find((entry) =>
     entry.tableName === TABLES.TABLES &&

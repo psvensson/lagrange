@@ -914,11 +914,6 @@ class HeartbeatService extends EventEmitter {
         now,
         heartbeatWriteQueryTimeoutMs,
       );
-      this.lastNodeHeartbeatWriteAt = now;
-      this.lastNodeHeartbeatWriteSignature =
-        this.buildNodeHeartbeatStructuralSignature(updateRow);
-      this.lastNodeHeartbeatUtilizationSignature =
-        this.buildNodeHeartbeatUtilizationSignature(updateRow);
     }
 
     // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
@@ -986,8 +981,12 @@ class HeartbeatService extends EventEmitter {
           reporterResult,
           'node_state_reporter',
         );
-        if (!this.verifyReporterVisibilityOnSuccess) {
+        if (this.isReporterHeartbeatVisibilityConfirmed(
+          reporterDiagnostics,
+          now,
+        )) {
           this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
+          this.recordConfirmedNodeHeartbeatWrite(updateRow, now);
           return;
         }
 
@@ -995,17 +994,21 @@ class HeartbeatService extends EventEmitter {
           reporterDiagnostics,
           now,
         )) {
-          this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
           return;
         }
 
         this.scheduleReporterHeartbeatVisibilityVerification(
           now,
           reporterDiagnostics,
+          {
+            onVisible: () => {
+              this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
+              this.recordConfirmedNodeHeartbeatWrite(updateRow, now);
+            },
+          },
         );
         this.lastReporterVisibilityTargetAddress =
           reporterDiagnostics.targetAddress || null;
-        this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
         return;
       } catch (error) {
         const reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
@@ -1038,6 +1041,7 @@ class HeartbeatService extends EventEmitter {
       {publicationPath: 'cdc_update'},
       now,
     );
+    this.recordConfirmedNodeHeartbeatWrite(updateRow, now);
   }
 
   /**
@@ -1084,16 +1088,39 @@ class HeartbeatService extends EventEmitter {
       this.reporterVisibilitySuccessTtlMs;
   }
 
+  isReporterHeartbeatVisibilityConfirmed(reporterDiagnostics, nowMs) {
+    if (this.verifyReporterVisibilityOnSuccess !== true) {
+      return true;
+    }
+    if (this.reporterVisibilityVerificationPromise) {
+      return false;
+    }
+    if (!Number.isFinite(this.lastReporterVisibilityVerifiedAt) ||
+        this.lastReporterVisibilityVerifiedAt <= ZERO) {
+      return false;
+    }
+
+    const targetAddress = reporterDiagnostics?.targetAddress || null;
+    if (targetAddress &&
+        targetAddress !== this.lastReporterVisibilityTargetAddress) {
+      return false;
+    }
+
+    return (nowMs - this.lastReporterVisibilityVerifiedAt) <
+      this.reporterVisibilitySuccessTtlMs;
+  }
+
   /**
    * Schedule one bounded canonical visibility proof outside the hot heartbeat
    * path. Reporter acknowledgement remains the owner-path success signal; this
    * readback is only a throttled diagnostic proof.
    * @param {number} expectedHeartbeatAt
-   * @param {Object|null} reporterDiagnostics
-   * @param {Object} [options]
-   * @return {Promise<void>|null}
-   * @private
-   */
+    * @param {Object|null} reporterDiagnostics
+    * @param {Object} [options]
+    * @param {Function} [options.onVisible]
+    * @return {Promise<void>|null}
+    * @private
+    */
   scheduleReporterHeartbeatVisibilityVerification(
     expectedHeartbeatAt,
     reporterDiagnostics,
@@ -1131,6 +1158,9 @@ class HeartbeatService extends EventEmitter {
             this.lastReporterVisibilityVerifiedAt = this.now();
             this.lastReporterVisibilityTargetAddress =
               normalizedDiagnostics.targetAddress || null;
+            if (typeof options.onVisible === TYPEOF.FUNCTION) {
+              options.onVisible();
+            }
             return;
           }
           this.recordHeartbeatPublicationTarget({
@@ -1162,6 +1192,14 @@ class HeartbeatService extends EventEmitter {
 
     this.reporterVisibilityVerificationPromise = verificationToken;
     return verificationPromise;
+  }
+
+  recordConfirmedNodeHeartbeatWrite(updateRow, now) {
+    this.lastNodeHeartbeatWriteAt = now;
+    this.lastNodeHeartbeatWriteSignature =
+      this.buildNodeHeartbeatStructuralSignature(updateRow);
+    this.lastNodeHeartbeatUtilizationSignature =
+      this.buildNodeHeartbeatUtilizationSignature(updateRow);
   }
 
   /**

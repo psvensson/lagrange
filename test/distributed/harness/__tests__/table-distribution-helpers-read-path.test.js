@@ -6,6 +6,7 @@ import {
   ensureBenchmarkPartitioningTable,
   queryTableDistribution,
   resolvePartitioningBenchmarkLoadOpsPerSec,
+  waitForPartitionGrowthAndSpread,
 } from '../../scenarios/table-distribution-helpers.js';
 
 const PARTITIONS_SQL_FRAGMENT = 'FROM partitions';
@@ -87,6 +88,89 @@ test('table-distribution-helpers falls back to an alternate snapshot node ' +
   assert.ok(
     fallbackCalls.every((entry) => entry.lane === 'snapshot'),
     'fallback observation should stay on snapshot lane',
+  );
+});
+
+test('table-distribution-helpers prefers a fresher alternate snapshot when ' +
+  'the primary node returns a stale empty distribution', async () => {
+  const primaryCalls = [];
+  const alternateCalls = [];
+
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      primaryCalls.push({
+        sql,
+        lane: options.lane,
+      });
+      if (sql.includes('control_snapshot_local(true)')) {
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT) ||
+          sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {rows: []};
+      }
+      return {rows: []};
+    },
+  };
+
+  const alternateNode = {
+    id: 'node-2',
+    async queryWithTimeout(sql, _params, options = {}) {
+      alternateCalls.push({
+        sql,
+        lane: options.lane,
+      });
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode, alternateNode],
+  });
+
+  assert.equal(distribution.partitionCount, 1);
+  assert.equal(distribution.replicaNodeCount, 3);
+  assert.deepEqual(
+    Array.from(distribution.replicaNodeIds).sort(),
+    ['node-2', 'node-3', 'seed-1'],
+  );
+  assert.ok(
+    primaryCalls.some((entry) => entry.sql.includes('control_snapshot_local(true)')),
+    'expected stale primary path to attempt one local snapshot repair',
+  );
+  assert.ok(
+    alternateCalls.length >= 3,
+    'expected helper to consult an alternate snapshot node after stale empty primary results',
+  );
+  assert.ok(
+    alternateCalls.every((entry) => entry.lane === 'snapshot'),
+    'alternate observation should stay on snapshot lane',
   );
 });
 
@@ -274,6 +358,212 @@ test('table-distribution-helpers checks alternate snapshot nodes when the ' +
   );
 });
 
+test('table-distribution-helpers repairs empty table distribution snapshots ' +
+  'from authoritative control state before giving up', async () => {
+  let repairCount = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-4'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        if (repairCount === 0) {
+          return {rows: []};
+        }
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-4-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        if (repairCount === 0) {
+          return {rows: []};
+        }
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-4-p1',
+              node_id: 'seed-1',
+              status: 'active',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(repairCount, 1);
+  assert.equal(distribution.partitionCount, 1);
+  assert.equal(distribution.replicaNodeCount, 1);
+  assert.deepEqual(
+    Array.from(distribution.replicaNodeIds),
+    ['seed-1'],
+  );
+});
+
+test('table-distribution-helpers avoids cross-table service joins while ' +
+  'partition rows are still empty', async () => {
+  let repairCount = 0;
+  const serviceQueries = [];
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-4b'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        if (repairCount === 0) {
+          return {rows: []};
+        }
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-4b-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        serviceQueries.push({
+          sql,
+          lane: options.lane,
+        });
+        if (sql.includes('JOIN partitions')) {
+          throw new Error('service snapshot should not use cross-table joins');
+        }
+        if (repairCount === 0) {
+          return {rows: []};
+        }
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-4b-p1',
+            node_id: 'seed-1',
+            status: 'active',
+          }],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(repairCount, 1);
+  assert.equal(distribution.partitionCount, 1);
+  assert.equal(distribution.replicaNodeCount, 1);
+  assert.ok(
+    serviceQueries.some((entry) => entry.sql.includes('AND 1 = 0')),
+    'expected empty-partition reads to avoid unsupported cross-table joins',
+  );
+  assert.ok(
+    serviceQueries.some((entry) => entry.sql.includes('partition_id IN')),
+    'expected repair retry to re-scope service reads to concrete partition ids',
+  );
+  assert.ok(
+    serviceQueries.every((entry) => entry.lane === 'snapshot'),
+    'table-scoped service reads should stay on snapshot lane while repairing',
+  );
+});
+
+test('table-distribution-helpers repairs table-scoped service gaps even when ' +
+  'other partition services are already visible', async () => {
+  let repairCount = 0;
+  const serviceQueries = [];
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-5'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-5-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        serviceQueries.push({
+          sql,
+          lane: options.lane,
+        });
+        if (repairCount === 0) {
+          return {
+            rows: sql.includes('partition_id IN') ?
+              [] :
+              [{
+                partition_id: 'sys-p1',
+                node_id: 'seed-1',
+                status: 'active',
+              }],
+          };
+        }
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-5-p1',
+              node_id: 'seed-1',
+              status: 'active',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-5-p1',
+              node_id: 'node-2',
+              status: 'active',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(repairCount, 1);
+  assert.equal(distribution.partitionCount, 1);
+  assert.equal(distribution.replicaNodeCount, 2);
+  assert.deepEqual(
+    Array.from(distribution.replicaNodeIds).sort(),
+    ['node-2', 'seed-1'],
+  );
+  assert.ok(
+    serviceQueries.length >= 2,
+    'expected service distribution to be re-read after repair',
+  );
+  assert.ok(
+    serviceQueries.every((entry) => entry.sql.includes('partition_id IN')),
+    'expected service distribution queries to stay scoped to the target partitions',
+  );
+  assert.ok(
+    serviceQueries.every((entry) => entry.lane === 'snapshot'),
+    'table-scoped service reads should stay on snapshot lane',
+  );
+});
+
 test('table-distribution-helpers admits benchmark-ready load nodes using the ' +
   'benchmark readiness API', async () => {
   const readyNodes = [
@@ -320,7 +610,7 @@ test('table-distribution-helpers admits benchmark-ready load nodes using the ' +
 });
 
 test('table-distribution-helpers bootstraps partitioning load on the ' +
-  'table-local replica quorum and refreshes toward the wider target spread',
+  'current replica quorum and refreshes toward wider benchmark-ready spread',
 async () => {
   let sampleStage = 0;
   const clusterNodes = [
@@ -408,32 +698,54 @@ async () => {
   );
 
   try {
-    assert.equal(plan.bootstrapRequiredNodeCount, 3);
+    assert.equal(plan.bootstrapRequiredNodeCount, 2);
     assert.equal(plan.targetNodeCount, 5);
     assert.deepEqual(
       plan.initialNodes.map((node) => node.id),
-      ['node-2', 'node-3'],
-      'initial partitioning load should stay on the admitted subset of the ' +
-      'current table-local replica quorum',
+      ['node-2', 'node-3', 'seed-1'],
+      'initial partitioning load should bootstrap on the current ' +
+      'replica-bearing quorum',
+    );
+    assert.deepEqual(
+      plan.nodeResolver().map((node) => node.id),
+      ['node-2', 'node-3', 'node-4', 'node-5', 'node-7'],
+      'live dispatch should immediately widen to the full admission-ready set',
+    );
+    assert.deepEqual(
+      plan.getDiagnostics(),
+      {
+        selectedNodeCount: 5,
+        selectedNodeIds: ['node-2', 'node-3', 'node-4', 'node-5', 'node-7'],
+        admissionReadyNodeCount: 5,
+        admissionReadyNodeIds: ['node-2', 'node-3', 'node-4', 'node-5', 'node-7'],
+        readyReplicaNodeCount: 2,
+        readyReplicaNodeIds: ['node-2', 'node-3'],
+        replicaBearingNodeCount: 3,
+        replicaBearingNodeIds: ['node-2', 'node-3', 'seed-1'],
+        partitionCount: 1,
+        readinessReasonHistogram: null,
+      },
+      'planner diagnostics should report the live dispatch set, not only the ' +
+        'replica-bearing bootstrap nodes',
     );
 
     await new Promise((resolve) => {
-      setTimeout(resolve, 20);
+      setTimeout(resolve, 60);
     });
 
     assert.deepEqual(
       plan.nodeResolver().map((node) => node.id),
-      ['node-2', 'node-3', 'node-4', 'node-5'],
-      'refresh should expand only through admitted table-local replica nodes',
+      ['node-2', 'node-3', 'node-4', 'node-5', 'node-7'],
+      'refresh should widen beyond the bootstrap quorum once additional ' +
+        'benchmark-ready routed nodes appear',
     );
   } finally {
     plan.stop();
   }
 });
 
-test('table-distribution-helpers waits for at least one admitted ' +
-  'table-local writer and excludes unadmitted replica nodes from steady ' +
-  'dispatch', async () => {
+test('table-distribution-helpers samples benchmark admission but does not ' +
+  'block bootstrap once replica quorum exists', async () => {
   let partitionSampleCount = 0;
   let admissionSampleCount = 0;
   const clusterNodes = [
@@ -531,13 +843,14 @@ test('table-distribution-helpers waits for at least one admitted ' +
 
   try {
     assert.ok(
-      admissionSampleCount >= 3,
-      'expected helper to wait for an admitted writer before starting load',
+      admissionSampleCount >= 1,
+      'expected helper to sample benchmark admission during bootstrap',
     );
     assert.deepEqual(
       plan.initialNodes.map((node) => node.id),
-      ['node-2'],
-      'initial partitioning load should start only on admitted table-local nodes',
+      ['node-2', 'node-3', 'seed-1'],
+      'initial partitioning load should start once one admitted writer ' +
+      'exists and replica quorum is available',
     );
 
     await new Promise((resolve) => {
@@ -546,8 +859,9 @@ test('table-distribution-helpers waits for at least one admitted ' +
 
     assert.deepEqual(
       plan.nodeResolver().map((node) => node.id),
-      ['node-2', 'node-4', 'node-5'],
-      'steady dispatch should exclude replica-bearing nodes that are still not benchmark-admitted',
+      ['node-2', 'node-4', 'node-5', 'node-3', 'node-6'],
+      'steady dispatch should promote benchmark-admitted nodes first while ' +
+      'preferring non-seed replica-bearing nodes over the seed',
     );
   } finally {
     plan.stop();
@@ -620,7 +934,7 @@ test('table-distribution-helpers can bootstrap partitioning load when ' +
   try {
     assert.deepEqual(
       plan.initialNodes.map((node) => node.id),
-      ['seed-1', 'node-2', 'node-3'],
+      ['node-2', 'node-3', 'seed-1'],
       'disabled admission enforcement should bootstrap on replica-bearing nodes',
     );
   } finally {
@@ -628,8 +942,9 @@ test('table-distribution-helpers can bootstrap partitioning load when ' +
   }
 });
 
-test('table-distribution-helpers degrades to replica-bearing bootstrap when ' +
-  'benchmark admission never stabilizes', async () => {
+test('table-distribution-helpers promotes admission-ready routed nodes ' +
+  'after the replica bootstrap quorum is established', async () => {
+  let admissionSampleCount = 0;
   const clusterNodes = [
     {id: 'seed-1'},
     {id: 'node-2'},
@@ -673,7 +988,105 @@ test('table-distribution-helpers degrades to replica-bearing bootstrap when ' +
       },
     },
     getNodes: () => clusterNodes,
-    resolveBenchmarkReadyLoadNodes: async () => [],
+    resolveBenchmarkReadyLoadNodes: async () => {
+      admissionSampleCount += 1;
+      if (admissionSampleCount <= 2) {
+        return [clusterNodes[1]];
+      }
+      return [
+        clusterNodes[1],
+        clusterNodes[3],
+        clusterNodes[4],
+        clusterNodes[5],
+      ];
+    },
+  };
+
+  const plan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: 'benchmark_events',
+      tableId: 'tbl-benchmark-events-1',
+      requiredNodeCount: 5,
+      queryNodes: [seedNode],
+      pollIntervalMs: 5,
+      stableWindowMs: 0,
+    },
+  );
+
+  try {
+    assert.deepEqual(
+      plan.initialNodes.map((node) => node.id),
+      ['node-2', 'node-3', 'seed-1'],
+      'bootstrap should still start on the current replica-bearing quorum',
+    );
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+    assert.deepEqual(
+      plan.nodeResolver().map((node) => node.id),
+      ['node-2', 'node-4', 'node-5', 'node-6', 'node-3'],
+      'steady dispatch should promote wider admission-ready nodes before ' +
+        'falling back to replica-bearing bootstrap nodes',
+    );
+  } finally {
+    plan.stop();
+  }
+});
+
+test('table-distribution-helpers can bootstrap on a majority-sized replica ' +
+  'cohort before wider admission catches up', async () => {
+  const clusterNodes = [
+    {id: 'seed-1'},
+    {id: 'node-2'},
+    {id: 'node-3'},
+    {id: 'node-4'},
+    {id: 'node-5'},
+    {id: 'node-6'},
+    {id: 'node-7'},
+  ];
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: async () => [
+      clusterNodes[1],
+      clusterNodes[3],
+      clusterNodes[4],
+      clusterNodes[5],
+    ],
   };
 
   const plan = await createPartitioningBenchmarkLoadNodePlan(
@@ -691,19 +1104,107 @@ test('table-distribution-helpers degrades to replica-bearing bootstrap when ' +
   );
 
   try {
+    assert.equal(plan.bootstrapRequiredNodeCount, 2);
     assert.deepEqual(
       plan.initialNodes.map((node) => node.id),
-      ['seed-1', 'node-2', 'node-3'],
-      'timed-out admission should still bootstrap on the replica-bearing quorum',
+      ['node-2', 'seed-1'],
+      'bootstrap should start once a majority-sized local replica cohort is active',
     );
-    assert.equal(plan.admissionFallbackUsed, true);
-    assert.match(
-      String(plan.admissionFallbackWarning || ''),
-      /degrading bootstrap to replica-bearing nodes/i,
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    assert.deepEqual(
+      plan.nodeResolver().map((node) => node.id),
+      ['node-2', 'node-4', 'node-5', 'node-6', 'seed-1'],
+      'refresh should widen to benchmark-admitted nodes after majority bootstrap',
     );
   } finally {
     plan.stop();
   }
+});
+
+test('table-distribution-helpers fails when the replica-bearing bootstrap ' +
+  'quorum never stabilizes', async () => {
+  const clusterNodes = [
+    {id: 'seed-1'},
+    {id: 'node-2'},
+    {id: 'node-3'},
+    {id: 'node-4'},
+    {id: 'node-5'},
+    {id: 'node-6'},
+    {id: 'node-7'},
+  ];
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: async () => [],
+  };
+
+  await assert.rejects(
+    createPartitioningBenchmarkLoadNodePlan(
+      seedNode,
+      cluster,
+      {
+        tableName: 'benchmark_events',
+        tableId: 'tbl-benchmark-events-1',
+        requiredNodeCount: 5,
+        queryNodes: [seedNode],
+        timeoutMs: 40,
+        pollIntervalMs: 5,
+        stableWindowMs: 0,
+      },
+    ),
+    (error) => {
+      assert.match(
+        error.message,
+        /Timed out after 40ms waiting for partitioning bootstrap quorum/i,
+      );
+      assert.match(error.message, /selectedNodeIds=seed-1/i);
+      assert.match(error.message, /readyReplicaNodeIds=/i);
+      assert.deepEqual(error.diagnostics?.partitioningPlanner, {
+        selectedNodeCount: 1,
+        selectedNodeIds: ['seed-1'],
+        admissionReadyNodeCount: 0,
+        admissionReadyNodeIds: [],
+        readyReplicaNodeCount: 0,
+        readyReplicaNodeIds: [],
+        replicaBearingNodeCount: 1,
+        replicaBearingNodeIds: ['seed-1'],
+        partitionCount: 1,
+        readinessReasonHistogram: null,
+      });
+      return true;
+    },
+  );
 });
 
 test('table-distribution-helpers falls back to the legacy cluster load ' +
@@ -736,6 +1237,125 @@ test('table-distribution-helpers falls back to the legacy cluster load ' +
     timeoutMs: 36000,
     stableWindowMs: 2000,
   }]);
+});
+
+test('table-distribution-helpers surfaces planner diagnostics when ' +
+  'partition growth times out after load is runnable', async () => {
+  let partitionSampleCount = 0;
+  const plannerDiagnostics = {
+    selectedNodeCount: 5,
+    selectedNodeIds: ['node-2', 'node-3', 'node-4', 'node-5', 'node-6'],
+    admissionReadyNodeCount: 4,
+    admissionReadyNodeIds: ['node-2', 'node-4', 'node-5', 'node-6'],
+    readyReplicaNodeCount: 1,
+    readyReplicaNodeIds: ['node-2'],
+    replicaBearingNodeCount: 3,
+    replicaBearingNodeIds: ['node-2', 'node-3', 'seed-1'],
+    partitionCount: 3,
+    readinessReasonHistogram: {
+      leadership_unstable: 4,
+    },
+  };
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        partitionSampleCount += 1;
+        if (partitionSampleCount === 1) {
+          return {
+            rows: [{partition_id: 'bench-p1'}],
+          };
+        }
+        return {
+          rows: [
+            {partition_id: 'bench-p1'},
+            {partition_id: 'bench-p2'},
+            {partition_id: 'bench-p3'},
+          ],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        if (partitionSampleCount <= 1) {
+          return {
+            rows: [
+              {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+              {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+              {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+            ],
+          };
+        }
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+            {partition_id: 'bench-p2', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p2', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p2', node_id: 'node-3', status: 'active'},
+            {partition_id: 'bench-p3', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p3', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p3', node_id: 'node-3', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  await assert.rejects(
+    waitForPartitionGrowthAndSpread(seedNode, {
+      tableName: 'benchmark_events',
+      timeoutMs: 40,
+      pollIntervalMs: 5,
+      minAdditionalPartitions: 2,
+      minDistinctReplicaNodes: 5,
+      plannerDiagnosticsResolver: () => plannerDiagnostics,
+    }),
+    (error) => {
+      assert.match(error.message, /failureMode=replica_spread_stalled/i);
+      assert.match(error.message, /selectedNodeIds=node-2,node-3,node-4,node-5,node-6/i);
+      assert.match(error.message, /admissionReadyNodeIds=node-2,node-4,node-5,node-6/i);
+      assert.match(error.message, /readinessReasonHistogram=leadership_unstable:4/i);
+      assert.deepEqual(error.diagnostics?.partitioningPlanner, plannerDiagnostics);
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.tableName,
+        'benchmark_events',
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.failureMode,
+        'replica_spread_stalled',
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.baselinePartitionCount,
+        1,
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.currentPartitionCount,
+        3,
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.additionalPartitionCount,
+        2,
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.replicaNodeCount,
+        3,
+      );
+      assert.ok(
+        error.diagnostics?.partitionGrowth?.sampleCount >= 2,
+        'expected timeout diagnostics to include at least two samples',
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.transientQueryErrors,
+        0,
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.lastQueryError,
+        'none',
+      );
+      return true;
+    },
+  );
 });
 
 test('table-distribution-helpers scales partitioning load to admitted node ' +

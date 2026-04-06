@@ -13,7 +13,6 @@ import {TABLES} from '../../../src/constants/index.js';
 import {
   CONVERGENCE_DEFAULTS,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
-  TIMEOUTS,
 } from '../harness/constants.js';
 import {
   resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,
@@ -29,6 +28,7 @@ import {
   rowsFromResult,
   sleep,
   waitForPartitionGrowthAndSpread,
+  waitForPostSplitConsistencyConvergence,
 } from './table-distribution-helpers.js';
 
 const ZERO = 0;
@@ -43,8 +43,12 @@ const SEEDED_VISIBILITY_TIMEOUT_MS = 15000;
 const SEEDED_VISIBILITY_POLL_INTERVAL_MS = 250;
 const RECOVERY_READINESS_TIMEOUT_ERROR_PREFIX =
   'Timed out waiting for post-restart recovery readiness';
+const RECOVERY_READINESS_QUERY_UNAVAILABLE_ERROR_PREFIX =
+  'Unable to query post-restart recovery readiness from any node';
 const TRANSIENT_RECOVERY_READINESS_ERROR_PATTERNS = Object.freeze([
   /admin api query failed/i,
+  /admin api query timed out/i,
+  /timeout|timed out|deadline exceeded|etimedout/i,
   /authoritative control snapshot repair/i,
   /econnrefused|connection refused/i,
   /control snapshot returned no rows/i,
@@ -155,6 +159,8 @@ function isTransientRecoveryReadinessQueryError(error) {
 function shouldFallbackToReplayValidationAfterRecoveryReadinessFailure(error) {
   const message = String(error?.message || error || '');
   return message.includes(RECOVERY_READINESS_TIMEOUT_ERROR_PREFIX) ||
+    (message.includes(RECOVERY_READINESS_QUERY_UNAVAILABLE_ERROR_PREFIX) &&
+      isTransientRecoveryReadinessQueryError(message)) ||
     isTransientRecoveryReadinessQueryError(message);
 }
 
@@ -442,13 +448,9 @@ async function waitForPostRestartRecoveryReadiness(node, seeded, options) {
         summary: readiness.summary,
       };
     }
-    if (!readiness.summary &&
-      lastErrors.length > ZERO &&
-      lastErrors.some((error) =>
-        !isTransientRecoveryReadinessQueryError(error),
-      )) {
+    if (!readiness.summary && lastErrors.length > ZERO) {
       throw new Error(
-        'Unable to query post-restart recovery readiness from any node' +
+        RECOVERY_READINESS_QUERY_UNAVAILABLE_ERROR_PREFIX +
         ': ' + lastErrors.join('; '),
       );
     }
@@ -514,23 +516,38 @@ function mergeTransactionStatuses(merged, incoming) {
 async function queryTransactionStatusesAcrossNodes(nodes, seeded) {
   const mergedStatuses = new Map();
   const errors = [];
+  const queryableNodes = (Array.isArray(nodes) ? nodes : [])
+    .filter((node) => node && (typeof node.query === 'function' ||
+      typeof node.queryWithTimeout === 'function'));
+  const results = await Promise.all(
+    queryableNodes.map(async (node) => {
+      const nodeId = String(node.id || 'unknown-node');
+      try {
+        return {
+          nodeId,
+          statuses: await queryTransactionStatuses(node, seeded),
+          error: null,
+        };
+      } catch (error) {
+        return {
+          nodeId,
+          statuses: null,
+          error,
+        };
+      }
+    }),
+  );
   let queriedNodeCount = 0;
 
-  for (const node of nodes) {
-    if (!node || (typeof node.query !== 'function' &&
-      typeof node.queryWithTimeout !== 'function')) {
+  for (const result of results) {
+    if (result.error === null) {
+      mergeTransactionStatuses(mergedStatuses, result.statuses);
+      queriedNodeCount += 1;
       continue;
     }
-    try {
-      const statuses = await queryTransactionStatuses(node, seeded);
-      mergeTransactionStatuses(mergedStatuses, statuses);
-      queriedNodeCount += 1;
-    } catch (error) {
-      errors.push(
-        String(node.id || 'unknown-node') + ': ' +
-        String(error?.message || error),
-      );
-    }
+    errors.push(
+      result.nodeId + ': ' + String(result.error?.message || result.error),
+    );
   }
 
   if (queriedNodeCount <= ZERO) {
@@ -718,41 +735,21 @@ async function run(cluster, options = {}) {
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-read-write-load-transaction-recovery',
   });
-  let loadNodePlan;
-  let loadNodeAdmissionFallback = null;
-  try {
-    loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
-      seedNode,
-      cluster,
-      {
-        tableName: effectiveTableName,
-        tableId: tablePreparation.tableId,
-        requiredNodeCount: minDistinctReplicaNodes,
-        timeoutMs: Math.max(
-          distributionTimeoutMs,
-          convergenceTimeoutMs,
-          transactionReplayTimeoutMs,
-        ),
-        queryNodes: nodes,
-      },
-    );
-    if (loadNodePlan?.admissionFallbackWarning) {
-      loadNodeAdmissionFallback = {
-        warning: loadNodePlan.admissionFallbackWarning,
-      };
-    }
-  } catch (error) {
-    loadNodeAdmissionFallback = {
-      warning: error instanceof Error ? error.message : String(error),
-    };
-    loadNodePlan = {
-      initialNodes: [seedNode],
-      nodeResolver: () => [seedNode],
-      stop: () => {},
-      bootstrapRequiredNodeCount: 1,
-      targetNodeCount: 1,
-    };
-  }
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      timeoutMs: Math.max(
+        distributionTimeoutMs,
+        convergenceTimeoutMs,
+        transactionReplayTimeoutMs,
+      ),
+      queryNodes: nodes,
+    },
+  );
   const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
     loadOpsPerSec,
     loadNodePlan.initialNodes.length,
@@ -794,6 +791,7 @@ async function run(cluster, options = {}) {
         minAdditionalPartitions,
         minDistinctReplicaNodes,
         queryNodes: nodes,
+        plannerDiagnosticsResolver: loadNodePlan.getDiagnostics,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -919,9 +917,7 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
   );
 
-  await cluster.waitForConsistencyConvergence({
-    timeoutMs: TIMEOUTS.CONSISTENCY_CONVERGENCE_POST_SPLIT,
-  });
+  await waitForPostSplitConsistencyConvergence(cluster);
 
   return {
     seedNodeId: seedNode.id,
@@ -942,7 +938,6 @@ async function run(cluster, options = {}) {
     convergenceWarnings,
     quiescenceWarnings,
     partitioningWarning,
-    loadNodeAdmissionFallback,
     loadMetrics: metrics,
     successRate,
   };

@@ -57,6 +57,8 @@
   "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",
   "analyze:distributed-failure": "bash scripts/summarize-distributed-failure-report.sh",
   "summarize:harness": "node scripts/summarize-harness-runs.js",
+  "debug:admin:ws": "node scripts/debug/admin-ws-connection-check.mjs",
+  "debug:logs:parse": "node scripts/debug/parse-json-log-lines.cjs",
   "test-output:prune:dry": "node scripts/prune-test-output.js",
   "test-output:prune": "node scripts/prune-test-output.js --apply",
   "guard:guidelines:file": "node scripts/check-guidelines-llm.js",

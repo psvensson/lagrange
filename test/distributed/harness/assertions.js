@@ -408,6 +408,50 @@ function extractLeaders(rows) {
 }
 
 /**
+ * Supplement a partition-id set from service-derived topology signals.
+ *
+ * The raw SQL fallback can temporarily observe a local `services` view that
+ * already exposes a partition while the local `partitions` table projection is
+ * still catching up. Treat leader-visible partitions and partitions with a
+ * full voter set as present so consistency checks do not fail on that transient
+ * table skew alone.
+ *
+ * @param {Set<string>} partitionIds
+ * @param {Map<string, string>} leaders
+ * @param {Map<string, number>} voterCounts
+ */
+function supplementPartitionIdsFromServiceTopology(
+  partitionIds,
+  leaders,
+  voterCounts,
+) {
+  if (!(partitionIds instanceof Set)) {
+    return;
+  }
+
+  if (leaders instanceof Map) {
+    for (const partitionId of leaders.keys()) {
+      if (typeof partitionId === 'string' && partitionId.length > 0) {
+        partitionIds.add(partitionId);
+      }
+    }
+  }
+
+  if (!(voterCounts instanceof Map)) {
+    return;
+  }
+
+  for (const [partitionId, voterCount] of voterCounts.entries()) {
+    if (typeof partitionId !== 'string' || partitionId.length === 0) {
+      continue;
+    }
+    if (voterCount >= CONVERGENCE_DEFAULTS.targetVoterCount) {
+      partitionIds.add(partitionId);
+    }
+  }
+}
+
+/**
  * Update over-target tracking state. For each partition whose
  * voter count exceeds targetVoterCount, record when it first
  * went over and track the maximum sustained duration.
@@ -833,6 +877,10 @@ async function queryControlSnapshot(node, options = {}) {
         Number.isInteger(publicationConvergence?.publicationEpoch) ?
           publicationConvergence.publicationEpoch :
           null,
+      sourceSnapshotVersion:
+        Number.isInteger(publicationConvergence?.sourceSnapshotVersion) ?
+          publicationConvergence.sourceSnapshotVersion :
+          null,
       publishedActiveNodeIds: Array.isArray(
         publicationConvergence?.publishedActiveNodeIds,
       ) ?
@@ -876,19 +924,22 @@ async function queryNodeConsistencyStateViaSql(node) {
     .map((row) => row.node_id)
     .sort();
 
-  const partitions = ((partResult && partResult.rows) || [])
-    .map((row) => row.partition_id)
-    .sort();
-
-  const leaders = {};
   const svcRows = (svcResult && svcResult.rows) || [];
-  for (const row of svcRows) {
-    if (!isVoterReady(row)) continue;
-    const role = row.raft_role.toLowerCase();
-    if (role === 'leader') {
-      leaders[row.partition_id] = row.address;
-    }
-  }
+  const voterCounts = countVotersPerPartition(svcRows);
+  const leaderMap = extractLeaders(svcRows);
+  const partitionIds = new Set(((partResult && partResult.rows) || [])
+    .map((row) => String(row?.partition_id || ''))
+    .filter((partitionId) => partitionId.length > 0));
+  supplementPartitionIdsFromServiceTopology(
+    partitionIds,
+    leaderMap,
+    voterCounts,
+  );
+  const partitions = Array.from(partitionIds).sort();
+  const leaders = Object.fromEntries(
+    Array.from(leaderMap.entries())
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
 
   return {
     nodeId: node.id,
@@ -897,6 +948,8 @@ async function queryNodeConsistencyStateViaSql(node) {
     projectedActiveNodes: null,
     partitions,
     leaders,
+    observationSource: 'sql_fallback',
+    controlSnapshotError: null,
   };
 }
 
@@ -916,6 +969,11 @@ async function queryConvergenceSnapshotViaSql(node) {
       .map((row) => String(row?.partition_id || ''))
       .filter((partitionId) => partitionId.length > 0),
   );
+  supplementPartitionIdsFromServiceTopology(
+    expectedPartitionIds,
+    leaders,
+    voterCounts,
+  );
 
   // When services rows are follower-only on a recovering node,
   // supplement leader identity from persisted partition metadata.
@@ -932,12 +990,6 @@ async function queryConvergenceSnapshotViaSql(node) {
     }
   }
 
-  if (expectedPartitionIds.size === 0 && voterCounts.size > 0) {
-    for (const partitionId of voterCounts.keys()) {
-      expectedPartitionIds.add(partitionId);
-    }
-  }
-
   return {
     nodeId: String(node?.id || VALUE_UNKNOWN),
     servicesRows,
@@ -950,6 +1002,7 @@ async function queryConvergenceSnapshotViaSql(node) {
     voterCounts,
     leaders,
     publicationEpoch: null,
+    sourceSnapshotVersion: null,
     publishedActiveNodeIds: null,
     inFlightReplicaOperationCount: 0,
     inFlightReplicaOperationStatuses: new Map(),
@@ -983,10 +1036,13 @@ async function queryNodeConsistencyState(node, options = {}) {
             .sort(([left], [right]) => left.localeCompare(right)),
         ),
         publicationEpoch: snapshotState.publicationEpoch,
+        sourceSnapshotVersion: snapshotState.sourceSnapshotVersion,
         publishedActiveNodeIds:
           snapshotState.authoritativeActiveNodeIds instanceof Set ?
             Array.from(snapshotState.authoritativeActiveNodeIds).sort() :
             null,
+        observationSource: 'control_snapshot',
+        controlSnapshotError: null,
       };
     } catch (error) {
       controlSnapshotError = error;
@@ -994,7 +1050,11 @@ async function queryNodeConsistencyState(node, options = {}) {
   }
 
   try {
-    return await queryNodeConsistencyStateViaSql(node);
+    const sqlState = await queryNodeConsistencyStateViaSql(node);
+    sqlState.controlSnapshotError = controlSnapshotError ?
+      String(controlSnapshotError?.message || controlSnapshotError) :
+      null;
+    return sqlState;
   } catch (error) {
     if (!controlSnapshotError) {
       throw error;
@@ -1005,6 +1065,10 @@ async function queryNodeConsistencyState(node, options = {}) {
         String(error?.message || error),
     );
   }
+}
+
+function isControlSnapshotObservation(state) {
+  return state?.observationSource === 'control_snapshot';
 }
 
 function resolveSnapshotExpectedPartitionIds(snapshot) {
@@ -1732,20 +1796,35 @@ function buildPublicationConvergenceFromState(state) {
   if (convergence &&
       typeof convergence === 'object' &&
       !Array.isArray(convergence)) {
-    return cloneDiagnostics(convergence);
+    const clonedConvergence = cloneDiagnostics(convergence);
+    return {
+      ...clonedConvergence,
+      sourceSnapshotVersion: Number.isInteger(
+        clonedConvergence?.sourceSnapshotVersion,
+      ) ?
+        clonedConvergence.sourceSnapshotVersion :
+        (Number.isInteger(state?.sourceSnapshotVersion) ?
+          state.sourceSnapshotVersion :
+          null),
+    };
   }
   const publicationEpoch = Number.isInteger(state?.publicationEpoch) ?
     state.publicationEpoch :
+    null;
+  const sourceSnapshotVersion = Number.isInteger(state?.sourceSnapshotVersion) ?
+    state.sourceSnapshotVersion :
     null;
   const publishedActiveNodeIds = Array.isArray(state?.publishedActiveNodeIds) ?
     [...state.publishedActiveNodeIds].sort() :
     null;
   if (!Number.isInteger(publicationEpoch) &&
+      !Number.isInteger(sourceSnapshotVersion) &&
       !Array.isArray(publishedActiveNodeIds)) {
     return null;
   }
   return {
     publicationEpoch,
+    sourceSnapshotVersion,
     publishedActiveNodeIds: Array.isArray(publishedActiveNodeIds) ?
       publishedActiveNodeIds :
       [],
@@ -1769,9 +1848,18 @@ function buildConsistencyStateByNodeId(nodeStates) {
       publicationEpoch: Number.isInteger(state?.publicationEpoch) ?
         state.publicationEpoch :
         null,
+      sourceSnapshotVersion: Number.isInteger(state?.sourceSnapshotVersion) ?
+        state.sourceSnapshotVersion :
+        null,
       publishedActiveNodeIds: Array.isArray(state?.publishedActiveNodeIds) ?
         [...state.publishedActiveNodeIds].sort() :
         [],
+      observationSource: String(state?.observationSource || VALUE_UNKNOWN),
+      controlSnapshotError:
+        typeof state?.controlSnapshotError === 'string' &&
+          state.controlSnapshotError.length > 0 ?
+          state.controlSnapshotError :
+          null,
     };
   }
   return stateByNodeId;
@@ -1920,6 +2008,10 @@ async function assertConsistency(nodes, options = {}) {
     );
   }
 
+  const reachableByNodeId = new Map(
+    queryable.map((node) => [String(node?.id || ''), node]),
+  );
+
   if (!forceRepair) {
     const hasAuthoritativePublishedMembership = nodeStates.some((state) =>
       Array.isArray(state?.authoritativeActiveNodes),
@@ -1929,9 +2021,6 @@ async function assertConsistency(nodes, options = {}) {
     );
     if (hasAuthoritativePublishedMembership &&
         hasMissingAuthoritativePublishedMembership) {
-      const reachableByNodeId = new Map(
-        queryable.map((node) => [String(node?.id || ''), node]),
-      );
       for (let i = 0; i < nodeStates.length; i++) {
         const state = nodeStates[i];
         if (Array.isArray(state?.authoritativeActiveNodes)) {
@@ -1952,8 +2041,41 @@ async function assertConsistency(nodes, options = {}) {
     }
   }
 
-  // Compare all states against the first node.
-  const reference = nodeStates[0];
+  const hasControlSnapshotObservation = nodeStates.some((state) =>
+    isControlSnapshotObservation(state),
+  );
+  const hasSqlFallbackObservation = nodeStates.some((state) =>
+    !isControlSnapshotObservation(state),
+  );
+  if (hasControlSnapshotObservation && hasSqlFallbackObservation) {
+    for (let i = 0; i < nodeStates.length; i++) {
+      const state = nodeStates[i];
+      if (isControlSnapshotObservation(state)) {
+        continue;
+      }
+      const node = reachableByNodeId.get(String(state?.nodeId || ''));
+      if (!node) {
+        continue;
+      }
+      try {
+        nodeStates[i] = await queryNodeConsistencyState(node, {
+          forceRepair: true,
+        });
+      } catch (_error) {
+        // Keep the original fallback observation if the retry fails.
+      }
+    }
+  }
+
+  const controlSnapshotStates = nodeStates.filter((state) =>
+    isControlSnapshotObservation(state),
+  );
+  const comparableNodeStates = controlSnapshotStates.length >= 1 ?
+    controlSnapshotStates :
+    nodeStates;
+
+  // Compare all states against the first canonical node set.
+  const reference = comparableNodeStates[0];
   const refActiveStr = JSON.stringify(reference.activeNodes);
   const refHasAuthoritativeActiveNodes =
     Array.isArray(reference.authoritativeActiveNodes);
@@ -1974,8 +2096,8 @@ async function assertConsistency(nodes, options = {}) {
       [],
   );
 
-  for (let i = 1; i < nodeStates.length; i++) {
-    const other = nodeStates[i];
+  for (let i = 1; i < comparableNodeStates.length; i++) {
+    const other = comparableNodeStates[i];
 
     const otherActiveStr = JSON.stringify(other.activeNodes);
     const otherHasAuthoritativeActiveNodes =

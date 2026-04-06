@@ -8,7 +8,7 @@ import {
   resolvePartitionGrowthAndSpreadScenarioConfig,
   resolveTableDistributionQueryConfig,
 } from '../harness/scenario-config.js';
-import {BENCHMARK_DEFAULTS} from '../harness/constants.js';
+import {BENCHMARK_DEFAULTS, TIMEOUTS} from '../harness/constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -73,8 +73,9 @@ const SQL_UPDATE_TABLE_POLICIES_PREFIX =
   'UPDATE tables SET table_policies = \'';
 const SQL_UPDATE_TABLE_POLICIES_MID = '\' WHERE table_id = \'';
 const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
-const SQL_UPDATE_TABLE_POLICIES_BY_NAME_MID = '\' WHERE table_name = \'';
-const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
+const SQL_CONTROL_SNAPSHOT_FORCE_REPAIR =
+  'SELECT * FROM control_snapshot_local(true)';
+const SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX =
   'SELECT partition_id, node_id, status FROM services ' +
   'WHERE service_type = \'' + SERVICE_TYPE_PARTITION + '\' ' +
   'AND status = \'' + STATUS_ACTIVE + '\'';
@@ -90,6 +91,116 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+function mapNodeIds(nodes) {
+  return (Array.isArray(nodes) ? nodes : [])
+    .map((node) => String(node?.id || ''))
+    .filter((nodeId) => nodeId.length > ZERO);
+}
+
+function buildPartitioningPlannerDiagnostics(options = {}) {
+  return {
+    selectedNodeCount: mapNodeIds(options.selectedNodes).length,
+    selectedNodeIds: mapNodeIds(options.selectedNodes),
+    admissionReadyNodeCount: mapNodeIds(options.admissionReadyNodes).length,
+    admissionReadyNodeIds: mapNodeIds(options.admissionReadyNodes),
+    readyReplicaNodeCount: mapNodeIds(options.readyReplicaNodes).length,
+    readyReplicaNodeIds: mapNodeIds(options.readyReplicaNodes),
+    replicaBearingNodeCount: Number(options.replicaBearingNodeCount || ZERO),
+    replicaBearingNodeIds: Array.isArray(options.replicaBearingNodeIds) ?
+      options.replicaBearingNodeIds.map((nodeId) => String(nodeId)).sort() :
+      [],
+    partitionCount: Number(options.partitionCount || ZERO),
+    readinessReasonHistogram:
+      options.readinessReasonHistogram &&
+      typeof options.readinessReasonHistogram === 'object' ?
+        {...options.readinessReasonHistogram} :
+        null,
+  };
+}
+
+function buildPartitioningPlannerTimeoutError(message, diagnostics) {
+  const error = new Error(message);
+  error.diagnostics = {
+    partitioningPlanner: diagnostics,
+  };
+  return error;
+}
+
+function buildPartitioningDispatchPlannerDiagnostics(selected, dispatchNodes) {
+  const baseDiagnostics = selected?.diagnostics &&
+    typeof selected.diagnostics === 'object' ?
+      selected.diagnostics :
+      {};
+  return buildPartitioningPlannerDiagnostics({
+    selectedNodes: dispatchNodes,
+    admissionReadyNodes: selected?.admissionReadyNodes,
+    readyReplicaNodes: selected?.readyReplicaNodes,
+    replicaBearingNodeCount: baseDiagnostics.replicaBearingNodeCount,
+    replicaBearingNodeIds: baseDiagnostics.replicaBearingNodeIds,
+    partitionCount: baseDiagnostics.partitionCount,
+    readinessReasonHistogram: baseDiagnostics.readinessReasonHistogram,
+  });
+}
+
+function resolvePartitioningPlannerDiagnosticsSnapshot(resolver) {
+  if (typeof resolver !== 'function') {
+    return null;
+  }
+  try {
+    const diagnostics = resolver();
+    return diagnostics && typeof diagnostics === 'object' ?
+      diagnostics :
+      null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function formatPlannerNodeIds(nodeIds) {
+  return Array.isArray(nodeIds) ?
+    nodeIds.map((nodeId) => String(nodeId)).join(',') :
+    '';
+}
+
+function formatPlannerHistogram(histogram) {
+  if (!histogram || typeof histogram !== 'object') {
+    return 'none';
+  }
+  const entries = Object.entries(histogram)
+    .map(([reason, count]) => [String(reason), Number(count)])
+    .filter(([, count]) => Number.isFinite(count) && count > ZERO)
+    .sort(([leftReason], [rightReason]) => leftReason.localeCompare(rightReason));
+  if (entries.length === ZERO) {
+    return 'none';
+  }
+  return entries
+    .map(([reason, count]) => reason + ':' + count)
+    .join('|');
+}
+
+function resolvePartitionGrowthFailureMode(options = {}) {
+  const additionalPartitionCount = Number(options.additionalPartitionCount || ZERO);
+  const minAdditionalPartitions = Number(options.minAdditionalPartitions || ZERO);
+  const replicaNodeCount = Number(options.replicaNodeCount || ZERO);
+  const minDistinctReplicaNodes = Number(options.minDistinctReplicaNodes || ZERO);
+  const selectedNodeCount = Number(options.plannerDiagnostics?.selectedNodeCount || ZERO);
+  const admissionReadyNodeCount = Number(
+    options.plannerDiagnostics?.admissionReadyNodeCount || ZERO,
+  );
+  if (additionalPartitionCount < minAdditionalPartitions &&
+      replicaNodeCount < minDistinctReplicaNodes &&
+      (selectedNodeCount === ZERO || admissionReadyNodeCount === ZERO)) {
+    return 'planner_not_runnable';
+  }
+  if (additionalPartitionCount < minAdditionalPartitions) {
+    return 'partition_growth_stalled';
+  }
+  if (replicaNodeCount < minDistinctReplicaNodes) {
+    return 'replica_spread_stalled';
+  }
+  return 'partitioning_timeout';
 }
 
 /**
@@ -320,12 +431,14 @@ function resolveBenchmarkBootstrapRequiredNodeCount(
   ) && cluster._config.benchmark.replicationFactor > ZERO ?
     cluster._config.benchmark.replicationFactor :
     BENCHMARK_DEFAULTS.replicationFactor;
+  const bootstrapQuorumNodeCount =
+    Math.floor(replicationFactor / 2) + ONE;
   return Math.max(
     1,
     Math.min(
       clusterNodeCount,
       targetNodeCount,
-      replicationFactor,
+      bootstrapQuorumNodeCount,
     ),
   );
 }
@@ -449,26 +562,105 @@ function resolvePartitioningDispatchNodes(
   selected,
   currentNodes = [],
   targetNodeCount = ZERO,
-  options = {},
+  bootstrapRequiredNodeCount = ZERO,
 ) {
-  const allowReplicaBearingFallback =
-    options.allowReplicaBearingFallback === true;
-  const nextNodes = supportsBenchmarkAdmission ?
-    (
-      selected.readyReplicaNodes.length > ZERO ||
-      allowReplicaBearingFallback !== true
-    ) ?
-      selected.readyReplicaNodes :
-      selected.selectedNodes :
-    selected.selectedNodes;
-  if (!Array.isArray(nextNodes) || nextNodes.length === ZERO) {
-    return [];
+  const normalizedTargetCount = Number.isInteger(targetNodeCount) &&
+    targetNodeCount > ZERO ?
+      targetNodeCount :
+      Number.POSITIVE_INFINITY;
+  const normalizedBootstrapRequiredNodeCount =
+    Number.isInteger(bootstrapRequiredNodeCount) &&
+      bootstrapRequiredNodeCount > ZERO ?
+        bootstrapRequiredNodeCount :
+        ONE;
+  const selectedNodes = Array.isArray(selected?.selectedNodes) ?
+    selected.selectedNodes :
+    [];
+  const admissionReadyNodes = Array.isArray(selected?.admissionReadyNodes) ?
+    selected.admissionReadyNodes :
+    [];
+  const readyReplicaNodes = Array.isArray(selected?.readyReplicaNodes) ?
+    selected.readyReplicaNodes :
+    [];
+  if (!supportsBenchmarkAdmission) {
+    if (selectedNodes.length === ZERO) {
+      return preserveNodeOrder(
+        currentNodes,
+        currentNodes,
+        targetNodeCount,
+      );
+    }
+    return preserveNodeOrder(
+      currentNodes,
+      selectedNodes,
+      targetNodeCount,
+    );
   }
-  return preserveNodeOrder(
-    currentNodes,
-    nextNodes,
-    targetNodeCount,
+  const currentReadyNodes = [];
+  const currentAdmissionReadyNodes = [];
+  const currentSelectedNodes = [];
+  const orderedNodeIds = new Set();
+  const pushNodeIfNeeded = (bucket, node) => {
+    const nodeId = String(node?.id || '');
+    if (nodeId.length > ZERO) {
+      if (orderedNodeIds.has(nodeId)) {
+        return;
+      }
+      orderedNodeIds.add(nodeId);
+    }
+    bucket.push(node);
+  };
+  const readyNodeById = new Map(
+    readyReplicaNodes
+      .map((node) => [String(node?.id || ''), node])
+      .filter(([nodeId]) => nodeId.length > ZERO),
   );
+  const admissionReadyNodeById = new Map(
+    admissionReadyNodes
+      .map((node) => [String(node?.id || ''), node])
+      .filter(([nodeId]) => nodeId.length > ZERO),
+  );
+  const selectedNodeById = new Map(
+    selectedNodes
+      .map((node) => [String(node?.id || ''), node])
+      .filter(([nodeId]) => nodeId.length > ZERO),
+  );
+  for (const node of currentNodes) {
+    const nodeId = String(node?.id || '');
+    if (nodeId.length === ZERO) {
+      continue;
+    }
+    if (readyNodeById.has(nodeId)) {
+      currentReadyNodes.push(readyNodeById.get(nodeId));
+    }
+    if (admissionReadyNodeById.has(nodeId)) {
+      currentAdmissionReadyNodes.push(admissionReadyNodeById.get(nodeId));
+    }
+    if (selectedNodeById.has(nodeId)) {
+      currentSelectedNodes.push(selectedNodeById.get(nodeId));
+    }
+  }
+  const orderedNodes = [];
+  const appendNodes = (nodes) => {
+    for (const node of nodes) {
+      if (orderedNodes.length >= normalizedTargetCount) {
+        return;
+      }
+      pushNodeIfNeeded(orderedNodes, node);
+    }
+  };
+  appendNodes(currentReadyNodes);
+  appendNodes(readyReplicaNodes);
+  if (selectedNodes.length < normalizedBootstrapRequiredNodeCount) {
+    appendNodes(currentSelectedNodes);
+    appendNodes(selectedNodes);
+    return orderedNodes;
+  }
+  appendNodes(currentAdmissionReadyNodes);
+  appendNodes(admissionReadyNodes);
+  appendNodes(selectedNodes);
+  appendNodes(currentSelectedNodes);
+  return orderedNodes;
 }
 
 /**
@@ -590,6 +782,7 @@ async function createPartitioningBenchmarkLoadNodePlan(
       fallbackNodes: options.fallbackNodes,
     });
     let readyNodeIds = null;
+    let admissionReadyNodes = [];
     if (supportsBenchmarkAdmission) {
       try {
         readyNodeIds = new Set(
@@ -601,15 +794,35 @@ async function createPartitioningBenchmarkLoadNodePlan(
             .map((node) => String(node?.id || ''))
             .filter((nodeId) => nodeId.length > ZERO),
         );
+        const readyNonSeedNodes = [];
+        const readySeedNodes = [];
+        for (const node of clusterNodes) {
+          const nodeId = String(node?.id || '');
+          if (!(readyNodeIds instanceof Set) || !readyNodeIds.has(nodeId)) {
+            continue;
+          }
+          if (nodeId === String(seedNode?.id || '')) {
+            readySeedNodes.push(node);
+            continue;
+          }
+          readyNonSeedNodes.push(node);
+        }
+        admissionReadyNodes = readyNonSeedNodes.concat(readySeedNodes);
       } catch (_error) {
         readyNodeIds = null;
+        admissionReadyNodes = [];
       }
     }
     const preferredNodes = [];
     const fallbackNodes = [];
+    const deferredSeedNodes = [];
     for (const node of clusterNodes) {
       const nodeId = String(node?.id || '');
       if (!distribution.replicaNodeIds.has(nodeId)) {
+        continue;
+      }
+      if (nodeId === String(seedNode?.id || '')) {
+        deferredSeedNodes.push(node);
         continue;
       }
       if (readyNodeIds instanceof Set && readyNodeIds.has(nodeId)) {
@@ -618,8 +831,25 @@ async function createPartitioningBenchmarkLoadNodePlan(
       }
       fallbackNodes.push(node);
     }
+    for (const node of deferredSeedNodes) {
+      const nodeId = String(node?.id || '');
+      if (readyNodeIds instanceof Set && readyNodeIds.has(nodeId)) {
+        preferredNodes.push(node);
+        continue;
+      }
+      fallbackNodes.push(node);
+    }
     return {
+      diagnostics: buildPartitioningPlannerDiagnostics({
+        selectedNodes: preferredNodes.concat(fallbackNodes),
+        admissionReadyNodes,
+        readyReplicaNodes: preferredNodes,
+        replicaBearingNodeCount: distribution.replicaNodeCount,
+        replicaBearingNodeIds: Array.from(distribution.replicaNodeIds),
+        partitionCount: distribution.partitionCount,
+      }),
       distribution,
+      admissionReadyNodes,
       selectedNodes: preferredNodes.concat(fallbackNodes),
       readyReplicaNodes: preferredNodes,
     };
@@ -647,28 +877,29 @@ async function createPartitioningBenchmarkLoadNodePlan(
   let readySinceMs = null;
   let lastDistribution = null;
   let lastSelectedNodes = [];
+  let lastAdmissionReadyNodes = [];
   let lastReadyReplicaNodes = [];
-  let admissionFallbackWarning = null;
-  let allowReplicaBearingFallback = false;
+  let lastSelectionDiagnostics = buildPartitioningPlannerDiagnostics();
 
   while (true) {
     try {
       const selected = await selectLoadNodes();
       lastDistribution = selected.distribution;
       lastSelectedNodes = selected.selectedNodes;
+      lastAdmissionReadyNodes = selected.admissionReadyNodes;
       lastReadyReplicaNodes = selected.readyReplicaNodes;
+      lastSelectionDiagnostics = selected.diagnostics;
     } catch (_error) {
       lastDistribution = null;
       lastSelectedNodes = [];
+      lastAdmissionReadyNodes = [];
       lastReadyReplicaNodes = [];
+      lastSelectionDiagnostics = buildPartitioningPlannerDiagnostics();
     }
 
     const replicaBootstrapReady =
       lastSelectedNodes.length >= bootstrapRequiredNodeCount;
-    const admissionBootstrapReady =
-      supportsBenchmarkAdmission !== true ||
-      lastReadyReplicaNodes.length >= ONE;
-    if (replicaBootstrapReady && admissionBootstrapReady) {
+    if (replicaBootstrapReady) {
       const nowMs = Date.now();
       if (stableWindowMs <= ZERO) {
         break;
@@ -684,33 +915,24 @@ async function createPartitioningBenchmarkLoadNodePlan(
     }
 
     if (Date.now() > deadlineAtMs && readySinceMs === null) {
-      if (supportsBenchmarkAdmission === true &&
-          lastSelectedNodes.length >= bootstrapRequiredNodeCount) {
-        allowReplicaBearingFallback = true;
-        admissionFallbackWarning =
-          'Timed out after ' + timeoutMs +
-          'ms waiting for benchmark admission for table-local load on ' +
-          String(options.tableName || 'unknown') +
-          '; degrading bootstrap to replica-bearing nodes (' +
-          lastSelectedNodes.length + '/' + targetNodeCount + ' available)';
-        break;
-      }
-      throw new Error(
+      throw buildPartitioningPlannerTimeoutError(
         'Timed out after ' + timeoutMs +
-        'ms waiting for partitioning bootstrap quorum and benchmark-ready ' +
-        'table-local load admission for table ' +
+        'ms waiting for partitioning bootstrap quorum for table ' +
         String(options.tableName || 'unknown') +
         '; lastReadyReplicaCount=' + lastReadyReplicaNodes.length +
         '; lastReplicaBearingCount=' + lastSelectedNodes.length +
         '; lastReplicaSpread=' +
-        String(lastDistribution?.replicaNodeCount || ZERO),
+        String(lastDistribution?.replicaNodeCount || ZERO) +
+        '; selectedNodeIds=' + mapNodeIds(lastSelectedNodes).join(',') +
+        '; readyReplicaNodeIds=' + mapNodeIds(lastReadyReplicaNodes).join(','),
+        lastSelectionDiagnostics,
       );
     }
 
     await sleep(pollIntervalMs);
   }
 
-  const initialNodes = resolvePartitioningDispatchNodes(
+  const bootstrapNodes = resolvePartitioningDispatchNodes(
     supportsBenchmarkAdmission,
     {
       selectedNodes: lastSelectedNodes,
@@ -718,11 +940,27 @@ async function createPartitioningBenchmarkLoadNodePlan(
     },
     [],
     targetNodeCount,
-    {
-      allowReplicaBearingFallback,
-    },
+    bootstrapRequiredNodeCount,
   );
-  let currentNodes = initialNodes;
+  let currentNodes = resolvePartitioningDispatchNodes(
+    supportsBenchmarkAdmission,
+    {
+      selectedNodes: lastSelectedNodes,
+      admissionReadyNodes: lastAdmissionReadyNodes,
+      readyReplicaNodes: lastReadyReplicaNodes,
+    },
+    bootstrapNodes,
+    targetNodeCount,
+    bootstrapRequiredNodeCount,
+  );
+  lastSelectionDiagnostics = buildPartitioningDispatchPlannerDiagnostics(
+    {
+      diagnostics: lastSelectionDiagnostics,
+      admissionReadyNodes: lastAdmissionReadyNodes,
+      readyReplicaNodes: lastReadyReplicaNodes,
+    },
+    currentNodes,
+  );
   let stopped = false;
   let refreshTimer = null;
 
@@ -737,9 +975,11 @@ async function createPartitioningBenchmarkLoadNodePlan(
         selected,
         currentNodes,
         targetNodeCount,
-        {
-          allowReplicaBearingFallback,
-        },
+        bootstrapRequiredNodeCount,
+      );
+      lastSelectionDiagnostics = buildPartitioningDispatchPlannerDiagnostics(
+        selected,
+        currentNodes,
       );
     } catch (_error) {
       return;
@@ -757,7 +997,7 @@ async function createPartitioningBenchmarkLoadNodePlan(
   }
 
   return {
-    initialNodes: currentNodes,
+    initialNodes: bootstrapNodes,
     nodeResolver: () => currentNodes,
     stop: () => {
       stopped = true;
@@ -766,10 +1006,9 @@ async function createPartitioningBenchmarkLoadNodePlan(
         refreshTimer = null;
       }
     },
+    getDiagnostics: () => lastSelectionDiagnostics,
     bootstrapRequiredNodeCount,
     targetNodeCount,
-    admissionFallbackWarning,
-    admissionFallbackUsed: allowReplicaBearingFallback,
   };
 }
 
@@ -1197,6 +1436,7 @@ async function ensureBenchmarkPartitioningTable(seedNode, options = {}) {
 async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
   const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
     tableName: options.tableName,
+    requirePartitionVisibility: true,
     queryNodes: options.queryNodes,
     fallbackNodes: options.fallbackNodes,
   });
@@ -1208,11 +1448,6 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     escapeSql(JSON.stringify(tablePolicies)) +
     SQL_UPDATE_TABLE_POLICIES_MID +
     escapeSql(ensured.tableId) +
-    SQL_UPDATE_TABLE_POLICIES_SUFFIX;
-  const policySqlByName = SQL_UPDATE_TABLE_POLICIES_PREFIX +
-    escapeSql(JSON.stringify(tablePolicies)) +
-    SQL_UPDATE_TABLE_POLICIES_BY_NAME_MID +
-    escapeSql(ensured.tableName) +
     SQL_UPDATE_TABLE_POLICIES_SUFFIX;
 
   // Table metadata can still receive asynchronous updates shortly after
@@ -1239,27 +1474,7 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
         fallbackNodes: options.fallbackNodes,
       });
       lastPolicyApplySummary = summarizeMutationResult(applyResult);
-      let affectedRows = affectedRowCountFromResult(applyResult);
-      if (affectedRows === ZERO) {
-        const fallbackApplyResult = await queryControl(
-          seedNode,
-          policySqlByName,
-          [],
-          {
-            timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-            lane: CONTROL_QUERY_LANE_CONTROL,
-            queryNodes: options.queryNodes,
-            fallbackNodes: options.fallbackNodes,
-          },
-        );
-        lastPolicyApplySummary = summarizeMutationResult(fallbackApplyResult);
-        const fallbackAffectedRows = affectedRowCountFromResult(
-          fallbackApplyResult,
-        );
-        if (Number.isFinite(fallbackAffectedRows)) {
-          affectedRows = fallbackAffectedRows;
-        }
-      }
+      const affectedRows = affectedRowCountFromResult(applyResult);
       if (affectedRows === ZERO) {
         noOpApplyCount += 1;
       } else {
@@ -1404,17 +1619,60 @@ async function queryTableDistribution(seedNode, options = {}) {
   const {tableName} = resolveTableDistributionQueryConfig(options);
   const queryNodes = resolveControlQueryNodes(seedNode, options);
   let lastError = null;
+  let bestDistribution = null;
   for (const queryNode of queryNodes) {
     try {
-      return await queryTableDistributionFromNode(queryNode, tableName);
+      const distribution = await queryTableDistributionFromNode(
+        queryNode,
+        tableName,
+      );
+      if (isBetterTableDistributionCandidate(distribution, bestDistribution)) {
+        bestDistribution = distribution;
+      }
     } catch (error) {
       lastError = error;
     }
   }
+  if (bestDistribution) {
+    return bestDistribution;
+  }
   throw lastError || new Error('no_table_distribution_query_nodes_available');
 }
 
+function isBetterTableDistributionCandidate(candidate, currentBest) {
+  if (!candidate || typeof candidate !== 'object') {
+    return false;
+  }
+  if (!currentBest || typeof currentBest !== 'object') {
+    return true;
+  }
+
+  const candidateReplicaCount = Number(candidate.replicaNodeCount) || ZERO;
+  const currentReplicaCount = Number(currentBest.replicaNodeCount) || ZERO;
+  if (candidateReplicaCount !== currentReplicaCount) {
+    return candidateReplicaCount > currentReplicaCount;
+  }
+
+  const candidatePartitionCount = Number(candidate.partitionCount) || ZERO;
+  const currentPartitionCount = Number(currentBest.partitionCount) || ZERO;
+  if (candidatePartitionCount !== currentPartitionCount) {
+    return candidatePartitionCount > currentPartitionCount;
+  }
+
+  return false;
+}
+
 async function queryTableDistributionFromNode(node, tableName) {
+  let distribution = await readTableDistributionSnapshot(node, tableName);
+  if (shouldRepairTableDistributionSnapshot(distribution)) {
+    await forceRepairControlSnapshot(node);
+    distribution = await readTableDistributionSnapshot(node, tableName);
+  }
+
+  return finalizeTableDistributionSnapshot(distribution, tableName);
+}
+
+async function readTableDistributionSnapshot(node, tableName) {
   const partitionSql = SQL_SELECT_TABLE_PARTITIONS_PREFIX +
     escapeSql(tableName) +
     SQL_SELECT_TABLE_PARTITIONS_SUFFIX;
@@ -1422,22 +1680,19 @@ async function queryTableDistributionFromNode(node, tableName) {
     escapeSql(tableName) +
     SQL_SELECT_TABLE_ID_SUFFIX;
 
-  const [partitionResult, tableResult, servicesResult] = await Promise.all([
+  const [partitionResult, tableResult] = await Promise.all([
     queryControlSingle(node, partitionSql, [], {
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
     }),
     queryControlSingle(node, tableIdSql, [], {
       lane: CONTROL_QUERY_LANE_SNAPSHOT,
     }),
-    queryControlSingle(node, SQL_SELECT_ACTIVE_PARTITION_SERVICES, [], {
-      lane: CONTROL_QUERY_LANE_SNAPSHOT,
-    }),
   ]);
 
   let partitionRows = rowsFromResult(partitionResult);
+  const tableRows = rowsFromResult(tableResult);
+  const tableId = firstTableId(tableRows);
   if (partitionRows.length === ZERO) {
-    const tableRows = rowsFromResult(tableResult);
-    const tableId = firstTableId(tableRows);
     if (tableId) {
       const partitionByIdSql = SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX +
         escapeSql(tableId) +
@@ -1453,8 +1708,73 @@ async function queryTableDistributionFromNode(node, tableName) {
       partitionRows = rowsFromResult(partitionByIdResult);
     }
   }
+  const servicesSql = buildActivePartitionServicesSql({
+    partitionRows,
+    tableId,
+    tableName,
+  });
+  const servicesResult = await queryControlSingle(node, servicesSql, [], {
+    lane: CONTROL_QUERY_LANE_SNAPSHOT,
+  });
   const serviceRows = rowsFromResult(servicesResult);
 
+  return {
+    tableId,
+    partitionRows,
+    serviceRows,
+  };
+}
+
+function shouldRepairTableDistributionSnapshot(snapshot) {
+  const partitionRows = Array.isArray(snapshot?.partitionRows) ?
+    snapshot.partitionRows :
+    [];
+  const serviceRows = Array.isArray(snapshot?.serviceRows) ?
+    snapshot.serviceRows :
+    [];
+  const tableId = typeof snapshot?.tableId === 'string' ?
+    snapshot.tableId :
+    '';
+  if (partitionRows.length === ZERO) {
+    return tableId.length > ZERO;
+  }
+  return serviceRows.length === ZERO;
+}
+
+function buildActivePartitionServicesSql(options = {}) {
+  const partitionRows = Array.isArray(options.partitionRows) ?
+    options.partitionRows :
+    [];
+  const partitionIds = partitionRows
+    .map((row) => String(row?.partition_id || ''))
+    .filter((partitionId) => partitionId.length > ZERO);
+  if (partitionIds.length > ZERO) {
+    return SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX +
+      ' AND partition_id IN (' +
+      partitionIds.map((partitionId) => '\'' + escapeSql(partitionId) + '\'')
+        .join(', ') +
+      ')';
+  }
+  return SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX + ' AND 1 = 0';
+}
+
+async function forceRepairControlSnapshot(node) {
+  try {
+    await queryControlSingle(node, SQL_CONTROL_SNAPSHOT_FORCE_REPAIR, [], {
+      lane: CONTROL_QUERY_LANE_SNAPSHOT,
+    });
+  } catch (_error) {
+    return;
+  }
+}
+
+function finalizeTableDistributionSnapshot(snapshot, tableName) {
+  const partitionRows = Array.isArray(snapshot?.partitionRows) ?
+    snapshot.partitionRows :
+    [];
+  const serviceRows = Array.isArray(snapshot?.serviceRows) ?
+    snapshot.serviceRows :
+    [];
   const partitionIds = new Set();
   for (const row of partitionRows) {
     const partitionId = row?.partition_id;
@@ -1600,7 +1920,17 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
     await sleep(pollIntervalMs);
   }
 
-  throw new Error(
+  const plannerDiagnostics = resolvePartitioningPlannerDiagnosticsSnapshot(
+    options.plannerDiagnosticsResolver,
+  );
+  const failureMode = resolvePartitionGrowthFailureMode({
+    additionalPartitionCount: additionalPartitionIds.size,
+    minAdditionalPartitions,
+    replicaNodeCount: latest.replicaNodeCount,
+    minDistinctReplicaNodes,
+    plannerDiagnostics,
+  });
+  const error = new Error(
     'Timed out waiting for table "' + tableName + '" to add at least ' +
     minAdditionalPartitions + ' partitions and spread replicas to at least ' +
     minDistinctReplicaNodes + ' nodes. Baseline=' +
@@ -1608,8 +1938,60 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
     ', additionalSeen=' + additionalPartitionIds.size +
     ', spread=' + latest.replicaNodeCount + ', samples=' + sampleCount +
     ', transientQueryErrors=' + transientQueryErrors +
-    ', lastQueryError=' + String(lastQueryError || 'none'),
+    ', lastQueryError=' + String(lastQueryError || 'none') +
+    ', failureMode=' + failureMode +
+    (plannerDiagnostics ?
+      ', selectedNodeIds=' + formatPlannerNodeIds(
+        plannerDiagnostics.selectedNodeIds,
+      ) +
+      ', readyReplicaNodeIds=' + formatPlannerNodeIds(
+        plannerDiagnostics.readyReplicaNodeIds,
+      ) +
+      ', admissionReadyNodeIds=' + formatPlannerNodeIds(
+        plannerDiagnostics.admissionReadyNodeIds,
+      ) +
+      ', readinessReasonHistogram=' + formatPlannerHistogram(
+        plannerDiagnostics.readinessReasonHistogram,
+      ) :
+      ''),
   );
+  error.diagnostics = {
+    partitionGrowth: {
+      tableName,
+      failureMode,
+      baselinePartitionCount: baseline.partitionCount,
+      currentPartitionCount: latest.partitionCount,
+      additionalPartitionCount: additionalPartitionIds.size,
+      replicaNodeCount: latest.replicaNodeCount,
+      sampleCount,
+      transientQueryErrors,
+      lastQueryError: String(lastQueryError || 'none'),
+    },
+    ...(plannerDiagnostics ? {partitioningPlanner: plannerDiagnostics} : {}),
+  };
+  throw error;
+}
+
+async function waitForPostSplitConsistencyConvergence(cluster, options = {}) {
+  assert.ok(
+    cluster &&
+      typeof cluster.waitForConsistencyConvergence === 'function',
+    'Cluster must expose waitForConsistencyConvergence()',
+  );
+
+  const timeoutMs = Number.isFinite(options.timeoutMs) ?
+    options.timeoutMs :
+    TIMEOUTS.CONSISTENCY_CONVERGENCE_POST_SPLIT;
+  const maxPartitionSkew = Number.isFinite(options.maxPartitionSkew) ?
+    Math.max(ZERO, Math.floor(options.maxPartitionSkew)) :
+    2;
+
+  return cluster.waitForConsistencyConvergence({
+    ...options,
+    timeoutMs,
+    toleratePartitionSkew: options.toleratePartitionSkew !== false,
+    maxPartitionSkew,
+  });
 }
 
 export {
@@ -1630,4 +2012,5 @@ export {
   assertSplitPolicyPrecondition,
   queryTableDistribution,
   waitForPartitionGrowthAndSpread,
+  waitForPostSplitConsistencyConvergence,
 };

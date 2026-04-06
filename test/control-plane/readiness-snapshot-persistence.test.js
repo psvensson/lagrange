@@ -456,6 +456,181 @@ test('dispatch service emits readiness snapshot with dispatch event',
     );
   });
 
+test('dispatch service passes row metadata through direct dispatch',
+  async (t) => {
+    initializeConfig();
+    const targetNodeId = 'node-dispatch-target';
+    const readiness = createReadiness(targetNodeId);
+    const readinessService = createReadinessService({
+      [targetNodeId]: readiness,
+    });
+
+    let capturedOperation = null;
+    const dispatchService = new ReplicaDispatchService({
+      nodeId: 'node-local',
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll() {
+          return [];
+        },
+        onCacheChange() {},
+        offCacheChange() {},
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation(operation) {
+          capturedOperation = operation;
+          return {success: true};
+        },
+        on() {},
+        off() {},
+      },
+      controlPlaneReadinessService: readinessService,
+    });
+
+    const row = {
+      operation_id: 'op-dispatch-bootstrap',
+      type: 'ADD',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r1',
+      source_node_id: 'node-local',
+      target_node_id: targetNodeId,
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+      steps_history: JSON.stringify([{
+        [OPERATION_METADATA_KEY.REPLICA_IDS]: ['partition-1-r1'],
+        [OPERATION_METADATA_KEY.PEER_ADDRESSES]: ['node-a:8080'],
+        [OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA]: {
+          table_id: 'table-1',
+          table_name: 'benchmark_events',
+        },
+        [OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA]: {
+          partition_id: 'partition-1',
+          table_id: 'table-1',
+        },
+      }]),
+    };
+
+    await dispatchService.dispatchOperationRow(row);
+
+    t.ok(capturedOperation, 'dispatch coordinator received an operation');
+    t.same(
+      capturedOperation.replicaIds,
+      ['partition-1-r1'],
+      'dispatch uses replica metadata from the row context',
+    );
+    t.same(
+      capturedOperation.peerAddresses,
+      ['node-a:8080'],
+      'dispatch uses peer metadata from the row context',
+    );
+    t.same(
+      capturedOperation.bootstrapTableMetadata,
+      {
+        table_id: 'table-1',
+        table_name: 'benchmark_events',
+      },
+      'dispatch uses bootstrap table metadata from the row context',
+    );
+    t.same(
+      capturedOperation.bootstrapPartitionMetadata,
+      {
+        partition_id: 'partition-1',
+        table_id: 'table-1',
+      },
+      'dispatch uses bootstrap partition metadata from the row context',
+    );
+  });
+
+test('dispatch service emits failure event when target is not ready',
+  async (t) => {
+    initializeConfig();
+    const targetNodeId = 'node-dispatch-blocked';
+    const readiness = createReadiness(targetNodeId, {
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+      },
+    });
+    const readinessService = createReadinessService({
+      [targetNodeId]: readiness,
+    });
+
+    let failureEvent = null;
+    const dispatchService = new ReplicaDispatchService({
+      nodeId: 'node-local',
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll() {
+          return [];
+        },
+        onCacheChange() {},
+        offCacheChange() {},
+      },
+      rebalanceCoordinator: {
+        async dispatchOperation() {
+          t.fail('dispatch should not run for a not-ready target');
+        },
+        on() {},
+        off() {},
+      },
+      controlPlaneReadinessService: readinessService,
+    });
+
+    dispatchService.on(DISPATCH_EVENT.OPERATION_FAILED, (event) => {
+      failureEvent = event;
+    });
+
+    await dispatchService.dispatchOperationRow({
+      operation_id: 'op-dispatch-blocked',
+      type: 'ADD',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r1',
+      source_node_id: 'node-local',
+      target_node_id: targetNodeId,
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
+
+    t.ok(failureEvent, 'dispatch failure event was emitted');
+    t.equal(
+      failureEvent.reason,
+      'target_node_not_ready',
+      'failure event reports readiness gate reason',
+    );
+    t.equal(
+      failureEvent.targetNodeId,
+      targetNodeId,
+      'failure event reports target node',
+    );
+    t.ok(
+      failureEvent.readinessSnapshot,
+      'failure event includes readiness snapshot',
+    );
+  });
+
 // --- Coordinator updateStep persists readiness snapshot ---
 
 test('coordinator updateStep persists readiness snapshot in step entry',

@@ -51,6 +51,25 @@ function buildRuntimeFailureScenario() {
         failedPhase: {
           phase: 'verify',
           artifacts: {
+            partitionGrowth: {
+              failureMode: 'replica_spread_stalled',
+              baselinePartitionCount: 1,
+              currentPartitionCount: 3,
+              additionalPartitionCount: 2,
+              replicaNodeCount: 4,
+              sampleCount: 12,
+              transientQueryErrors: 1,
+              lastQueryError: 'none',
+            },
+            partitioningPlanner: {
+              selectedNodeIds: ['node-1', 'node-2', 'node-3', 'node-4', 'node-5'],
+              readyReplicaNodeIds: ['node-1', 'node-2'],
+              admissionReadyNodeIds: ['node-1', 'node-2', 'node-3', 'node-4', 'node-5'],
+              readinessReasonHistogram: {
+                nodeSlotUnavailable: 8,
+                cluster_member_unhealthy: 2,
+              },
+            },
             nodeReasonsByNodeId: {
               'node-1': ['leader_mismatch'],
             },
@@ -526,25 +545,76 @@ describe('failure-bundle', () => {
       await writeFile(join(scenarioDir, '_analysis.json'), '{"summary":"ok"}\n');
       await writeFile(
         join(scenarioDir, 'events.ndjson'),
-        [JSON.stringify({
-          timestamp: 1709769603500,
-          type: 'node.restart.boundary',
-          scope: 'node',
-          entityId: 'node-1',
-          details: {
-            phase: 'after_ready',
-            snapshot: {
-              nodeId: 'node-1',
-              publicationConvergence: {
-                publicationEpoch: 7,
-                pendingAckNodeIds: ['node-2'],
-              },
-              localReadiness: {
-                reasonCodes: ['control_plane_publication_pending'],
+        [
+          {
+            timestamp: 1709769601000,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.active',
+              nodeCount: 5,
+            },
+          },
+          {
+            timestamp: 1709769602000,
+            type: 'load.started',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              metrics: {
+                total: 10,
+                attemptErrors: 0,
               },
             },
           },
-        })].join('\n') + '\n',
+          {
+            timestamp: 1709769602500,
+            type: 'partition.created',
+            scope: 'topology',
+            entityId: 'users-p2',
+            details: {
+              partitionId: 'users-p2',
+              tableName: 'users',
+              nodeId: 'node-2',
+              status: 'active',
+            },
+          },
+          {
+            timestamp: 1709769603000,
+            type: 'load.completed',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              metrics: {
+                total: 10,
+                attemptErrors: 3,
+                waitReasons: {
+                  nodeSlotUnavailable: 4,
+                },
+              },
+            },
+          },
+          {
+            timestamp: 1709769603500,
+            type: 'node.restart.boundary',
+            scope: 'node',
+            entityId: 'node-1',
+            details: {
+              phase: 'after_ready',
+              snapshot: {
+                nodeId: 'node-1',
+                publicationConvergence: {
+                  publicationEpoch: 7,
+                  pendingAckNodeIds: ['node-2'],
+                },
+                localReadiness: {
+                  reasonCodes: ['control_plane_publication_pending'],
+                },
+              },
+            },
+          },
+        ].map((entry) => JSON.stringify(entry)).join('\n') + '\n',
       );
 
       const scenario = buildRuntimeFailureScenario();
@@ -566,6 +636,7 @@ describe('failure-bundle', () => {
       });
 
       assert.ok(scenario.failureBundle?.jsonPath);
+      assert.ok(scenario.failureBundle?.triageJsonPath);
       assert.ok(failureBundle.runBundle?.jsonPath);
 
       const scenarioBundle = JSON.parse(
@@ -675,6 +746,30 @@ describe('failure-bundle', () => {
         scenarioBundle.controlPlane.logsTable.pendingWriteGrowthCount,
         2,
       );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenario.failureBundle.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      assert.equal(triageSummary.summary.phase, 'verify');
+      assert.equal(
+        triageSummary.partitioning.failureMode,
+        'replica_spread_stalled',
+      );
+      assert.equal(
+        triageSummary.playback.eventSummary.load.startedAt,
+        '2024-03-07T00:00:02.000Z',
+      );
+      assert.equal(
+        triageSummary.playback.eventSummary.topology.partitionCreatedCount,
+        1,
+      );
+      assert.equal(
+        triageSummary.routingDiagnosticsByNodeId['node-1']
+          .routingDiagnostics.reasonCode,
+        'all_services_filtered_by_readiness',
+      );
 
       const runBundle = JSON.parse(
         await readFile(resolve(tempDir, failureBundle.runBundle.jsonPath), UTF8_ENCODING),
@@ -712,6 +807,13 @@ describe('failure-bundle', () => {
       assert.match(markdown, /Restart Boundaries/);
       assert.match(markdown, /cache_visibility_timeout/);
       assert.match(markdown, /operation=queryLoad/);
+      const triageMarkdown = await readFile(
+        resolve(tempDir, scenario.failureBundle.triageMarkdownPath),
+        UTF8_ENCODING,
+      );
+      assert.match(triageMarkdown, /# Scenario Triage Summary/);
+      assert.match(triageMarkdown, /## Partitioning/);
+      assert.match(triageMarkdown, /replica_spread_stalled/);
     });
 
   it('writes no-progress diagnostics into failure bundles', async () => {

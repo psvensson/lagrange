@@ -67,6 +67,9 @@ const TIMEOUT_ERROR_MESSAGES = new Set([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
   QUERY_ERROR_MSG.QUERY_TIMED_OUT,
 ]);
+const IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES = new Set([
+  QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
+]);
 
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
@@ -1275,6 +1278,9 @@ class DistributedTransactionCoordinator {
         await operation(partitionId);
         return;
       } catch (error) {
+        if (this.shouldTreatParticipantCommitMissAsSuccess(stage, error)) {
+          return;
+        }
         if (attempt >= this.participantRetryMaxRetries) {
           throw error;
         }
@@ -1310,6 +1316,27 @@ class DistributedTransactionCoordinator {
     const timeoutError = new Error(QUERY_ERROR_MSG.QUERY_TIMEOUT);
     timeoutError.errorCode = QUERY_ERROR_CODE.TIMEOUT;
     return timeoutError;
+  }
+
+  /**
+   * Treat replayed participant commits that already cleared local transaction
+   * state as idempotent success so recovery can converge after ambiguous ACK
+   * loss or duplicate commit delivery.
+   * @param {string} stage
+   * @param {Error|Object} error
+   * @return {boolean}
+   * @private
+   */
+  shouldTreatParticipantCommitMissAsSuccess(stage, error) {
+    if (stage !== PARTICIPANT_STATUS.COMMITTING) {
+      return false;
+    }
+    const errorCode = error?.errorCode || error?.code || null;
+    if (errorCode === QUERY_ERROR_CODE.NO_TRANSACTION) {
+      return true;
+    }
+    const errorMessage = String(error?.message || error?.error || '');
+    return IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES.has(errorMessage);
   }
 
   /**

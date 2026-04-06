@@ -153,6 +153,7 @@ test('assertConsistency attaches control-plane diagnostics on mismatch errors',
       controlPlaneDiagnostics: {
         publicationConvergence: {
           publicationEpoch: 14,
+          sourceSnapshotVersion: 31,
           status: 'ACK_PENDING',
         },
       },
@@ -162,6 +163,7 @@ test('assertConsistency attaches control-plane diagnostics on mismatch errors',
       controlPlaneDiagnostics: {
         publicationConvergence: {
           publicationEpoch: 14,
+          sourceSnapshotVersion: 29,
           status: 'ACK_PENDING',
         },
       },
@@ -178,6 +180,11 @@ test('assertConsistency attaches control-plane diagnostics on mismatch errors',
         14,
       );
       assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics?.publicationConvergence
+          ?.sourceSnapshotVersion,
+        31,
+      );
+      assert.equal(
         error?.diagnostics?.controlPlaneDiagnostics?.mismatch?.reasonCode,
         'active_nodes_disagree',
       );
@@ -188,8 +195,18 @@ test('assertConsistency attaches control-plane diagnostics on mismatch errors',
       );
       assert.equal(
         error?.diagnostics?.controlPlaneDiagnostics
+          ?.publicationConvergenceByNodeId?.['node-a']?.sourceSnapshotVersion,
+        31,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics
           ?.publicationConvergenceByNodeId?.['node-b']?.publicationEpoch,
         14,
+      );
+      assert.equal(
+        error?.diagnostics?.controlPlaneDiagnostics
+          ?.publicationConvergenceByNodeId?.['node-b']?.sourceSnapshotVersion,
+        29,
       );
     }
   });
@@ -329,6 +346,233 @@ test('assertConsistency retries missing published membership with forced repair'
   assert.equal(nodeACalls.length, 2);
   assert.equal(nodeACalls[0]?.forceRepair, false);
   assert.equal(nodeACalls[1]?.forceRepair, true);
+});
+
+test('assertConsistency ignores raw SQL fallback split topology once two control snapshots agree', async () => {
+  const splitPartitions = ['logs-p2', 'logs-p3'];
+  const leaderMap = {
+    'logs-p2': TEST_LEADER_ADDRESS,
+    'logs-p3': TEST_WS_ADDRESS,
+  };
+  const nodeA = buildControlSnapshotNode('node-a', {
+    partitions: splitPartitions,
+    leaders: leaderMap,
+  });
+  const nodeB = buildControlSnapshotNode('node-b', {
+    partitions: splitPartitions,
+    leaders: leaderMap,
+  });
+  let fallbackQueryCount = 0;
+  const fallbackNode = {
+    id: 'node-c',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      throw new Error('Admin API query timed out');
+    },
+    async query(sql) {
+      fallbackQueryCount += 1;
+      if (sql.includes('FROM nodes')) {
+        return {rows: NODE_ROWS};
+      }
+      if (sql.includes('FROM partitions')) {
+        return {
+          rows: [
+            {partition_id: 'logs-p1'},
+            {partition_id: 'logs-p2'},
+            {partition_id: 'logs-p3'},
+          ],
+        };
+      }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_LEADER_ADDRESS,
+              partition_id: 'logs-p1',
+              node_id: 'node-1',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_LEADER_ADDRESS,
+              partition_id: 'logs-p2',
+              node_id: 'node-1',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_WS_ADDRESS,
+              partition_id: 'logs-p3',
+              node_id: 'node-2',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB, fallbackNode]);
+  });
+  assert.ok(
+    fallbackQueryCount > 0,
+    'expected fallback node to exercise raw SQL path before being ignored',
+  );
+});
+
+test('assertConsistency ignores raw SQL fallback split topology once one control snapshot is available', async () => {
+  const splitPartitions = ['logs-p2', 'logs-p3'];
+  const leaderMap = {
+    'logs-p2': TEST_LEADER_ADDRESS,
+    'logs-p3': TEST_WS_ADDRESS,
+  };
+  const nodeA = buildControlSnapshotNode('node-a', {
+    partitions: splitPartitions,
+    leaders: leaderMap,
+  });
+  let fallbackQueryCount = 0;
+  const fallbackNode = {
+    id: 'node-b',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      throw new Error('Admin API query timed out');
+    },
+    async query(sql) {
+      fallbackQueryCount += 1;
+      if (sql.includes('FROM nodes')) {
+        return {rows: NODE_ROWS};
+      }
+      if (sql.includes('FROM partitions')) {
+        return {
+          rows: [
+            {partition_id: 'logs-p1'},
+            {partition_id: 'logs-p2'},
+            {partition_id: 'logs-p3'},
+          ],
+        };
+      }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_LEADER_ADDRESS,
+              partition_id: 'logs-p1',
+              node_id: 'node-1',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_LEADER_ADDRESS,
+              partition_id: 'logs-p2',
+              node_id: 'node-1',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_WS_ADDRESS,
+              partition_id: 'logs-p3',
+              node_id: 'node-2',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, fallbackNode]);
+  });
+  assert.ok(
+    fallbackQueryCount > 0,
+    'expected fallback node to exercise raw SQL path before being ignored',
+  );
+});
+
+test('assertConsistency supplements SQL fallback partitions from service-visible topology', async () => {
+  const publishedNodes = ['node-1', 'node-2', 'node-3'];
+  const nodeA = buildControlSnapshotNode('node-a', {
+    publishedNodes,
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: publishedNodes,
+      },
+    },
+  });
+  let fallbackQueryCount = 0;
+  const fallbackNode = {
+    id: 'node-b',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      throw new Error('Admin API query timed out');
+    },
+    async query(sql) {
+      fallbackQueryCount += 1;
+      if (sql.includes('FROM nodes')) {
+        return {rows: NODE_ROWS};
+      }
+      if (sql.includes('FROM partitions')) {
+        return {rows: []};
+      }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'leader',
+              address: TEST_LEADER_ADDRESS,
+              partition_id: 'p1',
+              node_id: 'node-1',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'follower',
+              address: TEST_WS_ADDRESS,
+              partition_id: 'p1',
+              node_id: 'node-2',
+            },
+            {
+              service_type: 'partition',
+              status: 'active',
+              raft_role: 'follower',
+              address: `ws://node-3:${PORTS.WS_TRANSPORT}`,
+              partition_id: 'p1',
+              node_id: 'node-3',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, fallbackNode]);
+  });
+  assert.ok(
+    fallbackQueryCount > 0,
+    'expected fallback node to exercise raw SQL path',
+  );
 });
 
 test('assertConsistency ignores bootstrap-only control-snapshot nodes', async () => {

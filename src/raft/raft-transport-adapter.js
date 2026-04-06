@@ -10,6 +10,7 @@ import {
   RAFT_PACKET_MESSAGE_TYPE,
   RAFT_TRANSPORT_ERROR_MSG,
   RAFT_TRANSPORT_LOG_MSG,
+  resolveRaftTransportDeliveryOptions,
 } from './constants.js';
 
 /**
@@ -68,7 +69,14 @@ class RaftTransportAdapter {
         data: packet.data,
       };
 
-      const result = await this.messageRouter.deliver(peerAddress, message);
+      const result = await this.messageRouter.deliver(
+        peerAddress,
+        message,
+        resolveRaftTransportDeliveryOptions({
+          ...packet,
+          targetAddress: peerAddress,
+        }),
+      );
       callback(null, result);
     } catch (error) {
       callback(error);

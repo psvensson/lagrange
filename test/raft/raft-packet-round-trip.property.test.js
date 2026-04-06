@@ -19,7 +19,10 @@ import fc from 'fast-check';
 import {
   createPartitionRaftNodeClass,
 } from '../../src/partition/partition-raft-node.js';
-import {RAFT_PACKET_TYPE} from '../../src/raft/constants.js';
+import {
+  RAFT_PACKET_TYPE,
+  resolveRaftTransportDeliveryOptions,
+} from '../../src/raft/constants.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
 
 // Valid Raft packet types from liferaft
@@ -112,6 +115,7 @@ test('Property: Raft packet round-trip preserves all fields via PartitionRaftNod
         async (packetData) => {
           let receivedPayload = null;
           let receivedAddress = null;
+          let receivedOptions = null;
 
           const entityType = ENTITY_TYPE.PARTITION;
 
@@ -123,9 +127,10 @@ test('Property: Raft packet round-trip preserves all fields via PartitionRaftNod
 
           // Mock transport that captures the delivered message
           const mockTransport = {
-            deliver: async (address, payload) => {
+            deliver: async (address, payload, options) => {
               receivedAddress = address;
               receivedPayload = payload;
+              receivedOptions = options;
               return {acknowledged: true};
             },
           };
@@ -189,6 +194,12 @@ test('Property: Raft packet round-trip preserves all fields via PartitionRaftNod
           // Verify destination address is preserved
           if (receivedAddress !== destAddress) return false;
 
+          if (JSON.stringify(receivedOptions) !== JSON.stringify(
+            resolveRaftTransportDeliveryOptions(originalPacket),
+          )) {
+            return false;
+          }
+
           // Verify packet type is NOT converted — PartitionRaftNode
           // passes packets unchanged (unlike the removed adapter)
           if (receivedPayload.type !== packetData.type) return false;
@@ -243,10 +254,12 @@ test('Property: PartitionRaftNode.write() preserves packet type unchanged',
         termArb,
         async (packetType, term) => {
           let receivedPayload = null;
+          let receivedOptions = null;
 
           const mockTransport = {
-            deliver: async (_address, payload) => {
+            deliver: async (_address, payload, options) => {
               receivedPayload = payload;
+              receivedOptions = options;
               return {acknowledged: true};
             },
           };
@@ -292,7 +305,10 @@ test('Property: PartitionRaftNode.write() preserves packet type unchanged',
 
           // The type must be the original liferaft type, NOT a mapped type
           return receivedPayload !== null &&
-          receivedPayload.type === packetType;
+          receivedPayload.type === packetType &&
+          JSON.stringify(receivedOptions) === JSON.stringify(
+            resolveRaftTransportDeliveryOptions(packet),
+          );
         },
       ),
       {numRuns: 10},

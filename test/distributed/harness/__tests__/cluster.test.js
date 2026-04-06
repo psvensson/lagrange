@@ -600,6 +600,47 @@ test('Unit: startLoad honors an explicit node subset', async () => {
   );
 });
 
+test('Unit: startLoad preserves an explicit empty node list until nodeResolver refreshes it', async () => {
+  const cluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const selectedNode = {
+    id: 'node-selected',
+    closeQueryConnection: () => {},
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+  };
+  const excludedNode = {
+    id: 'node-excluded',
+    closeQueryConnection: () => {},
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+  };
+
+  cluster._nodes.set(selectedNode.id, selectedNode);
+  cluster._nodes.set(excludedNode.id, excludedNode);
+
+  const run = cluster.startLoad({
+    nodes: [],
+    nodeResolver: () => [selectedNode],
+    opsPerSec: 5,
+    duration: 250,
+    maxInFlight: 1,
+  });
+  const metrics = await run.waitComplete();
+
+  assert.deepEqual(
+    Object.keys(metrics.perNode || {}),
+    ['node-selected'],
+    'an explicit empty node list should not widen to cluster defaults before resolver updates',
+  );
+});
+
 test('Unit: resolveBenchmarkReadyLoadNodes only trusts local replica readiness',
   async () => {
     const cluster = createCluster({
@@ -641,13 +682,19 @@ test('Unit: resolveBenchmarkReadyLoadNodes only trusts local replica readiness',
           controlPlaneRecoveryReady: true,
         };
       },
-      async queryWithTimeout(sql) {
-        assert.match(
-          sql,
-          /service_discovery_local/,
-          'cluster should read benchmark-ready nodes from service discovery',
-        );
-        return buildDiscoverySnapshot('node-ready', true, 'node-blocked');
+      async queryWithTimeout(sql, _params = [], options = {}) {
+        if (options.lane === 'snapshot') {
+          assert.match(
+            sql,
+            /service_discovery_local/,
+            'cluster should read benchmark-ready nodes from service discovery',
+          );
+          return buildDiscoverySnapshot('node-ready', true, 'node-blocked');
+        }
+        if (options.lane === 'load') {
+          return {rows: [{ok: 1}]};
+        }
+        throw new Error('unexpected lane: ' + String(options.lane || 'default'));
       },
     };
     const blockedNode = {
@@ -660,8 +707,14 @@ test('Unit: resolveBenchmarkReadyLoadNodes only trusts local replica readiness',
           controlPlaneRecoveryReady: false,
         };
       },
-      async queryWithTimeout() {
-        return buildDiscoverySnapshot('node-blocked', false, 'node-ready');
+      async queryWithTimeout(_sql, _params = [], options = {}) {
+        if (options.lane === 'snapshot') {
+          return buildDiscoverySnapshot('node-blocked', false, 'node-ready');
+        }
+        if (options.lane === 'load') {
+          return {rows: [{ok: 1}]};
+        }
+        throw new Error('unexpected lane: ' + String(options.lane || 'default'));
       },
     };
 
@@ -699,21 +752,27 @@ test('Unit: resolveBenchmarkReadyLoadNodes admits recovery-ready nodes before ad
           recoveryStageRank: 2,
         };
       },
-      async queryWithTimeout() {
-        return {
-          rows: [{
-            services: [{
-              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
-              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
-              replicas: [{
-                nodeId: 'node-recovering',
-                benchmarkAdmission: {
-                  state: 'ready',
-                },
+      async queryWithTimeout(_sql, _params = [], options = {}) {
+        if (options.lane === 'snapshot') {
+          return {
+            rows: [{
+              services: [{
+                protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+                serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+                replicas: [{
+                  nodeId: 'node-recovering',
+                  benchmarkAdmission: {
+                    state: 'ready',
+                  },
+                }],
               }],
             }],
-          }],
-        };
+          };
+        }
+        if (options.lane === 'load') {
+          return {rows: [{ok: 1}]};
+        }
+        throw new Error('unexpected lane: ' + String(options.lane || 'default'));
       },
     };
 
@@ -729,6 +788,343 @@ test('Unit: resolveBenchmarkReadyLoadNodes admits recovery-ready nodes before ad
       'benchmark-ready admission should accept nodes once the control-plane recovery gate is open',
     );
   });
+
+test('Unit: resolveBenchmarkReadyLoadNodes rejects discovery-ready nodes ' +
+  'whose load lane still denies benchmark admission',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const readyDiscoverySnapshot = {
+    rows: [{
+      services: [{
+        protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+        serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+        replicas: [{
+          nodeId: 'node-stale-ready',
+          benchmarkAdmission: {
+            state: 'ready',
+          },
+        }],
+      }],
+    }],
+  };
+
+  const staleReadyNode = {
+    id: 'node-stale-ready',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-stale-ready',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        return readyDiscoverySnapshot;
+      }
+      if (options.lane === 'load') {
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'benchmark-ready admission should validate effective load-lane admission with a benign table-local probe',
+        );
+        throw new Error(
+          'serve not ready: load lane admission denied on node ' +
+          'node-stale-ready (tableName=benchmark_events, ' +
+          'benchmarkReady=false, reasons=schema_partition_unavailable)',
+        );
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(staleReadyNode.id, staleReadyNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    [],
+    'benchmark-ready admission should exclude nodes whose real load lane still rejects the benchmark table',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes admits soft-blocked discovery ' +
+  'nodes when the real load lane accepts the benchmark table',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  let loadProbeCount = 0;
+  const softBlockedNode = {
+    id: 'node-soft-blocked',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-soft-blocked',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        return {
+          rows: [{
+            services: [{
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              replicas: [{
+                nodeId: 'node-soft-blocked',
+                benchmarkAdmission: {
+                  state: 'blocked',
+                  routingReady: true,
+                  localReplicaRole: 'follower',
+                  degradedByOperationIds: [],
+                  reasons: [{
+                    code: 'schema_partition_unavailable',
+                    detail: 'transient cache lag',
+                  }],
+                },
+              }],
+            }],
+          }],
+        };
+      }
+      if (options.lane === 'load') {
+        loadProbeCount += 1;
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'soft-blocked discovery should still validate effective load-lane admission with a benign table-local probe',
+        );
+        return {rows: [{ok: 1}]};
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(softBlockedNode.id, softBlockedNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    ['node-soft-blocked'],
+    'benchmark-ready admission should not fail closed on soft local discovery blockers when the load lane already admits the table',
+  );
+  assert.equal(
+    loadProbeCount,
+    1,
+    'soft-blocked discovery should still require one real load-lane admission probe',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes admits topology-deferred ' +
+  'routed nodes without a voter-ready local replica when the load lane ' +
+  'accepts the benchmark table',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  let loadProbeCount = 0;
+  const topologyDeferredNode = {
+    id: 'node-topology-deferred',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-topology-deferred',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        return {
+          rows: [{
+            services: [{
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              replicas: [{
+                nodeId: 'node-topology-deferred',
+                benchmarkAdmission: {
+                  state: 'blocked',
+                  routingReady: true,
+                  schemaReady: false,
+                  topologyReady: false,
+                  degradedByOperationIds: [],
+                  reasons: [
+                    {code: 'schema_partition_unavailable'},
+                    {code: 'leadership_unstable'},
+                  ],
+                },
+              }],
+            }],
+          }],
+        };
+      }
+      if (options.lane === 'load') {
+        loadProbeCount += 1;
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'topology-deferred discovery should still validate effective ' +
+            'load-lane admission with a benign table-local probe',
+        );
+        return {rows: [{ok: 1}]};
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(topologyDeferredNode.id, topologyDeferredNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    ['node-topology-deferred'],
+    'topology-deferred discovery should not fail closed when the node is ' +
+      'routable and the real load lane already admits the table',
+  );
+  assert.equal(
+    loadProbeCount,
+    1,
+    'topology-deferred discovery should still require one real load-lane ' +
+      'admission probe',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes falls back to the load lane when ' +
+  'local discovery is under retryable control-plane pressure',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  let loadProbeCount = 0;
+  const pressuredNode = {
+    id: 'node-pressured-discovery',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-pressured-discovery',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        const error = new Error('control_plane_pressure_degraded');
+        error.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+        throw error;
+      }
+      if (options.lane === 'load') {
+        loadProbeCount += 1;
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'retryable discovery pressure should still validate effective ' +
+            'load-lane admission with a benign table-local probe',
+        );
+        return {rows: [{ok: 1}]};
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(pressuredNode.id, pressuredNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    ['node-pressured-discovery'],
+    'retryable discovery pressure should not hard-exclude a node whose real ' +
+      'load lane already admits the benchmark table',
+  );
+  assert.equal(
+    loadProbeCount,
+    1,
+    'retryable discovery fallback should require one real load-lane probe',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes still excludes retryable ' +
+  'discovery-pressure nodes when the real load lane denies the table',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const pressuredNode = {
+    id: 'node-pressured-denied',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-pressured-denied',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        const error = new Error('Query timeout after 3000ms');
+        error.code = 'ETIMEDOUT';
+        throw error;
+      }
+      if (options.lane === 'load') {
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'retryable discovery fallback should only admit nodes when the ' +
+            'real load lane accepts the benchmark table',
+        );
+        throw new Error(
+          'serve not ready: load lane admission denied on node ' +
+          'node-pressured-denied (tableName=benchmark_events, ' +
+          'benchmarkReady=false, reasons=schema_partition_unavailable)',
+        );
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(pressuredNode.id, pressuredNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    [],
+    'retryable discovery fallback must still respect the real load-lane ' +
+      'admission result',
+  );
+});
 
 test('Unit: resolveBenchmarkReadyLoadNodes only admits nodes on the required published control-plane epoch',
   async () => {
@@ -764,8 +1160,14 @@ test('Unit: resolveBenchmarkReadyLoadNodes only admits nodes on the required pub
           publishedControlPlaneEpoch: 14,
         };
       },
-      async queryWithTimeout() {
-        return buildDiscoverySnapshot('node-epoch-14');
+      async queryWithTimeout(_sql, _params = [], options = {}) {
+        if (options.lane === 'snapshot') {
+          return buildDiscoverySnapshot('node-epoch-14');
+        }
+        if (options.lane === 'load') {
+          return {rows: [{ok: 1}]};
+        }
+        throw new Error('unexpected lane: ' + String(options.lane || 'default'));
       },
     };
     const epoch13Node = {
@@ -779,8 +1181,14 @@ test('Unit: resolveBenchmarkReadyLoadNodes only admits nodes on the required pub
           publishedControlPlaneEpoch: 13,
         };
       },
-      async queryWithTimeout() {
-        return buildDiscoverySnapshot('node-epoch-13');
+      async queryWithTimeout(_sql, _params = [], options = {}) {
+        if (options.lane === 'snapshot') {
+          return buildDiscoverySnapshot('node-epoch-13');
+        }
+        if (options.lane === 'load') {
+          return {rows: [{ok: 1}]};
+        }
+        throw new Error('unexpected lane: ' + String(options.lane || 'default'));
       },
     };
 
@@ -3781,6 +4189,77 @@ test('Unit: _probeControlSnapshotCoverage forwards forced repair requests',
     );
   });
 
+test('Unit: _probeControlSnapshotCoverage reserves timeout budget for later nodes',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const probeCalls = [];
+    const nodeIds = ['node-a', 'node-b', 'node-c'];
+    for (const [index, nodeId] of nodeIds.entries()) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: 'active'}]};
+        },
+        async getReachabilityDiagnostics() {
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: 'admin_health',
+            lastError: null,
+          };
+        },
+        async getControlSnapshot(options) {
+          probeCalls.push({
+            nodeId,
+            timeoutMs: options.timeoutMs,
+          });
+          return {
+            rows: [{
+              nodes: nodeIds.slice(0, index + 1),
+              capturedAtMs: 100 + index,
+            }],
+          };
+        },
+        async getLogs(_options) {
+          return '';
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + 3500,
+      nodeIds,
+    );
+
+    assert.strictEqual(
+      coverage.completeCoverage,
+      true,
+      'final node should still be able to satisfy complete coverage',
+    );
+    assert.strictEqual(
+      probeCalls.length,
+      3,
+      'coverage probe should continue probing until a complete snapshot is found',
+    );
+    assert.ok(
+      Number.isInteger(probeCalls[0].timeoutMs) &&
+        probeCalls[0].timeoutMs > 0 &&
+        probeCalls[0].timeoutMs < 3000,
+      'first sequential snapshot probe should reserve budget for later nodes',
+    );
+    assert.ok(
+      probeCalls.every((call) =>
+        Number.isInteger(call.timeoutMs) && call.timeoutMs > 0),
+      'every sequential snapshot probe should receive a positive timeout budget',
+    );
+  });
+
 test('Unit: _probeControlSnapshotCoverage falls back to default lane after snapshot-lane failure',
   async () => {
     const cluster = createCluster({
@@ -4400,6 +4879,84 @@ test('Unit: _waitForAllActive treats CL-003 witness as load-mode soft success',
       collectedFailureLogs,
       false,
       'soft-success closure should not trigger failure log collection',
+    );
+  });
+
+test('Unit: _waitForAllActive treats CL-004 witness as startup-mode soft success',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        convergence: 200,
+        activeWaitNoProgressMaxAttempts: 2,
+      },
+    });
+
+    cluster._sleep = async () => {};
+    let collectedFailureLogs = false;
+    cluster._collectFailureLogs = async () => {
+      collectedFailureLogs = true;
+    };
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+
+    cluster._probeClusterActiveState = async () => {
+      return {
+        allActive: false,
+        nodeDiagnostics: [{
+          nodeId: 'seed-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }],
+        snapshotCoverage: {
+          completeCoverage: false,
+          expectedNodeCount: 2,
+          bestCoverageNodeCount: 0,
+          selectedNodeId: 'seed-1',
+          selectedAdminReady: true,
+          selectedReachableBy: 'admin_health',
+          selectedError:
+            'Admin API query timed out for node seed-1 on lane snapshot after 3000ms',
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          failingInvariantReasonCodes: [],
+          passed: true,
+        },
+      };
+    };
+
+    await cluster._waitForAllActive();
+
+    const waitingStage = recordedStages.find((entry) => {
+      return entry.stage === 'setup.cluster.waiting-active' &&
+        entry.details?.activeGateNoProgress?.stalled === true;
+    });
+    assert.equal(
+      waitingStage,
+      undefined,
+      'startup snapshot-timeout soft success should complete without recording a stalled waiting-active stage',
+    );
+    assert.equal(
+      collectedFailureLogs,
+      false,
+      'startup snapshot-timeout soft success should not trigger failure log collection',
     );
   });
 

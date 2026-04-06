@@ -190,6 +190,60 @@ test('updateStep persists through the opened transaction session',
     }
   });
 
+test('updateStep confirms persisted state only after transaction commit',
+  async (t) => {
+    const callOrder = [];
+    const txCoordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async () => {},
+      commitParticipant: async () => {},
+      rollbackParticipant: async () => {},
+      now: () => 1000,
+    });
+    const originalBegin = txCoordinator.begin.bind(txCoordinator);
+    const originalCommit = txCoordinator.commit.bind(txCoordinator);
+    txCoordinator.begin = async (sessionId) => {
+      callOrder.push(`begin:${sessionId}`);
+      return originalBegin(sessionId);
+    };
+    txCoordinator.commit = async (sessionId) => {
+      callOrder.push(`commit:${sessionId}`);
+      return originalCommit(sessionId);
+    };
+
+    const coordinator = createMinimalCoordinator({
+      transactionCoordinator: txCoordinator,
+    });
+    coordinator.initialize();
+    coordinator.repository.confirmReplicaOperationPersistence =
+      async (operation) => {
+        callOrder.push(`confirm:${operation.workflowStep}`);
+      };
+
+    try {
+      const operation = createTestOperation();
+      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+      t.same(
+        callOrder,
+        [
+          `begin:${buildExpectedTransitionSessionId(
+            operation.operationId,
+            WORKFLOW_STEP.SENDING,
+          )}`,
+          `commit:${buildExpectedTransitionSessionId(
+            operation.operationId,
+            WORKFLOW_STEP.SENDING,
+          )}`,
+          'confirm:SENDING',
+        ],
+        'authoritative confirmation should run only after the transition commits',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('updateStep retries with a fresh transition session after stale-session ' +
   'begin contention', async (t) => {
   const blockedSessions = new Set();
@@ -871,6 +925,80 @@ test('persistOperationUpdate retries transient partition transaction ' +
       observedSessions,
       [expectedSessionId, expectedSessionId],
       'retry should reuse the same canonical transition session',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('persistOperationUpdate serializes external metadata writes with ' +
+  'owner step transitions on replica_operations', async (t) => {
+  let releaseFirstPersist;
+  const firstPersistEntered = new Promise((resolve) => {
+    releaseFirstPersist = resolve;
+  });
+  let firstPersistBlocking = true;
+  let activePersistCount = 0;
+  let overlapAttempts = 0;
+
+  const coordinator = createMinimalCoordinator({
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (!sql.includes('UPDATE replica_operations')) {
+          return {success: true, rows: [], changes: 1};
+        }
+
+        activePersistCount += 1;
+        if (activePersistCount > 1) {
+          overlapAttempts += 1;
+        }
+        try {
+          if (firstPersistBlocking) {
+            firstPersistBlocking = false;
+            await firstPersistEntered;
+          }
+          return {success: true, rows: [], changes: 1};
+        } finally {
+          activePersistCount -= 1;
+        }
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const bootstrapOperation = createTestOperation({
+      operationId: 'op-bootstrap-metadata',
+      replicaId: 'partition-1-r-bootstrap',
+      targetNodeId: 'node-bootstrap',
+    });
+    const transitionOperation = createTestOperation({
+      operationId: 'op-transition-metadata',
+      replicaId: 'partition-1-r-transition',
+      targetNodeId: 'node-transition',
+    });
+
+    const persistPromise =
+      coordinator.persistOperationUpdate(bootstrapOperation);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const transitionPromise = coordinator.updateStep(
+      transitionOperation,
+      WORKFLOW_STEP.SENDING,
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    releaseFirstPersist();
+
+    await Promise.all([persistPromise, transitionPromise]);
+
+    t.equal(
+      overlapAttempts,
+      0,
+      'external metadata writes should share the replica_operations serialization lane with owner step transitions',
     );
   } finally {
     await coordinator.shutdown();

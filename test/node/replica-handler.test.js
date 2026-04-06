@@ -14,7 +14,8 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {SERVICE_STATUS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
@@ -987,6 +988,169 @@ test('ReplicaHandler', async (t) => {
   );
 
   t.test(
+    'handleCreateReplica - stale leader rows on a not-ready node should not force learner join mode',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const cache = createSeededCache({
+        partitionId,
+        leaderNodeId: 'dead-node',
+        leaderReplicaId: 'replica-2',
+      });
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
+
+      const now = Date.now();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'dead-node',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: now - 1000,
+        ready_lease_expires_at: now - 1,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'live-node',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 60_000,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica-3',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'dead-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        address: 'dead-node/partition/replica-3',
+        created_at: now,
+        updated_at: now,
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica-4',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'live-node',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        address: 'live-node/partition/replica-4',
+        created_at: now,
+        updated_at: now,
+      });
+
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId,
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.leaderAddress,
+        null,
+        'expired node readiness should suppress stale leader addresses',
+      );
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'replacement should bootstrap recovery instead of joining a dead leader as learner',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'handleCreateReplica - ready leader should still use learner join mode',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-1');
+
+      const now = Date.now();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
+        node_id: 'leader-node',
+        status: SERVICE_STATUS.ACTIVE,
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 60_000,
+      });
+
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.leaderAddress,
+        'leader-node/partition/leader-replica',
+        'ready leader metadata should still provide a join target',
+      );
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        true,
+        'healthy leader metadata should preserve learner join mode',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
     'handleCreateReplica - explicit bootstrap cohort should seed full peer topology ' +
       'for a fresh partition',
     async (t) => {
@@ -1539,6 +1703,66 @@ test('ReplicaHandler', async (t) => {
       handler.shutdown();
     });
 
+  t.test('handleRemoveReplica finalizes local state tracking after durable delete',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
+      const mockCDC = createMockCDCService(cache);
+      let nowValue = 1000;
+      const replicaStateMachine = new ReplicaStateMachine({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        removingTimeoutMs: 50,
+        now: () => nowValue,
+      });
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+        replicaStateMachine,
+      });
+
+      handler.initialize();
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+
+      const partitionDir = path.join(tempDir, 'partitions', 'partition-1');
+      fs.mkdirSync(partitionDir, {recursive: true});
+
+      handler.localReplicas.set('replica-1', {
+        replicaId: 'replica-1',
+        partitionId: 'partition-1',
+        status: ReplicaStatus.ACTIVE,
+        service: {
+          async shutdown() {},
+        },
+      });
+
+      await handler.handleRemoveReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        reason: 'rebalancing',
+      });
+
+      await removed;
+
+      nowValue = 1200;
+      t.equal(replicaStateMachine.checkTimeoutsNow(), 0,
+        'durable removal should not later time out from the removing state');
+      t.equal(replicaStateMachine.getState('replica-1'), null,
+        'durably removed replicas should be cleared from local tracking');
+
+      handler.shutdown();
+    });
+
   t.test('handleRemoveReplica - returns in_progress for removing replica',
     async (t) => {
       const cache = createSeededCache();
@@ -2037,11 +2261,6 @@ test('ReplicaHandler', async (t) => {
       (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVING,
     );
     t.ok(removingUpdate, 'removing status update via CDC');
-
-    const removedUpdate = mockCDC.operations.find(
-      (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVED,
-    );
-    t.ok(removedUpdate, 'removed status update via CDC');
 
     const deleteOp = mockCDC.operations.find(
       (op) => op.type === 'delete' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,

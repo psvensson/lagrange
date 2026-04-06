@@ -440,6 +440,41 @@ test('Bootstrap sequence - partition leadership wait fails when no leaders', asy
   }
 });
 
+test('Bootstrap sequence - partition leadership wait honors configured timeout beyond legacy cap', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    config: {
+      leadershipWaitTimeoutMs: 20,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  const partition = {partitionId: 'sql_transactions-p1', isLeader: false};
+  bootstrap.partitionServices = new Map([
+    ['sql_transactions-p1-r1', partition],
+  ]);
+
+  const originalNow = Date.now;
+  let now = 0;
+  Date.now = () => now;
+  bootstrap.sleep = async () => {
+    now += 3;
+    if (now >= 6) {
+      partition.isLeader = true;
+    }
+  };
+
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    t.pass('configured leadership wait budget should allow later leader election');
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('Bootstrap sequence - partition leadership wait allows priority control-plane recovery bypass', async (t) => {
   initializeTestEnvironment();
 
@@ -474,6 +509,133 @@ test('Bootstrap sequence - partition leadership wait allows priority control-pla
 
   await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
   t.pass('priority control-plane recovery should not require a local leader before bootstrap direct writes');
+});
+
+test('Bootstrap sequence - partition leadership wait allows init-phase priority control-plane bootstrap bypass', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'INIT',
+          reasons: [
+            'BOOTSTRAP_PHASE_INCOMPLETE',
+            'SQL_ENGINE_UNAVAILABLE',
+            'LEADER_METADATA_INCOMPLETE',
+            'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING',
+          ],
+        };
+      },
+    },
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  bootstrap.partitionServices = new Map([
+    [
+      'sql_transactions-p1-r1',
+      {
+        partitionId: 'sql_transactions-p1',
+        isLeader: false,
+        initialized: true,
+      },
+    ],
+  ]);
+
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  t.pass('init-phase priority control-plane bootstrap readiness should not block seed direct-write startup on a missing local sql_transactions leader');
+});
+
+test('Bootstrap sequence - partition leadership wait allows direct bootstrap priority partition bypass during registration', async (t) => {
+  initializeTestEnvironment();
+
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'INIT',
+          reasons: ['LEADER_METADATA_INCOMPLETE'],
+        };
+      },
+    },
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+  bootstrap.phase = 'registration';
+
+  bootstrap.partitionServices = new Map([
+    [
+      'sql_transactions-p1-r1',
+      {
+        partitionId: 'sql_transactions-p1',
+        isLeader: false,
+        initialized: true,
+      },
+    ],
+  ]);
+
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  t.pass('registration should not block bootstrap-direct startup on a local priority control-plane partition before the SQL engine exists');
+});
+
+test('Bootstrap sequence - partition leadership wait memoizes satisfied bootstrap partition set', async (t) => {
+  initializeTestEnvironment();
+
+  let allowBootstrapBypass = true;
+  const bootstrap = new BootstrapService({
+    nodeId: 'test-node',
+    readinessState: {
+      evaluate() {
+        return allowBootstrapBypass ? {
+          ready: false,
+          phase: 'INIT',
+          reasons: [
+            'BOOTSTRAP_PHASE_INCOMPLETE',
+            'SQL_ENGINE_UNAVAILABLE',
+            'LEADER_METADATA_INCOMPLETE',
+            'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING',
+          ],
+        } : {
+          ready: false,
+          phase: 'INIT',
+          reasons: ['LEADER_METADATA_INCOMPLETE'],
+        };
+      },
+    },
+    config: {
+      leadershipWaitTimeoutMs: 5,
+      leadershipWaitInitialDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1,
+    },
+  });
+
+  bootstrap.partitionServices = new Map([
+    [
+      'sql_transactions-p1-r1',
+      {
+        partitionId: 'sql_transactions-p1',
+        isLeader: false,
+        initialized: true,
+      },
+    ],
+  ]);
+
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  allowBootstrapBypass = false;
+  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+
+  t.pass('registration should not re-block on the same partition set after partitions phase already satisfied startup leadership');
 });
 
 test('Bootstrap sequence - partition leadership wait allows canonical remote leader bypass', async (t) => {

@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS, TIMEOUTS} from '../harness/constants.js';
+import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {
   resolveSevenNodeTablePartitionDistributionScenarioConfig,
 } from '../harness/scenario-config.js';
@@ -19,6 +19,7 @@ import {
   resolvePartitioningBenchmarkLoadOpsPerSec,
   resolvePartitioningLoadTableName,
   waitForPartitionGrowthAndSpread,
+  waitForPostSplitConsistencyConvergence,
 } from './table-distribution-helpers.js';
 
 const LOAD_OPERATION_INSERT = 'INSERT';
@@ -109,37 +110,17 @@ async function run(cluster, options = {}) {
   assertSplitPolicyPrecondition(tablePreparation, {
     scenarioName: 'seven-node-table-partition-distribution',
   });
-  let loadNodePlan;
-  let loadNodeAdmissionFallback = null;
-  try {
-    loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
-      seedNode,
-      cluster,
-      {
-        tableName: effectiveTableName,
-        tableId: tablePreparation.tableId,
-        requiredNodeCount: minDistinctReplicaNodes,
-        timeoutMs: Math.max(distributionTimeoutMs, convergenceTimeoutMs),
-        queryNodes: nodes,
-      },
-    );
-    if (loadNodePlan?.admissionFallbackWarning) {
-      loadNodeAdmissionFallback = {
-        warning: loadNodePlan.admissionFallbackWarning,
-      };
-    }
-  } catch (error) {
-    loadNodeAdmissionFallback = {
-      warning: error instanceof Error ? error.message : String(error),
-    };
-    loadNodePlan = {
-      initialNodes: [seedNode],
-      nodeResolver: () => [seedNode],
-      stop: () => {},
-      bootstrapRequiredNodeCount: 1,
-      targetNodeCount: 1,
-    };
-  }
+  const loadNodePlan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: effectiveTableName,
+      tableId: tablePreparation.tableId,
+      requiredNodeCount: minDistinctReplicaNodes,
+      timeoutMs: Math.max(distributionTimeoutMs, convergenceTimeoutMs),
+      queryNodes: nodes,
+    },
+  );
   const effectiveLoadOpsPerSec = resolvePartitioningBenchmarkLoadOpsPerSec(
     loadOpsPerSec,
     loadNodePlan.initialNodes.length,
@@ -166,6 +147,7 @@ async function run(cluster, options = {}) {
       minAdditionalPartitions,
       minDistinctReplicaNodes,
       queryNodes: nodes,
+      plannerDiagnosticsResolver: loadNodePlan.getDiagnostics,
     });
   } finally {
     if (typeof loadRun.cancel === 'function') {
@@ -188,9 +170,7 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
   );
 
-  await cluster.waitForConsistencyConvergence({
-    timeoutMs: TIMEOUTS.CONSISTENCY_CONVERGENCE_POST_SPLIT,
-  });
+  await waitForPostSplitConsistencyConvergence(cluster);
 
   return {
     expectedNodeCount,
@@ -198,7 +178,6 @@ async function run(cluster, options = {}) {
     tablePreparation,
     convergenceTiming: convergence,
     controlPlaneQuiescence,
-    loadNodeAdmissionFallback,
     distribution,
     loadMetrics: metrics,
     successRate,

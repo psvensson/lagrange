@@ -365,6 +365,99 @@ test('TableCreationService - re-provisions initial partition on ' +
   t.equal(provisionCalls[0]?.replicaCount, 3);
 });
 
+test('TableCreationService - uses authoritative metadata reads to avoid ' +
+  'duplicate CREATE TABLE IF NOT EXISTS under cache lag', async (t) => {
+  const provisionCalls = [];
+  let readCount = 0;
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName) {
+        readCount += 1;
+        if (tableName === 'tables') {
+          return {
+            success: true,
+            rows: [{
+              table_id: 'tbl-users',
+              table_name: 'users',
+            }],
+          };
+        }
+        if (tableName === 'partitions') {
+          return {
+            success: true,
+            rows: [{
+              partition_id: 'tbl-users-p1',
+              table_id: 'tbl-users',
+              table_name: 'users',
+              replica_count: 3,
+            }],
+          };
+        }
+        return {success: true, rows: []};
+      },
+      async submitMutation() {
+        throw new Error('submitMutation should not be called when table exists');
+      },
+    },
+    partitionProvisioner: async (context) => {
+      provisionCalls.push(context);
+    },
+  });
+
+  const result = await service.createTable({
+    ...createCreateTableAst(),
+    ifNotExists: true,
+  });
+
+  t.equal(result.success, true);
+  t.equal(result.skipped, true);
+  t.equal(readCount, 2,
+    'authoritative table and partition reads should repair cache lag');
+  t.equal(provisionCalls.length, 1,
+    'authoritative retries should still reconcile initial partition provisioning');
+  t.equal(provisionCalls[0]?.tableId, 'tbl-users');
+  t.equal(provisionCalls[0]?.partitionId, 'tbl-users-p1');
+});
+
+test('TableCreationService - rejects duplicate CREATE TABLE when ' +
+  'authoritative metadata already exists', async (t) => {
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName) {
+        if (tableName === 'tables') {
+          return {
+            success: true,
+            rows: [{
+              table_id: 'tbl-users',
+              table_name: 'users',
+            }],
+          };
+        }
+        return {success: true, rows: []};
+      },
+      async submitMutation() {
+        throw new Error('submitMutation should not be called when table exists');
+      },
+    },
+  });
+
+  await t.rejects(
+    service.createTable(createCreateTableAst()),
+    /already exists/i,
+    'authoritative duplicate detection should preserve CREATE TABLE semantics',
+  );
+});
+
 test('TableCreationService - provisions initial partition when callback is configured',
   async (t) => {
     let provisionContext = null;

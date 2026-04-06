@@ -33,6 +33,9 @@ import {
   QUERY_ROUTING_REPAIR_REASON,
 } from '../../src/query/query-constants.js';
 import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
+import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
@@ -706,6 +709,42 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when no leader', (
   const address = executor.findPartitionLeaderAddress('p1');
 
   t.equal(address, null);
+  t.end();
+});
+
+test('QueryExecutor - findPartitionLeaderAddress forwards one explicit routing ' +
+  'readiness dimension', (t) => {
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: null,
+  });
+  let receivedRoutingReadinessDimension = null;
+  executor.getPartitionServiceCandidates = (
+    partitionId,
+    forRead,
+    preferLeader,
+    preferSameLatencyGroup,
+    routingReadinessDimension,
+  ) => {
+    t.equal(partitionId, 'p1');
+    t.equal(forRead, false);
+    t.equal(preferLeader, false);
+    t.equal(preferSameLatencyGroup, false);
+    receivedRoutingReadinessDimension = routingReadinessDimension;
+    return [{address: 'node-a/partition/p1'}];
+  };
+
+  const address = executor.findPartitionLeaderAddress(
+    'p1',
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  );
+
+  t.equal(address, 'node-a/partition/p1');
+  t.equal(
+    receivedRoutingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'leader lookups should honor the requested readiness dimension',
+  );
   t.end();
 });
 
@@ -1611,6 +1650,95 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
   );
 });
 
+test('QueryExecutor - executeOnPartition repairs a zero-row canonical leader ' +
+  'gap before failing the write closed', async (t) => {
+  const deliveries = [];
+  const readinessCalls = [];
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: 'leader-node',
+      },
+    ],
+    services: [],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const readinessService = {
+    getNodeReadinessSync() {
+      return {
+        dimensions: {serveEligible: true},
+      };
+    },
+    async getNodeReadiness(nodeId, options) {
+      readinessCalls.push({nodeId, options});
+      systemCache.services.push({
+        service_id: 'p1-leader',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: 'leader-node/partition/p1',
+        status: 'active',
+      });
+      return {
+        dimensions: {serveEligible: true},
+      };
+    },
+  };
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [],
+        changes: 1,
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    controlPlaneReadinessService: readinessService,
+    nodeId: 'local-node',
+  });
+
+  const result = await executor.executeOnPartition(
+    'p1',
+    'UPDATE users SET name = ?',
+    ['Ada'],
+    false,
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    readinessCalls.map((call) => call.nodeId),
+    ['leader-node'],
+    'write routing should attempt one authoritative refresh when the canonical leader is known but no service rows are cached',
+  );
+  t.same(
+    deliveries,
+    ['leader-node/partition/p1'],
+    'the repaired canonical leader should be used once the zero-row gap is repaired',
+  );
+});
+
 test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
   'leader service row remains missing after repair', async (t) => {
   const deliveries = [];
@@ -2280,6 +2408,420 @@ test('QueryExecutor - executeOnPartition quarantines stale no-handler ' +
     'second write should skip the quarantined stale no-handler leader address',
   );
   t.end();
+});
+
+test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
+  'write failures on another live replica', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === leaderAddress) {
+        return {
+          acknowledged: true,
+          success: false,
+          error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        };
+      }
+      if (address === fallbackAddress) {
+        return {
+          acknowledged: true,
+          success: true,
+          changes: 1,
+          rows: [],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected address',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-1'],
+    false,
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, fallbackAddress],
+    'control-plane writes should fall through to another live replica ' +
+      'when the first candidate reports retryable partition contention',
+  );
+});
+
+test('QueryExecutor - executeOnPartition retries session-bound transaction ' +
+  'contention on the same replica before widening', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
+  let leaderAttempts = 0;
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === leaderAddress) {
+        leaderAttempts += 1;
+        if (leaderAttempts === 1) {
+          return {
+            acknowledged: true,
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+          changes: 1,
+          rows: [],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected fallback delivery',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+  executor.delay = async () => {};
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-1'],
+    false,
+    false,
+    false,
+    {sessionId: 'tx-1'},
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, leaderAddress],
+    'session-bound transaction contention should retry the pinned replica ' +
+      'instead of widening to another live replica in the same attempt',
+  );
+});
+
+test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
+  'same replica address across calls', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(tableName, key) {
+      if (tableName === TABLES.PARTITIONS) {
+        return this.partitions.find((row) => row.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      return {
+        acknowledged: true,
+        success: true,
+        changes: 1,
+        rows: [],
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const firstResult = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['creating', 'op-1'],
+    false,
+    false,
+    false,
+    {sessionId: 'tx-1'},
+  );
+  systemCache.partitions[0].leader_node_id = 'follower-node';
+  systemCache.services[0].raft_role = 'follower';
+  systemCache.services[1].raft_role = 'leader';
+  const secondResult = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['sending', 'op-1'],
+    false,
+    false,
+    false,
+    {sessionId: 'tx-1'},
+  );
+
+  t.equal(firstResult.success, true);
+  t.equal(secondResult.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, leaderAddress],
+    'session-bound writes should stay pinned to the replica that accepted the earlier step',
+  );
+});
+
+test('QueryExecutor - executeOnPartition clears session-bound replica ' +
+  'affinity after successful transactional teardown', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(tableName, key) {
+      if (tableName === TABLES.PARTITIONS) {
+        return this.partitions.find((row) => row.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      return {
+        acknowledged: true,
+        success: true,
+        changes: 1,
+        rows: [],
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['creating', 'op-1'],
+    false,
+    false,
+    false,
+    {sessionId: 'tx-1'},
+  );
+  systemCache.partitions[0].leader_node_id = 'follower-node';
+  systemCache.services[0].raft_role = 'follower';
+  systemCache.services[1].raft_role = 'leader';
+  await executor.executeOnPartition(
+    partitionId,
+    '',
+    [],
+    false,
+    false,
+    false,
+    {
+      sessionId: 'tx-1',
+      clearSessionPartitionAffinityOnSuccess: true,
+      buildRequest: () => ({type: 'TRANSACTION', operation: 'COMMIT'}),
+    },
+  );
+  const thirdResult = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['completed', 'op-1'],
+    false,
+    false,
+    false,
+    {sessionId: 'tx-1'},
+  );
+
+  t.equal(thirdResult.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, leaderAddress, fallbackAddress],
+    'successful teardown should release session affinity so later work can follow fresh routing',
+  );
 });
 
 test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +

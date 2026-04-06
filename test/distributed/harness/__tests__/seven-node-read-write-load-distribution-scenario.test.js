@@ -144,8 +144,8 @@ describe('seven-node-read-write-load-distribution scenario', () => {
       assertConsistency: async () => {
         calls.push('assertConsistency');
       },
-      waitForConsistencyConvergence: async () => {
-        calls.push('waitForConsistencyConvergence');
+      waitForConsistencyConvergence: async (options) => {
+        calls.push(['waitForConsistencyConvergence', options]);
       },
     };
 
@@ -166,7 +166,7 @@ describe('seven-node-read-write-load-distribution scenario', () => {
     assert.equal(calls[2][0], 'startLoad');
     assert.deepEqual(
       calls[2][1].nodes.map((node) => node.id),
-      ['seed-1', 'node-2', 'node-3'],
+      ['node-2', 'node-3', 'seed-1'],
       'scenario should bootstrap load on the current table replica quorum',
     );
     assert.equal(typeof calls[2][1].nodeResolver, 'function');
@@ -195,6 +195,13 @@ describe('seven-node-read-write-load-distribution scenario', () => {
       'benchmark_events_mixed',
       'scenario should use benchmark workload profile',
     );
-    assert.deepEqual(calls[3], 'waitForConsistencyConvergence');
+    assert.deepEqual(calls[3], [
+      'waitForConsistencyConvergence',
+      {
+        timeoutMs: 60000,
+        toleratePartitionSkew: true,
+        maxPartitionSkew: 2,
+      },
+    ]);
   });
 });

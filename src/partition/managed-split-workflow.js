@@ -14,6 +14,7 @@ import {
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -41,6 +42,8 @@ const DEFAULT_QUORUM_REPLICA_COUNT = 1;
 const CRITICAL_SPLIT_MINIMUM_ROUTABLE_SOURCE_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
+const SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 
 /**
  * First-class managed split workflow owner.
@@ -703,6 +706,8 @@ class ManagedSplitWorkflow {
           ] || snapshotCandidateTargetNodeIds,
         timeoutBudget: executionTimeoutBudget,
         topologySnapshot: transitionTopologySnapshot,
+        routingReadinessDimension:
+          SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
       await this.provisionInitialTablePartition({
         tableId,
@@ -718,6 +723,8 @@ class ManagedSplitWorkflow {
           ] || snapshotCandidateTargetNodeIds,
         timeoutBudget: executionTimeoutBudget,
         topologySnapshot: transitionTopologySnapshot,
+        routingReadinessDimension:
+          SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION,
       });
 
       await this.workflowCoordinator.updateWorkflow(workflowId, {

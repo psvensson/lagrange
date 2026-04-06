@@ -46,6 +46,20 @@ const TRAFFIC_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODE_ENDPOINTS,
 ]);
 
+function isLiveServiceLeader(service) {
+  if (!service) {
+    return false;
+  }
+
+  const role = typeof service.getRole === TYPEOF.FUNCTION ?
+    service.getRole() :
+    service.role;
+  return service.isLeader === true ||
+    role === RAFT_ROLE.LEADER ||
+    (typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
+      service.isLeaderReplica());
+}
+
 class ServiceLeaderReadinessOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -113,10 +127,10 @@ class ServiceLeaderReadinessOwner {
     }
 
     const configuredTimeoutMs = bootstrapService?.config?.leadershipWaitTimeoutMs;
-    const timeoutMs = Math.min(
-      configuredTimeoutMs || BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-    );
+    const timeoutMs = Number.isFinite(configuredTimeoutMs) &&
+      configuredTimeoutMs > NUM.ZERO ?
+      Math.floor(configuredTimeoutMs) :
+      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS;
     let delay = bootstrapService?.config?.leadershipWaitInitialDelayMs ||
       BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
     const maxDelay = bootstrapService?.config?.leadershipWaitMaxDelayMs ||
@@ -238,17 +252,7 @@ class ServiceLeaderReadinessOwner {
   }
 
   isLiveServiceLeader(service) {
-    if (!service) {
-      return false;
-    }
-
-    const role = typeof service.getRole === TYPEOF.FUNCTION ?
-      service.getRole() :
-      service.role;
-    return service.isLeader === true ||
-      role === RAFT_ROLE.LEADER ||
-      (typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
-        service.isLeaderReplica());
+    return isLiveServiceLeader(service);
   }
 
   normalizeLeaderStatusForRequiredTables(
@@ -445,4 +449,5 @@ export {
   BOOTSTRAP_REQUIRED_LEADER_TABLES,
   ServiceLeaderReadinessOwner,
   TRAFFIC_REQUIRED_LEADER_TABLES,
+  isLiveServiceLeader,
 };

@@ -203,11 +203,67 @@ class ReplicaStateMachine extends EventEmitter {
    * @return {boolean|Promise<boolean>} True if transition succeeded.
    */
   transition(replicaId, newState, context = {}) {
+    return this._applyTransition(replicaId, newState, context, {
+      persist: true,
+      validate: true,
+    });
+  }
+
+  /**
+   * Finalize one replica removal after the authoritative services row has
+   * already been deleted. This updates local lifecycle tracking without
+   * attempting a second CDC write against a row that no longer exists.
+   * @param {string} replicaId - Replica identifier.
+   * @param {Object} context - Additional context.
+   * @return {boolean} True when local tracking was finalized.
+   */
+  completeDurableRemoval(replicaId, context = {}) {
+    const existingState = this.replicas.get(replicaId);
+    if (!existingState) {
+      return true;
+    }
+
+    if (existingState.state === ReplicaState.REMOVED) {
+      this.removeFromTracking(replicaId);
+      return true;
+    }
+
+    const transitionResult = this._applyTransition(
+      replicaId,
+      ReplicaState.REMOVED,
+      context,
+      {
+        persist: false,
+        validate: false,
+      },
+    );
+    if (transitionResult !== true) {
+      return false;
+    }
+    this.removeFromTracking(replicaId);
+    return true;
+  }
+
+  /**
+   * Apply one replica-state transition with optional validation and
+   * persistence.
+   * @param {string} replicaId - Replica identifier.
+   * @param {string} newState - Target state.
+   * @param {Object} context - Additional context.
+   * @param {Object} options - Transition options.
+   * @param {boolean} options.persist - Persist through CDC.
+   * @param {boolean} options.validate - Enforce transition matrix.
+   * @return {boolean|Promise<boolean>} True if transition succeeded.
+   * @private
+   */
+  _applyTransition(replicaId, newState, context = {}, options = {}) {
     const existingState = this.replicas.get(replicaId);
     const currentState = existingState ? existingState.state : null;
+    const validate = options.validate !== false;
+    const persist = options.persist !== false;
 
     // Validate transition
-    if (!this.isValidTransition(currentState, newState)) {
+    if (validate && !this.isValidTransition(currentState, newState)) {
       this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.INVALID_TRANSITION, {
         replicaId,
         currentState,
@@ -304,6 +360,11 @@ class ReplicaStateMachine extends EventEmitter {
       errorMessage: replicaState.errorMessage,
       timeInPreviousState,
     });
+
+    if (!persist) {
+      this._armTimeoutClock(replicaId);
+      return true;
+    }
 
     const persistenceResult = previousState === null ?
       this._createReplicaRowInCdc(replicaState) :

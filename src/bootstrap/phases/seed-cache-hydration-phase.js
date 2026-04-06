@@ -53,6 +53,12 @@ import {
 import {
   SeedRuntimeBridgeOwner,
 } from '../owners/seed-runtime-bridge-owner.js';
+import {
+  isLiveServiceLeader,
+} from '../owners/service-leader-readiness-owner.js';
+import {
+  isSystemTableWriteReady,
+} from '../../cache/leader-readiness-gate.js';
 
 const LOG_HYDRATION_STEP_COMPLETE = 'Cache hydration step complete';
 const HYDRATION_STEP = Object.freeze({
@@ -702,6 +708,8 @@ class SeedCacheHydrationPhase {
       evaluate: () => createSystemLeaderReadinessSnapshot({
         systemTableCache: cache,
         requiredTables: SEED_REQUIRED_WRITE_TABLES,
+        isTableWriteSatisfied: (systemTableCache, tableName) =>
+          this.isSeedLocalSystemTableWriteReady(systemTableCache, tableName),
       }),
       createTimeoutError: (readiness, context) => {
         const missing = readiness?.missingLeaders || {};
@@ -726,6 +734,28 @@ class SeedCacheHydrationPhase {
         return error;
       },
     });
+  }
+
+  isSeedLocalSystemTableWriteReady(systemTableCache, tableName) {
+    if (isSystemTableWriteReady(systemTableCache, tableName)) {
+      return true;
+    }
+
+    const replicaIds = INITIAL_REPLICA_IDS[tableName];
+    if (!Array.isArray(replicaIds) || replicaIds.length === NUM.ZERO) {
+      return false;
+    }
+
+    const partitionServices = this.delegates.getPartitionServices?.();
+    if (!partitionServices || typeof partitionServices.get !== 'function') {
+      return false;
+    }
+
+    // Seed bootstrap can write directly through the local leader partition
+    // before its addressed service row is published into the cache.
+    return replicaIds.some((replicaId) =>
+      isLiveServiceLeader(partitionServices.get(replicaId)),
+    );
   }
 
   /**

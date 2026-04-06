@@ -116,3 +116,103 @@ test('SeedRegistrationPhase projects local meta service endpoints into cache dur
       entry.row?.node_id === 'node-a',
     ), 'bootstrap registration should project the local postgres-wire endpoint');
   });
+
+test('SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration',
+  async (t) => {
+    const waitedForPartitionLeadership = [];
+    const events = [];
+    const writer = {
+      enable() {
+        events.push('enable');
+      },
+    };
+    const phase = new SeedRegistrationPhase({
+      delegates: {
+        getLogger: () => ({
+          debug() {},
+          error() {},
+        }),
+        waitForPartitionLeadership: async (options) => {
+          waitedForPartitionLeadership.push(options);
+        },
+        getSystemTableWriter: () => writer,
+        getNodeId: () => 'node-a',
+        getPartitionServices: () => new Map(),
+        getServicesCreated: () => 0,
+      },
+    });
+
+    phase.registerMessageGroup = async () => {
+      events.push('registerMessageGroup');
+    };
+    phase.registerServices = async () => {
+      events.push('registerServices');
+    };
+    phase.registerMetaServiceDefinitions = async () => {
+      events.push('registerMetaServiceDefinitions');
+    };
+    phase.registerSystemTables = async () => {
+      events.push('registerSystemTables');
+    };
+    phase.updatePartitionSizes = async () => {
+      events.push('updatePartitionSizes');
+    };
+    phase.seedDynamicConfiguration = async () => {
+      events.push('seedDynamicConfiguration');
+    };
+    phase.persistCurrentEpochIfMissing = async () => {
+      events.push('persistCurrentEpochIfMissing');
+    };
+
+    await phase.phaseRegistration();
+
+    t.same(waitedForPartitionLeadership, [{
+      partitionIds: [
+        'partitions-p1',
+        'services-p1',
+        'tables-p1',
+        'message_groups-p1',
+      ],
+    }], 'bootstrap-direct registration should wait only for cache-hydration leader partitions');
+    t.same(events, [
+      'enable',
+      'registerMessageGroup',
+      'registerServices',
+      'registerMetaServiceDefinitions',
+      'registerSystemTables',
+      'updatePartitionSizes',
+      'seedDynamicConfiguration',
+      'persistCurrentEpochIfMissing',
+    ], 'bootstrap-direct writer should be enabled before registration steps run');
+  });
+
+test('SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected',
+  async (t) => {
+    const writer = createWriterRecorder();
+    const phase = new SeedRegistrationPhase({
+      delegates: {
+        getSystemTableWriter: () => writer,
+        getEpochManager: () => ({
+          getCurrentEpoch() {
+            return {
+              toJSON() {
+                return '{"epoch":1}';
+              },
+            };
+          },
+        }),
+        getNodeId: () => 'node-a',
+        getPartitionServices: () => new Map(),
+      },
+    });
+
+    await phase.persistCurrentEpochIfMissing();
+
+    t.equal(writer.calls.length, 1,
+      'bootstrap epoch should be written directly when no config leader exists yet');
+    t.equal(writer.calls[0]?.type, 'upsert', 'bootstrap epoch should use direct upsert');
+    t.equal(writer.calls[0]?.tableName, 'config',
+      'bootstrap epoch should be written into the config table');
+    t.equal(writer.calls[0]?.row?.config_key, 'current_epoch',
+      'bootstrap epoch should write the authoritative epoch config row');
+  });

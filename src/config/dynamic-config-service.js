@@ -114,9 +114,17 @@ class DynamicConfigService extends EventEmitter {
    * Only seeds keys that don't already exist in the config table.
    * Requirements: 30.2, 30.9
    * @param {string} updatedBy - Identity of who is seeding (e.g., 'system').
+   * @param {Object} [options={}] - Seeding options.
+   * @param {boolean} [options.skipExistingCheck=false] - Skip per-key existence
+   *   reads when a caller already proved the config table is empty.
+   * @param {boolean} [options.useDirectCdcMutations=false] - Write directly
+   *   through the CDC integration service instead of the control-plane gateway.
    * @return {Promise<Object>} Seeding result.
    */
-  async seedConfiguration(updatedBy = CONFIG_SEED_SOURCE.SYSTEM) {
+  async seedConfiguration(
+    updatedBy = CONFIG_SEED_SOURCE.SYSTEM,
+    options = {},
+  ) {
     if (!this.cdcIntegrationService) {
       throw new Error(CONFIG_ERROR_MSG.CDC_UNAVAILABLE);
     }
@@ -124,13 +132,16 @@ class DynamicConfigService extends EventEmitter {
     const seeded = [];
     const skipped = [];
     const now = Date.now();
+    const skipExistingCheck = options?.skipExistingCheck === true;
+    const useDirectCdcMutations = options?.useDirectCdcMutations === true;
 
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
-      // Check if key already exists
-      const existing = await this.getConfigFromTable(key);
-      if (existing) {
-        skipped.push(key);
-        continue;
+      if (!skipExistingCheck) {
+        const existing = await this.getConfigFromTable(key);
+        if (existing) {
+          skipped.push(key);
+          continue;
+        }
       }
 
       // Check for environment variable override
@@ -141,29 +152,40 @@ class DynamicConfigService extends EventEmitter {
         definition.defaultValue;
 
       // Insert into config table
-      await this.getControlPlaneSystemTableGateway().submitMutation({
-        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-        tableName: SYSTEM_TABLE_NAME.CONFIG,
-        row: {
-          [CONFIG_TABLE_COLUMN.KEY]: key,
-          [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
-            value, definition.type,
-          ),
-          [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
-          [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]:
-            definition.requiresRestart ? NUM.ONE : NUM.ZERO,
-          [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
-          [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
-            definition.defaultValue, definition.type,
-          ),
-          [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
-          [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
-          [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
-        },
-      }, {
+      const row = {
+        [CONFIG_TABLE_COLUMN.KEY]: key,
+        [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
+          value, definition.type,
+        ),
+        [CONFIG_TABLE_COLUMN.VALUE_TYPE]: definition.type,
+        [CONFIG_TABLE_COLUMN.REQUIRES_RESTART]:
+          definition.requiresRestart ? NUM.ONE : NUM.ZERO,
+        [CONFIG_TABLE_COLUMN.DESCRIPTION]: definition.description,
+        [CONFIG_TABLE_COLUMN.DEFAULT_VALUE]: this.serializeValue(
+          definition.defaultValue, definition.type,
+        ),
+        [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
+        [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
+        [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
+      };
+      const writeOptions = {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
         deliveryPriority: 'critical',
-      });
+      };
+
+      if (useDirectCdcMutations) {
+        await this.cdcIntegrationService.insertSystemTableRow(
+          SYSTEM_TABLE_NAME.CONFIG,
+          row,
+          writeOptions,
+        );
+      } else {
+        await this.getControlPlaneSystemTableGateway().submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+          tableName: SYSTEM_TABLE_NAME.CONFIG,
+          row,
+        }, writeOptions);
+      }
 
       seeded.push(key);
     }

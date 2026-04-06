@@ -39,6 +39,12 @@ const DOMAIN_TAG_KEYWORDS = Object.freeze({
   governance: ['roadmap', 'edition', 'scope', 'agpl'],
 });
 
+const NON_RULE_SECTION_HEADINGS = new Set([
+  'document role',
+  'document authority map',
+  'audit procedure',
+]);
+
 function printUsage() {
   console.log(
     'Usage: node scripts/generate-steering-llm-pack.js ' +
@@ -68,6 +74,18 @@ function isTable(line) {
 
 function normalizeWhitespace(value) {
   return String(value || '').replace(/\s+/gu, ' ').trim();
+}
+
+function shouldIgnoreSection(sectionPath = '') {
+  return String(sectionPath || '')
+    .split('>')
+    .map((part) => normalizeWhitespace(part).toLowerCase())
+    .some((part) => NON_RULE_SECTION_HEADINGS.has(part));
+}
+
+function isPathOnlyText(text = '') {
+  const normalized = normalizeWhitespace(text);
+  return /^[./\p{L}\p{N}_*\- ]+\.(?:md|json)$/u.test(normalized);
 }
 
 function stripInlineMarkdown(value) {
@@ -210,7 +228,13 @@ function pushCandidate(container, options = {}) {
   if (!text) {
     return;
   }
+  if (shouldIgnoreSection(options.section)) {
+    return;
+  }
   if (text.length < 16) {
+    return;
+  }
+  if (isPathOnlyText(text)) {
     return;
   }
 

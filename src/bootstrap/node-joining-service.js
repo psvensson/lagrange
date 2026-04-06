@@ -213,9 +213,11 @@ import {
   STARTUP_JOIN_MODE,
 } from './rejoin-hints-constants.js';
 import {
-  getSchemaByTableName,
-} from './system-table-schemas-constants.js';
-import {getPartitionDbPath} from '../storage/data-directory-manager.js';
+  buildDurableRejoinPartitionRestorePlans,
+} from './shared/durable-rejoin-partition-restore-planner.js';
+import {
+  formatReplicatedServiceAddress,
+} from '../service/replicated-service-topology.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const JoiningPhase = JOINING_PHASE;
@@ -231,51 +233,6 @@ import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
 import {canonicalizeSystemTableRow} from '../control-plane/system-row-normalizers.js';
-
-const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
-  ReplicaStatus.ACTIVE,
-  SERVICE_STATUS.ACTIVE,
-]);
-
-function normalizeJoinMetadataString(value) {
-  return typeof value === TYPEOF.STRING ? value.trim() : '';
-}
-
-function readJoinCacheRows(systemTableCache, tableName) {
-  if (!systemTableCache) {
-    return [];
-  }
-  if (typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
-    const rows = systemTableCache.getAll(tableName);
-    return Array.isArray(rows) ? rows : [];
-  }
-  if (typeof systemTableCache.filter === TYPEOF.FUNCTION) {
-    const rows = systemTableCache.filter(tableName, () => true);
-    return Array.isArray(rows) ? rows : [];
-  }
-  return [];
-}
-
-function getJoinCacheRow(
-  systemTableCache,
-  tableName,
-  key,
-  predicate = null,
-) {
-  if (key !== null &&
-      key !== undefined &&
-      typeof systemTableCache?.get === TYPEOF.FUNCTION) {
-    const row = systemTableCache.get(tableName, key);
-    if (row) {
-      return row;
-    }
-  }
-  if (typeof predicate !== TYPEOF.FUNCTION) {
-    return null;
-  }
-  return readJoinCacheRows(systemTableCache, tableName)
-    .find(predicate) || null;
-}
 
 
 /**
@@ -2052,6 +2009,7 @@ class NodeJoiningService extends EventEmitter {
         duration: phaseDuration,
         error: error.message,
         stack: error.stack,
+        joinReadiness: error?.joinReadiness || null,
       });
 
       this.emit(JoiningEvent.PHASE_FAILED, {
@@ -2439,9 +2397,11 @@ class NodeJoiningService extends EventEmitter {
 
     const unifiedAddress = typeof partition.getUnifiedAddress === TYPEOF.FUNCTION ?
       partition.getUnifiedAddress() :
-      `${this.nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-      `${options.replicaId}`;
+      formatReplicatedServiceAddress(
+        SERVICE_TYPE.PARTITION,
+        this.nodeId,
+        options.replicaId,
+      );
     this.messageRouter?.unregister?.(unifiedAddress);
     this.partitionServices.delete(options.replicaId);
     this.replicaHandler?.localServices?.delete?.(options.replicaId);
@@ -2789,6 +2749,54 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Resolve ordered target candidates for one NODE_STATE_UPDATE publication.
+   * READY heartbeat publications prefer remote authoritative ingress first so
+   * a newly self-hosted local ingress replica does not trap liveness updates
+   * behind its own still-converging metadata path. Earlier lifecycle updates
+   * keep the existing local-first behavior, and READY heartbeats still retain
+   * local fallback when no remote ingress is reachable.
+   * @param {Object} [options]
+   * @param {string} [options.state]
+   * @param {number} [options.heartbeatAt]
+   * @return {Array<string>}
+   * @private
+   */
+  resolveNodeStateUpdateTargetCandidates(options = {}) {
+    const sharedOptions = {
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+      requiredTables: getControlPlaneMessageRequiredTables(
+        ControlPlaneMessageType.NODE_STATE_UPDATE,
+      ),
+    };
+    const isReadyHeartbeatPublication =
+      options.state === STATE.READY &&
+      Number.isFinite(options.heartbeatAt);
+    if (!isReadyHeartbeatPublication) {
+      return this.resolveControlPlaneTargetAddressCandidates({
+        ...sharedOptions,
+        allowSelfTarget: true,
+      });
+    }
+
+    const remoteCandidates = this.resolveControlPlaneTargetAddressCandidates({
+      ...sharedOptions,
+      allowSelfTarget: false,
+    });
+    const allCandidates = this.resolveControlPlaneTargetAddressCandidates({
+      ...sharedOptions,
+      allowSelfTarget: true,
+    });
+    const mergedCandidates = [...remoteCandidates];
+    for (const address of allCandidates) {
+      if (!mergedCandidates.includes(address)) {
+        mergedCandidates.push(address);
+      }
+    }
+    return mergedCandidates;
+  }
+
+  /**
    * Determine whether a control-plane publication failure should be retried
    * against a different target address.
    * @param {?Error} error
@@ -2829,15 +2837,11 @@ class NodeJoiningService extends EventEmitter {
 
     const targetCandidates =
       // NODE_STATE_UPDATE is idempotent, but it still produces canonical
-      // metadata writes. Only target replicas that are already ready to carry
-      // that write set through the shared owner path.
-      this.resolveControlPlaneTargetAddressCandidates({
-        allowBootstrapHints: true,
-        allowSelfTarget: true,
-        localTargetMode: 'any_replica',
-        requiredTables: getControlPlaneMessageRequiredTables(
-          ControlPlaneMessageType.NODE_STATE_UPDATE,
-        ),
+      // metadata writes. Prefer ingress that is already authoritative for
+      // steady READY heartbeat publications, while retaining local fallback.
+      this.resolveNodeStateUpdateTargetCandidates({
+        state,
+        heartbeatAt: options.heartbeatAt,
       });
     if (targetCandidates.length === NUM.ZERO) {
       this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_TARGET_MISSING, {
@@ -4197,9 +4201,11 @@ class NodeJoiningService extends EventEmitter {
     }
 
     const restorePlans =
-      this.buildDurableRejoinPartitionRestorePlans(
+      buildDurableRejoinPartitionRestorePlans({
         systemTableCache,
-      );
+        nodeId: this.nodeId,
+        dataDir: this.dataDir,
+      });
     if (restorePlans.length === NUM.ZERO) {
       return [];
     }
@@ -4237,237 +4243,6 @@ class NodeJoiningService extends EventEmitter {
     );
 
     return restorePlans;
-  }
-
-  /**
-   * Build partition restore plans from canonical cache rows for durable rejoin.
-   * @param {Object} systemTableCache
-   * @return {Object[]}
-   * @private
-   */
-  buildDurableRejoinPartitionRestorePlans(systemTableCache) {
-    const serviceRows = readJoinCacheRows(
-      systemTableCache,
-      TABLES.SERVICES,
-    );
-    const restorePlans = [];
-    const seenReplicaIds = new Set();
-
-    for (const serviceRow of serviceRows) {
-      const serviceType = normalizeJoinMetadataString(
-        serviceRow?.service_type,
-      ).toLowerCase();
-      const nodeId = normalizeJoinMetadataString(
-        serviceRow?.node_id,
-      );
-      const replicaId = normalizeJoinMetadataString(
-        serviceRow?.replica_id || serviceRow?.service_id,
-      );
-      const partitionId = normalizeJoinMetadataString(
-        serviceRow?.partition_id,
-      );
-      const status = normalizeJoinMetadataString(
-        serviceRow?.status,
-      ).toLowerCase();
-
-      if (serviceType !== SERVICE_TYPE.PARTITION ||
-          nodeId !== this.nodeId ||
-          replicaId.length === NUM.ZERO ||
-          partitionId.length === NUM.ZERO ||
-          !RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES.has(status) ||
-          seenReplicaIds.has(replicaId)) {
-        continue;
-      }
-
-      seenReplicaIds.add(replicaId);
-      restorePlans.push(
-        this.buildDurableRejoinPartitionRestoreOptions(
-          systemTableCache,
-          serviceRows,
-          serviceRow,
-          partitionId,
-          replicaId,
-        ),
-      );
-    }
-
-    return restorePlans;
-  }
-
-  /**
-   * Resolve one durable rejoin partition restore plan from cache rows.
-   * @param {Object} systemTableCache
-   * @param {Object[]} serviceRows
-   * @param {Object} serviceRow
-   * @param {string} partitionId
-   * @param {string} replicaId
-   * @return {Object}
-   * @private
-   */
-  buildDurableRejoinPartitionRestoreOptions(
-    systemTableCache,
-    serviceRows,
-    serviceRow,
-    partitionId,
-    replicaId,
-  ) {
-    const partitionRow = getJoinCacheRow(
-      systemTableCache,
-      TABLES.PARTITIONS,
-      partitionId,
-      (row) => normalizeJoinMetadataString(
-        row?.partition_id,
-      ) === partitionId,
-    );
-    assertCritical(
-      partitionRow,
-      `Missing partition metadata for durable rejoin replica ${replicaId}`,
-    );
-
-    const tableId = normalizeJoinMetadataString(
-      partitionRow.table_id || partitionRow.table_name,
-    );
-    assertCritical(
-      tableId,
-      `Missing table metadata reference for durable rejoin partition ${partitionId}`,
-    );
-
-    const tableName = normalizeJoinMetadataString(
-      partitionRow.table_name || tableId,
-    );
-    const tableRow = getJoinCacheRow(
-      systemTableCache,
-      TABLES.TABLES,
-      tableId,
-      (row) => normalizeJoinMetadataString(
-        row?.table_id,
-      ) === tableId ||
-        normalizeJoinMetadataString(
-          row?.table_name,
-        ) === tableName,
-    );
-    let schema = null;
-    if (tableRow?.schema_definition) {
-      schema = typeof tableRow.schema_definition === TYPEOF.STRING ?
-        JSON.parse(tableRow.schema_definition) :
-        tableRow.schema_definition;
-    } else {
-      schema = getSchemaByTableName(tableName);
-    }
-    assertCritical(
-      schema,
-      `Missing schema definition for durable rejoin partition ${partitionId}`,
-    );
-
-    const replicaIds = [];
-    const peerAddresses = [];
-    const seenReplicaIds = new Set();
-    const seenPeerAddresses = new Set();
-    const partitionServiceRows = serviceRows.filter((row) => {
-      return normalizeJoinMetadataString(
-        row?.partition_id,
-      ) === partitionId &&
-        normalizeJoinMetadataString(
-          row?.service_type,
-        ).toLowerCase() === SERVICE_TYPE.PARTITION &&
-        RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES.has(
-          normalizeJoinMetadataString(
-            row?.status,
-          ).toLowerCase(),
-        );
-    });
-
-    for (const partitionServiceRow of partitionServiceRows) {
-      const serviceReplicaId = normalizeJoinMetadataString(
-        partitionServiceRow?.replica_id ||
-          partitionServiceRow?.service_id,
-      );
-      if (serviceReplicaId.length > NUM.ZERO &&
-          !seenReplicaIds.has(serviceReplicaId)) {
-        seenReplicaIds.add(serviceReplicaId);
-        replicaIds.push(serviceReplicaId);
-      }
-
-      const serviceNodeId = normalizeJoinMetadataString(
-        partitionServiceRow?.node_id,
-      );
-      const peerAddress = normalizeJoinMetadataString(
-        partitionServiceRow?.address,
-      ) ||
-        `${serviceNodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-        `${serviceReplicaId}`;
-      if (serviceNodeId.length > NUM.ZERO &&
-          serviceReplicaId.length > NUM.ZERO &&
-          peerAddress.length > NUM.ZERO &&
-          !seenPeerAddresses.has(peerAddress)) {
-        seenPeerAddresses.add(peerAddress);
-        peerAddresses.push(peerAddress);
-      }
-    }
-
-    if (!seenReplicaIds.has(replicaId)) {
-      replicaIds.push(replicaId);
-    }
-
-    const selfAddress = normalizeJoinMetadataString(
-      serviceRow?.address,
-    ) ||
-      `${this.nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-      `${replicaId}`;
-    if (!seenPeerAddresses.has(selfAddress)) {
-      peerAddresses.push(selfAddress);
-    }
-
-    const leaderNodeId = normalizeJoinMetadataString(
-      partitionRow?.leader_node_id,
-    );
-    const leaderService = leaderNodeId.length > NUM.ZERO ?
-      partitionServiceRows.find((row) =>
-        normalizeJoinMetadataString(
-          row?.node_id,
-        ) === leaderNodeId,
-      ) :
-      null;
-    const leaderReplicaId = normalizeJoinMetadataString(
-      leaderService?.replica_id ||
-        leaderService?.service_id,
-    );
-    const leaderAddress = leaderService ?
-      (
-        normalizeJoinMetadataString(leaderService?.address) ||
-        `${leaderNodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-        `${leaderReplicaId}`
-      ) :
-      null;
-
-    return {
-      serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
-      partitionId,
-      tableId,
-      tableName,
-      schema,
-      keyRange: {
-        start: partitionRow.partition_key_start || null,
-        end: partitionRow.partition_key_end || null,
-      },
-      replicaId,
-      replicaIds,
-      peerAddresses,
-      nodeId: this.nodeId,
-      dbPath: getPartitionDbPath(
-        this.dataDir,
-        partitionId,
-        replicaId,
-      ),
-      leaderAddress,
-      isJoiningExistingGroup: false,
-      deferElection: true,
-      suppressLifecycleLogs: true,
-      restoringExistingReplica: true,
-    };
   }
 
   /**
@@ -4695,9 +4470,11 @@ class NodeJoiningService extends EventEmitter {
         serviceType: SERVICE_TYPE.PARTITION,
         serviceAddress: typeof partition?.getUnifiedAddress === TYPEOF.FUNCTION ?
           partition.getUnifiedAddress() :
-          `${this.nodeId}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`,
+          formatReplicatedServiceAddress(
+            SERVICE_TYPE.PARTITION,
+            this.nodeId,
+            replicaId,
+          ),
       });
   }
 

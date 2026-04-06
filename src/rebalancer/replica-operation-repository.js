@@ -20,6 +20,9 @@ import {
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
+  isPriorityControlPlanePartition,
+} from '../bootstrap/system-partition-classification.js';
+import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
@@ -34,6 +37,7 @@ import {
 import {SERVICE_TYPE} from '../constants/service.js';
 import {
   buildControlPlaneQueryOptions,
+  getRemainingBudgetMs,
 } from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_READ_STRATEGY,
@@ -45,6 +49,7 @@ import {
   TERMINAL_STATUSES,
   OperationType,
   ReplicaStatus,
+  getOperationMetadataObject,
   getOperationMetadataString,
   getOperationMetadataStringArray,
   isValidWorkflowStep,
@@ -85,7 +90,7 @@ const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID:
     'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
-    WHERE source_node_id = ?
+    WHERE (source_node_id = ? OR target_node_id = ?)
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
     AND (
       workflow_step IN (?, ?, ?, ?, ?)
@@ -129,7 +134,7 @@ const SQL = Object.freeze({
 });
 
 const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
-const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIFTEEN;
 const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
 const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS =
   TIME_MS.SECOND * NUM.TEN;
@@ -143,6 +148,8 @@ const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS =
   TIME_MS.SECOND * NUM.FIVE;
 const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS =
   TIME_MS.SECOND / NUM.FIVE;
+const REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS = TIME_MS.SECOND;
+const REPLICA_OPERATION_READ_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.TEN;
 
 function shouldDeferReplicaOperationOwnerRead(participation) {
   return participation?.reasonCode ===
@@ -217,6 +224,11 @@ const REPLICA_OPERATION_PERSIST_CONFIRMATION_READ_QUERY_OPTIONS =
     allowOwnerRpcFallback: true,
     allowSqlFallback: false,
   });
+const REPLICA_STATUS_READ_QUERY_OPTIONS = Object.freeze({
+  ...CONTROL_PLANE_QUERY_OPTIONS,
+  preferOwnerRpcRead: true,
+  allowOwnerRpcFallback: true,
+});
 const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
   QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
 ]);
@@ -313,6 +325,32 @@ class ReplicaOperationRepository {
     return INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS;
   }
 
+  /**
+   * Bound authoritative operation-id read retries to a short window.
+   * @param {Object} result
+   * @return {number}
+   * @private
+   */
+  getRetryableReplicaOperationReadRetryDelayMs(result) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(result);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.max(
+        REPLICA_OPERATION_READ_RETRY_DELAY_MS,
+        Math.min(REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS, retryAfterMs),
+      );
+    }
+    return REPLICA_OPERATION_READ_RETRY_DELAY_MS;
+  }
+
+  /**
+   * Wait before retrying one authoritative replica_operations read.
+   * @param {number} delayMs
+   * @return {Promise<void>}
+   */
+  async waitForReplicaOperationReadRetry(delayMs) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
   // ── Row <-> Operation Translation ──────────────────────────────
 
   /**
@@ -371,6 +409,22 @@ class ReplicaOperationRepository {
     if (peerAddresses.length > NUM.ZERO) {
       operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
     }
+    const bootstrapTableMetadata = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_TABLE_METADATA,
+    );
+    if (bootstrapTableMetadata) {
+      operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+        bootstrapTableMetadata;
+    }
+    const bootstrapPartitionMetadata = getOperationMetadataObject(
+      stepsHistory,
+      OPERATION_METADATA_KEY.BOOTSTRAP_PARTITION_METADATA,
+    );
+    if (bootstrapPartitionMetadata) {
+      operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+        bootstrapPartitionMetadata;
+    }
     return operation;
   }
 
@@ -409,18 +463,33 @@ class ReplicaOperationRepository {
    * @return {string|null}
    */
   resolveOperationOwnerNodeId(operation) {
+    const workflowStep = String(
+      operation?.workflowStep ||
+        operation?.workflow_step || '',
+    );
+    const partitionId = String(
+      operation?.partitionId ||
+        operation?.partition_id || '',
+    );
     const sourceNodeId = String(
       operation?.sourceNodeId ||
         operation?.source_node_id || '',
     );
-    if (sourceNodeId.length > NUM.ZERO) {
-      return sourceNodeId;
-    }
-
     const targetNodeId = String(
       operation?.targetNodeId ||
         operation?.target_node_id || '',
     );
+    if (operation?.type === OperationType.REPLACE &&
+        isPriorityControlPlanePartition({partitionId}) &&
+        targetNodeId.length > NUM.ZERO &&
+        (workflowStep === WORKFLOW_STEP.CREATING ||
+          workflowStep === WORKFLOW_STEP.SYNCING ||
+          workflowStep === WORKFLOW_STEP.STOPPING)) {
+      return targetNodeId;
+    }
+    if (sourceNodeId.length > NUM.ZERO) {
+      return sourceNodeId;
+    }
     if (targetNodeId.length > NUM.ZERO) {
       return targetNodeId;
     }
@@ -661,6 +730,11 @@ class ReplicaOperationRepository {
     if (participationFailure) {
       return participationFailure;
     }
+    const retryOnRetryableFailure = Boolean(
+      readOptions &&
+      typeof readOptions === 'object' &&
+      readOptions.retryOnRetryableFailure === true,
+    );
     const queryOptions = readOptions &&
       typeof readOptions === 'object' ?
       {
@@ -668,13 +742,36 @@ class ReplicaOperationRepository {
         ...readOptions,
       } :
       REPLICA_OPERATION_READ_QUERY_OPTIONS;
-    return readAuthoritativeControlPlaneRows(
+    delete queryOptions.retryOnRetryableFailure;
+    const executeRead = async () => readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       sql,
       params,
       queryOptions,
     );
+    if (!retryOnRetryableFailure) {
+      return executeRead();
+    }
+
+    const deadlineAtMs = Date.now() + REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS;
+    while (true) {
+      const result = await executeRead();
+      if (result?.success !== false ||
+          !isRetryableControlPlaneError(result)) {
+        return result;
+      }
+      const remainingMs = deadlineAtMs - Date.now();
+      if (remainingMs <= NUM.ZERO) {
+        return result;
+      }
+      await this.waitForReplicaOperationReadRetry(
+        Math.min(
+          this.getRetryableReplicaOperationReadRetryDelayMs(result),
+          remainingMs,
+        ),
+      );
+    }
   }
 
   /**
@@ -773,7 +870,10 @@ class ReplicaOperationRepository {
     const result = await this.executeReplicaOperationsRead(
       SQL.SELECT_OPERATION_BY_ID,
       [operationId],
-      readQueryOptions,
+      {
+        ...readQueryOptions,
+        retryOnRetryableFailure: true,
+      },
     );
 
     if (!result.success || !Array.isArray(result.rows) ||
@@ -800,10 +900,17 @@ class ReplicaOperationRepository {
       options.skipSqlFallbackWhenCacheEmpty === true;
     const preferAuthoritativeRead =
       options.preferAuthoritativeRead === true;
+    const authoritativeReadOptions = preferAuthoritativeRead ?
+      {
+        ...REPLICA_OPERATION_STRICT_DEDUPE_READ_QUERY_OPTIONS,
+        retryOnRetryableFailure: true,
+      } :
+      null;
     const mapAndSortOperations = (rows) => rows
       .map((row) => this.rowToOperation(row))
       .filter((operation) =>
         isCoordinatorOwnedOperationType(operation?.type) &&
+        this.isOperationLocallyOwned(operation) &&
         !this.isOperationTerminal(operation),
       )
       .sort((left, right) => {
@@ -822,13 +929,9 @@ class ReplicaOperationRepository {
     if (!preferAuthoritativeRead) {
       const cachedRows =
         this.filterReplicaOperationRowsFromCache((row) => {
-          if (!row || row.source_node_id !== this.nodeId) {
+          if (!row) {
             return false;
           }
-          if (!isCoordinatorOwnedOperationType(row.type)) {
-            return false;
-          }
-
           return row.workflow_step === WORKFLOW_STEP.PENDING ||
             row.workflow_step === WORKFLOW_STEP.SENDING ||
             row.workflow_step === WORKFLOW_STEP.CREATING ||
@@ -856,6 +959,7 @@ class ReplicaOperationRepository {
       SQL.SELECT_INCOMPLETE_OPERATIONS,
       [
         this.nodeId,
+        this.nodeId,
         WORKFLOW_STEP.PENDING,
         WORKFLOW_STEP.SENDING,
         WORKFLOW_STEP.CREATING,
@@ -864,6 +968,7 @@ class ReplicaOperationRepository {
         WORKFLOW_STEP.ACTIVE,
         OperationType.REPLACE,
       ],
+      authoritativeReadOptions,
     );
     const queryDurationMs = Date.now() - queryStartedAtMs;
     const rowCount = Array.isArray(result?.rows) ?
@@ -1267,6 +1372,7 @@ class ReplicaOperationRepository {
    * @param {object} operation
    * @param {object} [options]
    * @param {string} [options.sessionId]
+   * @param {boolean} [options.confirmPersistence]
    * @return {Promise<void>}
    */
   async persistOperationUpdate(operation, options = {}) {
@@ -1298,6 +1404,10 @@ class ReplicaOperationRepository {
         },
       );
       throw new Error(result.error);
+    }
+
+    if (options.confirmPersistence === false) {
+      return;
     }
 
     await this.confirmReplicaOperationPersistence(
@@ -1532,14 +1642,17 @@ class ReplicaOperationRepository {
           .executeQuery(sql, params, queryOptions);
       if (result.success ||
           !this.isRetryableOperationPersistError(
-            result.error,
+            result,
           )) {
         return result;
       }
 
       const elapsedMs = Date.now() - startedAt;
       const remainingMs =
-        OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
+        this.resolveOperationMutationRemainingRetryMs(
+          elapsedMs,
+          options.timeoutBudget,
+        );
       if (remainingMs <= NUM.ZERO) {
         return result;
       }
@@ -1553,10 +1666,21 @@ class ReplicaOperationRepository {
 
   /**
    * Check whether a persist error is retryable.
-   * @param {string} errorMessage
+   * @param {object|string} errorResult
    * @return {boolean}
    */
-  isRetryableOperationPersistError(errorMessage) {
+  isRetryableOperationPersistError(errorResult) {
+    if (isRetryableControlPlaneError(errorResult)) {
+      return true;
+    }
+    const errorMessage =
+      typeof errorResult === 'string' ?
+        errorResult :
+        (typeof errorResult?.error === 'string' ?
+          errorResult.error :
+          (typeof errorResult?.message === 'string' ?
+            errorResult.message :
+            ''));
     return typeof errorMessage === 'string' &&
       (
         errorMessage.includes(
@@ -1586,6 +1710,24 @@ class ReplicaOperationRepository {
   }
 
   /**
+   * Clamp replica_operations retry time to the narrower of the local retry
+   * window and any enclosing timeout budget.
+   * @param {number} elapsedMs
+   * @param {Object|null} timeoutBudget
+   * @return {number}
+   * @private
+   */
+  resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {
+    const localRemainingMs =
+      OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
+    if (!timeoutBudget || typeof timeoutBudget !== 'object') {
+      return localRemainingMs;
+    }
+    const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
+    return Math.min(localRemainingMs, budgetRemainingMs);
+  }
+
+  /**
    * Build query options for an operation mutation.
    * @param {object} [options]
    * @return {object}
@@ -1598,6 +1740,10 @@ class ReplicaOperationRepository {
         null;
     return {
       ...CONTROL_PLANE_QUERY_OPTIONS,
+      timeoutBudget:
+        options.timeoutBudget && typeof options.timeoutBudget === 'object' ?
+          options.timeoutBudget :
+          undefined,
       sessionId:
         this.resolveOperationMutationSessionId(options),
       deliveryPriority: 'critical',
@@ -1836,7 +1982,7 @@ class ReplicaOperationRepository {
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_STATUS,
           [replicaId],
-          CONTROL_PLANE_QUERY_OPTIONS,
+          REPLICA_STATUS_READ_QUERY_OPTIONS,
         );
 
       if (result.success && result.rows &&
@@ -1854,7 +2000,7 @@ class ReplicaOperationRepository {
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_BY_PARTITION_NODE,
           [partitionId, targetNodeId],
-          CONTROL_PLANE_QUERY_OPTIONS,
+          REPLICA_STATUS_READ_QUERY_OPTIONS,
         );
 
       if (result.success && result.rows &&

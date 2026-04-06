@@ -378,6 +378,57 @@ test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
   t.end();
 });
 
+test('CDCIntegrationService - forwards pressure admission metadata to routed ' +
+  'SQL writes', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+
+  await service.upsertSystemTableRow(
+    SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+    {
+      transaction_id: 'tx-forwarded-1',
+      session_id: 'session-1',
+      status: 'ACTIVE',
+      transaction_epoch: 1,
+      timeout_deadline: 1000,
+      created_at: 1,
+      updated_at: 2,
+    },
+    {
+      skipCacheWait: true,
+      workClass: 'critical',
+      allowPressureDefer: true,
+      pressureRetryAfterMs: 777,
+      deliveryPriority: 'background',
+    },
+  );
+
+  t.equal(mockSqlEngine.executedQueries.length, 1,
+    'routed SQL write should execute once');
+  t.equal(mockSqlEngine.executedQueries[0]?.options?.workClass, 'critical',
+    'work class should survive the CDC SQL handoff');
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
+    true,
+    'defer policy should survive the CDC SQL handoff',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.pressureRetryAfterMs,
+    777,
+    'retry-after hints should survive the CDC SQL handoff',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
+    'background',
+    'delivery priority should survive the CDC SQL handoff',
+  );
+  t.end();
+});
+
 test('CDCIntegrationService canonicalizes control_plane_publications upserts ' +
   'before filtering schema columns', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
@@ -684,10 +735,10 @@ test('CDCIntegrationService - waitForCacheUpdate accepts monotonic minimum field
       },
     );
 
-    t.equal(
+    t.same(
       state.row,
-      null,
-      'authoritative confirmation should not mutate cache state directly',
+      authoritativeRow,
+      'authoritative confirmation should repair the writable cache target',
     );
     t.equal(state.onCacheChangeCalls > 0, true, 'should subscribe to cache changes');
     t.equal(state.offCacheChangeCalls > 0, true, 'should clean up cache listener');
@@ -757,6 +808,7 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
       null,
       {fallbackPhase: 'steady_state'},
     );
+    cacheState.row = undefined;
     await service.repairCacheVisibilityHole(
       SYSTEM_TABLE_NAME.NODES,
       'node-1',
@@ -774,8 +826,8 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
       'should classify steady-state fallback separately');
     t.equal(diagnostics.phases.recovery.totalCount, 1,
       'should classify recovery fallback separately');
-    t.equal(diagnostics.outcomes.diagnosed.totalCount, 2,
-      'should classify diagnosed cache lag separately from failure');
+    t.equal(diagnostics.outcomes.recovered.totalCount, 2,
+      'should classify repaired cache lag separately from failure');
     t.equal(diagnostics.byTable.nodes.totalCount, 2,
       'should group fallback diagnostics by table');
     t.equal(diagnostics.recentEvents.length, 2,
@@ -947,8 +999,8 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
 
     t.equal(repaired, true,
       'should confirm the authoritative row without routed SQL');
-    t.equal(cacheState.row, null,
-      'authoritative confirmation should not hydrate cache directly');
+    t.same(cacheState.row, authoritativeRow,
+      'authoritative confirmation should hydrate the writable cache target');
     t.equal(
       sqlQueryEngine.executedQueries.length,
       0,
@@ -1875,7 +1927,7 @@ test(
 );
 
 test(
-  'CDCIntegrationService - updateSystemTableRow diagnoses cache lag from authoritative row after timeout',
+  'CDCIntegrationService - updateSystemTableRow repairs cache lag from authoritative row after timeout',
   async (t) => {
     const cache = new SystemTableCache();
     const executedQueries = [];
@@ -1956,10 +2008,10 @@ test(
       /SELECT \* FROM nodes WHERE node_id = \?/,
       'confirmation should read the authoritative row by primary key',
     );
-    t.equal(
+    t.same(
       cache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
-      undefined,
-      'authoritative confirmation should not mutate cache directly',
+      authoritativeRow,
+      'authoritative confirmation should repair the cache directly',
     );
     t.equal(divergenceEvents.length, 1,
       'cache lag should emit one divergence event');
@@ -1970,7 +2022,7 @@ test(
 );
 
 test(
-  'CDCIntegrationService - insertSystemTableRow diagnoses cache lag from authoritative row after timeout',
+  'CDCIntegrationService - insertSystemTableRow repairs cache lag from authoritative row after timeout',
   async (t) => {
     const cache = new SystemTableCache();
     const executedQueries = [];
@@ -2047,10 +2099,10 @@ test(
       /SELECT \* FROM tables WHERE table_id = \?/,
       'confirmation should read the inserted row by primary key',
     );
-    t.equal(
+    t.same(
       cache.get(SYSTEM_TABLE_NAME.TABLES, 'tbl-1'),
-      undefined,
-      'authoritative confirmation should not hydrate cache directly',
+      authoritativeRow,
+      'authoritative confirmation should hydrate the cache directly',
     );
     t.equal(divergenceEvents.length, 1,
       'cache lag should emit one divergence event after insert');
@@ -2061,7 +2113,7 @@ test(
 );
 
 test(
-  'CDCIntegrationService - authoritative confirmation leaves explicit writable cache target untouched',
+  'CDCIntegrationService - authoritative confirmation repairs explicit writable cache targets',
   async (t) => {
     const writableCache = new SystemTableCache();
     const readOnlyCache = createReadOnlyCache(writableCache);
@@ -2137,16 +2189,16 @@ test(
     );
 
     t.equal(result.success, true,
-      'should confirm through authoritative reads without writing cache targets');
-    t.equal(
+      'should confirm through authoritative reads and repair writable cache targets');
+    t.same(
       writableCache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
-      undefined,
-      'writable cache should remain untouched by diagnostic confirmation',
+      authoritativeRow,
+      'writable cache should be repaired by authoritative confirmation',
     );
-    t.equal(
+    t.same(
       readOnlyCache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
-      undefined,
-      'read-only cache should remain untouched until CDC propagation arrives',
+      authoritativeRow,
+      'read-only cache should reflect the repaired writable cache',
     );
     t.equal(executedQueries.length, 2,
       'should still issue one authoritative confirmation query');
