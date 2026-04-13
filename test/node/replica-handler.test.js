@@ -1839,6 +1839,70 @@ test('ReplicaHandler', async (t) => {
       handler.shutdown();
     });
 
+  t.test('handleRemoveReplica reconciles stale service rows for removed replica',
+    async (t) => {
+      const cache = createSeededCache();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: 'replica-1',
+        service_type: 'partition',
+        partition_id: 'partition-1',
+        node_id: 'test-node',
+        raft_role: 'follower',
+        status: ReplicaStatus.ACTIVE,
+        address: 'test-node/partition/replica-1',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      handler.localReplicas.set('replica-1', {
+        replicaId: 'replica-1',
+        partitionId: 'partition-1',
+        status: ReplicaStatus.REMOVED,
+        service: null,
+      });
+      handler.localServices.set('replica-1', {
+        replicaId: 'replica-1',
+        partitionId: 'partition-1',
+      });
+
+      const response = await handler.handleRemoveReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        reason: 'replace_source_removal',
+      });
+
+      t.equal(response.status, ReplicaOperationResponseStatus.COMPLETED,
+        'already removed replica should still reconcile stale cleanup');
+      t.notOk(cache.get(SYSTEM_TABLE_NAME.SERVICES, 'replica-1'),
+        'stale service row should be removed durably');
+      t.notOk(handler.localServices.has('replica-1'),
+        'local tracked service should be cleared');
+      t.ok(
+        mockCDC.operations.some((op) =>
+          op.type === 'delete' &&
+          op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          op.whereClause?.service_id === 'replica-1' &&
+          op.whereClause?.service_type === 'partition' &&
+          op.whereClause?.partition_id === 'partition-1' &&
+          op.whereClause?.node_id === 'test-node',
+        ),
+        'stale removed replica should still delete its typed local service row',
+      );
+
+      handler.shutdown();
+    });
+
   t.test('registerExistingReplica - registers and is idempotent', async (t) => {
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
@@ -2266,6 +2330,12 @@ test('ReplicaHandler', async (t) => {
       (op) => op.type === 'delete' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
     t.ok(deleteOp, 'service row deleted via CDC');
+    t.same(deleteOp.whereClause, {
+      service_id: 'replica-1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      node_id: 'test-node',
+    }, 'partition removal should delete through the canonical typed owner path');
 
     handler.shutdown();
   });

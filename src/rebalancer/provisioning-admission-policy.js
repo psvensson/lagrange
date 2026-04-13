@@ -24,6 +24,12 @@ import {
 } from './storage-admission-constants.js';
 import {OperationType} from './replica-status.js';
 
+const PROVISIONING_ADMISSION_EVALUATION_STATE = Object.freeze({
+  CHECK_ADD: 'check_add',
+  CHECK_REPLACE: 'check_replace',
+  NO_ADMISSION_REQUIRED: 'no_admission_required',
+});
+
 class ProvisioningAdmissionPolicy {
   /**
    * @param {Object} options
@@ -350,48 +356,102 @@ class ProvisioningAdmissionPolicy {
    * @return {Promise<Object>}
    */
   async evaluateProvisioningAdmission(context) {
-    const moveType = this.normalizeMoveType(context?.move?.type);
-    if (moveType !== OperationType.ADD &&
-        moveType !== OperationType.REPLACE) {
+    const evaluation =
+      this.buildProvisioningAdmissionEvaluationSnapshot(context);
+    if (evaluation.state ===
+        PROVISIONING_ADMISSION_EVALUATION_STATE.NO_ADMISSION_REQUIRED) {
       return {
-        moveType,
+        moveType: evaluation.moveType,
+        state: evaluation.state,
         admissionResult: null,
         estimatedBytes: NUM.ZERO,
       };
     }
 
-    this.assertProvisioningAdmissionDependencies(moveType);
-
-    const estimatedBytes = this.estimateProvisioningAdmissionBytes(
-      context?.entityType,
-    );
-    const isCritical = this.resolveAdmissionCriticality(context);
+    this.assertProvisioningAdmissionDependencies(evaluation.moveType);
     const storageAdmissionService = this.getStorageAdmissionService();
-    let admissionResult = null;
-    if (moveType === OperationType.ADD) {
-      admissionResult = await storageAdmissionService.checkAdd({
-        targetNodeId: context.move.nodeId,
-        estimatedBytes,
-        isCritical,
-      });
-    } else if (moveType === OperationType.REPLACE) {
-      admissionResult = await storageAdmissionService.checkReplace({
-        sourceNodeId: context.sourceNodeId,
-        targetNodeId: context.move.nodeId,
-        estimatedBytes,
-        isCritical,
-      });
-    }
+    const admissionResult = await this.executeProvisioningAdmissionCheck(
+      evaluation,
+      storageAdmissionService,
+    );
 
     assertCritical(
       admissionResult,
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ADMISSION_REQUIRED,
     );
     return {
-      moveType,
+      moveType: evaluation.moveType,
+      state: evaluation.state,
       admissionResult,
-      estimatedBytes,
+      estimatedBytes: evaluation.estimatedBytes,
     };
+  }
+
+  /**
+   * Normalize one provisioning-admission evaluation into one explicit state
+   * snapshot before dispatching to admission owners.
+   * @param {Object} context
+   * @return {Object}
+   * @private
+   */
+  buildProvisioningAdmissionEvaluationSnapshot(context) {
+    const moveType = this.normalizeMoveType(context?.move?.type);
+    const state = this.resolveProvisioningAdmissionEvaluationState(moveType);
+    return Object.freeze({
+      moveType,
+      state,
+      targetNodeId: context?.move?.nodeId || null,
+      sourceNodeId: context?.sourceNodeId || null,
+      estimatedBytes: state ===
+          PROVISIONING_ADMISSION_EVALUATION_STATE.NO_ADMISSION_REQUIRED ?
+        NUM.ZERO :
+        this.estimateProvisioningAdmissionBytes(context?.entityType),
+      isCritical: this.resolveAdmissionCriticality(context),
+    });
+  }
+
+  /**
+   * Resolve one provisioning-admission state from one normalized move type.
+   * @param {string|null} moveType
+   * @return {string}
+   * @private
+   */
+  resolveProvisioningAdmissionEvaluationState(moveType) {
+    if (moveType === OperationType.ADD) {
+      return PROVISIONING_ADMISSION_EVALUATION_STATE.CHECK_ADD;
+    }
+    if (moveType === OperationType.REPLACE) {
+      return PROVISIONING_ADMISSION_EVALUATION_STATE.CHECK_REPLACE;
+    }
+    return PROVISIONING_ADMISSION_EVALUATION_STATE.NO_ADMISSION_REQUIRED;
+  }
+
+  /**
+   * Execute one admission-owner check from one normalized evaluation snapshot.
+   * @param {Object} evaluation
+   * @param {Object} storageAdmissionService
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeProvisioningAdmissionCheck(
+    evaluation,
+    storageAdmissionService,
+  ) {
+    if (evaluation.state ===
+        PROVISIONING_ADMISSION_EVALUATION_STATE.CHECK_ADD) {
+      return storageAdmissionService.checkAdd({
+        targetNodeId: evaluation.targetNodeId,
+        estimatedBytes: evaluation.estimatedBytes,
+        isCritical: evaluation.isCritical,
+      });
+    }
+
+    return storageAdmissionService.checkReplace({
+      sourceNodeId: evaluation.sourceNodeId,
+      targetNodeId: evaluation.targetNodeId,
+      estimatedBytes: evaluation.estimatedBytes,
+      isCritical: evaluation.isCritical,
+    });
   }
 
   /**
@@ -401,6 +461,10 @@ class ProvisioningAdmissionPolicy {
    */
   estimateProvisioningAdmissionBytes(entityType) {
     const storageAccountingService = this.getStorageAccountingService();
+    if (!storageAccountingService ||
+        typeof storageAccountingService.estimateReplicaBytes !== 'function') {
+      return NUM.ZERO;
+    }
     return storageAccountingService.estimateReplicaBytes({
       entityType: entityType || SERVICE_TYPE.PARTITION,
       sizeBytes: NUM.ZERO,

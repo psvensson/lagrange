@@ -4,32 +4,82 @@
  * Requirements: 20.1, 20.2, 20.3, 20.10
  */
 
-import {v4 as uuidv4} from 'uuid';
-import {LoggingService} from '../logging/logging-service.js';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {CONFIG_KEY} from '../config/config-constants.js';
-import {NUM, STATE, TABLES} from '../constants/index.js';
-import {
-  CONTROL_PLANE_MUTATION_OPERATION,
-} from '../control-plane/control-plane-system-table-gateway.js';
-import {
-  createControlPlaneRuntimeBundle,
-} from '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-  QUERY_LOG_MSG,
-  QUERY_OPERATION,
-  QUERY_SUBSYSTEM,
-} from './query-constants.js';
-
-const TABLE_CREATION_SQL = Object.freeze({
-  SELECT_TABLE_BY_NAME:
-    `SELECT * FROM ${TABLES.TABLES} WHERE table_name = ? LIMIT 1`,
-  SELECT_PARTITION_BY_ID:
-    `SELECT * FROM ${TABLES.PARTITIONS} WHERE partition_id = ? LIMIT 1`,
+import { v4 as uuidv4 } from 'uuid';
+import { LoggingService } from '../logging/logging-service.js';
+import { ConfigurationManager } from '../config/configuration-manager.js';
+import { CONFIG_KEY } from '../config/config-constants.js';
+import { NUM, STATE, TABLES } from '../constants/index.js';
+import { CONTROL_PLANE_MUTATION_OPERATION } from '../control-plane/control-plane-system-table-gateway.js';
+import { createControlPlaneRuntimeBundle } from '../control-plane/control-plane-runtime-bundle.js';
+import { PRESSURE_WORK_CLASS } from '../control-plane/pressure-governor.js';
+import { QUERY_ERROR_CODE, QUERY_ERROR_MSG, QUERY_LOG_MSG, QUERY_OPERATION, QUERY_SUBSYSTEM } from './query-constants.js';
+const TABLE_CREATION_SERVICE_LITERAL = Object.freeze({
+  FUNCTION: "function",
+  STRING: "string",
+  UPDATE: "UPDATE",
+  INSERT: "INSERT",
+  TABLE_POLICY_CHANGED: "table_policy_changed",
+  PARTITION_SIZE_CHANGED: "partition_size_changed",
+  VISIBLE: "visible",
+  EMPTY: ",",
+  UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE: "Unable to restore missing initial partition metadata for table ",
+  TABLE_CONSTRAINT: "table_constraint",
+  COLUMN_CONSTRAINT: "column_constraint"
 });
+const TABLE_CREATION_SQL = Object.freeze({
+  SELECT_TABLE_BY_NAME: `SELECT * FROM ${TABLES.TABLES} WHERE table_name = ? LIMIT 1`,
+  SELECT_PARTITION_BY_ID: `SELECT * FROM ${TABLES.PARTITIONS} WHERE partition_id = ? LIMIT 1`
+});
+const TABLE_CREATION_COMPLETION_STATE = Object.freeze({
+  ACTIVE: 'active',
+  PENDING_CREATION: 'pending_creation'
+});
+const TABLE_CREATION_COMPLETION_REASON = Object.freeze({
+  METADATA_VISIBILITY_PENDING: 'metadata_visibility_pending',
+  REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending'
+});
+const TABLE_CREATION_VISIBILITY_STATE = Object.freeze({
+  VISIBLE: 'visible'
+});
+function normalizeProvisioningSummary(provisioningResult = null, context = {}) {
+  const requestedReplicaCount = Number.isInteger(context?.replicaCount) && context.replicaCount > 0 ? context.replicaCount : null;
+  const minimumRoutableReplicaCount = Number.isInteger(context?.minimumRoutableReplicaCount) && context.minimumRoutableReplicaCount > 0 ? context.minimumRoutableReplicaCount : null;
+  const normalized = provisioningResult && typeof provisioningResult === 'object' ? provisioningResult : {};
+  const resolvedReplicaCount = Number.isInteger(normalized?.resolvedReplicaCount) && normalized.resolvedReplicaCount > 0 ? normalized.resolvedReplicaCount : requestedReplicaCount;
+  const fallbackRoutableReplicaCount = Number.isInteger(minimumRoutableReplicaCount) && minimumRoutableReplicaCount > 0 ? minimumRoutableReplicaCount : NUM.ZERO;
+  const routableReplicaCount = Number.isInteger(normalized?.routableReplicaCount) && normalized.routableReplicaCount >= 0 ? normalized.routableReplicaCount : fallbackRoutableReplicaCount;
+  return {
+    requestedReplicaCount,
+    resolvedReplicaCount,
+    minimumRoutableReplicaCount: Number.isInteger(normalized?.minimumRoutableReplicaCount) && normalized.minimumRoutableReplicaCount > NUM.ZERO ? normalized.minimumRoutableReplicaCount : minimumRoutableReplicaCount,
+    routableReplicaCount,
+    fullReplicaCountConverged: !Number.isInteger(requestedReplicaCount) || requestedReplicaCount <= NUM.ZERO || routableReplicaCount >= requestedReplicaCount
+  };
+}
+function resolveTableCreationCompletion(options = {}) {
+  const visibilityState = String(options?.visibilityState || TABLE_CREATION_VISIBILITY_STATE.VISIBLE);
+  const provisioningSummary = options?.provisioningSummary || null;
+  let completionState = TABLE_CREATION_COMPLETION_STATE.ACTIVE;
+  let completionReason = null;
+  if (visibilityState !== TABLE_CREATION_VISIBILITY_STATE.VISIBLE) {
+    completionState = TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION;
+    completionReason = TABLE_CREATION_COMPLETION_REASON.METADATA_VISIBILITY_PENDING;
+  } else if (provisioningSummary && provisioningSummary.fullReplicaCountConverged === false) {
+    completionState = TABLE_CREATION_COMPLETION_STATE.PENDING_CREATION;
+    completionReason = TABLE_CREATION_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING;
+  }
+  return {
+    completionState,
+    completionReason
+  };
+}
+function buildCreateTableSuccessResult(options = {}) {
+  return {
+    success: true,
+    operation: QUERY_OPERATION.CREATE_TABLE,
+    ...options
+  };
+}
 
 /**
  * TableCreationService handles table creation with automatic partition key
@@ -47,30 +97,20 @@ class TableCreationService {
   constructor(options = {}) {
     this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      createControlPlaneRuntimeBundle({
-        getCdcIntegrationService: () => this.cdcIntegrationService,
-        getSystemTableCache: () => this.systemCache,
-      }).controlPlaneSystemTableGateway;
+    this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway || createControlPlaneRuntimeBundle({
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getSystemTableCache: () => this.systemCache
+    }).controlPlaneSystemTableGateway;
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
     this.cachePolicyChangeListener = null;
-    this.calculateQuorumReplicaCount =
-      typeof options.calculateQuorumReplicaCount === 'function' ?
-        options.calculateQuorumReplicaCount :
-        null;
-    this.partitionProvisioner =
-      typeof options.partitionProvisioner === 'function' ?
-        options.partitionProvisioner :
-        null;
+    this.calculateQuorumReplicaCount = typeof options.calculateQuorumReplicaCount === TABLE_CREATION_SERVICE_LITERAL.FUNCTION ? options.calculateQuorumReplicaCount : null;
+    this.partitionProvisioner = typeof options.partitionProvisioner === TABLE_CREATION_SERVICE_LITERAL.FUNCTION ? options.partitionProvisioner : null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.defaultReplicaCount =
-      config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
-
+    this.defaultReplicaCount = config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
     this.logger = this.initLogger();
     this.setSystemCache(options.systemCache || null);
     this.setPartitionSplitMergeManager(options.partitionSplitMergeManager || null);
@@ -113,7 +153,6 @@ class TableCreationService {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
   }
-
   setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
     this.controlPlaneSystemTableGateway = controlPlaneSystemTableGateway || null;
   }
@@ -141,17 +180,11 @@ class TableCreationService {
   attachCachePolicyListener() {
     const cache = this.systemCache;
     const manager = this.partitionSplitMergeManager;
-    if (!cache ||
-        typeof cache.onCacheChange !== 'function' ||
-        typeof cache.getAll !== 'function' ||
-        !manager ||
-        typeof manager.evaluateAllPartitions !== 'function' &&
-        typeof manager.requestEvaluation !== 'function') {
+    if (!cache || typeof cache.onCacheChange !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION || typeof cache.getAll !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION || !manager || typeof manager.evaluateAllPartitions !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION && typeof manager.requestEvaluation !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       this.tablePolicyByTableId.clear();
       this.partitionSizeByPartitionId.clear();
       return;
     }
-
     this.seedTablePolicyCache(cache);
     this.seedPartitionMetricsCache(cache);
     this.cachePolicyChangeListener = (tableName, operation, record) => {
@@ -166,9 +199,7 @@ class TableCreationService {
    */
   detachCachePolicyListener() {
     const cache = this.systemCache;
-    if (cache &&
-        typeof cache.offCacheChange === 'function' &&
-        this.cachePolicyChangeListener) {
+    if (cache && typeof cache.offCacheChange === TABLE_CREATION_SERVICE_LITERAL.FUNCTION && this.cachePolicyChangeListener) {
       cache.offCacheChange(this.cachePolicyChangeListener);
     }
     this.cachePolicyChangeListener = null;
@@ -226,9 +257,7 @@ class TableCreationService {
    */
   resolveTableId(row) {
     const tableId = row?.table_id ?? row?.tableId ?? null;
-    return typeof tableId === 'string' && tableId.length > 0 ?
-      tableId :
-      null;
+    return typeof tableId === TABLE_CREATION_SERVICE_LITERAL.STRING && tableId.length > NUM.ZERO ? tableId : null;
   }
 
   /**
@@ -242,7 +271,7 @@ class TableCreationService {
     if (value === null || value === undefined) {
       return null;
     }
-    if (typeof value === 'string') {
+    if (typeof value === TABLE_CREATION_SERVICE_LITERAL.STRING) {
       return value;
     }
     try {
@@ -260,9 +289,7 @@ class TableCreationService {
    */
   resolvePartitionId(row) {
     const partitionId = row?.partition_id ?? row?.partitionId ?? null;
-    return typeof partitionId === 'string' && partitionId.length > 0 ?
-      partitionId :
-      null;
+    return typeof partitionId === TABLE_CREATION_SERVICE_LITERAL.STRING && partitionId.length > NUM.ZERO ? partitionId : null;
   }
 
   /**
@@ -273,9 +300,7 @@ class TableCreationService {
    */
   resolvePartitionSizeValue(row) {
     const sizeBytes = Number(row?.size_bytes ?? row?.sizeBytes);
-    return Number.isFinite(sizeBytes) && sizeBytes >= 0 ?
-      sizeBytes :
-      null;
+    return Number.isFinite(sizeBytes) && sizeBytes >= NUM.ZERO ? sizeBytes : null;
   }
 
   /**
@@ -286,15 +311,13 @@ class TableCreationService {
    * @private
    */
   onSystemTableCacheChange(tableName, operation, record) {
-    if (operation !== 'UPDATE' && operation !== 'INSERT') {
+    if (operation !== TABLE_CREATION_SERVICE_LITERAL.UPDATE && operation !== TABLE_CREATION_SERVICE_LITERAL.INSERT) {
       return;
     }
-
     if (tableName === TABLES.TABLES) {
       this.handleTablePolicyCacheChange(operation, record);
       return;
     }
-
     if (tableName === TABLES.PARTITIONS) {
       this.handlePartitionMetricsCacheChange(operation, record);
     }
@@ -312,19 +335,17 @@ class TableCreationService {
     if (!tableId || policyValue === null) {
       return;
     }
-
     const previousPolicyValue = this.tablePolicyByTableId.get(tableId);
     this.tablePolicyByTableId.set(tableId, policyValue);
     if (previousPolicyValue === policyValue) {
       return;
     }
-
     this.logger.debug(QUERY_LOG_MSG.TABLE_POLICY_CHANGE_TRIGGER_SPLIT_EVAL, {
       tableId,
-      operation,
+      operation
     });
     this.requestSplitMergeEvaluation({
-      reasonCode: 'table_policy_changed',
+      reasonCode: TABLE_CREATION_SERVICE_LITERAL.TABLE_POLICY_CHANGED
     });
   }
 
@@ -340,26 +361,20 @@ class TableCreationService {
     if (!partitionId || partitionSize === null) {
       return;
     }
-
-    const previousPartitionSize =
-      this.partitionSizeByPartitionId.get(partitionId);
+    const previousPartitionSize = this.partitionSizeByPartitionId.get(partitionId);
     this.partitionSizeByPartitionId.set(partitionId, partitionSize);
     if (previousPartitionSize === partitionSize) {
       return;
     }
-
-    this.logger.debug(
-      QUERY_LOG_MSG.TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL,
-      {
-        partitionId,
-        operation,
-        previousPartitionSize,
-        partitionSize,
-      },
-    );
-    this.requestSplitMergeEvaluation({
-      reasonCode: 'partition_size_changed',
+    this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL, {
       partitionId,
+      operation,
+      previousPartitionSize,
+      partitionSize
+    });
+    this.requestSplitMergeEvaluation({
+      reasonCode: TABLE_CREATION_SERVICE_LITERAL.PARTITION_SIZE_CHANGED,
+      partitionId
     });
   }
 
@@ -375,7 +390,7 @@ class TableCreationService {
     if (!manager) {
       return;
     }
-    if (typeof manager.requestEvaluation === 'function') {
+    if (typeof manager.requestEvaluation === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       manager.requestEvaluation(context);
       return;
     }
@@ -387,9 +402,7 @@ class TableCreationService {
    * @param {Function} provisioner - Provisioning callback.
    */
   setPartitionProvisioner(provisioner) {
-    this.partitionProvisioner = typeof provisioner === 'function' ?
-      provisioner :
-      null;
+    this.partitionProvisioner = typeof provisioner === TABLE_CREATION_SERVICE_LITERAL.FUNCTION ? provisioner : null;
   }
 
   /**
@@ -400,22 +413,22 @@ class TableCreationService {
    * @return {Promise<Object>} Creation result.
    */
   async createTable(ast) {
-    const {tableName, columns, primaryKey, ifNotExists} = ast;
-
+    const {
+      tableName,
+      columns,
+      primaryKey,
+      ifNotExists
+    } = ast;
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
       tableName,
       columnCount: columns.length,
       primaryKey,
-      ifNotExists,
+      ifNotExists
     });
 
     // Validate PRIMARY KEY requirement (Requirement 20.2)
-    if (!primaryKey || primaryKey.length === 0) {
-      const error = new Error(
-        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
-        `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
-        QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
-      );
+    if (!primaryKey || primaryKey.length === NUM.ZERO) {
+      const error = new Error(`${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` + `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` + QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL);
       error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
       throw error;
     }
@@ -424,21 +437,28 @@ class TableCreationService {
     const existingTable = await this.findExistingTableRecord(tableName);
     if (existingTable) {
       if (ifNotExists) {
-        await this.reconcileExistingInitialPartition(tableName, existingTable);
-        this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {tableName});
-        return {
-          success: true,
-          operation: QUERY_OPERATION.CREATE_TABLE,
+        const reconciliation = await this.reconcileExistingInitialPartition(tableName, existingTable);
+        const visibilityState = String(reconciliation?.visibilityState || TABLE_CREATION_VISIBILITY_STATE.VISIBLE);
+        const completion = resolveTableCreationCompletion({
+          visibilityState,
+          provisioningSummary: reconciliation?.provisioningSummary || null
+        });
+        this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {
+          tableName
+        });
+        return buildCreateTableSuccessResult({
           tableName,
           skipped: true,
-          message: `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
-            QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
-        };
+          completionState: completion.completionState,
+          completionReason: completion.completionReason,
+          visibilityState,
+          visibilityPending: visibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+          partitionMetadataCreated: reconciliation?.partitionMetadataCreated === true,
+          provisioningSummary: reconciliation?.provisioningSummary || null,
+          message: `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` + QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX
+        });
       }
-      const error = new Error(
-        `${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` +
-        QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX,
-      );
+      const error = new Error(`${QUERY_ERROR_MSG.TABLE_EXISTS_PREFIX}${tableName}` + QUERY_ERROR_MSG.TABLE_EXISTS_SUFFIX);
       error.code = QUERY_ERROR_CODE.TABLE_EXISTS;
       throw error;
     }
@@ -465,7 +485,7 @@ class TableCreationService {
       partition_transition_state: null,
       partition_transition_metadata: null,
       created_at: Date.now(),
-      updated_at: Date.now(),
+      updated_at: Date.now()
     };
 
     // Create initial partition with full key range [NULL, NULL) (Requirement 20.3)
@@ -474,55 +494,93 @@ class TableCreationService {
       partition_id: partitionId,
       table_id: tableId,
       table_name: tableName,
-      partition_key_start: null, // NULL means unbounded lower
-      partition_key_end: null, // NULL means unbounded upper
+      partition_key_start: null,
+      // NULL means unbounded lower
+      partition_key_end: null,
+      // NULL means unbounded upper
       partition_version: 1,
       replica_count: this.defaultReplicaCount,
       size_bytes: 0,
       leader_node_id: null,
       state: STATE.NORMAL,
       created_at: Date.now(),
-      updated_at: Date.now(),
+      updated_at: Date.now()
     };
 
     // Write to system tables via CDC
     if (this.cdcIntegrationService) {
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      const tableMetadataMutation = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName: TABLES.TABLES,
-        row: tableMetadata,
+        row: tableMetadata
       }, {
+        allowPendingVisibility: true,
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: 'critical'
       });
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      const partitionMetadataMutation = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName: TABLES.PARTITIONS,
-        row: partitionMetadata,
+        row: partitionMetadata
       }, {
+        allowPendingVisibility: true,
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-        deliveryPriority: 'critical',
+        deliveryPriority: 'critical'
       });
+      const metadataVisibilityState = [String(tableMetadataMutation?.visibilityState || 'visible'), String(partitionMetadataMutation?.visibilityState || 'visible')].includes('deferred_by_pressure') ? 'deferred_by_pressure' : [String(tableMetadataMutation?.visibilityState || 'visible'), String(partitionMetadataMutation?.visibilityState || 'visible')].includes('pending_visibility') ? 'pending_visibility' : 'visible';
+      const provisioningSummary = await this.provisionInitialPartition({
+        tableId,
+        tableName,
+        tableMetadata,
+        partitionId,
+        partitionMetadata,
+        replicaCount: partitionMetadata.replica_count
+      });
+      await this.evaluateSplitMergeLifecycle();
+      this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
+        tableId,
+        tableName,
+        partitionKey,
+        partitionId
+      });
+      const completion = resolveTableCreationCompletion({
+        visibilityState: metadataVisibilityState,
+        provisioningSummary
+      });
+      return {
+        success: true,
+        operation: QUERY_OPERATION.CREATE_TABLE,
+        tableId,
+        tableName,
+        partitionKey,
+        partitionId,
+        columns: columns.length,
+        completionState: completion.completionState,
+        completionReason: completion.completionReason,
+        visibilityState: metadataVisibilityState,
+        visibilityPending: metadataVisibilityState !== TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+        provisioningSummary
+      };
     }
-
-    await this.provisionInitialPartition({
+    const provisioningSummary = await this.provisionInitialPartition({
       tableId,
       tableName,
       tableMetadata,
       partitionId,
       partitionMetadata,
-      replicaCount: partitionMetadata.replica_count,
+      replicaCount: partitionMetadata.replica_count
     });
-
     await this.evaluateSplitMergeLifecycle();
-
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATED_SUCCESS, {
       tableId,
       tableName,
       partitionKey,
-      partitionId,
+      partitionId
     });
-
+    const completion = resolveTableCreationCompletion({
+      visibilityState: 'visible',
+      provisioningSummary
+    });
     return {
       success: true,
       operation: QUERY_OPERATION.CREATE_TABLE,
@@ -531,6 +589,11 @@ class TableCreationService {
       partitionKey,
       partitionId,
       columns: columns.length,
+      completionState: completion.completionState,
+      completionReason: completion.completionReason,
+      visibilityState: TABLE_CREATION_SERVICE_LITERAL.VISIBLE,
+      visibilityPending: false,
+      provisioningSummary
     };
   }
 
@@ -544,37 +607,43 @@ class TableCreationService {
    * @param {Object} [context.partitionMetadata] - Canonical partition row
    *   snapshot.
    * @param {number} context.replicaCount - Desired replica count.
-   * @return {Promise<void>}
+   * @return {Promise<Object|null>}
    * @private
    */
   async provisionInitialPartition(context) {
-    if (typeof this.partitionProvisioner !== 'function') {
-      return;
+    const minimumRoutableReplicaCount = Number.isInteger(context?.minimumRoutableReplicaCount) && context.minimumRoutableReplicaCount > 0 ? context.minimumRoutableReplicaCount : this.resolveDefaultMinimumRoutableReplicaCount(context?.replicaCount);
+    if (typeof this.partitionProvisioner !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+      return normalizeProvisioningSummary(null, {
+        ...context,
+        minimumRoutableReplicaCount
+      });
     }
-
-    const {tableId, tableName, partitionId, replicaCount} = context;
-    const minimumRoutableReplicaCount =
-      Number.isInteger(context?.minimumRoutableReplicaCount) &&
-        context.minimumRoutableReplicaCount > 0 ?
-        context.minimumRoutableReplicaCount :
-        this.resolveDefaultMinimumRoutableReplicaCount(replicaCount);
+    const {
+      tableId,
+      tableName,
+      partitionId,
+      replicaCount
+    } = context;
     this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
       tableId,
       tableName,
       partitionId,
-      replicaCount,
+      replicaCount
     });
-
     try {
-      await this.partitionProvisioner({
+      const provisioningResult = await this.partitionProvisioner({
         ...context,
-        minimumRoutableReplicaCount,
+        minimumRoutableReplicaCount
       });
       this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_SUCCESS, {
         tableId,
         tableName,
         partitionId,
-        replicaCount,
+        replicaCount
+      });
+      return normalizeProvisioningSummary(provisioningResult, {
+        ...context,
+        minimumRoutableReplicaCount
       });
     } catch (error) {
       this.logger.error(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_FAILED, {
@@ -582,7 +651,7 @@ class TableCreationService {
         tableName,
         partitionId,
         replicaCount,
-        error: error.message,
+        error: error.message
       });
       if (!error.code) {
         error.code = QUERY_ERROR_CODE.INTERNAL_ERROR;
@@ -600,15 +669,12 @@ class TableCreationService {
    * @private
    */
   resolveDefaultMinimumRoutableReplicaCount(replicaCount) {
-    if (typeof this.calculateQuorumReplicaCount !== 'function') {
+    const normalizedReplicaCount = Number.isInteger(replicaCount) && replicaCount > 0 ? replicaCount : null;
+    if (!normalizedReplicaCount) {
       return null;
     }
-    const minimumRoutableReplicaCount =
-      this.calculateQuorumReplicaCount(replicaCount);
-    return Number.isInteger(minimumRoutableReplicaCount) &&
-      minimumRoutableReplicaCount > 0 ?
-      minimumRoutableReplicaCount :
-      null;
+    const minimumRoutableReplicaCount = typeof this.calculateQuorumReplicaCount === 'function' ? this.calculateQuorumReplicaCount(normalizedReplicaCount) : Math.floor(normalizedReplicaCount / 2) + 1;
+    return Number.isInteger(minimumRoutableReplicaCount) && minimumRoutableReplicaCount > NUM.ZERO ? minimumRoutableReplicaCount : null;
   }
 
   /**
@@ -618,15 +684,14 @@ class TableCreationService {
    */
   async evaluateSplitMergeLifecycle() {
     const manager = this.partitionSplitMergeManager;
-    if (!manager || typeof manager.evaluateAllPartitions !== 'function') {
+    if (!manager || typeof manager.evaluateAllPartitions !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
-
     try {
       await manager.evaluateAllPartitions();
     } catch (error) {
       this.logger.warn(QUERY_LOG_MSG.TABLE_SPLIT_MERGE_EVAL_FAILED, {
-        splitMergeEvaluationError: error.message,
+        splitMergeEvaluationError: error.message
       });
     }
   }
@@ -637,7 +702,7 @@ class TableCreationService {
    */
   startPeriodicSplitMergeEvaluation() {
     const manager = this.partitionSplitMergeManager;
-    if (!manager || typeof manager.startPeriodicEvaluation !== 'function') {
+    if (!manager || typeof manager.startPeriodicEvaluation !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
     manager.startPeriodicEvaluation();
@@ -649,7 +714,7 @@ class TableCreationService {
    */
   stopPeriodicSplitMergeEvaluation() {
     const manager = this.partitionSplitMergeManager;
-    if (!manager || typeof manager.stopPeriodicEvaluation !== 'function') {
+    if (!manager || typeof manager.stopPeriodicEvaluation !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       return;
     }
     manager.stopPeriodicEvaluation();
@@ -663,9 +728,25 @@ class TableCreationService {
     this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
   }
-
   getControlPlaneSystemTableGateway() {
     return this.controlPlaneSystemTableGateway;
+  }
+  buildInitialPartitionMetadataFromTableRecord(tableId, tableName, existingTableRecord = null) {
+    const partitionVersion = Number(existingTableRecord?.active_partition_version ?? existingTableRecord?.activePartitionVersion ?? 1);
+    return {
+      partition_id: `${tableId}-p1`,
+      table_id: tableId,
+      table_name: existingTableRecord?.table_name || existingTableRecord?.tableName || tableName,
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_version: Number.isInteger(partitionVersion) && partitionVersion > NUM.ZERO ? partitionVersion : NUM.ONE,
+      replica_count: this.defaultReplicaCount,
+      size_bytes: NUM.ZERO,
+      leader_node_id: null,
+      state: STATE.NORMAL,
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
   }
 
   /**
@@ -676,12 +757,12 @@ class TableCreationService {
    * @private
    */
   derivePartitionKey(primaryKey) {
-    if (!primaryKey || primaryKey.length === 0) {
+    if (!primaryKey || primaryKey.length === NUM.ZERO) {
       throw new Error(QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL);
     }
 
     // For composite PRIMARY KEY, use all columns as partition key
-    return primaryKey.join(',');
+    return primaryKey.join(TABLE_CREATION_SERVICE_LITERAL.EMPTY);
   }
 
   /**
@@ -692,14 +773,14 @@ class TableCreationService {
    */
   buildSchemaDefinition(columns) {
     return {
-      columns: columns.map((col) => ({
+      columns: columns.map(col => ({
         name: col.name,
         type: this.normalizeDataType(col.dataType),
         primaryKey: col.primaryKey || false,
         notNull: col.notNull || false,
         unique: col.unique || false,
-        defaultValue: col.defaultValue?.value,
-      })),
+        defaultValue: col.defaultValue?.value
+      }))
     };
   }
 
@@ -732,9 +813,8 @@ class TableCreationService {
       'DATETIME': 'TEXT',
       'TIMESTAMP': 'TEXT',
       'DATE': 'TEXT',
-      'TIME': 'TEXT',
+      'TIME': 'TEXT'
     };
-
     return typeMap[typeName] || typeName;
   }
 
@@ -760,27 +840,15 @@ class TableCreationService {
     if (cachedTable) {
       return cachedTable;
     }
-
     const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
-    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== 'function') {
+    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       return null;
     }
-
     try {
-      const result = await controlPlaneGateway.readRows(
-        TABLES.TABLES,
-        TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME,
-        [tableName],
-        {
-          requireAuthoritative: true,
-          allowSqlFallback: true,
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: 'critical',
-        },
-      );
-      return Array.isArray(result?.rows) && result.rows.length > 0 ?
-        result.rows[0] :
-        null;
+      const result = await controlPlaneGateway.readRows(TABLES.TABLES, TABLE_CREATION_SQL.SELECT_TABLE_BY_NAME, [tableName], {
+        readProfile: 'table_lifecycle'
+      });
+      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO ? result.rows[NUM.ZERO] : null;
     } catch {
       return null;
     }
@@ -798,27 +866,15 @@ class TableCreationService {
     if (cachedPartition) {
       return cachedPartition;
     }
-
     const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
-    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== 'function') {
+    if (!controlPlaneGateway || typeof controlPlaneGateway.readRows !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
       return null;
     }
-
     try {
-      const result = await controlPlaneGateway.readRows(
-        TABLES.PARTITIONS,
-        TABLE_CREATION_SQL.SELECT_PARTITION_BY_ID,
-        [partitionId],
-        {
-          requireAuthoritative: true,
-          allowSqlFallback: true,
-          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-          deliveryPriority: 'critical',
-        },
-      );
-      return Array.isArray(result?.rows) && result.rows.length > 0 ?
-        result.rows[0] :
-        null;
+      const result = await controlPlaneGateway.readRows(TABLES.PARTITIONS, TABLE_CREATION_SQL.SELECT_PARTITION_BY_ID, [partitionId], {
+        readProfile: 'table_lifecycle'
+      });
+      return Array.isArray(result?.rows) && result.rows.length > NUM.ZERO ? result.rows[NUM.ZERO] : null;
     } catch {
       return null;
     }
@@ -832,37 +888,60 @@ class TableCreationService {
    * @private
    */
   async reconcileExistingInitialPartition(tableName, existingTable = null) {
-    const existingTableRecord = existingTable ||
-      await this.findExistingTableRecord(tableName);
+    const existingTableRecord = existingTable || (await this.findExistingTableRecord(tableName));
     if (!existingTableRecord) {
-      return;
+      return {
+        partitionMetadataCreated: false
+      };
     }
-
-    const tableId = existingTableRecord.table_id ||
-      existingTableRecord.tableId ||
-      null;
+    const tableId = existingTableRecord.table_id || existingTableRecord.tableId || null;
     if (!tableId) {
-      return;
+      return {
+        partitionMetadataCreated: false
+      };
     }
     const partitionId = `${tableId}-p1`;
-    const existingPartition = await this.findExistingPartitionRecord(partitionId);
+    let existingPartition = await this.findExistingPartitionRecord(partitionId);
+    let partitionMetadataCreated = false;
+    let visibilityState = TABLE_CREATION_SERVICE_LITERAL.VISIBLE;
     if (!existingPartition) {
-      return;
+      const controlPlaneGateway = this.getControlPlaneSystemTableGateway();
+      if (!controlPlaneGateway || typeof controlPlaneGateway.submitMutation !== TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+        throw new Error(TABLE_CREATION_SERVICE_LITERAL.UNABLE_TO_RESTORE_MISSING_INITIAL_PARTITION_METADATA_FOR_TABLE + String(tableName || tableId));
+      }
+      existingPartition = this.buildInitialPartitionMetadataFromTableRecord(tableId, tableName, existingTableRecord);
+      const partitionMutation = await controlPlaneGateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.PARTITIONS,
+        row: existingPartition
+      }, {
+        allowPendingVisibility: true,
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical'
+      });
+      partitionMetadataCreated = true;
+      visibilityState = String(partitionMutation?.visibilityState || TABLE_CREATION_SERVICE_LITERAL.VISIBLE);
     }
-
-    const replicaCount = Number(
-      existingPartition.replica_count ?? existingPartition.replicaCount,
-    );
-    await this.provisionInitialPartition({
+    const replicaCount = Number(existingPartition.replica_count ?? existingPartition.replicaCount);
+    const provisioningSummary = await this.provisionInitialPartition({
       tableId,
       tableName,
       tableMetadata: existingTableRecord,
       partitionId,
       partitionMetadata: existingPartition,
-      replicaCount: Number.isInteger(replicaCount) && replicaCount > 0 ?
-        replicaCount :
-        this.defaultReplicaCount,
+      replicaCount: Number.isInteger(replicaCount) && replicaCount > 0 ? replicaCount : this.defaultReplicaCount
     });
+    const completion = resolveTableCreationCompletion({
+      visibilityState,
+      provisioningSummary
+    });
+    return {
+      partitionMetadataCreated,
+      visibilityState,
+      completionState: completion.completionState,
+      completionReason: completion.completionReason,
+      provisioningSummary
+    };
   }
 
   /**
@@ -875,23 +954,17 @@ class TableCreationService {
     if (!this.systemCache) {
       return null;
     }
-
     try {
-      if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find(TABLES.TABLES, (table) =>
-          table?.table_name === tableName || table?.tableName === tableName,
-        ) || null;
+      if (typeof this.systemCache.find === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+        return this.systemCache.find(TABLES.TABLES, table => table?.table_name === tableName || table?.tableName === tableName) || null;
       }
-      if (typeof this.systemCache.getAll === 'function') {
+      if (typeof this.systemCache.getAll === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
         const tables = this.systemCache.getAll(TABLES.TABLES) || [];
-        return tables.find((table) =>
-          table?.table_name === tableName || table?.tableName === tableName,
-        ) || null;
+        return tables.find(table => table?.table_name === tableName || table?.tableName === tableName) || null;
       }
     } catch {
       return null;
     }
-
     return null;
   }
 
@@ -905,25 +978,17 @@ class TableCreationService {
     if (!this.systemCache || !partitionId) {
       return null;
     }
-
     try {
-      if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find(TABLES.PARTITIONS, (partition) =>
-          partition?.partition_id === partitionId ||
-          partition?.partitionId === partitionId,
-        ) || null;
+      if (typeof this.systemCache.find === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+        return this.systemCache.find(TABLES.PARTITIONS, partition => partition?.partition_id === partitionId || partition?.partitionId === partitionId) || null;
       }
-      if (typeof this.systemCache.getAll === 'function') {
+      if (typeof this.systemCache.getAll === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
         const partitions = this.systemCache.getAll(TABLES.PARTITIONS) || [];
-        return partitions.find((partition) =>
-          partition?.partition_id === partitionId ||
-          partition?.partitionId === partitionId,
-        ) || null;
+        return partitions.find(partition => partition?.partition_id === partitionId || partition?.partitionId === partitionId) || null;
       }
     } catch {
       return null;
     }
-
     return null;
   }
 
@@ -934,32 +999,34 @@ class TableCreationService {
    * @return {Object} Validation result.
    */
   validatePrimaryKey(ast) {
-    const {tableName, columns, primaryKey} = ast;
+    const {
+      tableName,
+      columns,
+      primaryKey
+    } = ast;
 
     // Check for table-level PRIMARY KEY constraint
-    if (primaryKey && primaryKey.length > 0) {
+    if (primaryKey && primaryKey.length > NUM.ZERO) {
       return {
         valid: true,
         primaryKey,
-        source: 'table_constraint',
+        source: TABLE_CREATION_SERVICE_LITERAL.TABLE_CONSTRAINT
       };
     }
 
     // Check for column-level PRIMARY KEY
-    const pkColumns = columns.filter((col) => col.primaryKey);
-    if (pkColumns.length > 0) {
+    const pkColumns = columns.filter(col => col.primaryKey);
+    if (pkColumns.length > NUM.ZERO) {
       return {
         valid: true,
-        primaryKey: pkColumns.map((col) => col.name),
-        source: 'column_constraint',
+        primaryKey: pkColumns.map(col => col.name),
+        source: TABLE_CREATION_SERVICE_LITERAL.COLUMN_CONSTRAINT
       };
     }
-
     return {
       valid: false,
-      error: `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
-        QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX,
-      code: QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED,
+      error: `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` + QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX,
+      code: QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED
     };
   }
 
@@ -972,18 +1039,14 @@ class TableCreationService {
     if (!this.systemCache) {
       return null;
     }
-
     try {
-      if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find(TABLES.TABLES, (t) =>
-          t.table_name === tableName || t.tableName === tableName,
-        );
+      if (typeof this.systemCache.find === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+        const table = this.systemCache.find(TABLES.TABLES, t => t.table_name === tableName || t.tableName === tableName);
         return table?.partition_key || table?.partitionKey || null;
       }
     } catch {
       // Cache not available
     }
-
     return null;
   }
 
@@ -996,12 +1059,9 @@ class TableCreationService {
     if (!this.systemCache) {
       return null;
     }
-
     try {
-      if (typeof this.systemCache.find === 'function') {
-        const table = this.systemCache.find(TABLES.TABLES, (t) =>
-          t.table_name === tableName || t.tableName === tableName,
-        );
+      if (typeof this.systemCache.find === TABLE_CREATION_SERVICE_LITERAL.FUNCTION) {
+        const table = this.systemCache.find(TABLES.TABLES, t => t.table_name === tableName || t.tableName === tableName);
         if (table?.schema_definition) {
           return JSON.parse(table.schema_definition);
         }
@@ -1012,7 +1072,6 @@ class TableCreationService {
     } catch {
       // Cache not available or parse error
     }
-
     return null;
   }
 
@@ -1030,7 +1089,9 @@ class TableCreationService {
     }
 
     // Create a copy to avoid mutating the original
-    const stripped = {...result};
+    const stripped = {
+      ...result
+    };
 
     // Remove internal partition-related fields from top-level result
     // Keep 'partitions' array as it's useful metadata about which partitions were queried
@@ -1040,8 +1101,10 @@ class TableCreationService {
 
     // Strip internal partition details from rows if present
     if (Array.isArray(stripped.rows)) {
-      stripped.rows = stripped.rows.map((row) => {
-        const cleanRow = {...row};
+      stripped.rows = stripped.rows.map(row => {
+        const cleanRow = {
+          ...row
+        };
         // Remove internal partition tracking fields
         delete cleanRow._partition_id;
         delete cleanRow._partitionId;
@@ -1049,7 +1112,6 @@ class TableCreationService {
         return cleanRow;
       });
     }
-
     return stripped;
   }
 
@@ -1059,20 +1121,8 @@ class TableCreationService {
    * @return {boolean} True if partition-related.
    */
   isPartitionField(fieldName) {
-    const partitionFields = new Set([
-      'partition_id',
-      'partitionId',
-      '_partition_id',
-      '_partitionId',
-      'partition_key_start',
-      'partition_key_end',
-      'partitionKeyStart',
-      'partitionKeyEnd',
-      'sourcePartition',
-    ]);
-
+    const partitionFields = new Set(['partition_id', 'partitionId', '_partition_id', '_partitionId', 'partition_key_start', 'partition_key_end', 'partitionKeyStart', 'partitionKeyEnd', 'sourcePartition']);
     return partitionFields.has(fieldName);
   }
 }
-
-export {TableCreationService};
+export { TableCreationService };

@@ -1,0 +1,133 @@
+// @ts-nocheck
+import {basename} from 'node:path';
+
+const CANONICAL_SCENARIO_MATRIX = Object.freeze([
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'admin-query-smoke',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'examples-catalog',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'network-partition-split-brain',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'node-failure-rebalance',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'rolling-restart',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'three-node-seed-rebalance',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'wasm-service-failover',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'write-ack-visibility',
+  }),
+  Object.freeze({
+    config: 'local.json',
+    name: 'node-join-under-load',
+  }),
+  Object.freeze({
+    config: 'local.json',
+    name: 'partition-kill-heal-under-load',
+  }),
+  Object.freeze({
+    config: 'local.json',
+    name: 'rolling-restart',
+  }),
+  Object.freeze({
+    config: 'local.json',
+    name: 'seed-restart-under-load',
+  }),
+  Object.freeze({
+    config: 'local.json',
+    name: 'sustained-write-throughput',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-5node.json',
+    name: 'postgres-baseline-comparison',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node.json',
+    name: 'diag-admin-discovery',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node.json',
+    name: 'seven-node-load-during-partitioning',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node.json',
+    name: 'seven-node-read-write-load-distribution',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node.json',
+    name: 'seven-node-read-write-load-transaction-recovery',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node.json',
+    name: 'seven-node-table-partition-distribution',
+  }),
+  Object.freeze({
+    config: 'local-benchmark-7node-partition-split.json',
+    name: 'seven-node-postgres-baseline-partition-split',
+  }),
+]);
+
+function normalizeScenarioConfigName(configPathOrName) {
+  if (typeof configPathOrName !== 'string') {
+    return null;
+  }
+  const normalized = basename(configPathOrName).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function listCanonicalScenarioEntries(configPathOrName = null) {
+  const configName = normalizeScenarioConfigName(configPathOrName);
+  if (!configName) {
+    return [...CANONICAL_SCENARIO_MATRIX];
+  }
+  return CANONICAL_SCENARIO_MATRIX.filter((entry) => entry.config === configName);
+}
+
+function selectCanonicalScenariosForConfig(scenarios, configPathOrName) {
+  if (!Array.isArray(scenarios) || scenarios.length === 0) {
+    return [];
+  }
+
+  const canonicalEntries = listCanonicalScenarioEntries(configPathOrName);
+  if (canonicalEntries.length === 0) {
+    return [...scenarios];
+  }
+
+  const byName = new Map(
+    scenarios.map((scenario) => [scenario?.name, scenario]),
+  );
+  return canonicalEntries
+    .map((entry) => byName.get(entry.name) || null)
+    .filter((scenario) => Boolean(scenario));
+}
+
+function formatCanonicalScenarioMatrixLines() {
+  return CANONICAL_SCENARIO_MATRIX.map((entry) => {
+    return `${entry.config}|${entry.name}`;
+  });
+}
+
+export {
+  CANONICAL_SCENARIO_MATRIX,
+  formatCanonicalScenarioMatrixLines,
+  listCanonicalScenarioEntries,
+  normalizeScenarioConfigName,
+  selectCanonicalScenariosForConfig,
+};

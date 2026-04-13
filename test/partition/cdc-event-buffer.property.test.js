@@ -211,15 +211,19 @@ test(
                 buffer.buffer(event);
               }
 
+              const expectedBufferedEvents =
+                modelBufferedNodeEvents(events, capacity);
               const replayed = [];
               await buffer.replay((event) => {
                 replayed.push(event);
               });
 
-              if (replayed.length !== events.length) return false;
+              if (replayed.length !== expectedBufferedEvents.length) {
+                return false;
+              }
 
-              for (let i = 0; i < events.length; i++) {
-                const expectedId = buildEventIdentity(events[i]);
+              for (let i = 0; i < expectedBufferedEvents.length; i++) {
+                const expectedId = buildEventIdentity(expectedBufferedEvents[i]);
                 const actualId = buildEventIdentity(replayed[i]);
                 if (expectedId !== actualId) return false;
               }

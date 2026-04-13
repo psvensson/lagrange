@@ -15,7 +15,10 @@ import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
 } from '../../src/rebalancer/unified-rebalancer.js';
-import {REBALANCER_LOG_MSG} from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  REBALANCER_LOG_MSG,
+  REBALANCER_SKIP_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -288,6 +291,8 @@ function createTestRebalancer(options = {}) {
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
     bootstrapReadinessState = null,
+    nowFn = null,
+    priorityRecoveryActivityStaleGraceMs = null,
   } = options;
 
   const mockCache = createMockCache(
@@ -327,6 +332,8 @@ function createTestRebalancer(options = {}) {
     controlPlaneSystemTableGateway,
     controlPlaneReadinessService: mockReadinessService,
     bootstrapReadinessState,
+    nowFn,
+    priorityRecoveryActivityStaleGraceMs,
   });
 }
 
@@ -643,11 +650,8 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
         tablePolicyService: createMockPolicyService(),
         messageRouter: createMockMessageRouter(),
         controlPlaneReadinessService: {
-          getMembershipPublicationDiagnosticsSync() {
-            return {
-              publicationEpoch: 11,
-              status: 'PUBLISHED',
-            };
+          getCurrentPublishedMembershipEpochSync() {
+            return 11;
           },
         },
         rebalanceCoordinator: {
@@ -691,10 +695,8 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
         tablePolicyService: createMockPolicyService(),
         messageRouter: createMockMessageRouter(),
         controlPlaneReadinessService: {
-          getMembershipPublicationPlanningSnapshotSync() {
-            return {
-              publishedPlanningEpoch: 12,
-            };
+          getCurrentPublishedMembershipEpochSync() {
+            return 12;
           },
         },
         rebalanceCoordinator: {
@@ -985,12 +987,178 @@ test('UnifiedRebalancer allows priority spread scheduling when global budget is 
     {
       preferAuthoritativeCount: true,
       bypassEmptyQueryDelay: true,
+      partitionId: 'control_plane_publications-p1',
     },
     'priority bypass should use authoritative coordinator lane checks',
   );
 
   rebalancer.shutdown();
 });
+
+test('UnifiedRebalancer reserves one global move slot for priority recovery ' +
+  'while priority spread is still unsatisfied', async (t) => {
+  initializeTestEnvironment();
+
+  const rebalancer = createTestRebalancer({
+    entityId: 'tables-p1',
+    entityType: EntityType.PARTITION,
+    nodeId: 'node-1',
+    nodes: [
+      {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      {node_id: 'node-2', status: NodeStatus.ACTIVE},
+    ],
+  });
+  rebalancer.controlPlaneReadinessService.membershipPublicationService =
+    createMockMembershipPublicationService(
+      ['node-1', 'node-2'],
+      1,
+      {
+        priorityPartitionSummary: {
+          satisfied: false,
+        },
+      },
+    );
+
+  rebalancer.setLeader(true);
+  rebalancer.getCurrentReplicas = () => [];
+  rebalancer.getAvailableNodes = () => ([
+    {node_id: 'node-1'},
+    {node_id: 'node-2'},
+  ]);
+  rebalancer.movePlanner.calculateTargetState = async () => ({
+    targetReplicaCount: 2,
+  });
+  rebalancer.movePlanner.calculateMoves = () => ([
+    {
+      type: MoveType.ADD,
+      nodeId: 'node-2',
+      replicaId: 'tables-p1-r2',
+    },
+  ]);
+  rebalancer.movePlanner.applyPressureGating = async (moves) => moves;
+  rebalancer.movePlanner.isCriticalState = () => false;
+  rebalancer.getConfiguredRebalanceBudget = async () => 1;
+  rebalancer.getGlobalInFlightOperationCount = async () => 0;
+  rebalancer.executeRebalancingMoves = async () => {
+    t.fail(
+      'non-priority system rebalancing should not consume the reserved global priority recovery slot',
+    );
+  };
+
+  const result = await rebalancer.rebalance(
+    TriggerType.PERIODIC,
+    {targetReplicaCount: 2, placementConstraints: {}},
+  );
+
+  t.equal(
+    result.success,
+    true,
+    'reserved-slot deferral should remain a clean skip, not a rebalance failure',
+  );
+  t.equal(
+    result.skipped,
+    true,
+    'non-priority system rebalancing should yield while the reserved priority slot is held back',
+  );
+  t.equal(
+    result.reason,
+    REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+    'reserved global slot should surface through the existing budget skip reason',
+  );
+
+  rebalancer.shutdown();
+});
+
+test('UnifiedRebalancer uses the canonical emergency priority classification for transport-critical recovery',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createTestRebalancer({
+      entityId: 'control_plane_publications-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ],
+    });
+    rebalancer.controlPlaneReadinessService.membershipPublicationService =
+      createMockMembershipPublicationService(
+        ['node-1', 'node-2'],
+        1,
+        {
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: 'control_plane_publications-p1',
+              spreadGap: 1,
+            }],
+          },
+        },
+      );
+
+    t.equal(
+      rebalancer.getPriorityRecoveryAdmissionPlan().emergencyRecoveryActive,
+      true,
+      'transport-critical publication partitions should activate the emergency recovery classification',
+    );
+
+    rebalancer.shutdown();
+  });
+
+test('UnifiedRebalancer keeps reserved priority move capacity during transient publication-summary gaps',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let nowMs = 10_000;
+    let publicationRow = {
+      status: 'PUBLISHED',
+      priorityPartitionSummary: {
+        satisfied: false,
+      },
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: 'tables-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nowFn: () => nowMs,
+      priorityRecoveryActivityStaleGraceMs: 15_000,
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ],
+    });
+    rebalancer.controlPlaneReadinessService.membershipPublicationService = {
+      getLatestClusterPublicationSync() {
+        return publicationRow;
+      },
+    };
+
+    t.equal(
+      rebalancer.getReservedPriorityRecoveryMoveSlots(),
+      1,
+      'active priority recovery should reserve one global move slot',
+    );
+
+    publicationRow = null;
+    nowMs += 5_000;
+
+    t.equal(
+      rebalancer.getReservedPriorityRecoveryMoveSlots(),
+      1,
+      'transient publication read gaps should reuse the last active recovery plan within stale grace',
+    );
+
+    nowMs += 20_000;
+
+    t.equal(
+      rebalancer.getReservedPriorityRecoveryMoveSlots(),
+      0,
+      'once stale grace expires the reserved move slot should clear',
+    );
+
+    rebalancer.shutdown();
+  });
 
 
 test('UnifiedRebalancer - Policy Management', async (t) => {
@@ -1446,6 +1614,91 @@ test('UnifiedRebalancer - Move Calculation', async (t) => {
     t.ok(addMoves.some((m) => m.nodeId === 'node-2'));
     t.ok(addMoves.some((m) => m.nodeId === 'node-3'));
   });
+
+  await t.test(
+    'ignores REPLACE remove-dispatch rows for pending-add node gating',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        replicaOperations: [
+          {
+            operation_id: 'op-active',
+            type: 'REPLACE',
+            partition_id: 'partition-1',
+            replica_id: 'replica-target-active',
+            target_node_id: 'node-2',
+            status: ReplicaStatus.ACTIVE,
+            workflow_step: WORKFLOW_STEP.ACTIVE,
+          },
+          {
+            operation_id: 'op-stopping',
+            type: 'REPLACE',
+            partition_id: 'partition-1',
+            replica_id: 'replica-target-stopping',
+            target_node_id: 'node-3',
+            status: ReplicaStatus.REMOVING,
+            workflow_step: WORKFLOW_STEP.STOPPING,
+          },
+        ],
+      });
+
+      t.equal(
+        rebalancer.hasPendingAddForNode('node-2'),
+        false,
+        'ACTIVE remove-dispatch phase should not consume add gating',
+      );
+      t.equal(
+        rebalancer.hasPendingAddForNode('node-3'),
+        false,
+        'STOPPING remove-dispatch phase should not consume add gating',
+      );
+      t.equal(
+        rebalancer.getTopologyBlockingInFlightOperations().length,
+        0,
+        'remove-dispatch rows should be excluded from topology blockers',
+      );
+    },
+  );
+
+  await t.test(
+    'does not stall non-priority planning on REPLACE remove-dispatch rows',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        replicaOperations: [
+          {
+            operation_id: 'op-active',
+            type: 'REPLACE',
+            partition_id: 'partition-1',
+            replica_id: 'replica-target',
+            target_node_id: 'node-2',
+            status: ReplicaStatus.ACTIVE,
+            workflow_step: WORKFLOW_STEP.ACTIVE,
+          },
+        ],
+      });
+
+      const currentReplicas = [
+        {replica_id: 'r1', node_id: 'node-1', status: ReplicaStatus.ACTIVE},
+      ];
+
+      const targetState = {
+        targetReplicaCount: 3,
+        targetNodes: ['node-1', 'node-2', 'node-3'],
+      };
+
+      const moves = rebalancer.calculateMoves(currentReplicas, targetState);
+      const addMoves = moves.filter((move) => move.type === MoveType.ADD);
+
+      t.equal(addMoves.length, 2, 'planner should keep creating add moves');
+      t.ok(addMoves.some((move) => move.nodeId === 'node-2'));
+      t.ok(addMoves.some((move) => move.nodeId === 'node-3'));
+    },
+  );
 
   await t.test(
     'does not block rebalance on stale syncing replicas without in-flight operations',
@@ -2179,11 +2432,8 @@ test('UnifiedRebalancer - Rebalancing', async (t) => {
               reasons: [],
             };
           },
-          getMembershipPublicationDiagnosticsSync() {
-            return {
-              publicationEpoch: 2,
-              status: 'PUBLISHED',
-            };
+          getCurrentPublishedMembershipEpochSync() {
+            return 2;
           },
         },
         rebalanceCoordinator: {
@@ -2652,6 +2902,138 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     rebalancer.shutdown();
   });
 
+  await t.test(
+    'routes timer-driven checks through the owner queue and replaces stale periodic timers',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalClearTimeout = globalThis.clearTimeout;
+      const timerRecords = [];
+      const clearedTimers = [];
+      let nextTimerId = 1;
+      let directCheckCount = 0;
+      const enqueuedReasons = [];
+
+      globalThis.setTimeout = (callback, delayMs) => {
+        const handle = {id: nextTimerId++, callback, delayMs};
+        timerRecords.push(handle);
+        return handle;
+      };
+      globalThis.clearTimeout = (handle) => {
+        clearedTimers.push(handle);
+      };
+
+      rebalancer.checkRebalance = async () => {
+        directCheckCount += 1;
+      };
+      rebalancer.rebalanceCheckQueue.enqueue =
+        (ownerKey, reason) => {
+          enqueuedReasons.push({ownerKey, reason});
+          return true;
+        };
+
+      try {
+        rebalancer.scheduleNextCheck(5000);
+        t.equal(timerRecords.length, 1, 'initial periodic timer scheduled');
+
+        rebalancer.recordStateChange('node_joined');
+
+        t.same(
+          clearedTimers,
+          [timerRecords[0]],
+          'state change clears the stale periodic timer',
+        );
+        t.equal(
+          rebalancer.scheduledCheck,
+          null,
+          'no stale periodic timer remains armed after reset',
+        );
+        t.equal(
+          timerRecords.length,
+          2,
+          'state change schedules one stabilization timer',
+        );
+
+        timerRecords[1].callback();
+
+        t.equal(
+          directCheckCount,
+          0,
+          'stabilization timers do not call checkRebalance directly',
+        );
+        t.same(
+          enqueuedReasons,
+          [{
+            ownerKey: 'partition-1',
+            reason: 'periodic_check',
+          }],
+          'stabilization timers enqueue through the shared owner queue',
+        );
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+        rebalancer.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'replaces an existing periodic timer instead of stacking another one',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+
+      const originalSetTimeout = globalThis.setTimeout;
+      const originalClearTimeout = globalThis.clearTimeout;
+      const timerRecords = [];
+      const clearedTimers = [];
+      let nextTimerId = 1;
+
+      globalThis.setTimeout = (callback, delayMs) => {
+        const handle = {id: nextTimerId++, callback, delayMs};
+        timerRecords.push(handle);
+        return handle;
+      };
+      globalThis.clearTimeout = (handle) => {
+        clearedTimers.push(handle);
+      };
+
+      try {
+        rebalancer.scheduleNextCheck(4000);
+        rebalancer.scheduleNextCheck(2000);
+
+        t.same(
+          clearedTimers,
+          [timerRecords[0]],
+          'scheduling again clears the previous timer first',
+        );
+        t.equal(
+          rebalancer.scheduledCheck,
+          timerRecords[1],
+          'only the latest timer remains scheduled',
+        );
+      } finally {
+        globalThis.setTimeout = originalSetTimeout;
+        globalThis.clearTimeout = originalClearTimeout;
+        rebalancer.shutdown();
+      }
+    },
+  );
+
   await t.test('detects critical CDC events', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'partition-1',
@@ -2975,6 +3357,560 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
   );
 
   await t.test(
+    'checkRebalance ignores authoritative REPLACE remove-dispatch rows during blocker revalidation',
+    async (t) => {
+      let authoritativeEntityReadCalls = 0;
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-cache-topology',
+          type: 'ADD',
+          partition_id: 'control_plane_publications-p1',
+          entity_type: EntityType.PARTITION,
+          entity_id: 'control_plane_publications-p1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async getOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [{
+              operation_id: 'op-authoritative-replace-active',
+              type: 'REPLACE',
+              partition_id: 'control_plane_publications-p1',
+              entity_type: EntityType.PARTITION,
+              entity_id: 'control_plane_publications-p1',
+              source_node_id: 'node-1',
+              target_node_id: 'node-2',
+              status: 'running',
+              workflow_step: WORKFLOW_STEP.ACTIVE,
+            }];
+          },
+        },
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        authoritativeEntityReadCalls,
+        1,
+        'topology blocker revalidation should still consult authoritative entity operations',
+      );
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'authoritative REPLACE remove-dispatch rows should not keep topology-settling closed',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance ignores authoritative priority REPLACE rows once the owner best-effort planning answer no longer blocks that partition',
+    async (t) => {
+      let authoritativeEntityReadCalls = 0;
+      const nodes = [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+      ];
+      const nodeEndpoints = [
+        createNodeEndpoint('node-1'),
+        createNodeEndpoint('node-2'),
+      ];
+      const serviceEndpoints = [
+        createPostgresWireEndpoint('node-1'),
+        createPostgresWireEndpoint('node-2'),
+      ];
+      const readinessService = {
+        ...createMockReadinessService(createMockCache(
+          nodes,
+          [],
+          [],
+          [],
+          [],
+          nodeEndpoints,
+          serviceEndpoints,
+        )),
+        async getMembershipPublicationPlanningAnswerBestEffort() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2'],
+            projectedServingNodeIds: ['node-1', 'node-2'],
+            locallyEligibleNodeIds: ['node-1', 'node-2'],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: 'sql_write_operations-p1',
+                spreadGap: 1,
+              }],
+              missingPartitionIds: ['sql_write_operations-p1'],
+              requiredDistinctNodeCount: 3,
+            },
+          };
+        },
+        async getMembershipPublicationPlanningSnapshot() {
+          t.fail(
+            'checkRebalance should use the canonical best-effort planning answer owner',
+          );
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints,
+        serviceEndpoints,
+        replicaOperations: [{
+          operation_id: 'op-cache-topology',
+          type: 'ADD',
+          partition_id: 'control_plane_publications-p1',
+          entity_type: EntityType.PARTITION,
+          entity_id: 'control_plane_publications-p1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+        controlPlaneReadinessService: readinessService,
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async getOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [{
+              operation_id: 'op-authoritative-priority-syncing',
+              type: 'REPLACE',
+              partition_id: 'control_plane_publications-p1',
+              entity_type: EntityType.PARTITION,
+              entity_id: 'control_plane_publications-p1',
+              source_node_id: 'node-1',
+              target_node_id: 'node-2',
+              status: ReplicaStatus.SYNCING,
+              workflow_step: WORKFLOW_STEP.SYNCING,
+              steps_history: JSON.stringify([
+                {step: 'PENDING', status: 'pending', inFlight: true},
+                {step: 'SENDING', status: 'pending', inFlight: true},
+                {step: 'CREATING', status: 'creating', inFlight: true},
+                {step: 'SYNCING', status: 'syncing', inFlight: true},
+              ]),
+            }];
+          },
+        },
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        authoritativeEntityReadCalls,
+        1,
+        'topology blocker revalidation should still consult authoritative entity operations',
+      );
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'planner-ready in-flight priority operations should not keep topology-settling closed',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance ignores authoritative priority rows targeting nodes outside the current eligible cohort',
+    async (t) => {
+      let authoritativeEntityReadCalls = 0;
+      const nodes = [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ];
+      const nodeEndpoints = [
+        createNodeEndpoint('node-1'),
+        createNodeEndpoint('node-2'),
+        createNodeEndpoint('node-3'),
+      ];
+      const serviceEndpoints = [
+        createPostgresWireEndpoint('node-1'),
+        createPostgresWireEndpoint('node-2'),
+        createPostgresWireEndpoint('node-3'),
+      ];
+      const readinessService = {
+        ...createMockReadinessService(createMockCache(
+          nodes,
+          [],
+          [],
+          [],
+          [],
+          nodeEndpoints,
+          serviceEndpoints,
+        )),
+        async getMembershipPublicationPlanningSnapshot() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2'],
+            projectedServingNodeIds: ['node-1', 'node-2'],
+            locallyEligibleNodeIds: ['node-1', 'node-2'],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: 'sql_write_operations-p1',
+                spreadGap: 1,
+              }],
+              missingPartitionIds: ['sql_write_operations-p1'],
+              requiredDistinctNodeCount: 3,
+            },
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_write_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'sql_write_operations-p1',
+          table_id: 'sql_write_operations',
+        }],
+        nodeEndpoints,
+        serviceEndpoints,
+        replicaOperations: [{
+          operation_id: 'op-cache-topology',
+          type: 'ADD',
+          partition_id: 'sql_write_operations-p1',
+          entity_type: EntityType.PARTITION,
+          entity_id: 'sql_write_operations-p1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-3',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+        controlPlaneReadinessService: readinessService,
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async getOperationsByEntity() {
+            authoritativeEntityReadCalls += 1;
+            return [{
+              operation_id: 'op-authoritative-priority-mismatch',
+              type: 'REPLACE',
+              partition_id: 'sql_write_operations-p1',
+              entity_type: EntityType.PARTITION,
+              entity_id: 'sql_write_operations-p1',
+              source_node_id: 'node-1',
+              target_node_id: 'node-3',
+              status: ReplicaStatus.PENDING,
+              workflow_step: WORKFLOW_STEP.SENDING,
+              steps_history: JSON.stringify([
+                {step: 'PENDING', status: 'pending', inFlight: true},
+                {step: 'SENDING', status: 'pending', inFlight: true},
+              ]),
+            }];
+          },
+        },
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        authoritativeEntityReadCalls,
+        1,
+        'topology blocker revalidation should still consult authoritative entity operations',
+      );
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'priority operations outside the current eligible cohort should not keep topology-settling closed',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance ignores cache-in-flight priority ACTIVE replace rows that satisfy ' +
+      'spread on the eligible target',
+    async (t) => {
+      const nodes = [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ];
+      const nodeEndpoints = [
+        createNodeEndpoint('node-1'),
+        createNodeEndpoint('node-2'),
+        createNodeEndpoint('node-3'),
+      ];
+      const serviceEndpoints = [
+        createPostgresWireEndpoint('node-1'),
+        createPostgresWireEndpoint('node-2'),
+        createPostgresWireEndpoint('node-3'),
+      ];
+      const readinessService = {
+        ...createMockReadinessService(createMockCache(
+          nodes,
+          [],
+          [],
+          [],
+          [],
+          nodeEndpoints,
+          serviceEndpoints,
+        )),
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2'],
+            priorityPartitionSummary: {
+              blockedPartitions: [{
+                partitionId: 'control_plane_publications-p1',
+                requiredDistinctNodeCount: 3,
+                readyDistinctNodeCount: 2,
+                spreadGap: 1,
+              }],
+              missingPartitionIds: ['control_plane_publications-p1'],
+              requiredDistinctNodeCount: 3,
+            },
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints,
+        serviceEndpoints,
+        replicaOperations: [{
+          operation_id: 'op-cache-replace-active',
+          type: 'REPLACE',
+          partition_id: 'control_plane_publications-p1',
+          entity_type: EntityType.PARTITION,
+          entity_id: 'control_plane_publications-p1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.ACTIVE,
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+        }],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateStateCalls,
+        1,
+        'in-flight priority ACTIVE replace rows on eligible targets should not block topology settling in cache',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance keeps cache-in-flight priority replace rows blocking when ' +
+      'they still do not satisfy spread',
+    async (t) => {
+      const nodes = [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ];
+      const nodeEndpoints = [
+        createNodeEndpoint('node-1'),
+        createNodeEndpoint('node-2'),
+        createNodeEndpoint('node-3'),
+      ];
+      const serviceEndpoints = [
+        createPostgresWireEndpoint('node-1'),
+        createPostgresWireEndpoint('node-2'),
+        createPostgresWireEndpoint('node-3'),
+      ];
+      const readinessService = {
+        ...createMockReadinessService(createMockCache(
+          nodes,
+          [],
+          [],
+          [],
+          [],
+          nodeEndpoints,
+          serviceEndpoints,
+        )),
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
+            priorityPartitionSummary: {
+              blockedPartitions: [{
+                partitionId: 'control_plane_publications-p1',
+                requiredDistinctNodeCount: 3,
+                readyDistinctNodeCount: 1,
+                spreadGap: 2,
+              }],
+              missingPartitionIds: ['control_plane_publications-p1'],
+              requiredDistinctNodeCount: 3,
+            },
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes,
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints,
+        serviceEndpoints,
+        replicaOperations: [{
+          operation_id: 'op-cache-replace-creating',
+          type: 'REPLACE',
+          partition_id: 'control_plane_publications-p1',
+          entity_type: EntityType.PARTITION,
+          entity_id: 'control_plane_publications-p1',
+          source_node_id: 'node-1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.systemPartitionStartDelayMs = 0;
+      rebalancer.userPartitionStartDelayMs = 0;
+      rebalancer.rebalanceStartAtMs = Date.now() - 1;
+      rebalancer.getCriticalSystemTrafficReadinessBlocker = () => null;
+      rebalancer.getCriticalSystemLocalServeReadinessBlocker = () => null;
+      rebalancer.getLocalControlPlaneMutationReadinessBlocker = () => null;
+      rebalancer.scheduleNextCheck = () => {};
+
+      let evaluateStateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateStateCalls += 1;
+        return false;
+      };
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateStateCalls,
+        0,
+        'in-flight priority replace rows outside the active spread completion invariant should keep topology-settling closed',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'topology-settling blocker should defer on the priority check cadence',
+      );
+    },
+  );
+
+  await t.test(
     'checkRebalance keeps priority control-plane partitions on short retry cadence ' +
       'when no actionable moves execute',
     async (t) => {
@@ -3008,6 +3944,43 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelays[0],
         rebalancer.getPriorityRetryDelayMs(),
         'priority partitions should schedule the next check on the short retry cadence',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance preserves priority retry cadence after retryable ' +
+      'control-plane failures',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'sql_transactions-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.evaluateState = async () => true;
+      rebalancer.rebalance = async () => {
+        const error =
+          new Error('Workflow participant replica_operations-p1 not found');
+        error.deferRetry = true;
+        error.retryAfterMs = 250;
+        throw error;
+      };
+      const scheduledDelays = [];
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelays.push(overrideDelayMs);
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.same(
+        scheduledDelays,
+        [rebalancer.getPriorityRetryDelayMs()],
+        'priority recovery should keep its short retry loop after transient control-plane failures',
       );
     },
   );
@@ -3851,6 +4824,66 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
+    'checkRebalance allows priority control-plane partitions to proceed ' +
+      'once endpoint visibility covers the policy target',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+          {node_id: 'node-5', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+          createNodeEndpoint('node-4'),
+          // node-5 intentionally missing endpoint publication
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+          createPostgresWireEndpoint('node-4'),
+          // node-5 intentionally missing endpoint publication
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane partitions should continue once endpoint coverage satisfies the replica target',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'target-satisfied endpoint visibility should not force topology-settling deferral',
+      );
+    });
+
+  await t.test(
     'checkRebalance does not defer critical system partitions for unrelated active-node replica operations in flight',
     async (t) => {
       const rebalancer = createTestRebalancer({
@@ -3913,7 +4946,68 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers critical system partitions while same-entity active-node replica operations are in flight',
+    'checkRebalance defers critical system partitions while same-entity add-side replica operations are in flight',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'add',
+          partition_group_id: 'nodes-p1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should still defer when the same entity already has an add-side topology operation in flight',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'entity-scoped in-flight topology operations should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance does not defer critical system partitions for same-entity REPLACE remove-dispatch rows',
     async (t) => {
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
@@ -3954,7 +5048,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         return false;
       };
 
-      let scheduledDelayMs = null;
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
       rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
         scheduledDelayMs = overrideDelayMs;
       };
@@ -3963,13 +5058,13 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        0,
-        'critical system partitions should still defer when the same entity already has an in-flight topology operation',
+        1,
+        'critical system partitions should keep evaluating once the same-entity REPLACE is only dispatching source removal',
       );
       t.equal(
-        typeof scheduledDelayMs,
-        'number',
-        'entity-scoped in-flight topology operations should schedule a delayed retry',
+        scheduledDelayMs !== UNSCHEDULED,
+        true,
+        'source-removal dispatch rows should still allow the normal next check scheduling path',
       );
     });
 
@@ -4630,7 +5725,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     });
 
   await t.test(
-    'checkRebalance defers non-system entities while priority control-plane partitions remain concentrated',
+    'checkRebalance still evaluates non-system entities while priority control-plane partitions remain concentrated',
     async (t) => {
       const readinessService = {
         ...createMockReadinessService(createMockCache([
@@ -4711,13 +5806,13 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       t.equal(
         evaluateCalls,
-        0,
-        'non-system rebalancing should yield while priority control-plane partitions are still concentrated on one node',
+        1,
+        'non-system rebalancing should still evaluate when concentration alone is present',
       );
       t.equal(
         scheduledDelayMs,
-        rebalancer.criticalCheckDelayMs,
-        'non-system work should retry on the short control-plane-priority cadence',
+        null,
+        'non-system work should keep the normal scheduler path when no explicit override is requested',
       );
     },
   );
@@ -4920,7 +6015,7 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       t.equal(prioritySpread.hasUnusedReadyNodes, true);
     });
 
-  await t.test('derives priority spread blocker from published membership summary',
+  await t.test('derives priority spread blocker from the sync planning answer owner',
     async (t) => {
       const readinessService = {
         ...createMockReadinessService(createMockCache([
@@ -4928,16 +6023,25 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ])),
-        membershipPublicationService: createMockMembershipPublicationService(
-          ['node-1', 'node-2', 'node-3'],
-          4,
-          {
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            projectedServingNodeIds: ['node-1', 'node-2', 'node-3'],
+            locallyEligibleNodeIds: ['node-1', 'node-2', 'node-3'],
             priorityPartitionSummary: {
               satisfied: false,
               missingPartitionIds: ['replica_operations-p1'],
             },
+          };
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            t.fail(
+              'priority spread blocker should route through the sync planning answer owner',
+            );
           },
-        ),
+        },
       };
 
       const rebalancer = createTestRebalancer({
@@ -4961,11 +6065,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           blockedPartitions: [{
             partitionId: 'replica_operations-p1',
             readyReplicaCount: null,
-            readyDistinctNodeCount: null,
-            spreadGap: null,
+            readyDistinctNodeCount: 0,
+            spreadGap: 1,
           }],
         },
-        'priority gating should be driven by the published membership summary',
+        'priority gating should be driven by the canonical sync planning answer',
       );
     });
 

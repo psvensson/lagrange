@@ -370,9 +370,18 @@ test(
             },
           });
 
-          engine.queryExecutor.findPartitionService = () => ({
-            address: `node-1/partition/${partitionId}`,
-          });
+          engine.queryExecutor.executeOnPartition = async (
+            _partitionId,
+            _sql,
+            _params,
+            _expectsRows,
+            _useLocalExecution,
+            _trackMetrics,
+            executionOptions = {},
+          ) => {
+            deliveredMessages.push(executionOptions.buildRequest());
+            return {success: true};
+          };
 
           const beginResult = await engine.transactionCoordinator.begin(sessionId);
           if (!beginResult.success) {

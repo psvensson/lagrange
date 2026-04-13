@@ -618,7 +618,7 @@ class DistributedTransactionCoordinator {
             }
             sweepPath = QUERY_OPERATION.ROLLBACK;
             protocolResult = await this.runRollbackProtocol(tx);
-            });
+          });
         } catch (error) {
           if (this.shouldDeferRecoverySweepError(error)) {
             deferred += 1;
@@ -1111,11 +1111,11 @@ class DistributedTransactionCoordinator {
     );
 
     if (rollbackFailures.length > 0) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     } else {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+      this.transactionsBySession.delete(tx.sessionId);
     }
-    this.transactionsBySession.delete(tx.sessionId);
 
     return {
       success: rollbackFailures.length === 0,

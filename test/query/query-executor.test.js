@@ -28,6 +28,7 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  QUERY_DEFAULTS,
   QUERY_LOG_MSG,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
@@ -515,6 +516,26 @@ test('QueryExecutor - preserves INSERT OR IGNORE when rebuilding SQL', async (t)
 
   t.match(sql, /^INSERT OR IGNORE INTO/i);
 });
+
+test('QueryExecutor - preserves zero affected rows for INSERT OR IGNORE no-op',
+  async (t) => {
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache: createMockSystemCache(['p1']),
+    });
+    executor.executeOnPartition = async () => ({
+      success: true,
+      changes: 0,
+      rows: [],
+    });
+
+    const ast = parseSQL(
+      'INSERT OR IGNORE INTO users (id, name) VALUES (1, \'Alice\')',
+    );
+    const result = await executor.executeInsert(ast, 'p1');
+
+    t.equal(result.affectedRows, 0);
+  });
 
 test('QueryExecutor - executes UPDATE on partitions', async (t) => {
   mockPartitionData.set('p1', [{id: 1}]);
@@ -1350,6 +1371,48 @@ test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
   );
 });
 
+test('QueryExecutor - executeOnPartition forwards router delivery overrides',
+  async (t) => {
+    const deliveries = [];
+    const messageRouter = {
+      deliver: async (address, message, options) => {
+        deliveries.push({address, message, options});
+        return {acknowledged: true, success: true, rows: [], changes: 1};
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter,
+      systemCache: createMockSystemCache(['p1']),
+    });
+
+    const result = await executor.executeOnPartition(
+      'p1',
+      'INSERT INTO users (id) VALUES (?)',
+      [1],
+      false,
+      false,
+      false,
+      {
+        deliveryPriority: 'critical',
+        timeoutMs: 4321,
+      },
+    );
+
+    t.equal(result.success, true, 'partition execution should still succeed');
+    t.equal(deliveries.length, 1, 'partition execution should dispatch once');
+    t.equal(
+      deliveries[0]?.options?.deliveryPriority,
+      'critical',
+      'partition execution should preserve delivery priority overrides',
+    );
+    t.equal(
+      deliveries[0]?.options?.timeoutMs,
+      4321,
+      'partition execution should preserve per-call timeout overrides',
+    );
+  });
+
 test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
   'bootstrap leader window', async (t) => {
   let deliveries = 0;
@@ -1439,6 +1502,95 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
   t.equal(result.success, true);
   t.equal(lastAddress, 'node2/partition/p1-r2');
   t.equal(deliveries, 1, 'write path should dispatch through the visible bootstrap leader');
+});
+
+test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
+  'bootstrap leader window when only followers are visible', async (t) => {
+  let deliveries = 0;
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: null,
+        created_at: 100,
+        updated_at: 100,
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-r1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node1',
+        raft_role: 'follower',
+        address: 'node1/partition/p1-r1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r2',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'follower',
+        address: 'node2/partition/p1-r2',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r3',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node3',
+        raft_role: 'follower',
+        address: 'node3/partition/p1-r3',
+        status: 'active',
+      },
+    ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async () => {
+      deliveries += 1;
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [],
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    'p1',
+    'INSERT INTO users (id) VALUES (\'1\')',
+    [],
+    false,
+    false,
+    false,
+  );
+
+  t.equal(result.success, false);
+  t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  t.equal(deliveries, 0, 'write path should not widen to follower-only services');
 });
 
 test('QueryExecutor - executeOnPartition forwards migration operation metadata',
@@ -2512,6 +2664,216 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   );
 });
 
+test('QueryExecutor - executeOnPartition defers retryable routed control-plane ' +
+  'transport failures instead of widening in the same attempt', async (t) => {
+  const deliveries = [];
+  const retryDelays = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
+  let leaderAttempts = 0;
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: fallbackAddress,
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === leaderAddress) {
+        leaderAttempts += 1;
+        if (leaderAttempts === 1) {
+          return {
+            acknowledged: true,
+            success: false,
+            error: 'Connection to node leader-node closed',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 250,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+          changes: 1,
+          rows: [],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected fallback delivery',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+  executor.delay = async (delayMs) => {
+    retryDelays.push(delayMs);
+  };
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-1'],
+    false,
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, leaderAddress],
+    'deferred control-plane transport failures should retry after backoff ' +
+      'instead of widening to other live replicas in the same attempt',
+  );
+  t.equal(retryDelays.length, 1,
+    'deferred failures should schedule one bounded partition retry');
+  t.ok(retryDelays[0] >= 250,
+    'deferred partition retry should honor retryAfterMs');
+});
+
+test('QueryExecutor - executeOnPartition bounds deferred control-plane write ' +
+  'retries by the per-call timeout budget', async (t) => {
+  const deliveries = [];
+  const retryDelays = [];
+  const partitionId = 'replica_operations-p1';
+  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'Connection to node leader-node closed',
+        errorCode: 'ROUTER_CONNECTION_CLOSED',
+        deferRetry: true,
+        retryAfterMs: 250,
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+  executor.delay = async (delayMs) => {
+    retryDelays.push(delayMs);
+  };
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-1'],
+    false,
+    false,
+    false,
+    {
+      timeoutMs: 200,
+    },
+  );
+
+  t.equal(result.success, false,
+    'bounded control-plane retries should surface the deferred failure once the budget is exhausted');
+  t.same(
+    deliveries,
+    [leaderAddress],
+    'per-call timeout budget should prevent extra retry attempts when retryAfterMs exceeds the remaining budget',
+  );
+  t.equal(retryDelays.length, 0,
+    'per-call timeout budget should not sleep past the remaining execution budget');
+  t.equal(result.deferRetry, true,
+    'bounded timeout exhaustion should preserve defer-retry semantics for upstream owners');
+  t.equal(result.retryAfterMs, 250,
+    'bounded timeout exhaustion should preserve retryAfterMs for the next owner-level retry');
+});
+
 test('QueryExecutor - executeOnPartition retries session-bound transaction ' +
   'contention on the same replica before widening', async (t) => {
   const deliveries = [];
@@ -2940,6 +3302,151 @@ test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +
     'second write should skip the quarantined stale no-handler leader address when no-handler arrives as a thrown transport error',
   );
   t.end();
+});
+
+test('QueryExecutor - control-plane no-handler quarantine stays active until ' +
+  'service metadata changes', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const staleAddress = 'leader-node/partition/replica_operations-p1-r1';
+  let nowMs = 1_000;
+  const realDateNow = Date.now;
+  Date.now = () => nowMs;
+  t.teardown(() => {
+    Date.now = realDateNow;
+  });
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.REPLICA_OPERATIONS,
+        leader_node_id: 'leader-node',
+      },
+    ],
+    services: [],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const originalService = {
+    service_id: 'replica_operations-p1-r1',
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: 'leader-node',
+    raft_role: 'leader',
+    address: staleAddress,
+    status: 'active',
+    updated_at: 100,
+  };
+
+  executor.markTemporarilyUnroutableAddress(
+    partitionId,
+    staleAddress,
+    originalService,
+  );
+
+  nowMs += QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS + 1_000;
+  t.equal(
+    executor.isTemporarilyUnroutableAddress(
+      partitionId,
+      staleAddress,
+      originalService,
+    ),
+    true,
+    'control-plane stale address should remain shadowed beyond the generic warn throttle while metadata is unchanged',
+  );
+
+  const refreshedService = {
+    ...originalService,
+    updated_at: 200,
+  };
+  t.equal(
+    executor.isTemporarilyUnroutableAddress(
+      partitionId,
+      staleAddress,
+      refreshedService,
+    ),
+    false,
+    'updated service metadata should immediately release the stale no-handler shadow',
+  );
+});
+
+test('QueryExecutor - non-control-plane no-handler quarantine keeps default ' +
+  'short window', async (t) => {
+  const partitionId = 'users-p1';
+  const address = 'leader-node/partition/users-p1-r1';
+  let nowMs = 5_000;
+  const realDateNow = Date.now;
+  Date.now = () => nowMs;
+  t.teardown(() => {
+    Date.now = realDateNow;
+  });
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        table_name: 'users',
+        leader_node_id: 'leader-node',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter() {
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  executor.markTemporarilyUnroutableAddress(partitionId, address, {
+    service_id: 'users-p1-r1',
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: 'leader-node',
+    raft_role: 'leader',
+    address,
+    status: 'active',
+    updated_at: 100,
+  });
+
+  nowMs += QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS + 1_000;
+  t.equal(
+    executor.isTemporarilyUnroutableAddress(partitionId, address),
+    false,
+    'non-control-plane partitions should age out at the default short quarantine window',
+  );
 });
 
 test('QueryExecutor - findPartitionLeaderAddress prefers canonical partition leader ' +
@@ -4894,6 +5401,112 @@ async (t) => {
   t.end();
 });
 
+test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
+  'authoritative readiness repair', async (t) => {
+  const partitionId = 'p-stale-routing-read-suppressed';
+  const nodeId = 'node-stale-routing-read-suppressed';
+  const systemCache = {
+    partitions: [
+      {partition_id: partitionId, leader_node_id: nodeId},
+    ],
+    services: [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: nodeId,
+        raft_role: 'leader',
+        address: `${nodeId}/partition/${partitionId}`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+    get(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find(
+          (partition) => partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const authoritativeRefreshes = [];
+  const readinessService = {
+    getNodeReadinessSync() {
+      return {
+        observedAt: '2026-03-11T00:00:00.000Z',
+        lifecycleState: SERVICE_STATUS.ACTIVE,
+        dimensions: {
+          serveEligible: false,
+          repairEligible: false,
+        },
+        reasons: [
+          {code: 'cluster_member_unhealthy'},
+        ],
+      };
+    },
+    async getNodeReadiness(targetNodeId) {
+      authoritativeRefreshes.push(targetNodeId);
+      return this.getNodeReadinessSync();
+    },
+  };
+
+  let deliveryCount = 0;
+  const executor = new QueryExecutor({
+    messageRouter: {
+      async deliver() {
+        deliveryCount += 1;
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [{ok: true}],
+        };
+      },
+    },
+    systemCache,
+    controlPlaneReadinessService: readinessService,
+  });
+  executor.readRetryAttempts = 1;
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT 1',
+    [],
+    true,
+    false,
+    false,
+    {
+      allowReadinessAuthoritativeRefresh: false,
+    },
+  );
+
+  t.equal(
+    result.success,
+    false,
+    'query should fail closed on the stale snapshot when repair is suppressed',
+  );
+  t.equal(
+    deliveryCount,
+    0,
+    'suppressed repair should not route the query to an ineligible candidate',
+  );
+  t.same(
+    authoritativeRefreshes,
+    [],
+    'suppressed repair should not recurse into authoritative readiness refresh',
+  );
+  t.end();
+});
+
 test('QueryExecutor - getPartitionServiceCandidates logs typed routing ' +
   'denials when services exist but readiness filters them all', (t) => {
   const readinessService = {
@@ -5151,6 +5764,115 @@ test('QueryExecutor - executeOnPartition returns last error when ' +
     result.error,
     'Message timeout',
     'should return last transient error after exhausting candidates',
+  );
+  t.end();
+});
+
+test('QueryExecutor - denied routing repair refreshes authoritative overlay ' +
+  'for canonical leader service gaps', async (t) => {
+  const partitionId = 'nodes-p1';
+  const leaderNodeId = 'seed-node';
+  const overlayServices = [];
+  const refreshCalls = [];
+  const systemCache = {
+    get(tableName, key) {
+      if (tableName === TABLES.PARTITIONS && key === partitionId) {
+        return {
+          partition_id: partitionId,
+          table_name: TABLES.NODES,
+          leader_node_id: leaderNodeId,
+        };
+      }
+      return null;
+    },
+    filter(tableName, predicate) {
+      if (tableName === TABLES.SERVICES) {
+        return overlayServices.filter(predicate);
+      }
+      if (tableName === TABLES.PARTITIONS) {
+        const rows = [
+          {
+            partition_id: partitionId,
+            table_name: TABLES.NODES,
+            leader_node_id: leaderNodeId,
+          },
+        ];
+        return rows.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+    routingMetadataOverlay: {
+      getServicesForPartition(requestedPartitionId) {
+        return requestedPartitionId === partitionId ? overlayServices : [];
+      },
+      async refreshPartitionRouting(requestedPartitionId, options = {}) {
+        refreshCalls.push({
+          partitionId: requestedPartitionId,
+          reasonCode: options.routingSnapshot?.reasonCode || null,
+          leaderNodeId: options.routingSnapshot?.canonicalLeaderNodeId || null,
+        });
+        overlayServices.splice(0, overlayServices.length, {
+          service_id: 'nodes-p1-r1',
+          service_type: SERVICE_TYPE.PARTITION,
+          partition_id: partitionId,
+          node_id: leaderNodeId,
+          raft_role: 'leader',
+          address: `${leaderNodeId}/partition/${partitionId}-r1`,
+          status: SERVICE_STATUS.ACTIVE,
+        });
+        return true;
+      },
+    },
+  });
+
+  const staleSnapshot =
+    executor.getPartitionRoutingSnapshot(partitionId);
+  t.equal(
+    staleSnapshot.reasonCode,
+    QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    'routing snapshot should surface the canonical leader service gap',
+  );
+  t.equal(staleSnapshot.serviceRowCount, 0);
+  t.equal(staleSnapshot.canonicalLeaderNodeId, leaderNodeId);
+  t.equal(staleSnapshot.leaderKnown, true);
+
+  const repaired =
+    await executor.maybeAwaitDeniedPartitionRoutingRepair(staleSnapshot);
+
+  t.equal(repaired, true,
+    'denied routing repair should retry after authoritative overlay refresh');
+  t.same(
+    refreshCalls,
+    [
+      {
+        partitionId,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+        leaderNodeId,
+      },
+    ],
+    'denied repair should reuse the authoritative overlay refresh path',
+  );
+
+  const refreshedSnapshot =
+    executor.getPartitionRoutingSnapshot(partitionId);
+  t.equal(
+    refreshedSnapshot.reasonCode,
+    QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
+    'routing snapshot should recover once overlay service rows arrive',
+  );
+  t.equal(refreshedSnapshot.serviceRowCount, 1);
+  t.equal(
+    executor.getPartitionServiceCandidates(
+      partitionId,
+      true,
+    ).length,
+    1,
+    'read candidates should recover after the overlay refresh',
   );
   t.end();
 });

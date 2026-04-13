@@ -16,6 +16,8 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  isCriticalTransportControlPlanePartition as
+    isCriticalTransportControlPlanePartitionTable,
   isPriorityControlPlanePartition as isPriorityControlPlanePartitionTable,
 } from '../bootstrap/system-partition-classification.js';
 import {
@@ -30,8 +32,16 @@ import {
 import {
   readAuthoritativeControlPlaneRows,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  buildPriorityRecoveryOperationAssessment,
+  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
+  resolvePriorityRecoveryActiveNodeCohort,
+  resolveTrackedPriorityRecoveryAdmissionPlan,
+  shouldPriorityRecoveryOperationBlockPlanning,
+} from '../control-plane/priority-recovery-snapshot.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
+  PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
@@ -43,7 +53,7 @@ import {
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {
-  WORKFLOW_STEP, NUM, TIME_MS, METRICS_LOG_TAG,
+  WORKFLOW_STEP, NUM, TIME_MS,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
@@ -59,18 +69,12 @@ import {
 import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
-  ReplicaStatus,
-  WORKFLOW_STEP_TO_STATUS,
   OperationType,
-  isCoordinatorOwnedOperationType,
   createOperation as createOperationRecord,
 } from './replica-status.js';
 import {
-  ReplicaOperationMessageType,
   ReplicaOperationField,
-  ReplicaOperationResponseStatus,
 } from './replica-operation-constants.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
@@ -79,7 +83,6 @@ import {
   REBALANCER_DEFAULT,
   REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
-  OPERATION_TRANSITION_REASON,
 } from './rebalancer-constants.js';
 import {
   RESERVATION_REASON,
@@ -88,9 +91,6 @@ import {
   STORAGE_CAPACITY_DEFAULT,
 } from './storage-capacity-constants.js';
 import {
-  EXECUTOR_OUTCOME_FIELD,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
 } from './executor-outcome-constants.js';
 import {
   ExecutorOutcomeEmitter,
@@ -173,6 +173,8 @@ const DEFAULT_AMPLIFICATION_FACTOR = NUM.ONE;
 
 const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
   ADD: 'add',
+  PRIORITY_ADD: 'priority_add',
+  EMERGENCY_PRIORITY_ADD: 'emergency_priority_add',
   REMOVE: 'remove',
 });
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
@@ -194,8 +196,8 @@ const STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS = Object.freeze({
     allowOwnerRpcFallback: true,
     allowSqlFallback: false,
   },
-  allowCacheFallbackOnReadFailure: false,
 });
+const PRIORITY_RECENT_INTENT_TTL_MS = TIME_MS.MINUTE * NUM.TWO;
 
 /**
  * RebalanceCoordinator manages the complete rebalancing workflow.
@@ -388,6 +390,19 @@ class RebalanceCoordinator extends EventEmitter {
     this.operationsInCreation = workflowInFlightExecutions;
     this.operationsInExecution = workflowInFlightExecutions;
     this.transactionCoordinator = options.transactionCoordinator || null;
+    this.nowFn = typeof options.nowFn === 'function' ? options.nowFn : Date.now;
+    this.priorityRecoveryActivityStaleGraceMs = Number.isFinite(
+      options.priorityRecoveryActivityStaleGraceMs,
+    ) ?
+      Math.max(
+        NUM.ZERO,
+        Math.floor(options.priorityRecoveryActivityStaleGraceMs),
+      ) :
+      DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS;
+    this.priorityRecoveryAdmissionTracker = {
+      lastObservedAdmissionPlan: null,
+      lastObservedAdmissionPlanAtMs: null,
+    };
     this.recentOperationIntents = new Map();
     this.replicaOperationTransitionQueue = Promise.resolve();
 
@@ -395,6 +410,7 @@ class RebalanceCoordinator extends EventEmitter {
       new ExecutorOutcomeEmitter({logger: this.logger});
     this._boundOutcomeHandler = null;
     this.cacheChangeListener = null;
+    this._boundTerminalOperationIntentPruner = null;
 
     // Repository owns SQL/cache access and row translation (D7.1)
     this.repository = options.repository ||
@@ -438,6 +454,8 @@ class RebalanceCoordinator extends EventEmitter {
           (params) => this.allocateCanonicalReplicaId(params),
         getActualReplicaStatus:
           (...args) => this.getActualReplicaStatus(...args),
+        setTimeoutFn: options.setTimeoutFn,
+        clearTimeoutFn: options.clearTimeoutFn,
         incompleteOperationQueryEmptyBackoffMs:
           INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS,
       });
@@ -463,8 +481,6 @@ class RebalanceCoordinator extends EventEmitter {
             this.normalizeMoveType(moveType),
         },
       });
-
-    this.logger = this.logger;
 
     this.isShuttingDown = false;
     this.initialized = false;
@@ -604,6 +620,44 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Bind terminal-operation events to recent-intent cache pruning.
+   * @private
+   */
+  bindTerminalOperationIntentPruner() {
+    if (!this._boundTerminalOperationIntentPruner) {
+      this._boundTerminalOperationIntentPruner = (payload = {}) => {
+        this.pruneRecentOperationIntentsForOperation(payload?.operation);
+      };
+    }
+    this.on(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+      this._boundTerminalOperationIntentPruner,
+    );
+    this.on(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+      this._boundTerminalOperationIntentPruner,
+    );
+  }
+
+  /**
+   * Remove terminal-operation recent-intent pruning listeners.
+   * @private
+   */
+  unbindTerminalOperationIntentPruner() {
+    if (!this._boundTerminalOperationIntentPruner) {
+      return;
+    }
+    this.removeListener(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+      this._boundTerminalOperationIntentPruner,
+    );
+    this.removeListener(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+      this._boundTerminalOperationIntentPruner,
+    );
+  }
+
+  /**
    * Initialize the coordinator.
    */
   initialize() {
@@ -623,6 +677,7 @@ class RebalanceCoordinator extends EventEmitter {
       this._boundOutcomeHandler,
     );
     this.bindSystemTableCacheListener();
+    this.bindTerminalOperationIntentPruner();
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
@@ -692,21 +747,37 @@ class RebalanceCoordinator extends EventEmitter {
    * Query incomplete operations using SQL engine.
    * @readModel COORDINATOR_TIMEOUT_QUERY — READ_MODEL_SOURCE.RECOVERY_SQL
    * @param {Object} [options={}]
-   * @param {boolean} [options.skipSqlFallbackWhenCacheEmpty]
    * @param {boolean} [options.preferAuthoritativeRead]
    * @return {Promise<Array<Object>>} Array of incomplete operations.
    * @private
    */
   async queryIncompleteOperations(options = {}) {
-    const skipSqlFallbackWhenCacheEmpty =
-      typeof options.skipSqlFallbackWhenCacheEmpty === 'boolean' ?
-        options.skipSqlFallbackWhenCacheEmpty :
-        this.isLocalRouterBackpressured();
     const preferAuthoritativeRead =
       options.preferAuthoritativeRead === true;
+    if (!preferAuthoritativeRead &&
+        this.isLocalRouterBackpressured(options)) {
+      return this.queryCachedIncompleteOperations();
+    }
     return this.repository.queryIncompleteOperations({
-      skipSqlFallbackWhenCacheEmpty,
       preferAuthoritativeRead,
+    });
+  }
+
+  /**
+   * Query only the cache-visible incomplete operations.
+   * This keeps cache-bound observation semantics explicit instead of exposing
+   * cache-empty fallback tuning on the general repository API.
+   *
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async queryCachedIncompleteOperations() {
+    if (typeof this.repository?.queryCachedIncompleteOperations ===
+        'function') {
+      return this.repository.queryCachedIncompleteOperations();
+    }
+    return this.repository.queryIncompleteOperations({
+      skipSqlFallbackWhenCacheEmpty: true,
     });
   }
 
@@ -1158,6 +1229,34 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Critical system partitions allow only one add-like recovery lifecycle in
+   * flight. Use one broader key so target-node churn or authoritative entity
+   * read misses cannot mint a second PENDING replacement for the same entity.
+   *
+   * @param {string|null} normalizedMoveType
+   * @param {string} partitionId
+   * @param {string} entityType
+   * @param {string} entityId
+   * @return {string|null}
+   * @private
+   */
+  buildCriticalAddLikeIntentKey(
+    move,
+    normalizedMoveType,
+    partitionId,
+    entityType,
+    entityId,
+  ) {
+    if (move?.enforceConcurrentOperationBudget !== true ||
+        (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE) ||
+        !this.isCriticalSystemPartition(partitionId)) {
+      return null;
+    }
+    return `${entityType}:${entityId}:critical_add_like`;
+  }
+
+  /**
    * Determine whether an in-flight operation matches a new move intent.
    * @param {Object} operation - Existing operation.
    * @param {Object} move - New move request.
@@ -1228,14 +1327,48 @@ class RebalanceCoordinator extends EventEmitter {
       this.recentOperationIntents.delete(dedupeKey);
       return null;
     }
+
+    let cacheVisibleOperation = null;
+    try {
+      cacheVisibleOperation = await this.queryOperationById(cachedOperationId);
+    } catch (error) {
+      this.logger.debug(
+        'Failed to refresh recent operation intent from cache-visible state',
+        {
+          operationId: cachedOperationId,
+          dedupeKey,
+          error: error?.message || String(error),
+        },
+      );
+    }
+    if (cacheVisibleOperation &&
+        this.isOperationTerminal(cacheVisibleOperation)) {
+      this.pruneRecentOperationIntentsForOperation(cacheVisibleOperation);
+      return null;
+    }
+    const operationForMissReuse =
+      cacheVisibleOperation &&
+      !this.isOperationTerminal(cacheVisibleOperation) ?
+        cacheVisibleOperation :
+        cachedOperation;
+
     const authoritativeOperation =
       await this.repository.queryAuthoritativeOperationById(
         cachedOperationId,
         {requireOwnerRpcRead: true},
       );
-    if (!authoritativeOperation ||
-        this.isOperationTerminal(authoritativeOperation)) {
+    if (!authoritativeOperation) {
+      if (this.shouldReuseRecentOperationIntentOnAuthoritativeMiss(
+        operationForMissReuse,
+      )) {
+        this.rememberOperationIntent(dedupeKey, operationForMissReuse);
+        return operationForMissReuse;
+      }
       this.recentOperationIntents.delete(dedupeKey);
+      return null;
+    }
+    if (this.isOperationTerminal(authoritativeOperation)) {
+      this.pruneRecentOperationIntentsForOperation(authoritativeOperation);
       return null;
     }
 
@@ -1250,10 +1383,187 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   rememberOperationIntent(dedupeKey, operation) {
+    if (!operation || this.isOperationTerminal(operation)) {
+      this.recentOperationIntents.delete(dedupeKey);
+      return;
+    }
     this.recentOperationIntents.set(dedupeKey, {
       operation,
-      expiresAt: Date.now() + RECENT_INTENT_TTL_MS,
+      expiresAt: Date.now() + this.getRecentOperationIntentTtlMs(operation),
     });
+  }
+
+  /**
+   * Remember one operation under one or more intent keys.
+   * @param {string[]|Set<string>} intentKeys
+   * @param {Object} operation
+   * @private
+   */
+  rememberOperationIntents(intentKeys, operation) {
+    const keys = Array.isArray(intentKeys) ?
+      intentKeys :
+      Array.from(intentKeys || []);
+    for (const key of keys) {
+      if (typeof key !== 'string' || key.length === NUM.ZERO) {
+        continue;
+      }
+      this.rememberOperationIntent(key, operation);
+    }
+  }
+
+  /**
+   * Reused create-intent rows may still be the correct in-flight operation
+   * while remaining stuck at PENDING because the first owner-side handoff was
+   * deferred or missed. Re-arm those rows through the canonical owner path so
+   * later planning retries do not keep returning one limbo operation forever.
+   *
+   * @param {Object|null} operation
+   * @param {Object} [options={}]
+   * @param {boolean} [options.shouldEmitOperationCreated]
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async maybeRearmReusedPendingOperation(
+    operation,
+    options = {},
+  ) {
+    const workflowStep = String(
+      operation?.workflowStep ||
+      operation?.workflow_step ||
+      '',
+    ).trim();
+    if (!operation ||
+        this.isOperationTerminal(operation) ||
+        workflowStep !== WORKFLOW_STEP.PENDING) {
+      return operation;
+    }
+    await this.armCoordinatorCreatedOperationProgress(operation);
+    return operation;
+  }
+
+  /**
+   * Drop cached create-intent entries that point at one terminal operation.
+   * This keeps failed/completed priority recovery rows from suppressing the
+   * next required operation while cache/owner reads are under pressure.
+   * @param {Object|null} operation
+   * @return {void}
+   * @private
+   */
+  pruneRecentOperationIntentsForOperation(operation) {
+    const operationId = String(
+      operation?.operationId ||
+      operation?.operation_id ||
+      '',
+    ).trim();
+    if (operationId.length === NUM.ZERO) {
+      return;
+    }
+    for (const [dedupeKey, entry] of this.recentOperationIntents.entries()) {
+      if (String(entry?.operation?.operationId || '').trim() !== operationId) {
+        continue;
+      }
+      this.recentOperationIntents.delete(dedupeKey);
+    }
+  }
+
+  /**
+   * Extend recent-intent retention for priority control-plane partitions so
+   * transient owner-read misses do not create a new PENDING operation every
+   * few seconds while the original one is still the intended recovery op.
+   * @param {Object|null} operation
+   * @return {number}
+   * @private
+   */
+  getRecentOperationIntentTtlMs(operation) {
+    const partitionId = String(
+      operation?.partitionId ||
+      operation?.entityId ||
+      '',
+    ).trim();
+    if (!partitionId ||
+        !this.isPriorityControlPlanePartition(partitionId)) {
+      return RECENT_INTENT_TTL_MS;
+    }
+    const configuredPendingTimeoutMs = Number.isFinite(
+      this.config?.pendingTimeoutMs,
+    ) && this.config.pendingTimeoutMs > NUM.ZERO ?
+      Math.floor(this.config.pendingTimeoutMs) :
+      RECENT_INTENT_TTL_MS;
+    return Math.max(
+      RECENT_INTENT_TTL_MS,
+      PRIORITY_RECENT_INTENT_TTL_MS,
+      configuredPendingTimeoutMs * NUM.FOUR,
+    );
+  }
+
+  /**
+   * Resolve the workflow-timeout window that defines how long a missing
+   * recent intent is still credible as an in-flight recovery operation.
+   * Once a cached priority operation has aged past its own step timeout,
+   * reusing it on authoritative misses suppresses the fresh recovery op that
+   * the planner now needs to mint.
+   * @param {Object|null} operation
+   * @return {number}
+   * @private
+   */
+  getRecentOperationMissReuseBudgetMs(operation) {
+    const workflowStep = String(operation?.workflowStep || '').trim();
+    if (workflowStep === WORKFLOW_STEP.CREATING) {
+      return this.config.creatingTimeoutMs;
+    }
+    if (workflowStep === WORKFLOW_STEP.SYNCING) {
+      return this.config.syncingTimeoutMs;
+    }
+    if (workflowStep === WORKFLOW_STEP.STOPPING ||
+        workflowStep === WORKFLOW_STEP.ACTIVE) {
+      return this.config.removingTimeoutMs;
+    }
+    return this.config.pendingTimeoutMs;
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {number}
+   * @private
+   */
+  getOperationAgeMs(operation) {
+    const updatedAt = Number(operation?.updatedAt);
+    const createdAt = Number(operation?.createdAt);
+    const startedAt = Number.isFinite(updatedAt) && updatedAt > NUM.ZERO ?
+      updatedAt :
+      createdAt;
+    if (!Number.isFinite(startedAt) || startedAt <= NUM.ZERO) {
+      return NUM.ZERO;
+    }
+    return Math.max(NUM.ZERO, Date.now() - startedAt);
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  shouldReuseRecentOperationIntentOnAuthoritativeMiss(operation) {
+    if (!operation || this.isOperationTerminal(operation)) {
+      return false;
+    }
+    const partitionId = String(
+      operation.partitionId ||
+      operation.entityId ||
+      '',
+    ).trim();
+    if (partitionId.length === NUM.ZERO ||
+        !this.isPriorityControlPlanePartition(partitionId)) {
+      return false;
+    }
+
+    const reuseBudgetMs =
+      this.getRecentOperationMissReuseBudgetMs(operation);
+    if (!Number.isFinite(reuseBudgetMs) || reuseBudgetMs <= NUM.ZERO) {
+      return false;
+    }
+
+    return this.getOperationAgeMs(operation) < reuseBudgetMs;
   }
 
   /**
@@ -1407,72 +1717,16 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   getCurrentPublishedMembershipEpoch() {
-    const observedAt = Date.now();
-    let planningSnapshot =
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService
-        .getMembershipPublicationPlanningSnapshotSync === 'function' ?
-        this.controlPlaneReadinessService
-          .getMembershipPublicationPlanningSnapshotSync(
-            this.nodeId,
-            observedAt,
-          ) :
-        null;
-    const diagnostics = !planningSnapshot &&
-      this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService
-        .getMembershipPublicationDiagnosticsSync === 'function' ?
-      this.controlPlaneReadinessService
-        .getMembershipPublicationDiagnosticsSync(
-          this.nodeId,
-          observedAt,
-        ) :
-      null;
-    if (!planningSnapshot &&
-        diagnostics &&
-        this.controlPlaneReadinessService &&
+    if (!this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService
-          .buildMembershipPublicationPlanningSnapshot === 'function') {
-      planningSnapshot = this.controlPlaneReadinessService
-        .buildMembershipPublicationPlanningSnapshot({
-          nodeId: this.nodeId,
-          observedAt,
-          membershipPublication: diagnostics,
-        });
+          .getCurrentPublishedMembershipEpochSync !== 'function') {
+      return null;
     }
-    const publishedPlanningEpoch = Number(
-      planningSnapshot?.publishedPlanningEpoch,
-    );
-    if (Number.isInteger(publishedPlanningEpoch) &&
-        publishedPlanningEpoch >= 0) {
-      return publishedPlanningEpoch;
-    }
-    const publicationEpoch = Number(diagnostics?.publicationEpoch);
-    const publicationStatus = String(
-      diagnostics?.status ?? diagnostics?.publicationStatus ?? '',
-    ).toUpperCase();
-    if (publicationStatus === 'PUBLISHED' && Number.isInteger(publicationEpoch)) {
-      return publicationEpoch;
-    }
-
-    const publicationService =
-      this.controlPlaneReadinessService?.membershipPublicationService;
-    let publicationRow = null;
-    if (publicationService &&
-        typeof publicationService.getLatestClusterPublicationSync === 'function') {
-      publicationRow = publicationService.getLatestClusterPublicationSync();
-    } else if (publicationService &&
-        typeof publicationService.getLatestPublicationRowSync === 'function') {
-      publicationRow = publicationService.getLatestPublicationRowSync();
-    }
-
-    const fallbackEpoch = Number(
-      publicationRow?.publicationEpoch ?? publicationRow?.publication_epoch,
-    );
-    const fallbackStatus = String(publicationRow?.status || '').toUpperCase();
-    return fallbackStatus === 'PUBLISHED' && Number.isInteger(fallbackEpoch) ?
-      fallbackEpoch :
-      null;
+    return this.controlPlaneReadinessService
+      .getCurrentPublishedMembershipEpochSync(
+        this.nodeId,
+        Date.now(),
+      );
   }
 
   /**
@@ -1502,9 +1756,6 @@ class RebalanceCoordinator extends EventEmitter {
     throw error;
   }
 
-
-
-
   /**
    * Create an operation record (persisted via SQL engine).
    * Includes deduplication check to prevent duplicate operations.
@@ -1519,6 +1770,8 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
    * @param {boolean} [move.emitOperationCreated] - Emit the local
    *   coordinator-created dispatch trigger after persistence.
+   * @param {boolean} [move.skipProvisioningAdmissionRecheck] - Reuse an
+   *   immediately preceding admitted provisioning probe for this target.
    * @return {Promise<Object>} Created or existing operation record.
    */
   async createOperation(move) {
@@ -1530,14 +1783,45 @@ class RebalanceCoordinator extends EventEmitter {
 
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
     const entityId = move.entityId || move.partitionId;
+    const partitionId = move.partitionId || entityId;
+    const normalizedMoveType = this.normalizeMoveType(move?.type);
+    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+    const criticalAddLikeIntentKey =
+      this.buildCriticalAddLikeIntentKey(
+        move,
+        normalizedMoveType,
+        partitionId,
+        entityType,
+        entityId,
+      );
+    const createOperationIntentKey =
+      criticalAddLikeIntentKey || dedupeKey;
     const singleFlightKey =
-      this.getCreateOperationSingleFlightKey(dedupeKey);
+      this.getCreateOperationSingleFlightKey(createOperationIntentKey);
     this.pruneExpiredOperationIntents();
 
     const recentOperation = await this.getRecentOperationIntent(dedupeKey);
     if (recentOperation) {
-      return recentOperation;
+      return this.maybeRearmReusedPendingOperation(
+        recentOperation,
+        {shouldEmitOperationCreated},
+      );
+    }
+    if (criticalAddLikeIntentKey &&
+        criticalAddLikeIntentKey !== dedupeKey) {
+      const recentCriticalOperation =
+        await this.getRecentOperationIntent(criticalAddLikeIntentKey);
+      if (recentCriticalOperation) {
+        this.rememberOperationIntents(
+          [dedupeKey, criticalAddLikeIntentKey],
+          recentCriticalOperation,
+        );
+        return this.maybeRearmReusedPendingOperation(
+          recentCriticalOperation,
+          {shouldEmitOperationCreated},
+        );
+      }
     }
 
     const existingPromise = this.operationsInCreation.get(singleFlightKey);
@@ -1591,6 +1875,14 @@ class RebalanceCoordinator extends EventEmitter {
       } :
       move;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+    const criticalAddLikeIntentKey =
+      this.buildCriticalAddLikeIntentKey(
+        move,
+        normalizedMoveType,
+        partitionId,
+        entityType,
+        entityId,
+      );
     const sourceNodeId = normalizedMoveType === OperationType.REPLACE ?
       (move.sourceNodeId || this.nodeId) :
       this.nodeId;
@@ -1606,7 +1898,10 @@ class RebalanceCoordinator extends EventEmitter {
     );
 
     if (existing) {
-      this.rememberOperationIntent(dedupeKey, existing);
+      this.rememberOperationIntents(
+        [dedupeKey, criticalAddLikeIntentKey],
+        existing,
+      );
       this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.DUPLICATE_OPERATION, {
         existingOperationId: existing.operationId,
         partitionId: partitionId,
@@ -1615,7 +1910,25 @@ class RebalanceCoordinator extends EventEmitter {
         entityType: entityType,
         entityId: entityId,
       });
-      return existing;
+      return this.maybeRearmReusedPendingOperation(
+        existing,
+        {shouldEmitOperationCreated},
+      );
+    }
+
+    if (criticalAddLikeIntentKey) {
+      const recentCriticalOperation =
+        await this.getRecentOperationIntent(criticalAddLikeIntentKey);
+      if (recentCriticalOperation) {
+        this.rememberOperationIntents(
+          [dedupeKey, criticalAddLikeIntentKey],
+          recentCriticalOperation,
+        );
+        return this.maybeRearmReusedPendingOperation(
+          recentCriticalOperation,
+          {shouldEmitOperationCreated},
+        );
+      }
     }
 
     await this.ensureNoConflictingInFlightReplaceForRemove({
@@ -1651,6 +1964,7 @@ class RebalanceCoordinator extends EventEmitter {
           entityId,
           partitionId,
           dedupeKey,
+          criticalAddLikeIntentKey,
           sourceNodeId,
         }),
       );
@@ -1665,6 +1979,7 @@ class RebalanceCoordinator extends EventEmitter {
       entityId,
       partitionId,
       dedupeKey,
+      criticalAddLikeIntentKey,
       sourceNodeId,
     });
   }
@@ -1753,6 +2068,7 @@ class RebalanceCoordinator extends EventEmitter {
       entityId,
       partitionId,
       dedupeKey,
+      criticalAddLikeIntentKey,
       sourceNodeId,
     } = context;
 
@@ -1762,13 +2078,15 @@ class RebalanceCoordinator extends EventEmitter {
       null;
     let operationReplicaId = move.replicaId || null;
 
-    await this.ensureProvisioningAdmissionAllowed({
-      move: normalizedMove,
-      entityType,
-      entityId,
-      partitionId,
-      sourceNodeId,
-    });
+    if (move?.skipProvisioningAdmissionRecheck !== true) {
+      await this.ensureProvisioningAdmissionAllowed({
+        move: normalizedMove,
+        entityType,
+        entityId,
+        partitionId,
+        sourceNodeId,
+      });
+    }
 
     if (normalizedMoveType === OperationType.ADD && !operationReplicaId) {
       operationReplicaId = await this.allocateCanonicalReplicaId({
@@ -1806,8 +2124,8 @@ class RebalanceCoordinator extends EventEmitter {
       excludeReplicaIds: normalizedMoveType === OperationType.REPLACE &&
         typeof sourceReplicaId === 'string' &&
         sourceReplicaId.length > NUM.ZERO ?
-          [sourceReplicaId] :
-          [],
+        [sourceReplicaId] :
+        [],
       partitionId,
       targetNodeId: move.nodeId,
       targetReplicaId: operationReplicaId,
@@ -1869,22 +2187,65 @@ class RebalanceCoordinator extends EventEmitter {
         STRICT_CREATE_DEDUPE_REPOSITORY_QUERY_OPTIONS,
       );
       if (existingAfterInsert) {
-        this.rememberOperationIntent(dedupeKey, existingAfterInsert);
-        return existingAfterInsert;
+        this.rememberOperationIntents(
+          [dedupeKey, criticalAddLikeIntentKey],
+          existingAfterInsert,
+        );
+        return this.maybeRearmReusedPendingOperation(
+          existingAfterInsert,
+          {shouldEmitOperationCreated},
+        );
       }
     }
 
     this.stats.operationsCreated++;
-    this.rememberOperationIntent(dedupeKey, operation);
+    this.rememberOperationIntents(
+      [dedupeKey, criticalAddLikeIntentKey],
+      operation,
+    );
 
     // Create storage reservation atomically (Req 4.1)
     await this.createReservationForOperation(operation);
 
     if (shouldEmitOperationCreated) {
       this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
+      await this.armCoordinatorCreatedOperationProgress(operation);
     }
 
     return operation;
+  }
+
+  /**
+   * Newly created locally owned operations should not depend solely on cache
+   * visibility or external listeners before leaving PENDING. Prime the
+   * owner-side transition lane best-effort while keeping dispatch ownership on
+   * the canonical event/read-model paths.
+   *
+   * @param {Object|null} operation
+   * @return {void}
+   * @private
+   */
+  async armCoordinatorCreatedOperationProgress(operation) {
+    if (!operation?.operationId ||
+        typeof this.workflowOwner?.armCoordinatorCreatedOperation !==
+          'function') {
+      return false;
+    }
+    try {
+      return await this.workflowOwner
+        .armCoordinatorCreatedOperation(operation);
+    } catch (error) {
+      this.logger.warn(
+        'Failed to prime coordinator-created operation progress',
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId || null,
+          workflowStep: operation.workflowStep || null,
+          error: error?.message || String(error),
+        },
+      );
+      return false;
+    }
   }
 
   /**
@@ -1930,12 +2291,20 @@ class RebalanceCoordinator extends EventEmitter {
         context?.entityType || SERVICE_TYPE.PARTITION,
         context?.entityId || context?.partitionId,
       );
-    const conflictingOperation = existingOperations.find((operation) => {
+    let conflictingOperation = null;
+    for (const operation of existingOperations) {
       if (!operation || this.isOperationTerminal(operation)) {
-        return false;
+        continue;
       }
-      return this.isConcurrentAddBudgetOperation(operation);
-    });
+      if (!this.isConcurrentAddBudgetOperation(operation)) {
+        continue;
+      }
+      if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
+        continue;
+      }
+      conflictingOperation = operation;
+      break;
+    }
     if (!conflictingOperation) {
       return;
     }
@@ -1944,12 +2313,46 @@ class RebalanceCoordinator extends EventEmitter {
       normalizedMoveType,
       1,
       {
-        message:
-          `Critical partition ${context.partitionId} already has ` +
-          `an add-like operation in flight`,
+        message: 'Critical partition ' +
+          `${context.partitionId} already has an add-like operation ` +
+          'in flight',
         conflictingOperationId: conflictingOperation.operationId,
       },
     );
+  }
+
+  /**
+   * Priority recovery rows that already satisfy spread or no longer target the
+   * current eligible cohort must not keep blocking the next add-like action.
+   *
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async shouldIgnoreCriticalAddBudgetOperation(operation) {
+    if (!operation ||
+        !isPriorityControlPlanePartitionTable({
+          partitionId: operation.partitionId,
+        }) ||
+        typeof this.workflowOwner
+          ?.getPriorityRecoveryPlanningSnapshotForOperation !== 'function') {
+      return false;
+    }
+    const planningSnapshot =
+      await this.workflowOwner
+        .getPriorityRecoveryPlanningSnapshotForOperation(operation);
+    if (!planningSnapshot ||
+        typeof planningSnapshot !== 'object') {
+      return false;
+    }
+    const assessment = buildPriorityRecoveryOperationAssessment({
+      operation,
+      priorityPartitionSummary:
+        planningSnapshot.priorityPartitionSummary || null,
+      effectiveEligibleNodeIds:
+        resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
+    });
+    return !shouldPriorityRecoveryOperationBlockPlanning(assessment);
   }
 
   /**
@@ -2017,9 +2420,10 @@ class RebalanceCoordinator extends EventEmitter {
     budgetContext = {},
     executionFactory,
   ) {
-    const scope = normalizedMoveType === OperationType.REMOVE ?
-      CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE :
-      CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
+    const scope = this.resolveConcurrentCreateBudgetScope(
+      normalizedMoveType,
+      budgetContext,
+    );
     return this.operationWorkflowRunExclusive(
       this.getCreateBudgetSingleFlightKey(scope),
       async () => {
@@ -2030,6 +2434,38 @@ class RebalanceCoordinator extends EventEmitter {
         return executionFactory();
       },
     );
+  }
+
+  /**
+   * Keep emergency priority recovery admission off the ordinary create-budget
+   * single-flight lane so unrelated add scheduling cannot head-of-line block
+   * the control-plane partitions that publish and execute recovery itself.
+   * @param {string|null} normalizedMoveType
+   * @param {Object} [budgetContext={}]
+   * @return {string}
+   * @private
+   */
+  resolveConcurrentCreateBudgetScope(
+    normalizedMoveType,
+    budgetContext = {},
+  ) {
+    if (normalizedMoveType === OperationType.REMOVE) {
+      return CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE;
+    }
+    if (!this.shouldUsePriorityConcurrentAddLane(
+      normalizedMoveType,
+      budgetContext,
+    )) {
+      return CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
+    }
+    const priorityRecoveryAdmissionPlan =
+      this.getPriorityRecoveryAdmissionPlan();
+    if (priorityRecoveryAdmissionPlan.usesEmergencyPriorityOverflow(
+      budgetContext?.partitionId,
+    ) === true) {
+      return CONCURRENT_CREATE_BUDGET_SCOPE.EMERGENCY_PRIORITY_ADD;
+    }
+    return CONCURRENT_CREATE_BUDGET_SCOPE.PRIORITY_ADD;
   }
 
   /**
@@ -2111,6 +2547,128 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Critical transport/system-table partitions own publication and
+   * replica-operation convergence for the rest of the control plane. During
+   * active priority recovery they must retain one extra add-like slot so
+   * ordinary priority system tables cannot consume the whole priority lane.
+   * @param {string|null} partitionId
+   * @return {boolean}
+   * @private
+   */
+  isEmergencyPriorityControlPlanePartition(partitionId) {
+    return isCriticalTransportControlPlanePartitionTable({
+      partitionId,
+    });
+  }
+
+  /**
+   * Resolve the latest cluster publication row when available.
+   * @return {Object|null}
+   * @private
+   */
+  getLatestMembershipPublicationRow() {
+    const publicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService;
+    let publicationRow = null;
+    if (publicationService &&
+        typeof publicationService.getLatestClusterPublicationSync ===
+          'function') {
+      publicationRow = publicationService.getLatestClusterPublicationSync();
+    } else if (publicationService &&
+        typeof publicationService.getLatestPublicationRowSync === 'function') {
+      publicationRow = publicationService.getLatestPublicationRowSync();
+    }
+    return publicationRow && typeof publicationRow === 'object' ?
+      publicationRow :
+      null;
+  }
+
+  /**
+   * Priority recovery remains active while the latest membership publication
+   * summary still reports unsatisfied spread. A short stale grace window keeps
+   * recovery admission active when publication summary reads are transiently
+   * unavailable under load.
+   * @return {boolean}
+   * @private
+   */
+  getPriorityRecoveryAdmissionPlan() {
+    return resolveTrackedPriorityRecoveryAdmissionPlan({
+      tracker: this.priorityRecoveryAdmissionTracker,
+      publicationRow: this.getLatestMembershipPublicationRow(),
+      nowMs: this.nowFn(),
+      staleGraceMs: this.priorityRecoveryActivityStaleGraceMs,
+      maxConcurrentAdds: this.config.maxConcurrentAdds,
+      isPriorityPartition: (partitionId) =>
+        this.isPriorityControlPlanePartition(partitionId),
+      isEmergencyPriorityPartition: (partitionId) =>
+        this.isEmergencyPriorityControlPlanePartition(partitionId),
+    });
+  }
+
+  isGlobalPriorityControlPlaneRecoveryActive() {
+    return this.getPriorityRecoveryAdmissionPlan().recoveryActive === true;
+  }
+
+  /**
+   * Return true when emergency transport partitions are currently part of the
+   * unresolved priority spread set. This keeps the emergency reservation
+   * narrow: ordinary priority tables should not be hard-blocked at limit 1
+   * when only ordinary priority partitions remain unresolved.
+   *
+   * Uses the same stale-grace semantics as global recovery activation so
+   * transient summary read gaps do not flap reservation behavior.
+   *
+   * @return {boolean}
+   * @private
+   */
+  isEmergencyPriorityControlPlaneRecoveryActive() {
+    return this.getPriorityRecoveryAdmissionPlan().emergencyRecoveryActive ===
+      true;
+  }
+
+  /**
+   * Keep one shared add slot free for priority recovery while publication
+   * spread remains unsatisfied.
+   * @param {Object} [options={}]
+   * @return {number}
+   * @private
+   */
+  getReservedPriorityRecoveryAddSlots(options = {}) {
+    return this.getPriorityRecoveryAdmissionPlan()
+      .getReservedNonPrioritySlots(options.partitionId, 'add');
+  }
+
+  /**
+   * Resolve the effective add budget for non-priority scheduling after
+   * reserving capacity for priority recovery.
+   * @param {Object} [options={}]
+   * @return {number}
+   * @private
+   */
+  getConcurrentAddBudgetLimit(options = {}) {
+    return Math.max(
+      NUM.ZERO,
+      this.config.maxConcurrentAdds -
+        this.getReservedPriorityRecoveryAddSlots(options),
+    );
+  }
+
+  /**
+   * Resolve the effective priority-lane add budget.
+   * During active recovery, emergency transport partitions may use one extra
+   * slot above the ordinary priority limit, while ordinary priority tables
+   * preserve that slot instead of consuming it first.
+   *
+   * @param {Object} [options={}]
+   * @return {number}
+   * @private
+   */
+  getPriorityConcurrentAddBudgetLimit(options = {}) {
+    return this.getPriorityRecoveryAdmissionPlan()
+      .getPriorityAddBudgetLimit(options.partitionId);
+  }
+
+  /**
    * Enforce configured maxConcurrentAdds/maxConcurrentRemoves before persisting
    * a newly scheduled operation.
    * @param {string|null} normalizedMoveType
@@ -2135,21 +2693,26 @@ class RebalanceCoordinator extends EventEmitter {
           normalizedMoveType,
           options,
         );
+      const concurrentAddLimit = usePriorityConcurrentAddLane ?
+        this.getPriorityConcurrentAddBudgetLimit(options) :
+        this.getConcurrentAddBudgetLimit(options);
       const canStart = usePriorityConcurrentAddLane ?
         await this.canStartPriorityAddOperation({
           bypassEmptyQueryDelay,
           preferAuthoritativeCount,
+          partitionId: options.partitionId,
         }) :
         await this.canStartAddOperation({
           bypassEmptyQueryDelay,
           preferAuthoritativeCount,
+          partitionId: options.partitionId,
         });
       if (canStart) {
         return;
       }
       throw this.createConcurrentOperationBudgetError(
         normalizedMoveType,
-        this.config.maxConcurrentAdds,
+        concurrentAddLimit,
       );
     }
 
@@ -2310,6 +2873,7 @@ class RebalanceCoordinator extends EventEmitter {
       () => this.repository.persistOperationUpdate(
         operation, options,
       ),
+      {operation},
     );
   }
 
@@ -2830,10 +3394,11 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<*>}
    * @private
    */
-  runReplicaOperationTransitionExclusive(executionFactory) {
+  runReplicaOperationTransitionExclusive(executionFactory, options = {}) {
     return this.repository
       .runReplicaOperationTransitionExclusive(
         executionFactory,
+        options,
       );
   }
 
@@ -3033,86 +3598,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async checkTimeouts() {
-    if (this.isShuttingDown || !this.initialized) {
+    if (!this.workflowOwner) {
       return;
     }
-
-    const now = Date.now();
-    if (this.workflowOwner &&
-        this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs > NUM.ZERO &&
-        now - this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs <
-          this.workflowOwner.incompleteOperationQueryEmptyBackoffMs) {
-      return;
-    }
-
-    const canUseCacheObservationBoundary =
-      this.repository.hasReplicaOperationCacheObservationBoundary();
-    const cachedIncompleteOps = canUseCacheObservationBoundary ?
-      await this.queryIncompleteOperations({
-        skipSqlFallbackWhenCacheEmpty: true,
-      }) :
-      [];
-    if (cachedIncompleteOps.length > NUM.ZERO) {
-      this.clearEmptyIncompleteOperationQueryDelay();
-    } else if (canUseCacheObservationBoundary &&
-        this.shouldDelayEmptyIncompleteOperationQuery(now)) {
-      return;
-    }
-
-    const incompleteOps = cachedIncompleteOps.length > NUM.ZERO ?
-      this.mergeIncompleteOperations(
-        cachedIncompleteOps,
-        await this.queryIncompleteOperations({
-          preferAuthoritativeRead: true,
-        }),
-      ) :
-      await this.queryIncompleteOperations();
-    if (incompleteOps.length === NUM.ZERO) {
-      this.markEmptyIncompleteOperationQueryAt(now);
-      return;
-    }
-    this.clearEmptyIncompleteOperationQueryDelay();
-
-    const timeoutReconcileTasks = [];
-
-    for (const operation of incompleteOps) {
-      if (!this.isOperationLocallyOwned(operation)) {
-        continue;
-      }
-      if (this.isOperationTerminal(operation)) {
-        continue;
-      }
-
-      const singleFlightKey =
-        this.getOperationOwnerSingleFlightKey(
-          operation.operationId,
-        );
-
-      const reconcileTask = this.operationWorkflowRunExclusive(
-        singleFlightKey,
-        () => this.reconcileTimeoutOperation(
-          operation, Date.now(),
-        ),
-      ).catch((error) => {
-        this.logQueryOperationsFailure(error, {
-          operationId: operation.operationId,
-        });
-      });
-      timeoutReconcileTasks.push(reconcileTask);
-    }
-
-    if (timeoutReconcileTasks.length > NUM.ZERO) {
-      await Promise.all(timeoutReconcileTasks);
-    }
-
-    // Periodic reservation reconciliation (Req 4.4)
-    await this.reconcileReservations().catch((error) => {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG
-          .RESERVATION_RELEASE_FAILED,
-        {error: error.message},
-      );
-    });
+    return this.workflowOwner.checkTimeouts();
   }
 
   /**
@@ -3133,90 +3622,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<void>}
    */
   async reconcileTimeoutOperation(operation, now) {
-    if (await this.reconcileOperationProgress(operation)) {
-      return;
-    }
-
-    const operationBudget = createTopLevelOperationBudget({
-      configuredBudgetMs:
-        TIMEOUT_BUDGET_DEFAULT
-          .REBALANCE_OPERATION_BUDGET_MS,
-      operationName: 'rebalance',
-      startedAtMs:
-        operation.createdAt || operation.updatedAt,
-      now: () => now,
-    });
-
-    const stepTimeout = this.getTimeoutForStep(
-      operation.workflowStep,
+    return this.workflowOwner.reconcileTimeoutOperation(
       operation,
+      now,
     );
-    const stepAllocation = createChildTimeoutBudget(
-      operationBudget,
-      {
-        requestedBudgetMs: stepTimeout,
-        minimumBudgetMs:
-          TIMEOUT_BUDGET_DEFAULT
-            .MINIMUM_OPERATION_BUDGET_MS,
-        classification:
-          TIMEOUT_BUDGET_CLASSIFICATION
-            .REBALANCE_OPERATION_TIMEOUT,
-        nestedOperation:
-          `rebalance:${String(
-            operation.workflowStep || 'unknown',
-          ).toLowerCase()}`,
-        now: () => now,
-      },
-    );
-
-    const elapsed = now - operation.updatedAt;
-    const stepExceeded = elapsed >= stepTimeout;
-    const budgetExhausted = !stepAllocation.allowed;
-
-    if (stepExceeded || budgetExhausted) {
-      const timeoutClassification = budgetExhausted ?
-        stepAllocation.timeoutClassification :
-        buildTimeoutClassification({
-          budget: operationBudget,
-          classification:
-            TIMEOUT_BUDGET_CLASSIFICATION
-              .REBALANCE_OPERATION_TIMEOUT,
-          nestedOperation:
-            `rebalance:${String(
-              operation.workflowStep || 'unknown',
-            ).toLowerCase()}`,
-          now: () => now,
-        });
-
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT,
-        {
-          operationId: operation.operationId,
-          workflowStep: operation.workflowStep,
-          elapsed,
-          timeout: stepTimeout,
-          budgetExhausted,
-          timeoutClassification,
-        },
-      );
-
-      await this.failOperation(
-        operation,
-        `Timeout in ${operation.workflowStep} step ` +
-          `after ${elapsed}ms`,
-        {
-          stepMetadata: {
-            timeoutClassification,
-            timeoutMs: stepTimeout,
-            elapsedMs: elapsed,
-            timedOutAtMs: now,
-            budgetExhausted,
-          },
-        },
-      );
-
-      this.stats.operationsTimedOut++;
-    }
   }
 
   /**
@@ -3502,13 +3911,20 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
-   * Build add/replace in-flight counts for priority and non-priority lanes.
+   * Build add/replace in-flight counts for ordinary-priority,
+   * emergency-priority, and non-priority lanes.
    * @param {Array<Object>} operations
-   * @return {{priorityCount:number, nonPriorityCount:number}}
+   * @return {{
+   *   priorityCount:number,
+   *   ordinaryPriorityCount:number,
+   *   emergencyPriorityCount:number,
+   *   nonPriorityCount:number,
+   * }}
    * @private
    */
   buildConcurrentAddCountByPriorityClass(operations = []) {
-    let priorityCount = NUM.ZERO;
+    let ordinaryPriorityCount = NUM.ZERO;
+    let emergencyPriorityCount = NUM.ZERO;
     let nonPriorityCount = NUM.ZERO;
     for (const operation of operations) {
       if (!this.isConcurrentAddBudgetOperation(operation)) {
@@ -3521,13 +3937,20 @@ class RebalanceCoordinator extends EventEmitter {
       ).trim();
       if (partitionId.length > NUM.ZERO &&
           this.isPriorityControlPlanePartition(partitionId)) {
-        priorityCount += NUM.ONE;
+        if (this.isEmergencyPriorityControlPlanePartition(partitionId)) {
+          emergencyPriorityCount += NUM.ONE;
+        } else {
+          ordinaryPriorityCount += NUM.ONE;
+        }
         continue;
       }
       nonPriorityCount += NUM.ONE;
     }
     return {
-      priorityCount,
+      priorityCount:
+        ordinaryPriorityCount + emergencyPriorityCount,
+      ordinaryPriorityCount,
+      emergencyPriorityCount,
       nonPriorityCount,
     };
   }
@@ -3597,21 +4020,27 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<boolean>} True if we can start a new ADD operation.
    */
   async canStartAddOperation(options = {}) {
-    if (this.isLocalRouterBackpressured()) {
+    if (this.isLocalRouterBackpressured(options)) {
       return false;
     }
-    const cachedCount = await this.getConcurrentAddCount({
-      skipSqlFallbackWhenCacheEmpty: true,
-    });
+    const concurrentAddLimit = this.getConcurrentAddBudgetLimit(options);
+    if (concurrentAddLimit <= NUM.ZERO) {
+      return false;
+    }
+    const cachedCount =
+      (await this.queryCachedIncompleteOperations()).filter((operation) =>
+        this.isConcurrentAddBudgetOperation(operation),
+      ).length;
     if (cachedCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
-      if (cachedCount < this.config.maxConcurrentAdds) {
+      if (cachedCount < concurrentAddLimit) {
         return true;
       }
       if (options?.preferAuthoritativeCount !== true) {
         return false;
       }
       const authoritativeCount = await this.getConcurrentAddCount({
+        partitionId: options.partitionId,
         preferAuthoritativeRead: true,
       });
       if (authoritativeCount === NUM.ZERO) {
@@ -3619,20 +4048,22 @@ class RebalanceCoordinator extends EventEmitter {
       } else {
         this.clearEmptyIncompleteOperationQueryDelay();
       }
-      return authoritativeCount < this.config.maxConcurrentAdds;
+      return authoritativeCount < concurrentAddLimit;
     }
     const bypassEmptyQueryDelay = options?.bypassEmptyQueryDelay === true;
     if (!bypassEmptyQueryDelay &&
         this.shouldDelayEmptyIncompleteOperationQuery()) {
       return false;
     }
-    const count = await this.getConcurrentAddCount();
+    const count = await this.getConcurrentAddCount({
+      partitionId: options.partitionId,
+    });
     if (count === NUM.ZERO) {
       this.markEmptyIncompleteOperationQueryAt();
     } else {
       this.clearEmptyIncompleteOperationQueryDelay();
     }
-    return count < this.config.maxConcurrentAdds;
+    return count < concurrentAddLimit;
   }
 
   /**
@@ -3645,23 +4076,39 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<boolean>}
    */
   async canStartPriorityAddOperation(options = {}) {
-    if (this.isLocalRouterBackpressured()) {
+    if (this.isLocalRouterBackpressured(options)) {
       return false;
     }
-    const cachedCounts = await this.getConcurrentAddCountByPriorityClass({
-      skipSqlFallbackWhenCacheEmpty: true,
-    });
+    const priorityRecoveryAdmissionPlan =
+      this.getPriorityRecoveryAdmissionPlan();
+    const maximumPriorityConcurrentAddLimit =
+      priorityRecoveryAdmissionPlan.emergencyPriorityAddBudgetLimit;
+    if (maximumPriorityConcurrentAddLimit <= NUM.ZERO) {
+      return false;
+    }
+    const isPriorityCountsAdmitted = (counts = {}) => {
+      return priorityRecoveryAdmissionPlan
+        .evaluatePriorityAddAdmission(
+          options.partitionId,
+          counts,
+        )
+        .allowed === true;
+    };
+    const cachedCounts = this.buildConcurrentAddCountByPriorityClass(
+      await this.queryCachedIncompleteOperations(),
+    );
     const cachedTotalCount =
       cachedCounts.priorityCount + cachedCounts.nonPriorityCount;
     if (cachedTotalCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
-      if (cachedCounts.priorityCount < this.config.maxConcurrentAdds) {
+      if (isPriorityCountsAdmitted(cachedCounts)) {
         return true;
       }
       if (options?.preferAuthoritativeCount !== true) {
         return false;
       }
       const authoritativeCounts = await this.getConcurrentAddCountByPriorityClass({
+        partitionId: options.partitionId,
         preferAuthoritativeRead: true,
       });
       const authoritativeTotalCount =
@@ -3671,21 +4118,23 @@ class RebalanceCoordinator extends EventEmitter {
       } else {
         this.clearEmptyIncompleteOperationQueryDelay();
       }
-      return authoritativeCounts.priorityCount < this.config.maxConcurrentAdds;
+      return isPriorityCountsAdmitted(authoritativeCounts);
     }
     const bypassEmptyQueryDelay = options?.bypassEmptyQueryDelay === true;
     if (!bypassEmptyQueryDelay &&
         this.shouldDelayEmptyIncompleteOperationQuery()) {
       return false;
     }
-    const counts = await this.getConcurrentAddCountByPriorityClass();
+    const counts = await this.getConcurrentAddCountByPriorityClass({
+      partitionId: options.partitionId,
+    });
     const totalCount = counts.priorityCount + counts.nonPriorityCount;
     if (totalCount === NUM.ZERO) {
       this.markEmptyIncompleteOperationQueryAt();
     } else {
       this.clearEmptyIncompleteOperationQueryDelay();
     }
-    return counts.priorityCount < this.config.maxConcurrentAdds;
+    return isPriorityCountsAdmitted(counts);
   }
 
   /**
@@ -3696,12 +4145,13 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<boolean>} True if we can start a new REMOVE operation.
    */
   async canStartRemoveOperation(options = {}) {
-    if (this.isLocalRouterBackpressured()) {
+    if (this.isLocalRouterBackpressured(options)) {
       return false;
     }
-    const cachedCount = await this.getConcurrentRemoveCount({
-      skipSqlFallbackWhenCacheEmpty: true,
-    });
+    const cachedCount =
+      (await this.queryCachedIncompleteOperations()).filter((operation) =>
+        operation?.type === OperationType.REMOVE,
+      ).length;
     if (cachedCount > NUM.ZERO) {
       this.clearEmptyIncompleteOperationQueryDelay();
       if (cachedCount < this.config.maxConcurrentRemoves) {
@@ -3790,13 +4240,33 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {boolean}
    * @private
    */
-  isLocalRouterBackpressured() {
+  isLocalRouterBackpressured(options = {}) {
+    return this.getLocalRouterPressureDecision(options).action !==
+      PRESSURE_GOVERNOR_ACTION.ALLOW;
+  }
+
+  /**
+   * Resolve one canonical local transport-pressure decision for coordinator
+   * admission reads.
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  getLocalRouterPressureDecision(options = {}) {
+    const partitionId = String(options.partitionId || '').trim();
+    const criticalPressureBypass =
+      partitionId.length > NUM.ZERO &&
+      this.isPriorityControlPlanePartition(partitionId);
     return PressureGovernor.getShared({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
-    }).isBackpressured({
-      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-      resourceKeys: ['rebalancer:operations'],
+    }).evaluate({
+      workClass: criticalPressureBypass ?
+        PRESSURE_WORK_CLASS.CRITICAL :
+        PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: [criticalPressureBypass ?
+        'control-plane:rebalancer:operations' :
+        'rebalancer:operations'],
     });
   }
 
@@ -3902,6 +4372,10 @@ class RebalanceCoordinator extends EventEmitter {
       this.unbindSystemTableCacheListener();
       this.cacheChangeListener = null;
     }
+    if (this._boundTerminalOperationIntentPruner) {
+      this.unbindTerminalOperationIntentPruner();
+      this._boundTerminalOperationIntentPruner = null;
+    }
 
     let inFlightOperationCount = NUM.ZERO;
     try {
@@ -3924,6 +4398,9 @@ class RebalanceCoordinator extends EventEmitter {
 
     this.operationsInCreation.clear();
     this.recentOperationIntents.clear();
+    if (typeof this.workflowOwner?.shutdown === 'function') {
+      this.workflowOwner.shutdown();
+    }
 
     this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
   }

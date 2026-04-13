@@ -1,0 +1,17 @@
+test/constants/pgwire-constants.test.js
+test/bootstrap/shared/meta-service-definition-registration.test.js
+test/runtime/pgwire-descriptor.test.js
+test/runtime/pgwire-runtime-module.test.js
+test/runtime/native-js-driver-lifecycle.test.js
+test/runtime/state-projection.test.js
+test/runtime/runtime-endpoint-writer.test.js
+test/runtime/endpoint-lifecycle.test.js
+test/rebalancer/runtime-service-entity.test.js
+test/rebalancer/move-planner-runtime-service.test.js
+test/bootstrap/pgwire-startup-safety-gate.test.js
+test/runtime/pgwire-protocol-handler.test.js
+test/runtime/pgwire-session.test.js
+test/runtime/pgwire-auth-handler.test.js
+test/runtime/pgwire-port-allocator.test.js
+test/runtime/pgwire-metrics.test.js
+test/admin/admin-runtime-service-views.test.js

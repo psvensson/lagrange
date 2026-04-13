@@ -80,6 +80,18 @@ const RUN_CONFIG_MODE = Object.freeze({
   LOCAL: 'local',
   REMOTE: 'remote',
 });
+const CONFIG_PRECHECK_STATE = Object.freeze({
+  INVALID_DOCKER_HOST: 'invalid_docker_host',
+  LOCAL_READY: 'local_ready',
+  REMOTE_HOST_RESOLVED: 'remote_host_resolved',
+  REMOTE_READY: 'remote_ready',
+  REMOTE_HOST_UNRESOLVABLE: 'remote_host_unresolvable',
+});
+const RUN_FINALIZATION_STATE = Object.freeze({
+  STOPPED: 'stopped',
+  PASSED: 'passed',
+  FAILED: 'failed',
+});
 const CONFIG_PRECHECK_ERROR_PREFIX =
   `${ADMIN_TEST_ERROR_MSG.CONFIG_PREFLIGHT_FAILED}: `;
 const DOCKER_HOST_PROTOCOL_SEPARATOR = '://';
@@ -87,6 +99,134 @@ const DOCKER_HOST_PATH_SEPARATOR = '/';
 const DOCKER_HOST_PORT_SEPARATOR = ':';
 const DOCKER_HOST_IPV6_PREFIX = '[';
 const DOCKER_HOST_IPV6_SUFFIX = ']';
+
+function buildLocalConfigPrecheck(socketPath) {
+  return Object.freeze({
+    state: CONFIG_PRECHECK_STATE.LOCAL_READY,
+    mode: RUN_CONFIG_MODE.LOCAL,
+    socketPath,
+    hosts: [],
+  });
+}
+
+function buildRemoteConfigPrecheck(hosts) {
+  return Object.freeze({
+    state: CONFIG_PRECHECK_STATE.REMOTE_READY,
+    mode: RUN_CONFIG_MODE.REMOTE,
+    socketPath: null,
+    hosts,
+  });
+}
+
+function resolveConfigPrecheckState(observations) {
+  const blockingObservation = observations.find((observation) =>
+    observation.state !== CONFIG_PRECHECK_STATE.REMOTE_HOST_RESOLVED);
+  return blockingObservation?.state || CONFIG_PRECHECK_STATE.REMOTE_READY;
+}
+
+function buildConfigPrecheckOutcome({
+  configName,
+  hosts,
+  observations,
+  precheckState,
+}) {
+  const blockingObservation = observations.find((observation) =>
+    observation.state === precheckState);
+  switch (precheckState) {
+    case CONFIG_PRECHECK_STATE.INVALID_DOCKER_HOST:
+      return Object.freeze({
+        state: precheckState,
+        error: new Error(
+          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
+          `invalid docker host "${blockingObservation.host}" in config "${configName}"`,
+        ),
+      });
+    case CONFIG_PRECHECK_STATE.REMOTE_HOST_UNRESOLVABLE:
+      return Object.freeze({
+        state: precheckState,
+        error: new Error(
+          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
+          `docker host "${blockingObservation.host}" from config "${configName}"` +
+          ` is not resolvable: ${blockingObservation.message}`,
+        ),
+      });
+    case CONFIG_PRECHECK_STATE.REMOTE_READY:
+      return Object.freeze({
+        state: precheckState,
+        precheck: buildRemoteConfigPrecheck(hosts),
+      });
+    default:
+      return Object.freeze({
+        state: precheckState,
+        error: new Error(
+          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
+          `unsupported config precheck state "${precheckState}" for config "${configName}"`,
+        ),
+      });
+  }
+}
+
+function buildRunFinalizationSnapshot(run, exitCode) {
+  return Object.freeze({
+    priorStatus: run.status,
+    exitCode,
+  });
+}
+
+function resolveRunFinalizationState(snapshot) {
+  if (snapshot.priorStatus === ADMIN_TEST_RUN_STATUS.STOPPING) {
+    return RUN_FINALIZATION_STATE.STOPPED;
+  }
+  if (snapshot.exitCode === PROCESS_EXIT_SUCCESS) {
+    return RUN_FINALIZATION_STATE.PASSED;
+  }
+  return RUN_FINALIZATION_STATE.FAILED;
+}
+
+function buildRunFinalizationOutcome(finalizationState) {
+  switch (finalizationState) {
+    case RUN_FINALIZATION_STATE.STOPPED:
+      return Object.freeze({
+        state: finalizationState,
+        status: ADMIN_TEST_RUN_STATUS.STOPPED,
+        progress: Object.freeze({
+          phase: RUN_PROGRESS_PHASE.STOPPED,
+          message: 'Run stopped',
+          percent: 100,
+        }),
+      });
+    case RUN_FINALIZATION_STATE.PASSED:
+      return Object.freeze({
+        state: finalizationState,
+        status: ADMIN_TEST_RUN_STATUS.PASSED,
+        progress: Object.freeze({
+          phase: RUN_PROGRESS_PHASE.COMPLETED,
+          message: 'Run completed successfully',
+          percent: 100,
+        }),
+      });
+    case RUN_FINALIZATION_STATE.FAILED:
+      return Object.freeze({
+        state: finalizationState,
+        status: ADMIN_TEST_RUN_STATUS.FAILED,
+        progress: Object.freeze({
+          phase: RUN_PROGRESS_PHASE.FAILED,
+          message: 'Run failed',
+          percent: 100,
+        }),
+      });
+    default:
+      return Object.freeze({
+        state: finalizationState,
+        status: ADMIN_TEST_RUN_STATUS.FAILED,
+        progress: Object.freeze({
+          phase: RUN_PROGRESS_PHASE.FAILED,
+          message: 'Run failed',
+          percent: 100,
+        }),
+      });
+  }
+}
 
 
 /**
@@ -297,37 +437,58 @@ class AdminTestRunService {
       [];
 
     if (hosts.length === 0) {
-      return {
-        mode: RUN_CONFIG_MODE.LOCAL,
-        socketPath: String(docker.socketPath || EMPTY_STRING).trim() || null,
-        hosts: [],
-      };
+      return buildLocalConfigPrecheck(
+        String(docker.socketPath || EMPTY_STRING).trim() || null,
+      );
     }
 
+    const observations = [];
     for (const host of hosts) {
-      const hostname = this.parseDockerHostname(host);
-      if (!hostname) {
-        throw new Error(
-          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
-          `invalid docker host "${host}" in config "${configName}"`,
-        );
-      }
-      try {
-        await this.resolveHost(hostname);
-      } catch (error) {
-        throw new Error(
-          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
-          `docker host "${host}" from config "${configName}"` +
-          ` is not resolvable: ${error.message}`,
-        );
-      }
+      observations.push(await this.resolveRemoteDockerHostObservation(host));
     }
 
-    return {
-      mode: RUN_CONFIG_MODE.REMOTE,
-      socketPath: null,
+    const precheckState = resolveConfigPrecheckState(observations);
+    const outcome = buildConfigPrecheckOutcome({
+      configName,
       hosts,
-    };
+      observations,
+      precheckState,
+    });
+    if (outcome.error) {
+      throw outcome.error;
+    }
+    return outcome.precheck;
+  }
+
+  /**
+   * Resolve one remote docker-host observation for config precheck.
+   * @param {string} host
+   * @return {Promise<Object>}
+   * @private
+   */
+  async resolveRemoteDockerHostObservation(host) {
+    const hostname = this.parseDockerHostname(host);
+    if (!hostname) {
+      return Object.freeze({
+        state: CONFIG_PRECHECK_STATE.INVALID_DOCKER_HOST,
+        host,
+      });
+    }
+    try {
+      await this.resolveHost(hostname);
+      return Object.freeze({
+        state: CONFIG_PRECHECK_STATE.REMOTE_HOST_RESOLVED,
+        host,
+        hostname,
+      });
+    } catch (error) {
+      return Object.freeze({
+        state: CONFIG_PRECHECK_STATE.REMOTE_HOST_UNRESOLVABLE,
+        host,
+        hostname,
+        message: error.message,
+      });
+    }
   }
 
   /**
@@ -1291,34 +1452,11 @@ class AdminTestRunService {
     run.signal = signal || null;
     run.endedAt = new Date(this.now()).toISOString();
     run.childProcess = null;
-
-    if (run.status === ADMIN_TEST_RUN_STATUS.STOPPING) {
-      run.status = ADMIN_TEST_RUN_STATUS.STOPPED;
-    } else if (run.exitCode === PROCESS_EXIT_SUCCESS) {
-      run.status = ADMIN_TEST_RUN_STATUS.PASSED;
-    } else {
-      run.status = ADMIN_TEST_RUN_STATUS.FAILED;
-    }
-
-    if (run.status === ADMIN_TEST_RUN_STATUS.PASSED) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.COMPLETED,
-        message: 'Run completed successfully',
-        percent: 100,
-      });
-    } else if (run.status === ADMIN_TEST_RUN_STATUS.STOPPED) {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.STOPPED,
-        message: 'Run stopped',
-        percent: 100,
-      });
-    } else {
-      this.updateRunProgress(run, {
-        phase: RUN_PROGRESS_PHASE.FAILED,
-        message: 'Run failed',
-        percent: 100,
-      });
-    }
+    const finalizationSnapshot = buildRunFinalizationSnapshot(run, run.exitCode);
+    const finalizationState = resolveRunFinalizationState(finalizationSnapshot);
+    const finalizationOutcome = buildRunFinalizationOutcome(finalizationState);
+    run.status = finalizationOutcome.status;
+    this.updateRunProgress(run, finalizationOutcome.progress);
 
     const reportSummary = await this.getReportSummary(
       run.outputReportPath,

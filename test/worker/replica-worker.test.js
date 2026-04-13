@@ -11,10 +11,12 @@
  * @see Requirements 5.4, 5.5 - Worker Process Lifecycle
  */
 
-import {describe, it, afterEach} from 'node:test';
+import {describe, it, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
 import workerEntryPoint, {
   replicas,
+  createPartitionReplica,
+  createMessageGroupReplica,
   stopReplica,
   deliverMessage,
   healthCheck,
@@ -22,6 +24,7 @@ import workerEntryPoint, {
 import {
   WORKER_OPERATION,
   WORKER_ERROR_MSG,
+  WORKER_STATUS,
 } from '../../src/worker/worker-constants.js';
 import {
   MessageGroupWorkerService,
@@ -55,6 +58,13 @@ const mockLogger = {
   trace: () => {},
 };
 
+const TEST_PARTITION_REPLICA_ID = 'created-partition-replica-1';
+const TEST_MESSAGE_GROUP_REPLICA_ID = 'created-message-group-replica-1';
+const TEST_HEALTH_REPLICA_ID = 'health-replica-1';
+const TEST_STATS_ERROR_REPLICA_ID = 'stats-error-replica-1';
+const TEST_NOT_READY_REPLICA_ID = 'not-ready-replica-1';
+const TEST_STATS_COLLECTION_FAILED = 'stats collection failed';
+
 /**
  * Create and register a message group replica in the replicas map.
  * Bypasses WorkerMessageBridge (which requires parentPort) by
@@ -74,6 +84,8 @@ async function createAndRegisterMessageGroup(options) {
   service.messageBridge = createMockMessageBridge();
   await service.onInitialize();
   service.initialized = true;
+  service.started = true;
+  service.status = WORKER_STATUS.RUNNING;
   replicas.set(options.replicaId, service);
   return service;
 }
@@ -96,6 +108,8 @@ async function createAndRegisterPartition(options) {
   service.messageBridge = createMockMessageBridge();
   await service.onInitialize();
   service.initialized = true;
+  service.started = true;
+  service.status = WORKER_STATUS.RUNNING;
   replicas.set(options.replicaId, service);
   return service;
 }
@@ -104,12 +118,17 @@ describe('replica-worker entry point', () => {
   afterEach(async () => {
     for (const [replicaId, service] of replicas) {
       try {
-        await service.onStop();
+        if (typeof service.stop === 'function') {
+          await service.stop();
+        } else if (typeof service.onStop === 'function') {
+          await service.onStop();
+        }
       } catch (_e) {
         // Ignore cleanup errors
       }
       replicas.delete(replicaId);
     }
+    mock.restoreAll();
   });
 
   describe('workerEntryPoint', () => {
@@ -156,6 +175,92 @@ describe('replica-worker entry point', () => {
         },
       );
     });
+  });
+
+  describe('create replica lifecycle', () => {
+    it('should initialize and start partition replica before registration',
+      async () => {
+        mock.method(
+          PartitionWorkerService.prototype,
+          'initialize',
+          async function initializeMock() {
+            this.initialized = true;
+          },
+        );
+        const startMock = mock.method(
+          PartitionWorkerService.prototype,
+          'start',
+          async function startMockMethod() {
+            this.started = true;
+            this.status = WORKER_STATUS.RUNNING;
+          },
+        );
+        mock.method(
+          PartitionWorkerService.prototype,
+          'stop',
+          async function stopMock() {
+            this.started = false;
+            this.initialized = false;
+            this.status = WORKER_STATUS.STOPPED;
+          },
+        );
+
+        const result = await createPartitionReplica({
+          nodeId: 'node-1',
+          partitionId: 'partition-1',
+          replicaId: TEST_PARTITION_REPLICA_ID,
+          tableId: 'table-1',
+          tableName: 'test_table',
+        });
+
+        assert.strictEqual(result.status, 'created');
+        assert.strictEqual(startMock.mock.calls.length, 1);
+        assert.strictEqual(
+          replicas.get(TEST_PARTITION_REPLICA_ID).started,
+          true,
+        );
+      });
+
+    it('should initialize and start message group replica before registration',
+      async () => {
+        mock.method(
+          MessageGroupWorkerService.prototype,
+          'initialize',
+          async function initializeMock() {
+            this.initialized = true;
+          },
+        );
+        const startMock = mock.method(
+          MessageGroupWorkerService.prototype,
+          'start',
+          async function startMockMethod() {
+            this.started = true;
+            this.status = WORKER_STATUS.RUNNING;
+          },
+        );
+        mock.method(
+          MessageGroupWorkerService.prototype,
+          'stop',
+          async function stopMock() {
+            this.started = false;
+            this.initialized = false;
+            this.status = WORKER_STATUS.STOPPED;
+          },
+        );
+
+        const result = await createMessageGroupReplica({
+          nodeId: 'node-1',
+          groupId: 'group-1',
+          replicaId: TEST_MESSAGE_GROUP_REPLICA_ID,
+        });
+
+        assert.strictEqual(result.status, 'created');
+        assert.strictEqual(startMock.mock.calls.length, 1);
+        assert.strictEqual(
+          replicas.get(TEST_MESSAGE_GROUP_REPLICA_ID).started,
+          true,
+        );
+      });
   });
 
   describe('stopReplica', () => {
@@ -229,6 +334,47 @@ describe('replica-worker entry point', () => {
           result.replicaId, 'health-replica-1',
         );
         assert.ok(result.stats);
+      });
+
+    it('should return unhealthy when replica is not started',
+      async () => {
+        replicas.set(TEST_NOT_READY_REPLICA_ID, {
+          initialized: true,
+          started: false,
+        });
+
+        const result = await healthCheck(TEST_NOT_READY_REPLICA_ID);
+
+        assert.strictEqual(result.healthy, false);
+        assert.strictEqual(
+          result.replicaId,
+          TEST_NOT_READY_REPLICA_ID,
+        );
+        assert.match(result.error, /not ready/i);
+      });
+
+    it('should return unhealthy when stats collection fails',
+      async () => {
+        replicas.set(TEST_STATS_ERROR_REPLICA_ID, {
+          initialized: true,
+          started: true,
+          getStats() {
+            throw new Error(TEST_STATS_COLLECTION_FAILED);
+          },
+        });
+
+        const result = await healthCheck(TEST_STATS_ERROR_REPLICA_ID);
+
+        assert.strictEqual(result.healthy, false);
+        assert.strictEqual(
+          result.replicaId,
+          TEST_STATS_ERROR_REPLICA_ID,
+        );
+        assert.strictEqual(
+          result.error,
+          TEST_STATS_COLLECTION_FAILED,
+        );
+        assert.deepStrictEqual(result.stats, {});
       });
 
     it('should return unhealthy for non-existent replica',

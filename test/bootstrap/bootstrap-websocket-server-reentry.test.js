@@ -53,6 +53,11 @@ test('Bootstrap lifecycle - startWebSocketServer after bootstrap is a no-op',
       t.ok(result.messageRouter.server, 'WebSocket server should be running');
       t.ok(result.messageRouter.hasSelfConnection(),
         'self-connection should be established');
+      t.equal(
+        result.messageRouter.isExternalAdmissionEnabled(),
+        true,
+        'bootstrap should open external transport admission before returning success',
+      );
 
       await bootstrap.startWebSocketServer();
 
@@ -60,6 +65,11 @@ test('Bootstrap lifecycle - startWebSocketServer after bootstrap is a no-op',
         'WebSocket server should still be running after reentry');
       t.ok(result.messageRouter.hasSelfConnection(),
         'self-connection should still be established after reentry');
+      t.equal(
+        result.messageRouter.isExternalAdmissionEnabled(),
+        true,
+        'WebSocket server reentry should preserve external transport admission',
+      );
     } finally {
       await bootstrap.shutdown();
     }

@@ -4,6 +4,12 @@ const MESSAGE_GROUP_SELECTION_REASON = Object.freeze({
   OWNER_NOT_READY: 'operational message-group ingress not ready',
 });
 
+const MESSAGE_GROUP_SELECTION_ROUTE = Object.freeze({
+  LEADER: 'leader',
+  PREFERRED: 'preferred',
+  RELAY: 'relay',
+});
+
 function normalizeRequiredTables(requiredTables) {
   return [...new Set(
     (Array.isArray(requiredTables) ? requiredTables : [])
@@ -30,32 +36,22 @@ function listMessageGroupServices(messageGroupServices) {
 
 function normalizeSelectionReadiness(readiness, fallbackReason) {
   if (readiness === true) {
-    return {
-      ready: true,
-      retryAfterMs: NUM.ZERO,
-      reason: null,
-    };
-  }
-  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
-    return {
-      ready: false,
-      retryAfterMs: NUM.ZERO,
-      reason: fallbackReason,
-    };
+    return buildSelectionReadiness(true, NUM.ZERO, null);
+  } else if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+    return buildSelectionReadiness(false, NUM.ZERO, fallbackReason);
   }
 
-  return {
-    ready: readiness.ready === true,
-    retryAfterMs:
-      Number.isFinite(readiness.retryAfterMs) && readiness.retryAfterMs > NUM.ZERO ?
-        Math.floor(readiness.retryAfterMs) :
-        NUM.ZERO,
-    reason:
-      typeof readiness.reason === TYPEOF.STRING &&
+  return buildSelectionReadiness(
+    readiness.ready === true,
+    Number.isFinite(readiness.retryAfterMs) &&
+      readiness.retryAfterMs > NUM.ZERO ?
+      Math.floor(readiness.retryAfterMs) :
+      NUM.ZERO,
+    typeof readiness.reason === TYPEOF.STRING &&
       readiness.reason.length > NUM.ZERO ?
-        readiness.reason :
-        fallbackReason,
-  };
+      readiness.reason :
+      fallbackReason,
+  );
 }
 
 function isMessageGroupInitialized(service) {
@@ -64,11 +60,11 @@ function isMessageGroupInitialized(service) {
 
 function resolveLeaderReadiness(service, requiredTables) {
   if (!service) {
-    return {
-      ready: false,
-      retryAfterMs: NUM.ZERO,
-      reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    };
+    return buildSelectionReadiness(
+      false,
+      NUM.ZERO,
+      MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+    );
   }
 
   if (requiredTables.length > NUM.ZERO &&
@@ -79,36 +75,53 @@ function resolveLeaderReadiness(service, requiredTables) {
     );
   }
 
-  return isMessageGroupInitialized(service) ? {
-    ready: true,
-    retryAfterMs: NUM.ZERO,
-    reason: null,
-  } : {
-    ready: false,
-    retryAfterMs: NUM.ZERO,
-    reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-  };
+  return isMessageGroupInitialized(service) ?
+    buildSelectionReadiness(true, NUM.ZERO, null) :
+    buildSelectionReadiness(
+      false,
+      NUM.ZERO,
+      MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+    );
 }
 
 function resolveRelayReadiness(service, requiredTables) {
-  if (!service || requiredTables.length === NUM.ZERO) {
-    return {
-      ready: false,
-      retryAfterMs: NUM.ZERO,
-      reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    };
-  }
-  if (typeof service.getMetadataIngressReadiness !== TYPEOF.FUNCTION) {
-    return {
-      ready: false,
-      retryAfterMs: NUM.ZERO,
-      reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    };
+  if (!service ||
+      requiredTables.length === NUM.ZERO ||
+      typeof service.getMetadataIngressReadiness !== TYPEOF.FUNCTION) {
+    return buildSelectionReadiness(
+      false,
+      NUM.ZERO,
+      MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+    );
   }
   return normalizeSelectionReadiness(
     service.getMetadataIngressReadiness({requiredTables}),
     MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
   );
+}
+
+function buildSelectionReadiness(ready, retryAfterMs, reason) {
+  return {
+    ready,
+    retryAfterMs,
+    reason,
+  };
+}
+
+function buildOperationalMessageGroupSelection(
+  service,
+  ready,
+  retryAfterMs,
+  reason,
+  route,
+) {
+  return {
+    service,
+    ready,
+    retryAfterMs,
+    reason,
+    route,
+  };
 }
 
 function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
@@ -125,7 +138,7 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
       ready: true,
       retryAfterMs: NUM.ZERO,
       reason: null,
-      route: 'leader',
+      route: MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
     };
   }
 
@@ -139,7 +152,9 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
       ready: true,
       retryAfterMs: NUM.ZERO,
       reason: null,
-      route: service?.isLeaderReplica?.() === true ? 'leader' : 'relay',
+      route: service?.isLeaderReplica?.() === true ?
+        MESSAGE_GROUP_SELECTION_ROUTE.LEADER :
+        MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
     };
   }
 
@@ -240,13 +255,13 @@ function resolveOperationalMessageGroupSelection(
     }
     const readiness = resolveLeaderReadiness(service, requiredTables);
     if (readiness.ready === true) {
-      return {
+      return buildOperationalMessageGroupSelection(
         service,
-        ready: true,
-        retryAfterMs: readiness.retryAfterMs,
-        reason: null,
-        route: 'leader',
-      };
+        true,
+        readiness.retryAfterMs,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+      );
     }
     deferredSummary = recordNotReadyCandidate(
       deferredSummary,
@@ -260,13 +275,13 @@ function resolveOperationalMessageGroupSelection(
     }
     const readiness = resolveRelayReadiness(service, requiredTables);
     if (readiness.ready === true) {
-      return {
+      return buildOperationalMessageGroupSelection(
         service,
-        ready: true,
-        retryAfterMs: readiness.retryAfterMs,
-        reason: null,
-        route: 'relay',
-      };
+        true,
+        readiness.retryAfterMs,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+      );
     }
     deferredSummary = recordNotReadyCandidate(
       deferredSummary,
@@ -274,13 +289,13 @@ function resolveOperationalMessageGroupSelection(
     );
   }
 
-  return {
-    service: null,
-    ready: false,
-    retryAfterMs: deferredSummary.retryAfterMs,
-    reason: deferredSummary.reason,
-    route: null,
-  };
+  return buildOperationalMessageGroupSelection(
+    null,
+    false,
+    deferredSummary.retryAfterMs,
+    deferredSummary.reason,
+    null,
+  );
 }
 
 async function resolveOperationalMessageGroupSelectionAsync(
@@ -289,6 +304,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
 ) {
   const services = listMessageGroupServices(messageGroupServices);
   const requiredTables = normalizeRequiredTables(options.requiredTables);
+  const preferredService = options.preferredService || null;
   let deferredSummary = {
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     retryAfterMs: NUM.ZERO,
@@ -307,13 +323,39 @@ async function resolveOperationalMessageGroupSelectionAsync(
         ) :
         resolveLeaderReadiness(service, requiredTables);
     if (readiness.ready === true) {
-      return {
+      return buildOperationalMessageGroupSelection(
         service,
-        ready: true,
-        retryAfterMs: readiness.retryAfterMs,
-        reason: null,
-        route: 'leader',
-      };
+        true,
+        readiness.retryAfterMs,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+      );
+    }
+    deferredSummary = recordNotReadyCandidate(
+      deferredSummary,
+      readiness,
+    );
+  }
+
+  if (preferredService) {
+    const readiness =
+      requiredTables.length > NUM.ZERO ?
+        await resolveMetadataIngressReadinessAsync(
+          preferredService,
+          requiredTables,
+          MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+        ) :
+        (preferredService?.isLeaderReplica?.() === true ?
+          resolveLeaderReadiness(preferredService, requiredTables) :
+          resolveRelayReadiness(preferredService, requiredTables));
+    if (readiness.ready === true) {
+      return buildOperationalMessageGroupSelection(
+        preferredService,
+        true,
+        readiness.retryAfterMs,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
+      );
     }
     deferredSummary = recordNotReadyCandidate(
       deferredSummary,
@@ -325,6 +367,9 @@ async function resolveOperationalMessageGroupSelectionAsync(
     if (service?.isLeaderReplica?.() === true) {
       continue;
     }
+    if (preferredService && service === preferredService) {
+      continue;
+    }
     const readiness =
       requiredTables.length > NUM.ZERO ?
         await resolveMetadataIngressReadinessAsync(
@@ -334,13 +379,13 @@ async function resolveOperationalMessageGroupSelectionAsync(
         ) :
         resolveRelayReadiness(service, requiredTables);
     if (readiness.ready === true) {
-      return {
+      return buildOperationalMessageGroupSelection(
         service,
-        ready: true,
-        retryAfterMs: readiness.retryAfterMs,
-        reason: null,
-        route: 'relay',
-      };
+        true,
+        readiness.retryAfterMs,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+      );
     }
     deferredSummary = recordNotReadyCandidate(
       deferredSummary,
@@ -348,13 +393,13 @@ async function resolveOperationalMessageGroupSelectionAsync(
     );
   }
 
-  return {
-    service: null,
-    ready: false,
-    retryAfterMs: deferredSummary.retryAfterMs,
-    reason: deferredSummary.reason,
-    route: null,
-  };
+  return buildOperationalMessageGroupSelection(
+    null,
+    false,
+    deferredSummary.retryAfterMs,
+    deferredSummary.reason,
+    null,
+  );
 }
 
 function getBootstrapMessageGroupService(messageGroupServices) {

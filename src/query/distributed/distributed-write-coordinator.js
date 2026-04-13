@@ -230,6 +230,55 @@ class DistributedWriteCoordinator {
       }
 
       if (failedParticipants.length > 0) {
+        const participantFailures = failedParticipants.map((result) => ({
+          partitionId: result.partitionId,
+          participantNodeId:
+            typeof result.participantNodeId === 'string' ?
+              result.participantNodeId :
+              null,
+          participantAddress:
+            typeof result.participantAddress === 'string' ?
+              result.participantAddress :
+              null,
+          errorCode:
+            typeof result.errorCode === 'string' ?
+              result.errorCode :
+              null,
+          error:
+            result.error ||
+            QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+          durationMs:
+            Number.isFinite(result?.durationMs) ?
+              Math.max(0, Math.floor(result.durationMs)) :
+              null,
+          retryAfterMs:
+            Number.isFinite(result?.retryAfterMs) &&
+            result.retryAfterMs > 0 ?
+              Math.floor(result.retryAfterMs) :
+              null,
+          deferRetry: result?.deferRetry === true,
+          backpressured: result?.backpressured === true,
+          failedTable:
+            typeof result.failedTable === 'string' ?
+              result.failedTable :
+              (typeof result.tableName === 'string' ?
+                result.tableName :
+                null),
+        }));
+        const firstFailedParticipant =
+          participantFailures.length > 0 ?
+            participantFailures[0] :
+            null;
+        const retryAfterMs = participantFailures.reduce(
+          (maxRetryAfterMs, result) => {
+            if (!Number.isFinite(result?.retryAfterMs) ||
+                result.retryAfterMs <= 0) {
+              return maxRetryAfterMs;
+            }
+            return Math.max(maxRetryAfterMs, result.retryAfterMs);
+          },
+          0,
+        );
         return {
           success: false,
           operation: plan.statementType,
@@ -242,15 +291,24 @@ class DistributedWriteCoordinator {
           ),
           partitionErrors: failedParticipants.map((result) => ({
             partitionId: result.partitionId,
-            error: result.error ||
+            error:
+              result.error ||
               QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+            retryAfterMs:
+              Number.isFinite(result?.retryAfterMs) &&
+              result.retryAfterMs > 0 ?
+                Math.floor(result.retryAfterMs) :
+                null,
           })),
+          participantFailures,
+          firstFailedParticipant,
           participantResults,
           errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
           error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
           idempotencyKey: plan.idempotencyKey,
           operationId: plan.operationId,
           retryCount,
+          retryAfterMs: retryAfterMs > 0 ? retryAfterMs : null,
         };
       }
 
@@ -310,6 +368,34 @@ class DistributedWriteCoordinator {
           return {
             success: false,
             error: error.message,
+            errorCode:
+              typeof error?.code === 'string' &&
+              error.code.length > 0 ?
+                error.code :
+                (typeof error?.errorCode === 'string' &&
+                error.errorCode.length > 0 ?
+                  error.errorCode :
+                  null),
+            retryAfterMs:
+              Number.isFinite(error?.retryAfterMs) &&
+              error.retryAfterMs > 0 ?
+                Math.floor(error.retryAfterMs) :
+                null,
+            deferRetry: error?.deferRetry === true,
+            participantNodeId:
+              typeof error?.participantNodeId === 'string' ?
+                error.participantNodeId :
+                null,
+            participantAddress:
+              typeof error?.participantAddress === 'string' ?
+                error.participantAddress :
+                null,
+            failedTable:
+              typeof error?.failedTable === 'string' ?
+                error.failedTable :
+                (typeof error?.tableName === 'string' ?
+                  error.tableName :
+                  null),
             attempts: attempt + 1,
           };
         }

@@ -8,24 +8,200 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from '../harness/constants.js';
+import {resolveScenarioOptions} from '../harness/scenario-config.js';
 
-const LOAD_OPS_PER_SEC = 50;
-const LOAD_DURATION = '120s';
-const PRE_RESTART_SETTLE_MS = 5000;
-const PER_NODE_CONVERGENCE_TIMEOUT_MS = 300000;
-const INTER_RESTART_DELAY_MS = 2000;
-const MIN_RESTART_SUCCESS_RATE = 0.63;
-const POST_RESTART_QUIET_WINDOW_MS = 60000;
-const POST_RESTART_ACTIVE_TIMEOUT_MS = 120000;
+const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
+const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
 const ZERO = 0;
+
+function normalizeFiniteNumber(value, fallback) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeNonEmptyString(value, fallback) {
+  return typeof value === 'string' && value.length > ZERO ? value : fallback;
+}
+
+function rowsFromResult(result) {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (Array.isArray(result?.rows)) {
+    return result.rows;
+  }
+  return [];
+}
+
+function escapeSql(value) {
+  return String(value).replace(/'/g, '\'\'');
+}
+
+async function getReachableNodes(nodes) {
+  const reachable = [];
+  for (const node of nodes) {
+    if (typeof node?.isReachable === 'function') {
+      const isReachable = await node.isReachable();
+      if (!isReachable) {
+        continue;
+      }
+    }
+    reachable.push(node);
+  }
+  return reachable;
+}
+
+function buildAcknowledgedWriteVisibilityQuery(tableName, idColumn, ids) {
+  return 'SELECT ' + idColumn + ' AS ' + ACKNOWLEDGED_WRITE_ALIAS +
+    ' FROM ' + tableName + ' WHERE ' + idColumn + ' IN (' +
+    ids.map((id) => '\'' + escapeSql(id) + '\'').join(', ') + ')';
+}
+
+async function assertAcknowledgedWritesVisibleOnReachableNodes(
+  acknowledgedWrites,
+  nodes,
+) {
+  const ids = Array.isArray(acknowledgedWrites?.ids) ?
+    [...new Set(acknowledgedWrites.ids
+      .filter((id) => typeof id === 'string' && id.length > ZERO))] :
+    [];
+  const reachableNodes = await getReachableNodes(nodes);
+  if (ids.length === ZERO) {
+    return {
+      acknowledgedWriteCount: ZERO,
+      reachableNodeCount: reachableNodes.length,
+    };
+  }
+
+  assert.ok(
+    reachableNodes.length > ZERO,
+    'No reachable nodes available for acknowledged-write visibility check',
+  );
+
+  const tableName = normalizeNonEmptyString(
+    acknowledgedWrites?.tableName,
+    'logs',
+  );
+  const idColumn = normalizeNonEmptyString(
+    acknowledgedWrites?.idColumn,
+    'log_id',
+  );
+
+  for (const node of reachableNodes) {
+    const missingIds = [];
+    for (let index = ZERO; index < ids.length;
+      index += ACKNOWLEDGED_WRITE_BATCH_SIZE) {
+      const idBatch = ids.slice(index, index + ACKNOWLEDGED_WRITE_BATCH_SIZE);
+      const query = buildAcknowledgedWriteVisibilityQuery(
+        tableName,
+        idColumn,
+        idBatch,
+      );
+      const result = await node.query(query);
+      const visibleIds = new Set(
+        rowsFromResult(result)
+          .map((row) => row?.[ACKNOWLEDGED_WRITE_ALIAS])
+          .filter((id) => typeof id === 'string' && id.length > ZERO),
+      );
+      for (const id of idBatch) {
+        if (!visibleIds.has(id)) {
+          missingIds.push(id);
+        }
+      }
+    }
+    assert.equal(
+      missingIds.length,
+      ZERO,
+      'Acknowledged writes missing after rolling restart on node ' +
+      String(node?.id || 'unknown') + ': ' +
+      JSON.stringify(missingIds.slice(ZERO, 10)) +
+      (missingIds.length > 10 ?
+        ' (+' + String(missingIds.length - 10) + ' more)' :
+        ''),
+    );
+  }
+
+  return {
+    acknowledgedWriteCount: ids.length,
+    reachableNodeCount: reachableNodes.length,
+  };
+}
+
+function resolveRollingRestartScenarioConfig(options = {}) {
+  return Object.freeze({
+    loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 30),
+    loadDuration: normalizeNonEmptyString(options.loadDuration, '300s'),
+    queryTimeoutMs: normalizeFiniteNumber(options.queryTimeoutMs, 10000),
+    preRestartSettleMs: normalizeFiniteNumber(
+      options.preRestartSettleMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
+    perRestartActiveTimeoutMs:
+      normalizeFiniteNumber(options.perRestartActiveTimeoutMs, 120000),
+    perNodeConvergenceTimeoutMs:
+      normalizeFiniteNumber(options.perNodeConvergenceTimeoutMs, 300000),
+    interRestartDelayMs: normalizeFiniteNumber(
+      options.interRestartDelayMs,
+      SCENARIO_TIMING_DEFAULTS.interActionDelayMs,
+    ),
+    minRestartSuccessRate:
+      normalizeFiniteNumber(options.minRestartSuccessRate, 0.63),
+    postRestartLoadSoakMs:
+      normalizeFiniteNumber(
+        options.postRestartLoadSoakMs,
+        SCENARIO_TIMING_DEFAULTS.shortSoakMs,
+      ),
+    postRestartQuietWindowMs:
+      normalizeFiniteNumber(
+        options.postRestartQuietWindowMs,
+        CONVERGENCE_DEFAULTS.quietWindowMs,
+      ),
+    postRestartActiveTimeoutMs:
+      normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 240000),
+  });
+}
+
+function buildConvergenceOptions(perNodeConvergenceTimeoutMs) {
+  return {
+    settleTimeoutMs: perNodeConvergenceTimeoutMs,
+    quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+    targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    maxSustainedOverTargetMs: Math.max(
+      CONVERGENCE_DEFAULTS.maxSustainedOverTargetMs,
+      perNodeConvergenceTimeoutMs,
+    ),
+    ignoreStaleInFlightReplicaOperations: true,
+  };
+}
 
 /**
  * Run the rolling-restart scenario.
  *
  * @param {Object} cluster - Cluster handle from the harness.
+ * @param {Object} [options]
  */
-async function run(cluster) {
+async function run(cluster, options = {}) {
+  const scenarioOptions = resolveScenarioOptions(
+    options,
+    cluster,
+    'rollingRestart',
+  );
+  const {
+    loadOpsPerSec,
+    loadDuration,
+    queryTimeoutMs,
+    preRestartSettleMs,
+    perRestartActiveTimeoutMs,
+    perNodeConvergenceTimeoutMs,
+    interRestartDelayMs,
+    minRestartSuccessRate,
+    postRestartLoadSoakMs,
+    postRestartQuietWindowMs,
+    postRestartActiveTimeoutMs,
+  } = resolveRollingRestartScenarioConfig(scenarioOptions);
   // 1. Start sustained write load.
   const initialNodes = cluster.getNodes();
   const loadNodesById = new Map(
@@ -42,12 +218,14 @@ async function run(cluster) {
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
     nodeResolver: resolveLoadNodes,
-    opsPerSec: LOAD_OPS_PER_SEC,
-    duration: LOAD_DURATION,
+    opsPerSec: loadOpsPerSec,
+    duration: loadDuration,
+    queryTimeoutMs,
+    trackAcknowledgedWrites: true,
   });
 
   // 2. Let load stabilize before starting restarts.
-  await new Promise((r) => setTimeout(r, PRE_RESTART_SETTLE_MS));
+  await new Promise((r) => setTimeout(r, preRestartSettleMs));
 
   // 3. Capture load progress before rolling restart.
   const preRestartMetrics = loadRun.getMetrics();
@@ -60,31 +238,33 @@ async function run(cluster) {
 
   for (const node of nonSeedNodes) {
     availableLoadNodeIds.delete(String(node.id));
-    await cluster.restartNode(node.id);
-
-    // Wait for convergence after each restart.
-    await cluster.waitForConvergence({
-      settleTimeoutMs: PER_NODE_CONVERGENCE_TIMEOUT_MS,
-      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-      targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
-      maxSustainedOverTargetMs: Math.max(
-        CONVERGENCE_DEFAULTS.maxSustainedOverTargetMs,
-        PER_NODE_CONVERGENCE_TIMEOUT_MS,
-      ),
-      ignoreStaleInFlightReplicaOperations: true,
+    await cluster.restartNode(node.id, {
+      readinessTimeoutMs: perRestartActiveTimeoutMs,
     });
     availableLoadNodeIds.add(String(node.id));
 
     // Brief pause between restarts.
     await new Promise(
-      (r) => setTimeout(r, INTER_RESTART_DELAY_MS),
+      (r) => setTimeout(r, interRestartDelayMs),
     );
   }
 
-  // 5. Wait for load to complete.
+  // 5. Keep load running through the full rolling-restart sequence,
+  // then stop it explicitly so the measured window always covers both restarts.
+  await new Promise((r) => setTimeout(r, postRestartLoadSoakMs));
+  if (typeof loadRun.cancel === 'function') {
+    loadRun.cancel();
+  }
   const metrics = await loadRun.waitComplete();
+  const acknowledgedWrites = typeof loadRun.getAcknowledgedWrites === 'function' ?
+    loadRun.getAcknowledgedWrites() :
+    null;
 
-  // 6. Verify bounded disruption during rolling restarts.
+  await cluster.waitForConvergence(
+    buildConvergenceOptions(perNodeConvergenceTimeoutMs),
+  );
+
+  // 6. Compute bounded disruption during rolling restarts.
   const restartWindowTotal = Math.max(
     ZERO,
     Number(metrics?.total || ZERO) - preRestartTotal,
@@ -96,18 +276,12 @@ async function run(cluster) {
   const restartSuccessRate = restartWindowTotal > ZERO ?
     restartWindowSuccess / restartWindowTotal :
     1;
-  assert.ok(
-    restartSuccessRate >= MIN_RESTART_SUCCESS_RATE,
-    'Success rate during rolling restart below threshold: ' +
-    restartSuccessRate.toFixed(3) +
-    ' (expected >= ' + MIN_RESTART_SUCCESS_RATE + ')',
-  );
 
   // 7. Ensure all nodes become active again before final consistency checks.
   if (typeof cluster.waitForAllActive === 'function') {
     await cluster.waitForAllActive({
       mode: 'load',
-      timeoutMs: POST_RESTART_ACTIVE_TIMEOUT_MS,
+      timeoutMs: postRestartActiveTimeoutMs,
     });
   }
 
@@ -115,16 +289,41 @@ async function run(cluster) {
   //    playback recorder captures recovery samples for transient-pressure
   //    vs sustained-leak classification.
   await new Promise(
-    (r) => setTimeout(r, POST_RESTART_QUIET_WINDOW_MS),
+    (r) => setTimeout(r, postRestartQuietWindowMs),
   );
 
   // 9. Assert final cluster consistency.
   await cluster.waitForConsistencyConvergence();
 
+  let acknowledgedWriteVisibility = null;
+  const failureMessages = [];
+  try {
+    acknowledgedWriteVisibility =
+      await assertAcknowledgedWritesVisibleOnReachableNodes(
+        acknowledgedWrites,
+        cluster.getNodes(),
+      );
+  } catch (error) {
+    failureMessages.push(error?.message || String(error));
+  }
+  if (restartSuccessRate < minRestartSuccessRate) {
+    failureMessages.unshift(
+      'Success rate during rolling restart below threshold: ' +
+      restartSuccessRate.toFixed(3) +
+      ' (expected >= ' + minRestartSuccessRate + ')',
+    );
+  }
+
+  assert.ok(
+    failureMessages.length === ZERO,
+    failureMessages.join('\n'),
+  );
+
   return {
     loadMetrics: metrics,
     restartSuccessRate,
     restartedNodes: nonSeedNodes.map((n) => n.id),
+    acknowledgedWriteVisibility,
   };
 }
 

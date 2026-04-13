@@ -23,6 +23,8 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createMockMutationGateway} from
+  './failure-detector-test-helpers.js';
 
 /**
  * The detector's own node ID — always skipped during health checks.
@@ -120,6 +122,8 @@ test('Property 8: Failure detector recovery detection',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -189,6 +193,8 @@ test('Property 8: Failure detector recovery detection',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -252,6 +258,8 @@ test('Property 8: Failure detector recovery detection',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -326,6 +334,8 @@ test('Property 8: Failure detector recovery detection',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 

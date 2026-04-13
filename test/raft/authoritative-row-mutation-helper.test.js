@@ -39,7 +39,7 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
       },
       options: {
         expectedCacheFields: {raft_role: 'leader'},
-        routingReadinessDimension: 'repairEligible',
+        routingReadinessDimension: 'controlPlaneRecoveryEligible',
       },
     }, 'should use the configured row key and cache-visibility fields');
     t.same(result, {
@@ -48,7 +48,11 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
       cacheVisible: true,
       recoveredFromCacheGap: false,
       attempts: 1,
-      partitionResult: {success: true, outcome: 'applied'},
+      partitionResult: {
+        success: true,
+        outcome: 'applied',
+        completionState: 'applied',
+      },
       reason: 'applied',
     }, 'should return structured success metadata');
     t.equal(helper.persistedValue, 'leader', 'should track persisted value');

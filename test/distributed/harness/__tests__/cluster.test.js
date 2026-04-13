@@ -100,6 +100,7 @@ import {
   PORTS,
   PLAYBACK_EVENT_TYPE,
   RAFT_PROVIDER_DEFAULTS,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
   NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
@@ -1008,6 +1009,148 @@ async () => {
     1,
     'topology-deferred discovery should still require one real load-lane ' +
       'admission probe',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes admits routed-only nodes when ' +
+  'strict discovery is disabled and the load lane accepts the table',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    benchmark: {
+      strictDiscovery: false,
+    },
+  });
+
+  let loadProbeCount = 0;
+  const routedOnlyNode = {
+    id: 'node-routed-only',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-routed-only',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        return {
+          rows: [{
+            services: [{
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              replicas: [{
+                nodeId: 'node-seed',
+                benchmarkAdmission: {
+                  state: 'ready',
+                },
+              }],
+            }],
+          }],
+        };
+      }
+      if (options.lane === 'load') {
+        loadProbeCount += 1;
+        assert.match(
+          sql,
+          /select\s+1\s+from\s+benchmark_events\s+limit\s+1/i,
+          'routed-only fallback should validate effective load-lane ' +
+            'admission with a benign table-local probe',
+        );
+        return {rows: [{ok: 1}]};
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(routedOnlyNode.id, routedOnlyNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    ['node-routed-only'],
+    'strictDiscovery=false should admit nodes that can already route the ' +
+      'benchmark table even before local discovery publishes a replica row',
+  );
+  assert.equal(
+    loadProbeCount,
+    1,
+    'routed-only fallback should still require one real load-lane ' +
+      'admission probe',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes keeps routed-only nodes excluded ' +
+  'when strict discovery remains enabled',
+async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    benchmark: {
+      strictDiscovery: true,
+    },
+  });
+
+  let loadProbeCount = 0;
+  const routedOnlyNode = {
+    id: 'node-routed-only-strict',
+    closeQueryConnection: () => {},
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: 'node-routed-only-strict',
+        adminReady: true,
+        controlPlaneRecoveryReady: true,
+      };
+    },
+    async queryWithTimeout(_sql, _params = [], options = {}) {
+      if (options.lane === 'snapshot') {
+        return {
+          rows: [{
+            services: [{
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              replicas: [{
+                nodeId: 'node-seed',
+                benchmarkAdmission: {
+                  state: 'ready',
+                },
+              }],
+            }],
+          }],
+        };
+      }
+      if (options.lane === 'load') {
+        loadProbeCount += 1;
+        return {rows: [{ok: 1}]};
+      }
+      throw new Error('unexpected lane: ' + String(options.lane || 'default'));
+    },
+  };
+
+  cluster._nodes.set(routedOnlyNode.id, routedOnlyNode);
+
+  const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+    tableName: 'benchmark_events',
+  });
+
+  assert.deepStrictEqual(
+    loadNodes.map((node) => node.id),
+    [],
+    'strict discovery should still require local discovery evidence before ' +
+      'admitting a benchmark load node',
+  );
+  assert.equal(
+    loadProbeCount,
+    0,
+    'strict discovery should not probe the load lane when local discovery ' +
+      'still lacks the node',
   );
 });
 
@@ -2137,6 +2280,68 @@ test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', asyn
   }
 });
 
+test('Unit: NodeHandle.query uses injected default admin timeout', async () => {
+  const server = new WebSocketServer({
+    host: '127.0.0.1',
+    port: 0,
+  });
+  await new Promise((resolve, reject) => {
+    server.once('listening', resolve);
+    server.once('error', reject);
+  });
+
+  const address = server.address();
+  assert.ok(address && typeof address === 'object', 'server should expose listen address');
+  const adminApiPort = address.port;
+
+  let capturedQuery = null;
+  server.on('connection', (socket) => {
+    socket.send(JSON.stringify({
+      type: 'cache_dump',
+      data: {},
+    }));
+    socket.once('message', (data) => {
+      capturedQuery = JSON.parse(data.toString());
+      socket.send(JSON.stringify({
+        type: 'query_result',
+        queryId: capturedQuery.queryId,
+        results: [{ok: 1}],
+        count: 1,
+      }));
+    });
+  });
+
+  const node = new NodeHandle(
+    'node-1',
+    'container-1',
+    '127.0.0.1',
+    NODE_ROLES.SEED,
+    {getContainerLogs: async () => ''},
+    adminApiPort,
+    {adminQueryTimeoutMs: 4321},
+  );
+
+  try {
+    await node.query('SELECT 1');
+    assert.strictEqual(
+      capturedQuery.timeoutMs,
+      4321,
+      'query() should inherit the injected default admin timeout',
+    );
+  } finally {
+    node.closeQueryConnection();
+    await new Promise((resolve, reject) => {
+      server.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+});
+
 test('Unit: NodeHandle.queryWithTimeout opens lane-tagged admin stream sockets',
   async () => {
     const server = new WebSocketServer({
@@ -2632,6 +2837,79 @@ test('Unit: NodeHandle.getStatus derives ACTIVE state from local discovery readi
         result.rows[0].status,
         'active',
         'routing-ready admin replica should be treated as ACTIVE',
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+test('Unit: NodeHandle.getControlSnapshot uses injected default admin timeout',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    let capturedQuery = null;
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        capturedQuery = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: capturedQuery.queryId,
+          results: [{
+            nodeId: 'node-1',
+            capturedAt: 1,
+            nodes: [],
+          }],
+          count: 1,
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+      {adminQueryTimeoutMs: 4321},
+    );
+
+    try {
+      await node.getControlSnapshot();
+      assert.strictEqual(
+        capturedQuery.sql,
+        NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+        'getControlSnapshot should query the canonical control snapshot SQL',
+      );
+      assert.strictEqual(
+        capturedQuery.timeoutMs,
+        4321,
+        'getControlSnapshot should inherit the injected default admin timeout',
       );
     } finally {
       node.closeQueryConnection();
@@ -4189,7 +4467,8 @@ test('Unit: _probeControlSnapshotCoverage forwards forced repair requests',
     );
   });
 
-test('Unit: _probeControlSnapshotCoverage reserves timeout budget for later nodes',
+test('Unit: _probeControlSnapshotCoverage parallelizes remaining nodes after ' +
+  'a partial seed snapshot',
   async () => {
     const cluster = createCluster({
       size: 3,
@@ -4249,14 +4528,95 @@ test('Unit: _probeControlSnapshotCoverage reserves timeout budget for later node
     );
     assert.ok(
       Number.isInteger(probeCalls[0].timeoutMs) &&
-        probeCalls[0].timeoutMs > 0 &&
-        probeCalls[0].timeoutMs < 3000,
-      'first sequential snapshot probe should reserve budget for later nodes',
+        probeCalls[0].timeoutMs > 0,
+      'seed snapshot probe should receive a positive timeout budget',
     );
     assert.ok(
       probeCalls.every((call) =>
         Number.isInteger(call.timeoutMs) && call.timeoutMs > 0),
-      'every sequential snapshot probe should receive a positive timeout budget',
+      'every snapshot probe should receive a positive timeout budget',
+    );
+    assert.strictEqual(
+      probeCalls[1].timeoutMs,
+      probeCalls[2].timeoutMs,
+      'remaining node probes should share the same timeout budget instead of ' +
+        'serially starving the tail node',
+    );
+  });
+
+test('Unit: _probeControlSnapshotCoverage preserves a meaningful timeout floor ' +
+  'for late active-wait probes',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const snapshotProbeCalls = [];
+    const reachabilityProbeCalls = [];
+    for (const [index, nodeId] of ['node-a', 'node-b'].entries()) {
+      cluster._nodes.set(nodeId, {
+        id: nodeId,
+        role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+        async getStatus() {
+          return {rows: [{status: 'active'}]};
+        },
+        async getReachabilityDiagnostics(options = {}) {
+          reachabilityProbeCalls.push({
+            nodeId,
+            timeoutMs: options.timeoutMs,
+          });
+          return {
+            reachable: true,
+            adminReady: true,
+            reachableBy: 'admin_health',
+            lastError: null,
+          };
+        },
+        async getControlSnapshot(options = {}) {
+          snapshotProbeCalls.push({
+            nodeId,
+            timeoutMs: options.timeoutMs,
+          });
+          return {
+            rows: [{
+              nodes: [nodeId],
+              capturedAtMs: 100 + index,
+            }],
+          };
+        },
+        async getLogs(_options) {
+          return '';
+        },
+      });
+    }
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + 1,
+      ['node-a', 'node-b'],
+    );
+
+    assert.strictEqual(
+      snapshotProbeCalls.length,
+      2,
+      'late coverage probes should still inspect the remaining nodes when the first witness is partial',
+    );
+    assert.ok(
+      snapshotProbeCalls.every((call) => call.timeoutMs >= 100),
+      'snapshot coverage probes should preserve a meaningful timeout floor instead of collapsing to 1ms near the deadline',
+    );
+    assert.ok(
+      reachabilityProbeCalls.every((call) => call.timeoutMs >= 100),
+      'reachability probes should preserve the same meaningful timeout floor for late coverage attempts',
+    );
+    assert.ok(
+      coverage.selectedSnapshotTimeoutMs >= 100,
+      'coverage summary should report the preserved late snapshot timeout floor',
+    );
+    assert.ok(
+      coverage.selectedReachabilityTimeoutMs >= 100,
+      'coverage summary should report the preserved late reachability timeout floor',
     );
   });
 
@@ -4316,6 +4676,98 @@ test('Unit: _probeControlSnapshotCoverage falls back to default lane after snaps
     );
   });
 
+test('Unit: _probeControlSnapshotCoverage prefers authoritative admin-ready witnesses when coverage ties',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    cluster._nodes.set('node-a', {
+      id: 'node-a',
+      role: NODE_ROLES.SEED,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          reachable: false,
+          adminReady: false,
+          reachableBy: null,
+          lastError: 'connect ECONNREFUSED 127.0.0.1:8081',
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a'],
+            capturedAtMs: 200,
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+    cluster._nodes.set('node-b', {
+      id: 'node-b',
+      role: NODE_ROLES.JOINER,
+      async getStatus() {
+        return {rows: [{status: 'active'}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          reachable: true,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          lastError: null,
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-b'],
+            capturedAtMs: 100,
+            controlPlaneDiagnostics: {
+              readinessByNodeId: {
+                'node-b': {
+                  dimensions: {
+                    clusterMemberHealthy: true,
+                  },
+                },
+              },
+            },
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    });
+
+    const coverage = await cluster._probeControlSnapshotCoverage(
+      Date.now() + 1000,
+      ['node-a', 'node-b'],
+    );
+
+    assert.strictEqual(
+      coverage.selectedSnapshotNodeId,
+      'node-b',
+      'authoritative admin-ready witnesses should win snapshot selection when coverage is otherwise tied',
+    );
+    assert.strictEqual(
+      coverage.selectedSnapshotAdminReady,
+      true,
+      'selected witness should preserve the authoritative admin-ready status',
+    );
+    assert.strictEqual(
+      coverage.selectedControlPlaneDiagnosticsAvailable,
+      true,
+      'selected witness should preserve control-plane diagnostics availability',
+    );
+  });
+
 test('Unit: _probeControlSnapshotCoverage parses stringified snapshot fields',
   async () => {
     const cluster = createCluster({
@@ -4365,6 +4817,65 @@ test('Unit: _probeControlSnapshotCoverage parses stringified snapshot fields',
     );
   });
 
+test('Unit: _probeControlSnapshotCoverage counts projected and suspected nodes ' +
+  'when authoritative nodes remain publication-scoped', async () => {
+  const cluster = createCluster({
+    size: 5,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  cluster._nodes.set('node-a', {
+    id: 'node-a',
+    role: NODE_ROLES.SEED,
+    async getStatus() {
+      return {rows: [{status: 'active'}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: true,
+        adminReady: true,
+        reachableBy: 'admin_health',
+        lastError: null,
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: ['node-a', 'node-b'],
+          projectedNodes: ['node-a', 'node-b', 'node-c', 'node-d'],
+          suspectedOrTransitioningNodes: ['node-e'],
+          capturedAtMs: 321,
+        }],
+      };
+    },
+    async getLogs(_options) {
+      return '';
+    },
+  });
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + 5000,
+    ['node-a', 'node-b', 'node-c', 'node-d', 'node-e'],
+  );
+
+  assert.strictEqual(
+    coverage.completeCoverage,
+    true,
+    'coverage should treat projected and suspected nodes as observed membership',
+  );
+  assert.strictEqual(
+    coverage.bestCoverageNodeCount,
+    5,
+    'coverage should union authoritative, projected, and suspected node ids',
+  );
+  assert.deepStrictEqual(
+    coverage.selectedObservedNodeIds,
+    ['node-a', 'node-b', 'node-c', 'node-d', 'node-e'],
+    'coverage should retain the expanded observed node set',
+  );
+});
+
 test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from the selected snapshot',
   async () => {
     const cluster = createCluster({
@@ -4399,6 +4910,32 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
                 publishedActiveNodeIds: JSON.stringify(['node-a', 'node-b']),
                 pendingAckNodeIds: ['node-b'],
                 acknowledgedNodeIds: ['node-a'],
+                recoveryProtocolState: 'publication_pending',
+                priorityRecoveryReasonCodes: [
+                  'publication_epoch_pending',
+                  'priority_partitions_not_spread',
+                ],
+                participationByNodeId: {
+                  'node-a': {
+                    state: 'published_active',
+                    publishedActive: true,
+                    recoveryActive: true,
+                  },
+                  'node-b': {
+                    state: 'recovery_pending_publish',
+                    recoveryActive: true,
+                    recoverySource: 'recovery_eligible_projection',
+                  },
+                  'node-c': {
+                    state: 'recovery_pending_publish',
+                    recoveryActive: true,
+                    recoverySource: 'recovery_eligible_projection',
+                  },
+                },
+                participationStateCounts: {
+                  published_active: 1,
+                  recovery_pending_publish: 2,
+                },
                 membershipLifecycleSummary: {
                   lifecycleState: 'publish_pending',
                   epochBoundary: 'publication_pending',
@@ -4463,6 +5000,53 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
         publishedActiveNodeIds: ['node-a', 'node-b'],
         pendingAckNodeIds: ['node-b'],
         acknowledgedNodeIds: ['node-a'],
+        recoveryActiveNodeIds: ['node-a', 'node-b', 'node-c'],
+        recoveryActiveNodeSource: 'locally_eligible_projection',
+        missingPublishedRecoveryActiveNodeIds: ['node-c'],
+        recoveryProtocolState: 'publication_pending',
+        priorityRecoveryReasonCodes: [
+          'priority_partitions_not_spread',
+          'publication_epoch_pending',
+        ],
+        participationByNodeId: {
+          'node-a': {
+            state: 'published_active',
+            durable: false,
+            publishedActive: true,
+            recoveryActive: true,
+            projectedServing: false,
+            locallyEligible: false,
+            suspectedOrTransitioning: false,
+            recoverySource: null,
+            reasons: [],
+          },
+          'node-b': {
+            state: 'recovery_pending_publish',
+            durable: false,
+            publishedActive: false,
+            recoveryActive: true,
+            projectedServing: false,
+            locallyEligible: false,
+            suspectedOrTransitioning: false,
+            recoverySource: 'recovery_eligible_projection',
+            reasons: [],
+          },
+          'node-c': {
+            state: 'recovery_pending_publish',
+            durable: false,
+            publishedActive: false,
+            recoveryActive: true,
+            projectedServing: false,
+            locallyEligible: false,
+            suspectedOrTransitioning: false,
+            recoverySource: 'recovery_eligible_projection',
+            reasons: [],
+          },
+        },
+        participationStateCounts: {
+          published_active: 1,
+          recovery_pending_publish: 2,
+        },
         priorityPartitionSummary: null,
         membershipLifecycleSummary: {
           lifecycleState: 'publish_pending',
@@ -4471,6 +5055,53 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
           projectedServingNodeIds: ['node-a', 'node-b', 'node-c'],
           locallyEligibleNodeIds: ['node-a', 'node-b', 'node-c'],
           suspectedOrTransitioningNodeIds: ['node-c'],
+          recoveryActiveNodeIds: ['node-a', 'node-b', 'node-c'],
+          recoveryActiveNodeSource: 'locally_eligible_projection',
+          missingPublishedRecoveryActiveNodeIds: ['node-c'],
+          recoveryProtocolState: 'publication_pending',
+          recoveryProtocolReasonCodes: [
+            'priority_partitions_not_spread',
+            'publication_epoch_pending',
+          ],
+          participationByNodeId: {
+            'node-a': {
+              state: 'published_active',
+              durable: false,
+              publishedActive: true,
+              recoveryActive: true,
+              projectedServing: false,
+              locallyEligible: false,
+              suspectedOrTransitioning: false,
+              recoverySource: null,
+              reasons: [],
+            },
+            'node-b': {
+              state: 'recovery_pending_publish',
+              durable: false,
+              publishedActive: false,
+              recoveryActive: true,
+              projectedServing: false,
+              locallyEligible: false,
+              suspectedOrTransitioning: false,
+              recoverySource: 'recovery_eligible_projection',
+              reasons: [],
+            },
+            'node-c': {
+              state: 'recovery_pending_publish',
+              durable: false,
+              publishedActive: false,
+              recoveryActive: true,
+              projectedServing: false,
+              locallyEligible: false,
+              suspectedOrTransitioning: false,
+              recoverySource: 'recovery_eligible_projection',
+              reasons: [],
+            },
+          },
+          participationStateCounts: {
+            published_active: 1,
+            recovery_pending_publish: 2,
+          },
           projectionDiagnostics: {
             readinessDecisionMode: 'cluster_member_or_recovery_eligible',
             readinessDecisionDimensions: [
@@ -4507,6 +5138,9 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
         publishedActiveNodeIds: ['node-a'],
         pendingAckNodeIds: [],
         acknowledgedNodeIds: ['node-a'],
+        recoveryActiveNodeIds: ['node-a'],
+        recoveryActiveNodeSource: 'published_membership',
+        missingPublishedRecoveryActiveNodeIds: [],
         priorityPartitionSummary: null,
         membershipLifecycleSummary: null,
         projectionDiagnostics: null,
@@ -4682,6 +5316,108 @@ test('Unit: _probeControlSnapshotCoverage captures per-node publication ' +
   );
 });
 
+test('Unit: _probeControlSnapshotCoverage prefers the strongest publication ' +
+  'witness when coverage ties', async () => {
+  const cluster = createCluster({
+    size: 3,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const createNode = (
+    nodeId,
+    role,
+    capturedAtMs,
+    publishedActiveNodeIds,
+  ) => ({
+    id: nodeId,
+    role,
+    async getStatus() {
+      return {rows: [{status: 'active'}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {
+        reachable: true,
+        adminReady: true,
+        reachableBy: 'admin_health',
+        lastError: null,
+      };
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: ['node-a', 'node-b'],
+          capturedAtMs,
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 22,
+              publicationStatus: 'PUBLISHED',
+              publishedActiveNodeIds,
+              pendingAckNodeIds: [],
+              acknowledgedNodeIds: ['node-a'],
+            },
+            logsTable: {
+              pendingWrites: 0,
+              pendingWriteGrowthCount: 0,
+              retainedBacklogGrowthCount: 0,
+              sharedPressureBackpressured: false,
+            },
+            cdcReplay: {
+              bufferedEvents: 0,
+              replayBufferGrowthCount: 0,
+              replayRetryDepth: 0,
+              partitionCount: 1,
+              replayInFlightPartitionCount: 0,
+              byPartitionId: {},
+            },
+          },
+        }],
+      };
+    },
+    async getLogs() {
+      return '';
+    },
+  });
+
+  cluster._nodes.set('node-a', createNode(
+    'node-a',
+    NODE_ROLES.SEED,
+    100,
+    ['node-a', 'node-b'],
+  ));
+  cluster._nodes.set('node-b', createNode(
+    'node-b',
+    NODE_ROLES.JOINER,
+    200,
+    ['node-a'],
+  ));
+  cluster._nodes.set('node-c', createNode(
+    'node-c',
+    NODE_ROLES.JOINER,
+    300,
+    ['node-a'],
+  ));
+
+  const coverage = await cluster._probeControlSnapshotCoverage(
+    Date.now() + 5000,
+    ['node-a', 'node-b', 'node-c'],
+  );
+
+  assert.strictEqual(
+    coverage.selectedNodeId,
+    'node-a',
+    'probe should prefer the witness with fewer missing published nodes over a newer stale witness',
+  );
+  assert.deepStrictEqual(
+    coverage.selectedPublishedActiveNodeIds,
+    ['node-a', 'node-b'],
+  );
+  assert.deepStrictEqual(
+    coverage.selectedMissingPublishedNodeIds,
+    ['node-c'],
+  );
+});
+
 test('Unit: _waitForAllActive carries selected snapshot witness into no-progress diagnostics',
   async () => {
     const cluster = createCluster({
@@ -4696,7 +5432,6 @@ test('Unit: _waitForAllActive carries selected snapshot witness into no-progress
 
     cluster._sleep = async () => {};
     cluster._collectFailureLogs = async () => {};
-
     const recordedStages = [];
     cluster._recordClusterStage = (stage, details = {}) => {
       recordedStages.push({stage, details});
@@ -4882,7 +5617,7 @@ test('Unit: _waitForAllActive treats CL-003 witness as load-mode soft success',
     );
   });
 
-test('Unit: _waitForAllActive treats CL-004 witness as startup-mode soft success',
+test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
   async () => {
     const cluster = createCluster({
       size: 2,
@@ -4942,21 +5677,258 @@ test('Unit: _waitForAllActive treats CL-004 witness as startup-mode soft success
       };
     };
 
-    await cluster._waitForAllActive();
-
-    const waitingStage = recordedStages.find((entry) => {
-      return entry.stage === 'setup.cluster.waiting-active' &&
-        entry.details?.activeGateNoProgress?.stalled === true;
-    });
+    let timeoutError = null;
+    await assert.rejects(
+      async () => {
+        await cluster._waitForAllActive();
+      },
+      (error) => {
+        timeoutError = error;
+        return typeof error?.message === 'string' &&
+          error.message.includes('Not all nodes reached ACTIVE state within');
+      },
+      'startup snapshot timeout should timeout until active admission is strong',
+    );
+    assert.ok(
+      timeoutError?.diagnostics?.noProgress,
+      'startup timeout should carry final timeout diagnostics',
+    );
     assert.equal(
-      waitingStage,
-      undefined,
-      'startup snapshot-timeout soft success should complete without recording a stalled waiting-active stage',
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
+      'snapshot_timeout',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.recoverability,
+      'terminal',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.mode,
+      'startup',
     );
     assert.equal(
       collectedFailureLogs,
-      false,
-      'startup snapshot-timeout soft success should not trigger failure log collection',
+      true,
+      'startup snapshot-timeout path should collect failure logs',
+    );
+  });
+
+test('Unit: _waitForAllActive rejects CL-006 witness without strong admin proof',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        convergence: 200,
+        activeWaitNoProgressMaxAttempts: 2,
+      },
+    });
+
+    cluster._sleep = async () => {};
+    let collectedFailureLogs = false;
+    cluster._collectFailureLogs = async () => {
+      collectedFailureLogs = true;
+    };
+
+    cluster._recordClusterStage = () => {};
+
+    cluster._probeClusterActiveState = async () => {
+      return {
+        allActive: false,
+        nodeDiagnostics: [{
+          nodeId: 'seed-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-2',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }],
+        snapshotCoverage: {
+          completeCoverage: false,
+          expectedNodeCount: 3,
+          bestCoverageNodeCount: 2,
+          selectedNodeId: 'seed-1',
+          selectedAdminReady: true,
+          selectedReachableBy: 'admin_health',
+          selectedPublicationConvergence: {
+            publicationEpoch: 2,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+            pendingAckNodeIds: [],
+            priorityPartitionSummary: null,
+          },
+          selectedPublishedActiveNodeIds: ['seed-1', 'joiner-1'],
+          selectedMissingPublishedNodeIds: ['joiner-2'],
+          selectedError: null,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: null,
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          failingInvariantReasonCodes: [],
+          passed: true,
+        },
+      };
+    };
+
+    let timeoutError = null;
+    await assert.rejects(
+      async () => {
+        await cluster._waitForAllActive();
+      },
+      (error) => {
+        timeoutError = error;
+        return typeof error?.message === 'string' &&
+          error.message.includes('Not all nodes reached ACTIVE state within');
+      },
+      'startup publication lag witness should timeout when strong admission is absent',
+    );
+    assert.ok(
+      timeoutError?.diagnostics?.noProgress,
+      'startup timeout should carry final timeout diagnostics',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
+      'no_progress_terminal',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.cause,
+      'none',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.mode,
+      'startup',
+    );
+    assert.equal(
+      collectedFailureLogs,
+      true,
+      'startup publication-lag timeout should collect failure logs',
+    );
+  });
+
+test('Unit: _waitForAllActive rejects CL-006 witness when only reachability is transient',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        convergence: 200,
+        activeWaitNoProgressMaxAttempts: 2,
+      },
+    });
+
+    cluster._sleep = async () => {};
+    let collectedFailureLogs = false;
+    cluster._collectFailureLogs = async () => {
+      collectedFailureLogs = true;
+    };
+
+    cluster._recordClusterStage = () => {};
+
+    cluster._probeClusterActiveState = async () => {
+      return {
+        allActive: false,
+        nodeDiagnostics: [{
+          nodeId: 'seed-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-2',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }],
+        snapshotCoverage: {
+          completeCoverage: false,
+          expectedNodeCount: 3,
+          bestCoverageNodeCount: 2,
+          selectedNodeId: 'seed-1',
+          selectedAdminReady: false,
+          selectedReachableBy: null,
+          selectedReachabilityError:
+            'Control snapshot reachability probe timed out for seed-1',
+          selectedPublicationConvergence: {
+            publicationEpoch: 2,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+            pendingAckNodeIds: [],
+            priorityPartitionSummary: null,
+          },
+          selectedPublishedActiveNodeIds: ['seed-1', 'joiner-1'],
+          selectedMissingPublishedNodeIds: ['joiner-2'],
+          selectedError: null,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: null,
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          failingInvariantReasonCodes: [],
+          passed: true,
+        },
+      };
+    };
+
+    let timeoutError = null;
+    await assert.rejects(
+      async () => {
+        await cluster._waitForAllActive();
+      },
+      (error) => {
+        timeoutError = error;
+        return typeof error?.message === 'string' &&
+          error.message.includes('Not all nodes reached ACTIVE state within');
+      },
+      'startup publication-lag witness should timeout when reachability is weak',
+    );
+    assert.ok(
+      timeoutError?.diagnostics?.noProgress,
+      'startup timeout should carry final timeout diagnostics',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.classCode,
+      'snapshot_reachability_timeout',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.recoverability,
+      'terminal',
+    );
+    assert.equal(
+      timeoutError?.diagnostics?.noProgress?.readinessFailure?.mode,
+      'startup',
+    );
+    assert.equal(
+      collectedFailureLogs,
+      true,
+      'startup publication-lag timeout should collect failure logs',
     );
   });
 
@@ -6192,6 +7164,35 @@ test('Unit: _startNode sets joiner timeout env overrides', async () => {
   );
 });
 
+test('Unit: _startNode injects benchmark control timeout into NodeHandle',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      benchmark: {
+        controlQueryTimeoutMs: 4321,
+      },
+    });
+
+    cluster._networkName = 'test-net';
+
+    const provider = cluster._providers[0];
+    provider.createContainer = async (options) => ({
+      containerId: 'container-1',
+      ip: '10.0.0.10',
+      name: options.name,
+    });
+
+    const node = await cluster._startNode('test-node-id', NODE_ROLES.SEED, null, 0);
+
+    assert.strictEqual(
+      node._defaultAdminQueryTimeoutMs,
+      4321,
+      'NodeHandle should inherit the benchmark control timeout configured for the cluster',
+    );
+  });
+
 test('Unit: _startNode sets leak capture NODE_OPTIONS when enabled', async () => {
   const cluster = createCluster({
     size: 1,
@@ -6693,6 +7694,41 @@ test('Unit: reusable cluster lease recovers stale holder files', async () => {
     await cluster._releaseReusableClusterLease();
     await fs.rm(lockPath, {force: true});
   }
+});
+
+test('Unit: reusable cluster lease timeout disables fast-local reuse for the ' +
+  'current run', async () => {
+  const cluster = createCluster({
+    size: 5,
+    docker: {
+      socketPath: '/var/run/docker.sock',
+      reuseContainers: true,
+    },
+    image: 'distributed-db:test',
+  });
+
+  cluster._acquireReusableClusterLease = async () => {
+    const error = new Error(
+      'Timed out waiting for reusable cluster lease ' +
+      '(path=/tmp/reuse.lock, timeoutMs=1000, holderPid=42, ' +
+      'holderScenario=busy-run)',
+    );
+    error.code = 'REUSE_CLUSTER_LEASE_TIMEOUT';
+    throw error;
+  };
+
+  await cluster._prepareReusableClusterLeaseForStart();
+
+  assert.strictEqual(
+    cluster._isContainerReuseEnabled(),
+    false,
+    'lease timeout should disable reusable containers for this run',
+  );
+  assert.match(
+    cluster._reuseLeaseFallbackWarning,
+    /Timed out waiting for reusable cluster lease/,
+    'lease timeout fallback should retain the cause for diagnostics',
+  );
 });
 
 test('Unit: _startNode reconnects reusable container with hostname alias',

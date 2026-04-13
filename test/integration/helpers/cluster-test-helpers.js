@@ -28,7 +28,51 @@ import {URL} from 'url';
  * Per-test-file allocator to avoid cross-file port collisions when tests
  * execute in parallel worker processes.
  */
-const testFilePortAllocator = createPortAllocator(process.argv[1] || import.meta.url);
+const STACK_PREFIX = 'at ';
+const FILE_SCHEME_PREFIX = 'file://';
+const TEST_FILE_PATTERN = /((?:file:\/\/)?[^\s()]+\.test\.js)/;
+const DEFAULT_TEST_FILE_ID = process.argv[1] || import.meta.url;
+const testFilePortAllocators = new Map();
+
+function normalizeTestFileId(candidate) {
+  if (typeof candidate !== 'string' || candidate.length === 0) {
+    return DEFAULT_TEST_FILE_ID;
+  }
+  return candidate.startsWith(FILE_SCHEME_PREFIX) ?
+    candidate :
+    candidate;
+}
+
+function resolveCallerTestFileId() {
+  const stack = new Error().stack || '';
+  const lines = stack.split('\n');
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trim();
+    if (!line.startsWith(STACK_PREFIX)) {
+      continue;
+    }
+    if (line.includes('cluster-test-helpers.js')) {
+      continue;
+    }
+    const match = line.match(TEST_FILE_PATTERN);
+    if (!match?.[1]) {
+      continue;
+    }
+    return normalizeTestFileId(match[1]);
+  }
+  return DEFAULT_TEST_FILE_ID;
+}
+
+function getTestFilePortAllocator(testFileId) {
+  const normalizedTestFileId = normalizeTestFileId(testFileId);
+  if (!testFilePortAllocators.has(normalizedTestFileId)) {
+    testFilePortAllocators.set(
+      normalizedTestFileId,
+      createPortAllocator(normalizedTestFileId),
+    );
+  }
+  return testFilePortAllocators.get(normalizedTestFileId);
+}
 
 /**
  * Get a unique port for test use.
@@ -37,7 +81,7 @@ const testFilePortAllocator = createPortAllocator(process.argv[1] || import.meta
  * @returns {number} A unique port number
  */
 export function getUniquePort() {
-  return testFilePortAllocator.getPort();
+  return getTestFilePortAllocator(resolveCallerTestFileId()).getPort();
 }
 
 /**
@@ -48,7 +92,7 @@ export function getUniquePort() {
  */
 export function resetPortCounter(startPort = 18000) {
   void startPort;
-  testFilePortAllocator.reset();
+  getTestFilePortAllocator(resolveCallerTestFileId()).reset();
 }
 
 /**

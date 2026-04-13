@@ -330,6 +330,157 @@ test(
 );
 
 test(
+  'AdminServiceDiscovery degrades both nodes for failed replace operations',
+  async (t) => {
+    const PARTITION_ID = 'partition-1';
+    const OPERATION_ID = 'replace-1';
+    const SOURCE_NODE_ID = 'node-source';
+    const TARGET_NODE_ID = 'node-target';
+    const FAILED_STATUS = 'failed';
+    const MOVE_FAILED_STATE = 'move_failed';
+    const REASON_CODE = 'replica_operation_failed';
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-local',
+      nowFn() {
+        return 200;
+      },
+    });
+
+    const degradationByNodeId =
+      discovery.buildDiscoveryReplicaOperationDegradationByNodeId(
+        [{
+          partition_id: PARTITION_ID,
+          operation_id: OPERATION_ID,
+          type: 'REPLACE',
+          status: FAILED_STATUS,
+          workflow_step: 'FAILED',
+          source_node_id: SOURCE_NODE_ID,
+          target_node_id: TARGET_NODE_ID,
+          updated_at: 100,
+        }],
+        {
+          partitionIds: new Set([PARTITION_ID]),
+          serviceRows: [],
+        },
+      );
+
+    t.same(
+      degradationByNodeId.get(SOURCE_NODE_ID),
+      {
+        degradationState: MOVE_FAILED_STATE,
+        operationIds: [OPERATION_ID],
+        reasons: [{
+          code: REASON_CODE,
+          detail: `${OPERATION_ID}:REPLACE:${FAILED_STATUS}`,
+        }],
+      },
+      'failed replace operations should degrade the source node',
+    );
+    t.same(
+      degradationByNodeId.get(TARGET_NODE_ID),
+      {
+        degradationState: MOVE_FAILED_STATE,
+        operationIds: [OPERATION_ID],
+        reasons: [{
+          code: REASON_CODE,
+          detail: `${OPERATION_ID}:REPLACE:${FAILED_STATUS}`,
+        }],
+      },
+      'failed replace operations should degrade the target node',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery builds canonical readiness reasons for blocked replicas',
+  async (t) => {
+    const NODE_ID = 'node-local';
+    const TABLE_NAME = 'users';
+    const PARTITION_ID = 'users-p1';
+    const UNHEALTHY_STATUS = 'unhealthy';
+    const OPERATION_DETAIL = 'replace-1:REPLACE:failed';
+    const ROUTING_NOT_READY = 'routing_not_ready';
+    const SCHEMA_PARTITION_UNAVAILABLE = 'schema_partition_unavailable';
+    const REPLICA_OPERATION_FAILED = 'replica_operation_failed';
+    const LEADERSHIP_UNSTABLE = 'leadership_unstable';
+    const LOCAL_REPLICA_NOT_VOTER_READY = 'local_replica_not_voter_ready';
+    const LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE =
+      'local_cdc_diagnostics_unavailable';
+    const LOCAL_CDC_SUBSCRIBER_MISSING =
+      'local_cdc_subscriber_missing';
+    const LOCAL_CDC_BUFFER_NOT_DRAINED =
+      'local_cdc_buffer_not_drained';
+    const discovery = new AdminServiceDiscovery({
+      nodeId: NODE_ID,
+    });
+
+    const readiness = discovery.buildServiceDiscoveryReplicaReadiness(
+      {
+        nodeId: NODE_ID,
+        healthStatus: UNHEALTHY_STATUS,
+      },
+      {
+        activeNodeIds: new Set(),
+        tableName: TABLE_NAME,
+        tableFound: true,
+        schemaReady: false,
+        localTargetReplicaStateByNodeId: new Map([[
+          NODE_ID,
+          {
+            nonVoterPartitionIds: new Set([PARTITION_ID]),
+            replicaRoles: new Set(),
+          },
+        ]]),
+        localPartitionCdcState: {
+          applies: true,
+          ready: false,
+          diagnosticsAvailable: false,
+          missingDiagnosticsPartitionIds: [PARTITION_ID],
+          noSubscriberPartitionIds: [PARTITION_ID],
+          bufferedPartitionIds: [PARTITION_ID],
+        },
+        replicaOperationDegradationByNodeId: new Map([[
+          NODE_ID,
+          {
+            degradationState: 'move_failed',
+            reasons: [{
+              code: REPLICA_OPERATION_FAILED,
+              detail: OPERATION_DETAIL,
+            }],
+          },
+        ]]),
+        leadershipStable: false,
+        appliedSchemaVersion: 7,
+        replicaOpsInFlight: 1,
+      },
+    );
+
+    t.equal(readiness.benchmarkReady, false,
+      'blocked readiness should keep benchmark admission false');
+    t.same(
+      readiness.reasons.map((reason) => reason.code),
+      [
+        ROUTING_NOT_READY,
+        SCHEMA_PARTITION_UNAVAILABLE,
+        REPLICA_OPERATION_FAILED,
+        LEADERSHIP_UNSTABLE,
+        LOCAL_REPLICA_NOT_VOTER_READY,
+        LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE,
+        LOCAL_CDC_SUBSCRIBER_MISSING,
+        LOCAL_CDC_BUFFER_NOT_DRAINED,
+      ],
+      'readiness reasons should preserve the canonical blocked signals',
+    );
+    t.equal(
+      readiness.reasons.find((reason) =>
+        reason.code === LOCAL_REPLICA_NOT_VOTER_READY)?.detail,
+      PARTITION_ID,
+      'local replica readiness should surface the blocked partition id',
+    );
+  },
+);
+
+test(
   'AdminServiceDiscovery classifies control-plane backpressure repair cause chains',
   async (t) => {
     const warnings = [];
@@ -518,5 +669,71 @@ test('AdminServiceDiscovery marks repair as applied only after all tables are re
       reconcileCalls.length,
       repair.tableNames.length,
       'applied repair should reconcile every requested table',
+    );
+  });
+
+test(
+  'AdminServiceDiscovery stops discovery repair after the first timeout-' +
+    'shaped authoritative read failure',
+  async (t) => {
+    const readCalls = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          const tableName = String(readIntent?.tableName || '');
+          readCalls.push(tableName);
+          if (tableName === TABLES.SERVICES) {
+            return {
+              success: false,
+              errorCode: 'QUERY_TIMEOUT',
+              error: 'query_timeout',
+            };
+          }
+          return {
+            success: true,
+            tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+    discovery.resolveAuthoritativeDiscoveryRepairTables = () => [
+      TABLES.SERVICES,
+      TABLES.PARTITIONS,
+      TABLES.TABLES,
+    ];
+
+    const repair = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'unit-test-timeout-fail-fast',
+    });
+
+    t.same(
+      readCalls,
+      [TABLES.SERVICES],
+      'timeout-shaped authoritative failures should stop the repair loop ' +
+        'instead of probing every remaining table',
+    );
+    t.equal(repair.applied, false, 'timeout-shaped repair failures should still fail closed');
+    t.same(
+      repair.failedTables,
+      [TABLES.SERVICES],
+      'the first timed out table should remain the only failed table in the bounded repair result',
+    );
+    t.same(
+      repair.causeChain,
+      ['query_timeout'],
+      'timeout-shaped failures should preserve the explicit timeout classification',
     );
   });

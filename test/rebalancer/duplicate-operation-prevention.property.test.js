@@ -104,11 +104,21 @@ function createMockSqlQueryEngine(options = {}) {
         };
       }
 
+      if (sql.includes('SELECT') && sql.includes('operation_id = ?')) {
+        const [operationId] = params;
+        const existing = operations.get(operationId);
+        return {
+          success: true,
+          rows: existing ? [existing] : [],
+        };
+      }
+
       if (sql.includes('INSERT INTO replica_operations') ||
           sql.includes('INSERT OR IGNORE')) {
         // Insert new operation
         const [operationId, type, partitionId, replicaId, sourceNodeId,
-          targetNodeId, status] = params;
+          targetNodeId, status, workflowStep, createdAt, updatedAt,
+          completedAt, errorMessage, stepsHistory, entityType, entityId] = params;
         const newOp = {
           operation_id: operationId,
           type,
@@ -117,9 +127,14 @@ function createMockSqlQueryEngine(options = {}) {
           source_node_id: sourceNodeId,
           target_node_id: targetNodeId,
           status,
-          workflow_step: 'pending',
-          created_at: Date.now(),
-          updated_at: Date.now(),
+          workflow_step: workflowStep,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          completed_at: completedAt,
+          error_message: errorMessage,
+          steps_history: stepsHistory,
+          entity_type: entityType,
+          entity_id: entityId,
         };
         operations.set(operationId, newOp);
         return {success: true, changes: 1};
@@ -148,6 +163,14 @@ function createMockCoordinatorDeps(sqlEngine) {
     messageRouter: {
       deliver: async () => ({acknowledged: true, status: 'completed'}),
     },
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      executeQuery: async (sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+    },
     tablePolicyService: {
       getPolicyForPartition: () => ({replicaCount: 3}),
     },
@@ -163,6 +186,25 @@ function createMockCoordinatorDeps(sqlEngine) {
     },
     enableTimeouts: false,
   };
+}
+
+function createCoordinatorUnderTest(sqlEngine, overrides = {}) {
+  const coordinator = new RebalanceCoordinator({
+    ...createMockCoordinatorDeps(sqlEngine),
+    ...overrides,
+  });
+  coordinator.initialize();
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
+  return coordinator;
 }
 
 test('MovePlanner - Duplicate Operation Prevention', async (t) => {
@@ -353,9 +395,7 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
     // Property: When multiple createOperation calls happen concurrently
     // for the same partition/node, only one operation should be created
     const sqlEngine = createMockSqlQueryEngine({insertDelay: 10});
-    const deps = createMockCoordinatorDeps(sqlEngine);
-    const coordinator = new RebalanceCoordinator(deps);
-    coordinator.initialize();
+    const coordinator = createCoordinatorUnderTest(sqlEngine);
 
     // Simulate concurrent createOperation calls
     const move = {
@@ -402,9 +442,7 @@ test('RebalanceCoordinator - Concurrent Operation Deduplication', async (t) => {
     const sqlEngine = createMockSqlQueryEngine({
       existingOperations: [existingOp],
     });
-    const deps = createMockCoordinatorDeps(sqlEngine);
-    const coordinator = new RebalanceCoordinator(deps);
-    coordinator.initialize();
+    const coordinator = createCoordinatorUnderTest(sqlEngine);
 
     const move = {
       type: 'ADD',
@@ -432,9 +470,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
     // The issue from the logs is that the SAME partition was creating
     // duplicate operations, which should be prevented by the deduplication.
     const sqlEngine = createMockSqlQueryEngine();
-    const deps = createMockCoordinatorDeps(sqlEngine);
-    const coordinator = new RebalanceCoordinator(deps);
-    coordinator.initialize();
+    const coordinator = createCoordinatorUnderTest(sqlEngine);
 
     // Two different partitions creating operations to the same node
     const move1 = {
@@ -473,9 +509,7 @@ test('Multiple Partition Rebalancers - Cross-Partition Deduplication', async (t)
           fc.integer({min: 2, max: 5}),
           async (concurrentAttempts) => {
             const sqlEngine = createMockSqlQueryEngine({insertDelay: 5});
-            const deps = createMockCoordinatorDeps(sqlEngine);
-            const coordinator = new RebalanceCoordinator(deps);
-            coordinator.initialize();
+            const coordinator = createCoordinatorUnderTest(sqlEngine);
 
             const move = {
               type: 'ADD',
@@ -520,9 +554,7 @@ test('Rapid Rebalance Cycles - Race Condition Prevention', async (t) => {
     // rebalance cycles happen in rapid succession, potentially before
     // the in-flight operations are visible in the system cache.
     const sqlEngine = createMockSqlQueryEngine();
-    const deps = createMockCoordinatorDeps(sqlEngine);
-    const coordinator = new RebalanceCoordinator(deps);
-    coordinator.initialize();
+    const coordinator = createCoordinatorUnderTest(sqlEngine);
 
     // Simulate multiple rapid rebalance cycles for the same partition
     const partitionId = 'indices-p1';
@@ -784,9 +816,7 @@ test('System Cache Consistency - In-Flight Operation Visibility', async (t) => {
     // that provides immediate visibility of operations being created.
     // This is the correct approach for preventing duplicates.
     const sqlEngine = createMockSqlQueryEngine();
-    const deps = createMockCoordinatorDeps(sqlEngine);
-    const coordinator = new RebalanceCoordinator(deps);
-    coordinator.initialize();
+    const coordinator = createCoordinatorUnderTest(sqlEngine);
 
     // Start creating an operation (but don't await yet)
     const createPromise = coordinator.createOperation({
@@ -828,14 +858,10 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
     // the logs is that the SAME partition is creating duplicates.
 
     const sqlEngine1 = createMockSqlQueryEngine();
-    const deps1 = createMockCoordinatorDeps(sqlEngine1);
-    const coordinator1 = new RebalanceCoordinator(deps1);
-    coordinator1.initialize();
+    const coordinator1 = createCoordinatorUnderTest(sqlEngine1);
 
     const sqlEngine2 = createMockSqlQueryEngine();
-    const deps2 = createMockCoordinatorDeps(sqlEngine2);
-    const coordinator2 = new RebalanceCoordinator(deps2);
-    coordinator2.initialize();
+    const coordinator2 = createCoordinatorUnderTest(sqlEngine2);
 
     // Each coordinator has its own in-memory guard
     t.not(coordinator1.operationsInCreation, coordinator2.operationsInCreation,
@@ -859,10 +885,10 @@ test('Cross-Rebalancer Coordination - Multiple Partition Leaders', async (t) => 
 
     // Shared SQL engine simulates shared database
     const sharedSqlEngine = createMockSqlQueryEngine();
-
-    const deps1 = createMockCoordinatorDeps(sharedSqlEngine);
-    const coordinator1 = new RebalanceCoordinator({...deps1, nodeId: 'node-1'});
-    coordinator1.initialize();
+    const coordinator1 = createCoordinatorUnderTest(
+      sharedSqlEngine,
+      {nodeId: 'node-1'},
+    );
 
     // Create operation for partition-1
     await coordinator1.createOperation({

@@ -116,6 +116,7 @@ class CDCHandler extends EventEmitter {
     this.subscriptions = new Set();
     this.eventBuffer = new Map(); // tableName -> array of pending events
     this.lastAppliedTimestamp = new Map(); // tableName -> last applied HLC timestamp
+    this.lastAppliedTimestampByKey = new Map(); // tableName -> key -> HLC
     this.processedEventIds = new Set(); // For deduplication
 
     // Configuration
@@ -167,6 +168,7 @@ class CDCHandler extends EventEmitter {
     this.subscriptions.add(tableName);
     this.eventBuffer.set(tableName, []);
     this.lastAppliedTimestamp.set(tableName, null);
+    this.lastAppliedTimestampByKey.set(tableName, new Map());
 
     this.logger.debug('Subscribed to CDC', {tableName});
     this.emit('subscribed', {tableName});
@@ -187,6 +189,7 @@ class CDCHandler extends EventEmitter {
     this.subscriptions.delete(tableName);
     this.eventBuffer.delete(tableName);
     this.lastAppliedTimestamp.delete(tableName);
+    this.lastAppliedTimestampByKey.delete(tableName);
 
     this.logger.debug('Unsubscribed from CDC', {tableName});
     this.emit('unsubscribed', {tableName});
@@ -417,7 +420,10 @@ class CDCHandler extends EventEmitter {
     const key = event.getKey();
 
     // Check timestamp ordering
-    const lastTimestamp = this.lastAppliedTimestamp.get(tableName);
+    const lastTimestamp =
+      key !== null && key !== undefined ?
+        this.getLastAppliedTimestampForKey(tableName, key) :
+        this.lastAppliedTimestamp.get(tableName);
     if (lastTimestamp) {
       const lastTs = HLCTimestamp.fromString(lastTimestamp);
       const eventTs = HLCTimestamp.fromString(timestamp);
@@ -445,7 +451,7 @@ class CDCHandler extends EventEmitter {
       }
 
       // Update tracking
-      this.recordLastAppliedTimestamp(tableName, timestamp);
+      this.recordLastAppliedTimestamp(tableName, timestamp, key);
       if (typeof this.cache.recordAppliedSchemaVersion === 'function') {
         this.cache.recordAppliedSchemaVersion(tableName, timestamp);
       }
@@ -493,9 +499,19 @@ class CDCHandler extends EventEmitter {
    * @return {string|null}
    * @private
    */
-  recordLastAppliedTimestamp(tableName, timestamp) {
+  recordLastAppliedTimestamp(tableName, timestamp, key = null) {
     if (!timestamp) {
       return this.getLastAppliedTimestamp(tableName);
+    }
+
+    const keyMap = this.getOrCreateLastAppliedTimestampKeyMap(tableName);
+    if (key !== null && key !== undefined) {
+      const normalizedKey = String(key);
+      const previousForKey = keyMap.get(normalizedKey) || null;
+      if (!previousForKey ||
+          this.compareTimestampStrings(timestamp, previousForKey) >= 0) {
+        keyMap.set(normalizedKey, timestamp);
+      }
     }
 
     const previous = this.lastAppliedTimestamp.get(tableName);
@@ -505,6 +521,40 @@ class CDCHandler extends EventEmitter {
     }
 
     return previous;
+  }
+
+  /**
+   * Resolve or initialize the per-table key timestamp map.
+   * @param {string} tableName
+   * @return {Map<string, string>}
+   * @private
+   */
+  getOrCreateLastAppliedTimestampKeyMap(tableName) {
+    let keyMap = this.lastAppliedTimestampByKey.get(tableName);
+    if (keyMap instanceof Map) {
+      return keyMap;
+    }
+    keyMap = new Map();
+    this.lastAppliedTimestampByKey.set(tableName, keyMap);
+    return keyMap;
+  }
+
+  /**
+   * Get the last applied timestamp for one table/key pair.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {string|null}
+   * @private
+   */
+  getLastAppliedTimestampForKey(tableName, key) {
+    if (key === null || key === undefined) {
+      return null;
+    }
+    const keyMap = this.lastAppliedTimestampByKey.get(tableName);
+    if (!(keyMap instanceof Map)) {
+      return null;
+    }
+    return keyMap.get(String(key)) || null;
   }
 
   /**

@@ -103,6 +103,8 @@ class QuerySystemStatePhase {
         getSeedNodeId: () => this.delegates.getSeedNodeId?.() || null,
         getMessageRouter: () =>
           this.delegates.getMessageRouter?.() || null,
+        connectToClusterNodes: () =>
+          this.delegates.connectToClusterNodes?.(),
         getCdcIntegrationService: () =>
           this.delegates.getCdcIntegrationService(),
         getCdcSubscriptionsActive: () =>
@@ -675,6 +677,17 @@ class QuerySystemStatePhase {
     while (true) {
       attempt += NUM.ONE;
       try {
+        const messageRouter =
+          typeof this.delegates.getMessageRouter === TYPEOF.FUNCTION ?
+            this.delegates.getMessageRouter() :
+            null;
+        if (messageRouter &&
+            typeof this.delegates.connectToClusterNodes ===
+            TYPEOF.FUNCTION) {
+          await this.delegates.connectToClusterNodes({
+            requireReadyConnections: true,
+          });
+        }
         return await this.nodeRegistrationOwner.registerNodeInCluster();
       } catch (error) {
         const retryable =

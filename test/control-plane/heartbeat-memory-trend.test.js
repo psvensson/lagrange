@@ -11,6 +11,9 @@ import {HEARTBEAT_EVENT} from
   '../../src/control-plane/heartbeat-service-constants.js';
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
+import {
+  createMockControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -706,6 +709,67 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   }
+  });
+
+test('HeartbeatService promotes stopped rows back to active in reporter heartbeats',
+  async (t) => {
+    initEnv();
+
+    let reportedHeartbeat = null;
+    const existingNodeRow = {
+      node_id: 'node-reporter-restart',
+      node_address: '10.0.0.91:8080',
+      cpu_cores: 4,
+      memory_mb: 256,
+      disk_gb: 64,
+      cpu_usage_percent: 10,
+      memory_usage_percent: 20,
+      disk_usage_percent: 30,
+      status: SERVICE_STATUS.STOPPED,
+      connection_state: STATE.DISCONNECTED,
+      capabilities: '["partition_replica"]',
+      last_heartbeat: 111,
+      ready_lease_expires_at: null,
+      created_at: 100,
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-reporter-restart',
+      nodeAddress: '10.0.0.91:8080',
+      cdcIntegrationService: createMockCdc(),
+      systemTableCache: {
+        get: (_tableName, key) =>
+          key === 'node-reporter-restart' ? existingNodeRow : null,
+      },
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeStateReporter: async (payload) => {
+        reportedHeartbeat = payload;
+        return {
+          publicationPath: 'node_state_reporter',
+          targetAddress: 'seed-1/message-group/mg-1',
+        };
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+
+      t.ok(reportedHeartbeat, 'reporter should receive heartbeat payload');
+      t.equal(
+        reportedHeartbeat.nodeRow.status,
+        SERVICE_STATUS.ACTIVE,
+        'ready heartbeat should promote a restarted node back to active',
+      );
+      t.equal(
+        reportedHeartbeat.nodeRow.connection_state,
+        STATE.READY,
+        'reported heartbeat should publish ready connectivity',
+      );
+    } finally {
+      service.stop();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
   });
 
 test('HeartbeatService surfaces reporter failure when node-state reporter fails',
@@ -1543,6 +1607,66 @@ test('HeartbeatService allows initial node heartbeat write during quiet mode',
     }
   });
 
+test('HeartbeatService promotes stopped rows back to active for direct node writes',
+  async (t) => {
+    initEnv();
+
+    const nodeUpdates = [];
+    const existingNodeRow = {
+      node_id: 'node-direct-restart',
+      node_address: '10.0.0.92:8080',
+      cpu_cores: 4,
+      memory_mb: 256,
+      disk_gb: 64,
+      cpu_usage_percent: 10,
+      memory_usage_percent: 20,
+      disk_usage_percent: 30,
+      status: SERVICE_STATUS.STOPPED,
+      connection_state: STATE.DISCONNECTED,
+      capabilities: '["partition_replica"]',
+      last_heartbeat: 111,
+      ready_lease_expires_at: null,
+      created_at: 100,
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-direct-restart',
+      nodeAddress: '10.0.0.92:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_tableName, _whereClause, updateRow) => {
+          nodeUpdates.push(updateRow);
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: {
+        get: (_tableName, key) =>
+          key === 'node-direct-restart' ? existingNodeRow : null,
+      },
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+
+      t.equal(nodeUpdates.length, 1, 'should persist one heartbeat update');
+      t.equal(
+        nodeUpdates[0].status,
+        SERVICE_STATUS.ACTIVE,
+        'direct heartbeat writes should promote a restarted node back to active',
+      );
+      t.equal(
+        nodeUpdates[0].connection_state,
+        STATE.READY,
+        'direct heartbeat writes should publish ready connectivity',
+      );
+    } finally {
+      service.stop();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('HeartbeatService allows quiet-mode safety bypass for staleness guard and records reason',
   async (t) => {
     initEnv();
@@ -1758,10 +1882,8 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
     const intervalHandles = [];
     const timeoutHandles = [];
     const writes = [];
-    const service = new HeartbeatService({
-      nodeId: 'node-timeout',
-      nodeAddress: '10.0.0.11:8080',
-      cdcIntegrationService: {
+    const controlPlaneSystemTableGateway =
+      createMockControlPlaneSystemTableGateway({
         updateSystemTableRow: async () => {
           const writeIndex = writes.length;
           writes.push({resolved: false});
@@ -1769,10 +1891,28 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
             return new Promise(() => {});
           }
           writes[writeIndex].resolved = true;
-          return {success: true};
+          return {
+            success: true,
+            partitionResult: {
+              affectedRows: 1,
+            },
+          };
         },
+        upsertSystemTableRow: async () => ({
+          success: true,
+          partitionResult: {
+            affectedRows: 1,
+          },
+        }),
+      });
+    const service = new HeartbeatService({
+      nodeId: 'node-timeout',
+      nodeAddress: '10.0.0.11:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
         upsertSystemTableRow: async () => ({success: true}),
       },
+      controlPlaneSystemTableGateway,
       systemTableCache: createMockCache(),
       setIntervalFn: (callback, intervalMs) => {
         const handle = {

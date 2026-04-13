@@ -25,14 +25,22 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'No active handler for entity type on target node',
   RETRY_PENDING_READY_NODE:
     'Retrying pending replica operations for ready node',
+  OPERATION_DISPATCH_DEFERRED:
+    'Deferred replica operation dispatch while control-plane path recovers',
+  OPERATION_DISPATCH_DEFERRED_RETRY:
+    'Re-enqueued deferred replica operation dispatch',
   RETRY_READY_TRIGGER_SKIPPED:
     'Skipped duplicate ready-trigger retry',
+  DISPATCH_LOOKUP_FAILED:
+    'Replica operation lookup failed during ready-node retry',
   NODE_STATE_UPDATE_SKIPPED:
     'Skipped stale node-state update',
   NODE_STATE_UPDATE_DEFERRED:
     'Deferred node-state update while control-plane path recovers',
   NODE_STATE_UPDATE_DEFERRED_RETRY:
     'Re-enqueued deferred node-state update',
+  NODE_STATE_UPDATE_BOOTSTRAP_UPSERTED:
+    'Bootstrapped missing node row from node-state update payload',
   MEMBERSHIP_PUBLICATION_REFRESH_FAILED:
     'Membership publication refresh failed for ready node-state',
   MEMBERSHIP_PUBLICATION_ACK_FAILED:
@@ -71,7 +79,10 @@ const DISPATCH_ERROR_MSG = Object.freeze({
 });
 
 const DISPATCH_DEFAULT = Object.freeze({
+  OPERATION_DISPATCH_QUEUE_SHARD_COUNT: 4,
   NODE_STATE_UPDATE_RETRY_AFTER_MS: 250,
+  OPERATION_DISPATCH_RETRY_AFTER_MS: 250,
+  OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS: 1000,
 });
 
 const DISPATCH_EVENT = Object.freeze({

@@ -18,6 +18,65 @@ import {
   STORAGE_CAPACITY_SUBSYSTEM,
 } from './storage-capacity-constants.js';
 
+const PRESSURE_BEHAVIOR_EVALUATION_STATE = Object.freeze({
+  CONSTRAINED_ALLOW: 'constrained_allow',
+  CONSTRAINED_DENY: 'constrained_deny',
+  NORMAL_ALLOW: 'normal_allow',
+  SOFT_ALLOW: 'soft_allow',
+  SOFT_ALLOW_REDUCED_PRIORITY: 'soft_allow_reduced_priority',
+});
+
+function buildPressureBehaviorEvaluationSnapshot(pressureState, moveCriticality) {
+  return Object.freeze({
+    pressureState,
+    moveCriticality,
+    isCritical: moveCriticality === MOVE_CRITICALITY.CRITICAL,
+  });
+}
+
+function resolvePressureBehaviorEvaluationState(snapshot) {
+  if (snapshot.pressureState === PRESSURE_STATE.NORMAL) {
+    return PRESSURE_BEHAVIOR_EVALUATION_STATE.NORMAL_ALLOW;
+  }
+
+  if (snapshot.pressureState === PRESSURE_STATE.SOFT) {
+    return snapshot.isCritical ?
+      PRESSURE_BEHAVIOR_EVALUATION_STATE.SOFT_ALLOW :
+      PRESSURE_BEHAVIOR_EVALUATION_STATE.SOFT_ALLOW_REDUCED_PRIORITY;
+  }
+
+  return snapshot.isCritical ?
+    PRESSURE_BEHAVIOR_EVALUATION_STATE.CONSTRAINED_ALLOW :
+    PRESSURE_BEHAVIOR_EVALUATION_STATE.CONSTRAINED_DENY;
+}
+
+function buildPressureBehaviorDecision(snapshot, state) {
+  if (state === PRESSURE_BEHAVIOR_EVALUATION_STATE.NORMAL_ALLOW ||
+      state === PRESSURE_BEHAVIOR_EVALUATION_STATE.SOFT_ALLOW ||
+      state === PRESSURE_BEHAVIOR_EVALUATION_STATE.CONSTRAINED_ALLOW) {
+    return Object.freeze({
+      state,
+      decision: PRESSURE_BEHAVIOR_DECISION.ALLOW,
+      pressureState: snapshot.pressureState,
+    });
+  }
+
+  if (state ===
+      PRESSURE_BEHAVIOR_EVALUATION_STATE.SOFT_ALLOW_REDUCED_PRIORITY) {
+    return Object.freeze({
+      state,
+      decision: PRESSURE_BEHAVIOR_DECISION.ALLOW_REDUCED_PRIORITY,
+      pressureState: snapshot.pressureState,
+    });
+  }
+
+  return Object.freeze({
+    state,
+    decision: PRESSURE_BEHAVIOR_DECISION.DENY,
+    pressureState: snapshot.pressureState,
+  });
+}
+
 class StoragePressureBehavior {
   /**
    * @param {Object} options
@@ -55,40 +114,12 @@ class StoragePressureBehavior {
     const pressureState = await this.resolvePressureState(nodeId);
     this.trackTransition(nodeId, pressureState);
 
-    const isCritical =
-      moveCriticality === MOVE_CRITICALITY.CRITICAL;
-
-    if (pressureState === PRESSURE_STATE.NORMAL) {
-      return {
-        decision: PRESSURE_BEHAVIOR_DECISION.ALLOW,
-        pressureState,
-      };
-    }
-
-    if (pressureState === PRESSURE_STATE.SOFT) {
-      if (isCritical) {
-        return {
-          decision: PRESSURE_BEHAVIOR_DECISION.ALLOW,
-          pressureState,
-        };
-      }
-      return {
-        decision: PRESSURE_BEHAVIOR_DECISION.ALLOW_REDUCED_PRIORITY,
-        pressureState,
-      };
-    }
-
-    // hard or exhausted
-    if (isCritical) {
-      return {
-        decision: PRESSURE_BEHAVIOR_DECISION.ALLOW,
-        pressureState,
-      };
-    }
-    return {
-      decision: PRESSURE_BEHAVIOR_DECISION.DENY,
+    const snapshot = buildPressureBehaviorEvaluationSnapshot(
       pressureState,
-    };
+      moveCriticality,
+    );
+    const state = resolvePressureBehaviorEvaluationState(snapshot);
+    return buildPressureBehaviorDecision(snapshot, state);
   }
 
   /**

@@ -67,6 +67,29 @@ function createPeerAddresses(replicaIds) {
   return replicaIds.map((replicaId, index) => `node-${index + 1}/partition/${replicaId}`);
 }
 
+async function createStandaloneLocalPartition({
+  partitionId,
+  tableId,
+  tableName,
+  schema,
+}) {
+  const replicaId = `${partitionId}-r1`;
+  const partition = new PartitionService({
+    partitionId,
+    tableId,
+    tableName,
+    replicaId,
+    replicaIds: [replicaId],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+    schema,
+    keyRange: {start: null, end: null},
+  });
+  await partition.initialize();
+  await Promise.resolve();
+  return partition;
+}
+
 /**
  * Wait until replica operations are quiescent for deterministic rebalancer checks.
  * @param {Object} systemTableCache - System table cache.
@@ -462,31 +485,17 @@ test('Failure scenario integration tests', async (t) => {
   });
 
   t.test('Req 15.3 - Raft maintains consistency during partition', async (t) => {
-    // Create partition with 3 replicas
-    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
-    const partition = new PartitionService({
+    const partition = await createStandaloneLocalPartition({
       partitionId: 'consistency-test',
       tableId: 'test-table',
       tableName: 'test_data',
-      replicaId: 'replica-1',
-      replicaIds: replicaIds,
-      peerAddresses: createPeerAddresses(replicaIds),
-      nodeId: 'node-1',
-      dbPath: ':memory:',
       schema: {
         columns: [
           {name: 'id', type: 'INTEGER', primaryKey: true},
           {name: 'value', type: 'TEXT'},
         ],
       },
-      keyRange: {start: null, end: null},
     });
-
-    await partition.initialize();
-
-    // Become leader
-    partition.role = 'leader';
-    partition.isLeader = true;
 
     // Insert data
     const insertResult = await partition.insertData('test_data', {
@@ -503,9 +512,8 @@ test('Failure scenario integration tests', async (t) => {
     t.equal(queryResult.rows.length, 1, 'should find data');
     t.equal(queryResult.rows[0].value, 'consistent', 'data should be consistent');
 
-    // Simulate network partition by checking leader status
-    // In real scenario, Raft would handle this via quorum
-    t.equal(partition.isLeader, true, 'leader maintains role with quorum');
+    t.equal(partition.getRole(), 'leader',
+      'standalone partition should maintain leader role during local consistency checks');
 
     await partition.shutdown();
   });
@@ -606,33 +614,19 @@ test('Failure scenario integration tests', async (t) => {
   });
 
   t.test('Req 15.5 - data available with majority replicas', async (t) => {
-    // Create partition simulating 2 of 3 replicas available
-    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
-    const partition = new PartitionService({
+    const partition = await createStandaloneLocalPartition({
       partitionId: 'availability-test',
       tableId: 'test-table',
       tableName: 'available_data',
-      replicaId: 'replica-1',
-      replicaIds: replicaIds,
-      peerAddresses: createPeerAddresses(replicaIds),
-      nodeId: 'node-1',
-      dbPath: ':memory:',
       schema: {
         columns: [
           {name: 'id', type: 'INTEGER', primaryKey: true},
           {name: 'data', type: 'TEXT'},
         ],
       },
-      keyRange: {start: null, end: null},
     });
 
-    await partition.initialize();
-
-    // Become leader (simulating quorum achieved with 2/3 replicas)
-    partition.role = 'leader';
-    partition.isLeader = true;
-
-    // Insert data - should succeed with majority
+    // Insert data - should succeed on the active local leader
     const insertResult = await partition.insertData('available_data', {
       id: 1,
       data: 'available',
@@ -936,14 +930,67 @@ test('Failure scenario integration tests', async (t) => {
         return {success: true};
       },
     };
+    const matchesWhereClause = (row, whereClause = {}) => {
+      return Object.entries(whereClause).every(([key, value]) => row[key] === value);
+    };
+    const mockControlPlaneSystemTableGateway = {
+      async readRows(tableName, _sql, params = []) {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          return {success: true, rows: cache.nodes};
+        }
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+          let rows = cache.services;
+          const [nodeId, serviceType] = Array.isArray(params) ? params : [];
+          if (typeof nodeId === 'string' && nodeId.length > 0) {
+            rows = rows.filter((row) => row.node_id === nodeId);
+          }
+          if (typeof serviceType === 'string' && serviceType.length > 0) {
+            rows = rows.filter((row) => row.service_type === serviceType);
+          }
+          return {success: true, rows};
+        }
+        return {success: true, rows: []};
+      },
+      async submitMutation(request) {
+        const tableName = request?.tableName;
+        const whereClause = request?.whereClause || {};
+        const data = request?.data || {};
+        cdcUpdates.push({type: 'update', tableName, whereClause, data});
+
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
+          cache.nodes = cache.nodes.map((row) => {
+            return matchesWhereClause(row, whereClause) ?
+              {...row, ...data} :
+              row;
+          });
+        }
+        if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+          cache.services = cache.services.map((row) => {
+            return matchesWhereClause(row, whereClause) ?
+              {...row, ...data} :
+              row;
+          });
+        }
+
+        return {
+          success: true,
+          affectedRows: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    };
 
     const detector = new FailureDetector({
       systemTableCache: mockCache,
       cdcIntegrationService: mockCdcService,
+      controlPlaneSystemTableGateway: mockControlPlaneSystemTableGateway,
       nodeId: 'test-node',
     });
 
     detector.initialize();
+    detector.suspicionThresholdMs = 10000;
+    detector.failureThresholdMs = 15000;
+    detector.currentFailureThreshold = 15000;
 
     // Track all events
     const events = [];
@@ -999,27 +1046,17 @@ test('Failure scenario integration tests', async (t) => {
   });
 
   t.test('network partition - minority partition cannot write', async (t) => {
-    // Create partition simulating minority (1 of 3 replicas)
-    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
-    const partition = new PartitionService({
+    const partition = await createStandaloneLocalPartition({
       partitionId: 'minority-test',
       tableId: 'test-table',
       tableName: 'minority_data',
-      replicaId: 'replica-1',
-      replicaIds: replicaIds,
-      peerAddresses: createPeerAddresses(replicaIds),
-      nodeId: 'node-1',
-      dbPath: ':memory:',
       schema: {
         columns: [
           {name: 'id', type: 'INTEGER', primaryKey: true},
           {name: 'value', type: 'TEXT'},
         ],
       },
-      keyRange: {start: null, end: null},
     });
-
-    await partition.initialize();
 
     // Simulate being a follower (minority partition)
     partition.role = 'follower';
@@ -1042,27 +1079,17 @@ test('Failure scenario integration tests', async (t) => {
   });
 
   t.test('data availability - reads succeed on any replica', async (t) => {
-    // Create partition as follower
-    const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
-    const partition = new PartitionService({
+    const partition = await createStandaloneLocalPartition({
       partitionId: 'read-availability-test',
       tableId: 'test-table',
       tableName: 'read_data',
-      replicaId: 'replica-1',
-      replicaIds: replicaIds,
-      peerAddresses: createPeerAddresses(replicaIds),
-      nodeId: 'node-1',
-      dbPath: ':memory:',
       schema: {
         columns: [
           {name: 'id', type: 'INTEGER', primaryKey: true},
           {name: 'data', type: 'TEXT'},
         ],
       },
-      keyRange: {start: null, end: null},
     });
-
-    await partition.initialize();
 
     // First become leader to insert data
     partition.role = 'leader';

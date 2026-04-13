@@ -144,6 +144,38 @@ test(
 );
 
 test(
+  'JoinReadinessEvaluator - self target remains unreachable while local query transport readiness is unknown',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    harness.evaluator.delegates.getMessageRouter = () => ({
+      getOutboundPressureSummary: () => ({...harness.routerPressure}),
+      getQueryDataPlaneTransportReadiness: () => ({
+        state: 'unknown',
+      }),
+    });
+
+    t.equal(
+      harness.evaluator.isControlPlaneAddressReachable(
+        'joining-node-readiness-evaluator/message-group/mg-local-r1',
+      ),
+      false,
+      'self target should stay unreachable until local query transport readiness is explicitly ready',
+    );
+
+    t.same(
+      harness.evaluator.resolveControlPlaneTargetConnectionStates([
+        'joining-node-readiness-evaluator/message-group/mg-local-r1',
+      ]),
+      {
+        'joining-node-readiness-evaluator/message-group/mg-local-r1':
+          'self:unknown',
+      },
+      'diagnostics should preserve unknown self transport state instead of claiming self readiness',
+    );
+  },
+);
+
+test(
   'JoinReadinessEvaluator - excludes observed-converged MOVE_ASSIGNMENT rows from topology blockers',
   async (t) => {
     const harness = createEvaluatorHarness();

@@ -386,6 +386,36 @@ function isCoordinatorOwnedOperationType(value) {
   return COORDINATOR_OWNED_OPERATION_TYPES.includes(value.toUpperCase());
 }
 
+/**
+ * Return true when a REPLACE operation has already completed add-side spread
+ * and is only dispatching source removal.
+ *
+ * ACTIVE is the initial source-removal dispatch. STOPPING is the replay /
+ * reconciliation phase while source-removal completion is still being
+ * observed.
+ *
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isReplaceRemoveDispatchPhase(operation) {
+  const type = String(
+    operation?.type ||
+    operation?.operation_type ||
+    operation?.operationType ||
+    '',
+  ).toUpperCase();
+  if (type !== OperationType.REPLACE) {
+    return false;
+  }
+  const workflowStep = String(
+    operation?.workflowStep ??
+    operation?.workflow_step ??
+    '',
+  ).toUpperCase();
+  return workflowStep === WORKFLOW_STEP.ACTIVE ||
+    workflowStep === WORKFLOW_STEP.STOPPING;
+}
+
 export {
   ReplicaStatus,
   TERMINAL_STATUSES,
@@ -407,6 +437,7 @@ export {
   COORDINATOR_OWNED_OPERATION_TYPES,
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   isCoordinatorOwnedOperationType,
+  isReplaceRemoveDispatchPhase,
   getOperationMetadataValue,
   getOperationMetadataString,
   getOperationMetadataStringArray,

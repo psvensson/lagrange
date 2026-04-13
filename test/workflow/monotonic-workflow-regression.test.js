@@ -26,6 +26,38 @@ const MOCK_NODE_ID = 'node-monotonic';
 const FIXED_NOW = 5000;
 const TRANSITION_REASON = 'test_forward';
 const RECOVERY_REASON = 'test_recovery';
+const REPLICA_OPERATION_SELECT_BY_ID_QUERY =
+  'SELECT * FROM replica_operations WHERE operation_id = ?';
+const REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT = 'UPDATE replica_operations';
+const DEFAULT_SQL_MUTATION_RESULT = Object.freeze({
+  success: true,
+  rows: [],
+  changes: 1,
+});
+
+function buildPersistedReplicaOperationRowFromUpdate(
+  params = [],
+  existingRow = {},
+) {
+  return {
+    ...existingRow,
+    operation_id: params[7] || existingRow.operation_id || null,
+    type: existingRow.type || 'ADD',
+    partition_id: existingRow.partition_id || 'partition-1',
+    replica_id: params[6] ?? existingRow.replica_id ?? null,
+    source_node_id: existingRow.source_node_id || MOCK_NODE_ID,
+    target_node_id: existingRow.target_node_id || 'node-remote',
+    status: params[0] ?? existingRow.status ?? null,
+    workflow_step: params[1] ?? existingRow.workflow_step ?? null,
+    created_at: existingRow.created_at ?? FIXED_NOW,
+    updated_at: params[2] ?? existingRow.updated_at ?? FIXED_NOW,
+    completed_at: params[3] ?? existingRow.completed_at ?? null,
+    error_message: params[4] ?? existingRow.error_message ?? null,
+    steps_history: params[5] ?? existingRow.steps_history ?? JSON.stringify([]),
+    entity_type: existingRow.entity_type || 'partition',
+    entity_id: existingRow.entity_id || 'partition-1',
+  };
+}
 
 /**
  * Build a minimal RebalanceCoordinator for regression tests.
@@ -33,9 +65,61 @@ const RECOVERY_REASON = 'test_recovery';
  * @return {RebalanceCoordinator} Coordinator instance.
  */
 function createMinimalCoordinator(overrides = {}) {
+  const {
+    transactionCoordinator: overrideTransactionCoordinator,
+    sqlQueryEngine: overrideSqlQueryEngine,
+    controlPlaneSystemTableGateway: overrideControlPlaneSystemTableGateway,
+    ...coordinatorOverrides
+  } = overrides;
+  const authoritativeReplicaOperations = new Map();
+  const baseSqlQueryEngine = overrideSqlQueryEngine || {
+    async executeQuery() {
+      return DEFAULT_SQL_MUTATION_RESULT;
+    },
+  };
+  const sqlQueryEngine = {
+    async executeQuery(sql, params = []) {
+      if (sql.includes(REPLICA_OPERATION_SELECT_BY_ID_QUERY)) {
+        const operationId = params[0] || null;
+        const operationRow = authoritativeReplicaOperations.get(operationId);
+        return {
+          success: true,
+          rows: operationRow ? [operationRow] : [],
+          changes: operationRow ? 1 : 0,
+        };
+      }
+
+      const result = await baseSqlQueryEngine.executeQuery(sql, params);
+      if (result?.success === false) {
+        return result;
+      }
+
+      if (sql.includes(REPLICA_OPERATION_UPDATE_QUERY_FRAGMENT)) {
+        const operationId = params[7] || null;
+        const existingRow = authoritativeReplicaOperations.get(operationId) || {};
+        authoritativeReplicaOperations.set(
+          operationId,
+          buildPersistedReplicaOperationRowFromUpdate(params, existingRow),
+        );
+      }
+
+      return result;
+    },
+  };
+  const controlPlaneSystemTableGateway = overrideControlPlaneSystemTableGateway || {
+    async executeQuery(sql, params = []) {
+      return sqlQueryEngine.executeQuery(sql, params);
+    },
+    async readAuthoritativeRows(_tableName, sql, params = []) {
+      return sqlQueryEngine.executeQuery(sql, params);
+    },
+    async readRows(_tableName, sql, params = []) {
+      return sqlQueryEngine.executeQuery(sql, params);
+    },
+  };
   const transactionCoordinator =
     Object.prototype.hasOwnProperty.call(overrides, 'transactionCoordinator') ?
-      overrides.transactionCoordinator :
+      overrideTransactionCoordinator :
       new DistributedTransactionCoordinator({
         beginParticipant: async () => {},
         prepareParticipant: async () => {},
@@ -43,7 +127,7 @@ function createMinimalCoordinator(overrides = {}) {
         rollbackParticipant: async () => {},
         now: () => FIXED_NOW,
       });
-  return new RebalanceCoordinator({
+  const coordinator = new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
     systemTableCache: {
       get() {
@@ -61,15 +145,15 @@ function createMinimalCoordinator(overrides = {}) {
         return {acknowledged: true, status: 'initiated'};
       },
     },
-    sqlQueryEngine: {
-      async executeQuery() {
-        return {success: true, rows: [], changes: 1};
-      },
-    },
+    sqlQueryEngine,
+    controlPlaneSystemTableGateway,
     transactionCoordinator,
     enableTimeouts: false,
-    ...overrides,
+    ...coordinatorOverrides,
   });
+  coordinator.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 0;
+  coordinator.repository.replicaOperationAuthoritativeVisibilityRetryDelayMs = 0;
+  return coordinator;
 }
 
 /**

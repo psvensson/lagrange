@@ -44,6 +44,18 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
   };
 
   const mockBudgetService = {
+    resolveBudgetRow: (nodeRow) => ({
+      budgetRow: {
+        ...nodeRow,
+        storage_budget_bytes: 100,
+        storage_budget_source: 'test',
+      },
+      resolution: {
+        isValid: true,
+        budgetBytes: 100,
+        source: 'test',
+      },
+    }),
     registerNodeBudget: async ({nodeRow, upsertOptions}) => {
       await mockCdcIntegrationService.upsertSystemTableRow(
         'nodes',

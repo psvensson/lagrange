@@ -258,6 +258,10 @@ class ChaosPrimitives {
       return;
     }
 
+    if (hasNetworkAlias(mainEndpoint, expectedAlias)) {
+      return;
+    }
+
     if (mainEndpoint &&
         typeof this._dockerProvider.disconnectFromNetwork === 'function') {
       await this._dockerProvider.disconnectFromNetwork(

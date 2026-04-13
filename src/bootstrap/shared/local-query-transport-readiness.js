@@ -67,6 +67,10 @@ function getLocalQueryTransportReadiness(messageRouter) {
   );
 }
 
+function isLocalQueryTransportReady(readiness) {
+  return readiness?.ready === true;
+}
+
 function buildLocalQueryTransportNotReadyError(readiness) {
   const error = new Error(
     readiness?.reason || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
@@ -82,7 +86,7 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
   const readiness = getLocalQueryTransportReadiness(
     options.messageRouter || null,
   );
-  if (readiness.ready !== false) {
+  if (isLocalQueryTransportReady(readiness)) {
     return readiness;
   }
 
@@ -110,7 +114,7 @@ async function waitForLocalQueryTransportReadiness(options = {}) {
     lastReadiness = getLocalQueryTransportReadiness(
       options.messageRouter || null,
     );
-    if (lastReadiness.ready !== false) {
+    if (isLocalQueryTransportReady(lastReadiness)) {
       return lastReadiness;
     }
 
@@ -151,5 +155,6 @@ export {
   LOCAL_QUERY_TRANSPORT_WAIT_DEFAULT,
   buildLocalQueryTransportNotReadyError,
   getLocalQueryTransportReadiness,
+  isLocalQueryTransportReady,
   waitForLocalQueryTransportReadiness,
 };

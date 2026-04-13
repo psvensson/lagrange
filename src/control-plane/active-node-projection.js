@@ -32,6 +32,13 @@ const PROJECTION_READINESS_DECISION_MODE = Object.freeze({
   CLUSTER_MEMBER_OR_RECOVERY_ELIGIBLE:
     'cluster_member_or_recovery_eligible',
 });
+const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
+  PUBLISHED_MEMBERSHIP: 'published_membership',
+  LOCALLY_ELIGIBLE_PROJECTION: 'locally_eligible_projection',
+  PROJECTED_SERVING: 'projected_serving_projection',
+  RECOVERY_ELIGIBLE_PROJECTION: 'recovery_eligible_projection',
+  NONE: 'none',
+});
 
 function normalizeNodeIdList(values = []) {
   return [...new Set(
@@ -108,11 +115,28 @@ function resolveLatestPublishedPublicationRow(options = {}) {
     .filter((row) => row && typeof row === TYPEOF.OBJECT)
     .map((row) => normalizeControlPlanePublicationRow(row))
     .filter((row) => isMembershipPublicationRow(row));
+  const explicitPublishedPublicationRow =
+    options.latestPublishedPublicationRow &&
+      typeof options.latestPublishedPublicationRow === TYPEOF.OBJECT ?
+      normalizeControlPlanePublicationRow(
+        options.latestPublishedPublicationRow,
+      ) :
+      null;
   const explicitPublicationRow =
     options.latestPublicationRow &&
       typeof options.latestPublicationRow === TYPEOF.OBJECT ?
       normalizeControlPlanePublicationRow(options.latestPublicationRow) :
       null;
+  if (explicitPublishedPublicationRow &&
+    isMembershipPublicationRow(explicitPublishedPublicationRow) && (
+    explicitPublishedPublicationRow.publicationId ||
+    explicitPublishedPublicationRow.publicationEpoch > NUM.ZERO ||
+    explicitPublishedPublicationRow.status
+  ) &&
+    explicitPublishedPublicationRow.status ===
+      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
+    publicationRows.push(explicitPublishedPublicationRow);
+  }
   if (explicitPublicationRow &&
     isMembershipPublicationRow(explicitPublicationRow) && (
     explicitPublicationRow.publicationId ||
@@ -135,18 +159,25 @@ function resolvePublishedActiveNodeIds(options = {}) {
     latestPublicationRow?.status === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ?
       latestPublicationRow :
       resolveLatestPublishedPublicationRow(options);
-  if (!publishedPublicationRow) {
+  const durablePublishedMembershipCandidate = publishedPublicationRow ||
+    buildMembershipPublicationActiveSnapshot(latestPublicationRow);
+  if (!durablePublishedMembershipCandidate) {
     return options.requirePublishedMembership === true ?
       Object.freeze([]) :
       null;
   }
   const publishedActiveNodeIds = Array.isArray(
-    publishedPublicationRow.publishedActiveNodeIds,
+    durablePublishedMembershipCandidate.publishedActiveNodeIds,
   ) ?
-    publishedPublicationRow.publishedActiveNodeIds :
+    durablePublishedMembershipCandidate.publishedActiveNodeIds :
     [];
   if (publishedActiveNodeIds.length === NUM.ZERO) {
-    return Object.freeze([]);
+    return durablePublishedMembershipCandidate
+      .publishedActiveNodeIdsPresent === true ?
+      Object.freeze([]) :
+      (options.requirePublishedMembership === true ?
+        Object.freeze([]) :
+        null);
   }
   return Object.freeze([...new Set(
     publishedActiveNodeIds.filter((nodeId) =>
@@ -243,8 +274,31 @@ function hasCanonicalActiveService(nodeId, serviceRows = []) {
         normalizedService.status ===
           String(SERVICE_STATUS.ACTIVE).toLowerCase() &&
         typeof normalizedService.serviceId === TYPEOF.STRING &&
-        normalizedService.serviceId.length > NUM.ZERO;
+          normalizedService.serviceId.length > NUM.ZERO;
     });
+}
+
+function hasRuntimeTransportEvidence(nodeId, options = {}) {
+  const normalizedNodeId = String(nodeId || '').trim();
+  if (normalizedNodeId.length === NUM.ZERO) {
+    return false;
+  }
+  const connectedNodeIds = new Set(normalizeNodeIdList(options.connectedNodeIds));
+  if (connectedNodeIds.has(normalizedNodeId)) {
+    return true;
+  }
+  const readinessByNodeId = buildReadinessByNodeId(options);
+  const readinessEntry = readinessByNodeId?.[normalizedNodeId] || null;
+  const nodeEvidence = readinessEntry?.nodeEvidence &&
+    typeof readinessEntry.nodeEvidence === TYPEOF.OBJECT ?
+    readinessEntry.nodeEvidence :
+    null;
+  if (nodeEvidence?.transportConnected === true) {
+    return true;
+  }
+  return options.localNodeResponsive === true &&
+    String(options.localNodeId || '').trim() === normalizedNodeId &&
+    nodeEvidence?.localQueryTransportReady !== false;
 }
 
 function evaluateProjectionReadinessDimensions(
@@ -274,13 +328,9 @@ function evaluateProjectionReadinessDimensions(
   const controlPlaneRecoveryEligible = readinessDimensions[
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
   ] === true;
-  const controlPlaneWritable = readinessDimensions[
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
-  ] !== false;
   const projectedByRecoveryEligibility =
     options.allowControlPlaneRecoveryEligibleProjection === true &&
-    controlPlaneRecoveryEligible &&
-    controlPlaneWritable;
+    controlPlaneRecoveryEligible;
   return {
     hasReadinessEvidence: true,
     projectionEligible: projectedByRecoveryEligibility,
@@ -300,12 +350,39 @@ function resolveProjectionReadinessDecisionDimensions(options = {}) {
     return Object.freeze([
       CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
     ]);
   }
   return Object.freeze([
     CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
   ]);
+}
+
+function shouldAllowLivenessFallbackProjection(
+  nodeRow,
+  readinessProjection,
+  options = {},
+) {
+  if (options.allowControlPlaneRecoveryEligibleProjection !== true ||
+      options.allowLivenessFallbackProjection !== true) {
+    return false;
+  }
+  if (!readinessProjection ||
+      readinessProjection.hasReadinessEvidence !== true ||
+      readinessProjection.projectionEligible === true) {
+    return false;
+  }
+  const normalizedNode = normalizeNodeRow(nodeRow);
+  if (!normalizedNode.nodeId) {
+    return false;
+  }
+  const nowMs = Number.isFinite(options.nowMs) ?
+    options.nowMs :
+    Date.now();
+  const hasReadyConnection = normalizedNode.connectionState ===
+    String(STATE.READY).toLowerCase();
+  const hasFreshLiveness = hasReadyConnection &&
+    hasFreshReadyLeaseOrHeartbeat(nodeRow, {nowMs});
+  return hasFreshLiveness;
 }
 
 function isCanonicallyActiveNode(nodeRow, options = {}) {
@@ -336,8 +413,15 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
     readinessDimensions,
     options,
   );
+  const allowLivenessFallbackProjection =
+    shouldAllowLivenessFallbackProjection(
+      nodeRow,
+      readinessProjection,
+      options,
+    );
   if (readinessProjection.hasReadinessEvidence) {
-    if (readinessProjection.projectionEligible !== true) {
+    if (readinessProjection.projectionEligible !== true &&
+        !allowLivenessFallbackProjection) {
       return false;
     }
   } else {
@@ -349,16 +433,25 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
   const nodeEndpointRows = Array.isArray(options.nodeEndpointRows) ?
     options.nodeEndpointRows :
     [];
-  if (hasCanonicalWebSocketEndpoints(nodeEndpointRows) &&
-      !hasCanonicalWebSocketEndpoint(
-        normalizedNode.nodeId,
-        nodeEndpointRows,
-      ) &&
-      !hasCanonicalActiveService(
-        normalizedNode.nodeId,
-        options.serviceRows,
-      )) {
-    return false;
+  const projectedByRecoveryEligibility =
+    readinessProjection.projectedByRecoveryEligibility === true &&
+    options.allowControlPlaneRecoveryEligibleProjection === true;
+  if (!projectedByRecoveryEligibility) {
+    if (hasCanonicalWebSocketEndpoints(nodeEndpointRows) &&
+        !hasCanonicalWebSocketEndpoint(
+          normalizedNode.nodeId,
+          nodeEndpointRows,
+        ) &&
+        !hasCanonicalActiveService(
+          normalizedNode.nodeId,
+          options.serviceRows,
+        ) &&
+        !hasRuntimeTransportEvidence(normalizedNode.nodeId, {
+          ...options,
+          readinessByNodeId,
+        })) {
+      return false;
+    }
   }
 
   return true;
@@ -369,6 +462,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   const readinessByNodeId = buildReadinessByNodeId(options);
   const nodeRowsById = new Map();
   const recoveryEligibleIncludedNodeIds = new Set();
+  const livenessFallbackIncludedNodeIds = new Set();
   const readinessExcludedNodeIds = new Set();
   const clusterMemberUnhealthyExcludedNodeIds = new Set();
   for (const nodeRow of nodeRows) {
@@ -382,6 +476,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   const candidateNodeIds = new Set([
     ...nodeRowsById.keys(),
     ...Object.keys(readinessByNodeId || {}),
+    ...normalizeNodeIdList(options.connectedNodeIds),
+    ...normalizeNodeIdList([options.localNodeId]),
   ]);
   const activeNodeIds = [];
   const requireWebSocketEndpoint =
@@ -398,9 +494,20 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       readinessDimensions,
       options,
     );
+    const allowLivenessFallbackProjection =
+      shouldAllowLivenessFallbackProjection(
+        nodeRow,
+        readinessProjection,
+        options,
+      );
+    const runtimeTransportEvidence = hasRuntimeTransportEvidence(nodeId, {
+      ...options,
+      readinessByNodeId,
+    });
     if (nodeRow) {
       if (readinessProjection.hasReadinessEvidence &&
-          readinessProjection.projectionEligible !== true) {
+          readinessProjection.projectionEligible !== true &&
+          !allowLivenessFallbackProjection) {
         readinessExcludedNodeIds.add(nodeId);
         if (readinessProjection.clusterMemberHealthyMissing) {
           clusterMemberUnhealthyExcludedNodeIds.add(nodeId);
@@ -416,12 +523,31 @@ function resolveProjectedActiveNodeSelection(options = {}) {
         if (readinessProjection.projectedByRecoveryEligibility) {
           recoveryEligibleIncludedNodeIds.add(nodeId);
         }
+        if (allowLivenessFallbackProjection) {
+          livenessFallbackIncludedNodeIds.add(nodeId);
+        }
       }
       continue;
     }
 
     if (!readinessProjection.hasReadinessEvidence ||
         readinessProjection.projectionEligible !== true) {
+      const allowResponsiveLocalNodeProjection =
+        options.localNodeResponsive === true &&
+        String(options.localNodeId || '').trim() === nodeId;
+      if (allowResponsiveLocalNodeProjection !== true) {
+        if (readinessProjection.hasReadinessEvidence) {
+          readinessExcludedNodeIds.add(nodeId);
+          if (readinessProjection.clusterMemberHealthyMissing) {
+            clusterMemberUnhealthyExcludedNodeIds.add(nodeId);
+          }
+        }
+        continue;
+      }
+    }
+    if (readinessProjection.hasReadinessEvidence &&
+        readinessProjection.projectionEligible !== true &&
+        !allowLivenessFallbackProjection) {
       if (readinessProjection.hasReadinessEvidence) {
         readinessExcludedNodeIds.add(nodeId);
         if (readinessProjection.clusterMemberHealthyMissing) {
@@ -431,16 +557,21 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       continue;
     }
     if (requireWebSocketEndpoint &&
-        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows)) {
+        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
+        !runtimeTransportEvidence) {
       continue;
     }
     if (!hasCanonicalActiveService(nodeId, options.serviceRows) &&
-        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows)) {
+        !hasCanonicalWebSocketEndpoint(nodeId, options.nodeEndpointRows) &&
+        !runtimeTransportEvidence) {
       continue;
     }
     activeNodeIds.push(nodeId);
     if (readinessProjection.projectedByRecoveryEligibility) {
       recoveryEligibleIncludedNodeIds.add(nodeId);
+    }
+    if (allowLivenessFallbackProjection) {
+      livenessFallbackIncludedNodeIds.add(nodeId);
     }
   }
 
@@ -460,6 +591,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       options.allowControlPlaneRecoveryEligibleProjection === true,
     recoveryEligibleIncludedNodeIds:
       Object.freeze([...recoveryEligibleIncludedNodeIds].sort()),
+    livenessFallbackIncludedNodeIds:
+      Object.freeze([...livenessFallbackIncludedNodeIds].sort()),
     readinessExcludedNodeIds:
       Object.freeze([...readinessExcludedNodeIds].sort()),
     clusterMemberUnhealthyExcludedNodeIds:
@@ -564,6 +697,9 @@ function resolveActiveNodeViews(options = {}) {
       recoveryEligibleIncludedNodeIds: Object.freeze([
         ...projectedActiveNodeSelection.recoveryEligibleIncludedNodeIds,
       ]),
+      livenessFallbackIncludedNodeIds: Object.freeze([
+        ...projectedActiveNodeSelection.livenessFallbackIncludedNodeIds,
+      ]),
       readinessExcludedNodeIds: Object.freeze([
         ...projectedActiveNodeSelection.readinessExcludedNodeIds,
       ]),
@@ -585,7 +721,314 @@ function resolveCanonicalActiveNodeIds(options = {}) {
   return [...activeNodeViews.effectiveActiveNodeIds];
 }
 
+function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) {
+  const normalizedPublicationConvergence =
+    publicationConvergence &&
+      typeof publicationConvergence === TYPEOF.OBJECT ?
+      publicationConvergence :
+      {};
+  const membershipLifecycleSummary =
+    normalizedPublicationConvergence.membershipLifecycleSummary &&
+      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.membershipLifecycleSummary :
+      null;
+  const projectionDiagnostics =
+    normalizedPublicationConvergence.projectionDiagnostics &&
+      typeof normalizedPublicationConvergence.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.projectionDiagnostics :
+      membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+        membershipLifecycleSummary.projectionDiagnostics :
+        null;
+  const publishedActiveNodeIds = normalizeNodeIdList(
+    Array.isArray(normalizedPublicationConvergence?.publishedActiveNodeIds) ?
+      normalizedPublicationConvergence.publishedActiveNodeIds :
+      membershipLifecycleSummary?.publishedActiveNodeIds,
+  );
+  const projectedServingNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.projectedServingNodeIds) ?
+      normalizedPublicationConvergence.projectedServingNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.projectedServingNodeIds) ?
+      membershipLifecycleSummary.projectedServingNodeIds :
+      []),
+  ]);
+  const locallyEligibleNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.locallyEligibleNodeIds) ?
+      normalizedPublicationConvergence.locallyEligibleNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.locallyEligibleNodeIds) ?
+      membershipLifecycleSummary.locallyEligibleNodeIds :
+      []),
+  ]);
+  const recoveryEligibleIncludedNodeIds = normalizeNodeIdList(
+    projectionDiagnostics?.recoveryEligibleIncludedNodeIds,
+  );
+  const livenessFallbackIncludedNodeIds = normalizeNodeIdList(
+    projectionDiagnostics?.livenessFallbackIncludedNodeIds,
+  );
+  const explicitRecoveryActiveNodeIds = normalizeNodeIdList([
+    ...(Array.isArray(normalizedPublicationConvergence?.recoveryActiveNodeIds) ?
+      normalizedPublicationConvergence.recoveryActiveNodeIds :
+      []),
+    ...(Array.isArray(membershipLifecycleSummary?.recoveryActiveNodeIds) ?
+      membershipLifecycleSummary.recoveryActiveNodeIds :
+      []),
+  ]);
+  const explicitRecoveryActiveNodeSource =
+    typeof normalizedPublicationConvergence?.recoveryActiveNodeSource ===
+      TYPEOF.STRING &&
+      normalizedPublicationConvergence.recoveryActiveNodeSource.trim()
+        .length > NUM.ZERO ?
+      normalizedPublicationConvergence.recoveryActiveNodeSource.trim() :
+      (typeof membershipLifecycleSummary?.recoveryActiveNodeSource ===
+        TYPEOF.STRING &&
+        membershipLifecycleSummary.recoveryActiveNodeSource.trim().length >
+          NUM.ZERO ?
+        membershipLifecycleSummary.recoveryActiveNodeSource.trim() :
+        null);
+
+  const publishedActiveNodeIdSet = new Set(publishedActiveNodeIds);
+  const projectionNodeIds = normalizeNodeIdList([
+    ...locallyEligibleNodeIds,
+    ...projectedServingNodeIds,
+    ...recoveryEligibleIncludedNodeIds,
+  ]);
+  const projectionAddsNodes = projectionNodeIds.some((nodeId) =>
+    !publishedActiveNodeIdSet.has(nodeId),
+  );
+  const shouldUseProjectionCohort =
+    projectionNodeIds.length > NUM.ZERO && (
+      publishedActiveNodeIds.length === NUM.ZERO ||
+      projectionAddsNodes ||
+      recoveryEligibleIncludedNodeIds.length > NUM.ZERO ||
+      livenessFallbackIncludedNodeIds.length > NUM.ZERO
+    );
+  const buildProjectionCohortNodeIds = (candidateNodeIds) =>
+    normalizeNodeIdList([
+      ...publishedActiveNodeIds,
+      ...candidateNodeIds,
+    ]);
+
+  let activeNodeIds = [];
+  let source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE;
+  if (explicitRecoveryActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = explicitRecoveryActiveNodeIds;
+    source = explicitRecoveryActiveNodeSource ||
+      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+  } else if (shouldUseProjectionCohort && locallyEligibleNodeIds.length > NUM.ZERO) {
+    activeNodeIds = buildProjectionCohortNodeIds(locallyEligibleNodeIds);
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+  } else if (
+    shouldUseProjectionCohort && projectedServingNodeIds.length > NUM.ZERO
+  ) {
+    activeNodeIds = buildProjectionCohortNodeIds(projectedServingNodeIds);
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PROJECTED_SERVING;
+  } else if (
+    shouldUseProjectionCohort && recoveryEligibleIncludedNodeIds.length > NUM.ZERO
+  ) {
+    activeNodeIds = buildProjectionCohortNodeIds(
+      recoveryEligibleIncludedNodeIds,
+    );
+    source =
+      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+  } else if (publishedActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = publishedActiveNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PUBLISHED_MEMBERSHIP;
+  } else if (locallyEligibleNodeIds.length > NUM.ZERO) {
+    activeNodeIds = locallyEligibleNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+  } else if (projectedServingNodeIds.length > NUM.ZERO) {
+    activeNodeIds = projectedServingNodeIds;
+    source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.PROJECTED_SERVING;
+  } else if (recoveryEligibleIncludedNodeIds.length > NUM.ZERO) {
+    activeNodeIds = recoveryEligibleIncludedNodeIds;
+    source =
+      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+  }
+
+  return Object.freeze({
+    activeNodeIds: Object.freeze([...activeNodeIds]),
+    source,
+    publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),
+    projectedServingNodeIds: Object.freeze([...projectedServingNodeIds]),
+    locallyEligibleNodeIds: Object.freeze([...locallyEligibleNodeIds]),
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...recoveryEligibleIncludedNodeIds,
+    ]),
+    missingPublishedActiveNodeIds: Object.freeze(activeNodeIds.filter((nodeId) =>
+      !publishedActiveNodeIds.includes(nodeId),
+    )),
+  });
+}
+
+function buildActiveMembershipSnapshot(publicationConvergence = null) {
+  const normalizedPublicationConvergence =
+    publicationConvergence &&
+      typeof publicationConvergence === TYPEOF.OBJECT ?
+      publicationConvergence :
+      {};
+  const membershipLifecycleSummary =
+    normalizedPublicationConvergence.membershipLifecycleSummary &&
+      typeof normalizedPublicationConvergence.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.membershipLifecycleSummary :
+      null;
+  const projectionDiagnostics =
+    normalizedPublicationConvergence.projectionDiagnostics &&
+      typeof normalizedPublicationConvergence.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      normalizedPublicationConvergence.projectionDiagnostics :
+      membershipLifecycleSummary?.projectionDiagnostics &&
+        typeof membershipLifecycleSummary.projectionDiagnostics ===
+          TYPEOF.OBJECT ?
+        membershipLifecycleSummary.projectionDiagnostics :
+        null;
+  const activeNodeCohort =
+    resolvePriorityRecoveryActiveNodeCohort(normalizedPublicationConvergence);
+
+  return Object.freeze({
+    publishedActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.publishedActiveNodeIds,
+    ]),
+    projectedServingNodeIds: Object.freeze([
+      ...activeNodeCohort.projectedServingNodeIds,
+    ]),
+    locallyEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.locallyEligibleNodeIds,
+    ]),
+    projectionDiagnostics:
+      projectionDiagnostics && typeof projectionDiagnostics === TYPEOF.OBJECT ?
+        Object.freeze({...projectionDiagnostics}) :
+        null,
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...activeNodeCohort.recoveryEligibleIncludedNodeIds,
+    ]),
+    concreteEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.activeNodeIds,
+    ]),
+    recoveryActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.activeNodeIds,
+    ]),
+    recoveryActiveNodeSource: activeNodeCohort.source,
+    missingPublishedRecoveryActiveNodeIds: Object.freeze([
+      ...activeNodeCohort.missingPublishedActiveNodeIds,
+    ]),
+    missingPublishedEligibleNodeIds: Object.freeze([
+      ...activeNodeCohort.missingPublishedActiveNodeIds,
+    ]),
+  });
+}
+
+function buildMembershipPublicationActiveSnapshot(
+  membershipPublication = null,
+) {
+  if (!membershipPublication || typeof membershipPublication !== TYPEOF.OBJECT) {
+    return null;
+  }
+
+  const normalizedPublication =
+    normalizeControlPlanePublicationRow(membershipPublication);
+  const membershipLifecycleSummary =
+    normalizedPublication.membershipLifecycleSummary &&
+      typeof normalizedPublication.membershipLifecycleSummary ===
+        TYPEOF.OBJECT ?
+      Object.freeze({...normalizedPublication.membershipLifecycleSummary}) :
+      null;
+  const projectionDiagnostics =
+    membershipLifecycleSummary?.projectionDiagnostics &&
+      typeof membershipLifecycleSummary.projectionDiagnostics ===
+        TYPEOF.OBJECT ?
+      Object.freeze({...membershipLifecycleSummary.projectionDiagnostics}) :
+      null;
+  const publicationStatus =
+    typeof membershipPublication.status === TYPEOF.STRING ?
+      membershipPublication.status :
+      normalizedPublication.status || null;
+  const publishedActiveNodeIdsPresent =
+    membershipPublication.publishedActiveNodeIdsPresent === true ||
+    Array.isArray(membershipPublication.publishedActiveNodeIds) ||
+    Array.isArray(membershipPublication.published_active_node_ids);
+  const priorityRecoveryPublicationContext =
+    buildActiveMembershipSnapshot({
+      publishedActiveNodeIds: normalizedPublication.publishedActiveNodeIds,
+      membershipLifecycleSummary,
+      projectionDiagnostics,
+      recoveryActiveNodeIds:
+        membershipPublication.recoveryActiveNodeIds ??
+        membershipPublication.recovery_active_node_ids,
+      recoveryActiveNodeSource:
+        membershipPublication.recoveryActiveNodeSource ??
+        membershipPublication.recovery_active_node_source,
+    });
+
+  return Object.freeze({
+    publicationEpoch:
+      Number.isFinite(normalizedPublication.publicationEpoch) ?
+        normalizedPublication.publicationEpoch :
+        null,
+    status: publicationStatus,
+    publicationStatus: publicationStatus,
+    sourceTopologyEpoch:
+      Number.isFinite(normalizedPublication.sourceTopologyEpoch) ?
+        normalizedPublication.sourceTopologyEpoch :
+        null,
+    sourceSnapshotVersion:
+      Number.isFinite(normalizedPublication.sourceSnapshotVersion) ?
+        normalizedPublication.sourceSnapshotVersion :
+        null,
+    publishedActiveNodeIdsPresent,
+    publishedActiveNodeIds: Object.freeze([
+      ...normalizedPublication.publishedActiveNodeIds,
+    ]),
+    requiredAckNodeIds: Object.freeze([
+      ...normalizedPublication.requiredAckNodeIds,
+    ]),
+    acknowledgedNodeIds: Object.freeze([
+      ...normalizedPublication.acknowledgedNodeIds,
+    ]),
+    priorityPartitionSummary:
+      normalizedPublication.priorityPartitionSummary &&
+        typeof normalizedPublication.priorityPartitionSummary ===
+          TYPEOF.OBJECT ?
+        Object.freeze({...normalizedPublication.priorityPartitionSummary}) :
+        null,
+    membershipLifecycleSummary,
+    projectionDiagnostics,
+    projectedServingNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.projectedServingNodeIds,
+    ]),
+    locallyEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.locallyEligibleNodeIds,
+    ]),
+    recoveryEligibleIncludedNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.recoveryEligibleIncludedNodeIds,
+    ]),
+    concreteEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.concreteEligibleNodeIds,
+    ]),
+    recoveryActiveNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.recoveryActiveNodeIds,
+    ]),
+    recoveryActiveNodeSource:
+      priorityRecoveryPublicationContext.recoveryActiveNodeSource,
+    missingPublishedRecoveryActiveNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext
+        .missingPublishedRecoveryActiveNodeIds,
+    ]),
+    missingPublishedEligibleNodeIds: Object.freeze([
+      ...priorityRecoveryPublicationContext.missingPublishedEligibleNodeIds,
+    ]),
+  });
+}
+
 export {
+  ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE,
+  buildActiveMembershipSnapshot,
+  buildMembershipPublicationActiveSnapshot,
   resolveActiveNodeViews,
   buildReadinessByNodeId,
   hasCanonicalActiveService,
@@ -598,4 +1041,5 @@ export {
   resolveProjectedActiveNodeIds,
   resolvePublishedActiveNodeIds,
   resolveCanonicalActiveNodeIds,
+  resolvePriorityRecoveryActiveNodeCohort,
 };

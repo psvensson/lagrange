@@ -89,7 +89,7 @@ function buildInFlightReplicaOperationRow(
     type: OPERATION_TYPE_ADD,
     status: IN_FLIGHT_STATUS,
     workflow_step: IN_FLIGHT_WORKFLOW_STEP,
-    partition_id: `partition-${operationId}`,
+    partition_id: `${TABLES.SERVICES}-p1`,
     replica_id: `replica-${operationId}`,
     source_node_id: sourceNodeId,
     target_node_id: targetNodeId,

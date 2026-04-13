@@ -118,6 +118,7 @@ test('LatencyTopologySetup usage is constrained to bootstrap/joining owners',
       'bootstrap/bootstrap-service.js',
       'bootstrap/node-joining-service.js',
       'bootstrap/join-cleanup-handler.js',
+      'bootstrap/owners/seed-runtime-bridge-owner.js',
       'bootstrap/phases/seed-cache-hydration-phase.js',
       'bootstrap/phases/seed-cleanup-handler.js',
     ]);

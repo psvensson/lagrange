@@ -47,8 +47,11 @@ function getTableMetadataState(systemTableCache, tableName) {
       row.status === SERVICE_STATUS.ACTIVE,
     );
   const activePartitionIds = new Set(partitionServices.map((row) => row.partition_id));
-  const leaderPartitionIds = new Set(partitionServices
-    .filter((row) => row.raft_role === 'leader')
+  const leaderPartitionIds = new Set(partitionRows
+    .filter((row) =>
+      typeof row.leader_node_id === 'string' &&
+      row.leader_node_id.length > 0,
+    )
     .map((row) => row.partition_id));
   return {
     tableRowCount: tableRows.length,

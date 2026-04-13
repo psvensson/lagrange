@@ -138,11 +138,39 @@ function createTestCoordinator(options = {}) {
     operation = null,
     persistResults = {success: true, rows: [], affectedRows: 1},
     messageRouter = null,
+    transactionCoordinator = null,
   } = options;
 
   const emitter = new ExecutorOutcomeEmitter({logger: console});
   const workflowCoordinator = new DurableWorkflowCoordinator();
   const persisted = [];
+  const executeQuery = async (sql, params) => {
+    if (sql.includes('WHERE operation_id') && operation) {
+      const opId = params?.[0];
+      if (opId === operation.operationId) {
+        return {
+          success: true,
+          rows: [operationToRow(operation)],
+        };
+      }
+    }
+    if (sql.includes('UPDATE')) {
+      if (operation) {
+        operation.status = params?.[0] ?? operation.status;
+        operation.workflowStep = params?.[1] ?? operation.workflowStep;
+        operation.updatedAt = params?.[2] ?? operation.updatedAt;
+        operation.completedAt = params?.[3] ?? operation.completedAt;
+        operation.errorMessage = params?.[4] ?? operation.errorMessage;
+        operation.stepsHistory = Array.isArray(operation.stepsHistory) ?
+          JSON.parse(params?.[5] || JSON.stringify(operation.stepsHistory)) :
+          [];
+        operation.replicaId = params?.[6] ?? operation.replicaId;
+      }
+      persisted.push({sql, params});
+      return persistResults;
+    }
+    return {success: true, rows: []};
+  };
 
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
@@ -161,21 +189,17 @@ function createTestCoordinator(options = {}) {
       },
     },
     sqlQueryEngine: {
+      executeQuery,
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(_tableName, sql, params) {
+        return executeQuery(sql, params);
+      },
+      async readAuthoritativeRows(_tableName, sql, params) {
+        return executeQuery(sql, params);
+      },
       async executeQuery(sql, params) {
-        if (sql.includes('WHERE operation_id') && operation) {
-          const opId = params?.[0];
-          if (opId === operation.operationId) {
-            return {
-              success: true,
-              rows: [operationToRow(operation)],
-            };
-          }
-        }
-        if (sql.includes('UPDATE')) {
-          persisted.push({sql, params});
-          return persistResults;
-        }
-        return {success: true, rows: []};
+        return executeQuery(sql, params);
       },
     },
     controlPlaneReadinessService: {
@@ -183,7 +207,8 @@ function createTestCoordinator(options = {}) {
     },
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
-    transactionCoordinator: createMockTransactionCoordinator(),
+    transactionCoordinator:
+      transactionCoordinator || createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     enableTimeouts: false,
   });
@@ -393,6 +418,61 @@ async (t) => {
   );
 });
 
+test('claimDispatchTransition uses compare-and-set owner claim for priority ' +
+  'control-plane partitions',
+async (t) => {
+  const operation = buildTestOperation({
+    partitionId: 'sql_transactions-p1',
+    entityId: 'sql_transactions-p1',
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const txCalls = [];
+  const transactionCoordinator = {
+    begin: async () => {
+      txCalls.push('begin');
+      return {success: true};
+    },
+    commit: async () => {
+      txCalls.push('commit');
+      return {success: true};
+    },
+    rollback: async () => {
+      txCalls.push('rollback');
+      return {success: true};
+    },
+  };
+  const {coordinator, persisted} = createTestCoordinator({
+    operation,
+    transactionCoordinator,
+  });
+
+  const claimed = await coordinator.claimDispatchTransition(
+    TEST_OPERATION_ID,
+  );
+
+  t.ok(claimed, 'priority claim must return the operation');
+  t.equal(
+    claimed.workflowStep,
+    WORKFLOW_STEP.SENDING,
+    'priority claim must still advance the workflow step',
+  );
+  t.equal(
+    txCalls.length,
+    0,
+    'priority dispatch claim should not begin a distributed transaction',
+  );
+  t.equal(
+    persisted.length,
+    1,
+    'priority dispatch claim should perform exactly one durable compare-and-set update',
+  );
+  t.match(
+    persisted[0]?.sql || '',
+    /WHERE operation_id = \? AND workflow_step = \?/,
+    'priority dispatch claim should guard the update on the durable PENDING row',
+  );
+});
+
 test('dispatchOperation shares the owner-key execution with ' +
   'concurrent inline executeOperation calls',
 async (t) => {
@@ -449,7 +529,7 @@ async (t) => {
   );
 });
 
-test('dispatchOperation uses background router priority for replica work',
+test('dispatchOperation uses critical router priority for replica work',
   async (t) => {
     const operation = buildTestOperation({
       workflowStep: WORKFLOW_STEP.PENDING,
@@ -473,8 +553,8 @@ test('dispatchOperation uses background router priority for replica work',
     t.equal(deliverCalls.length, 1, 'dispatch should use one router delivery');
     t.equal(
       deliverCalls[0].options?.deliveryPriority,
-      'background',
-      'replica dispatch should use background router priority',
+      'critical',
+      'replica dispatch should use critical router priority',
     );
     t.equal(
       deliverCalls[0].options?.targetNodeId,

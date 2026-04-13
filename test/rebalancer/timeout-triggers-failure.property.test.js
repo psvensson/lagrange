@@ -2,8 +2,9 @@
  * Property Test: Timeout Triggers Failure
  *
  * Property 7: For any operation that remains in a transitional state
- * (PENDING, SENDING, CREATING, SYNCING, STOPPING) longer than the configured
- * timeout, the RebalanceCoordinator SHALL transition it to FAILED status.
+ * (PENDING, SENDING, CREATING, SYNCING) longer than the configured timeout,
+ * the RebalanceCoordinator SHALL transition it to FAILED status. REMOVE
+ * operations already in STOPPING remain externally tracked as removing.
  *
  * Validates: Requirements 6.2
  *
@@ -178,6 +179,14 @@ function createTimeoutTestCoordinator(options = {}) {
     nodeId: options.nodeId || 'test-node-1',
     systemTableCache: createMockCache(),
     cdcIntegrationService: cdcService,
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      executeQuery: async (sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+    },
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
@@ -194,6 +203,16 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
   coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
   // Set very short timeouts for testing
   coordinator.config.pendingTimeoutMs = options.pendingTimeoutMs || 10;
@@ -359,7 +378,7 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
     }
   });
 
-  await t.test('operation in STOPPING times out and fails', async (t) => {
+  await t.test('operation in STOPPING remains removing during timeout checks', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
       createTimeoutTestCoordinator({
         removingTimeoutMs: 1,
@@ -393,10 +412,13 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
       // Get the updated operation
       const updatedOp = getTrackedOperation(operation.operationId);
 
-      // Verify operation failed
-      t.equal(updatedOp.status, ReplicaStatus.FAILED, 'Status is failed after timeout');
-      t.ok(updatedOp.error_message.includes('STOPPING'),
-        'Error message mentions STOPPING step');
+      // REMOVE STOPPING remains externally tracked as removing
+      t.equal(updatedOp.status, ReplicaStatus.REMOVING,
+        'Status remains removing while waiting on external removal');
+      t.equal(updatedOp.workflow_step, 'STOPPING',
+        'Workflow step remains STOPPING');
+      t.equal(updatedOp.error_message, null,
+        'No timeout error is recorded for STOPPING REMOVE');
     } finally {
       await coordinator.shutdown();
     }

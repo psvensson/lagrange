@@ -100,7 +100,10 @@ function buildNodeHandle(nodeId, role, allNodeIds, queryImpl) {
       const statement = String(sql);
       if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
         return {
-          rows: [buildControlSnapshotPayload(this.id)],
+          rows: [buildControlSnapshotPayload(this.id, {
+            nodes: allNodeIds.map((id) => String(id)),
+            authoritativeActiveNodes: allNodeIds.map((id) => String(id)),
+          })],
         };
       }
       if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||

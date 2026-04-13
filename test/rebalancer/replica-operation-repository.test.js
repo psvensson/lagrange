@@ -12,12 +12,18 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ERRORS, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   OperationType,
   TERMINAL_STATUSES,
@@ -106,6 +112,7 @@ function createTestRepository(overrides = {}) {
       overrides.controlPlaneReadinessService || null,
     logger: mockLogger,
     emitter: overrides.emitter || null,
+    random: overrides.random,
   });
 }
 
@@ -411,6 +418,21 @@ test('executeReplicaOperationsRead routes authoritative owner reads through ' +
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     'replica_operations owner reads should route on control-plane recovery readiness',
   );
+  t.equal(
+    capturedReads[0]?.options?.workClass,
+    'critical',
+    'replica_operations owner reads should stay on the critical pressure lane',
+  );
+  t.equal(
+    capturedReads[0]?.options?.deliveryPriority,
+    'critical',
+    'replica_operations owner reads should use critical delivery priority',
+  );
+  t.equal(
+    capturedReads[0]?.options?.allowPressureDefer,
+    false,
+    'replica_operations owner reads should not defer under transport pressure',
+  );
 });
 
 test('queryAuthoritativeOperationById retries retryable authoritative read ' +
@@ -449,6 +471,52 @@ test('queryAuthoritativeOperationById retries retryable authoritative read ' +
     'authoritative operation reads should retry until one read succeeds');
   t.equal(waitCalls.length, 2,
     'authoritative operation reads should wait between retryable failures');
+});
+
+test('queryAuthoritativeOperationById retries transaction commit visibility ' +
+  'gaps before returning null', async (t) => {
+  let readCalls = 0;
+  const waitCalls = [];
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async () => {
+        readCalls += 1;
+        if (readCalls === 1) {
+          return {
+            success: false,
+            error: 'No active transaction to commit',
+          };
+        }
+        return {
+          success: true,
+          rows: [makeRow()],
+        };
+      },
+    },
+  });
+  repo.waitForReplicaOperationReadRetry = async (delayMs) => {
+    waitCalls.push(delayMs);
+  };
+
+  const operation = await repo.queryAuthoritativeOperationById(
+    TEST_OPERATION_ID,
+  );
+
+  t.equal(
+    operation?.operationId,
+    TEST_OPERATION_ID,
+    'authoritative reads should recover after a bounded transaction commit visibility gap',
+  );
+  t.equal(
+    readCalls,
+    2,
+    'transaction commit visibility gaps should trigger one authoritative read retry',
+  );
+  t.equal(
+    waitCalls.length,
+    1,
+    'authoritative read recovery should wait once before retrying the gap',
+  );
 });
 
 test('queryIncompleteOperations retries retryable authoritative read failures',
@@ -633,6 +701,38 @@ test('resolveOperationOwnerNodeId accepts raw row fields',
     const repo = createTestRepository();
     const row = {source_node_id: 'raw-src'};
     t.equal(repo.resolveOperationOwnerNodeId(row), 'raw-src');
+  });
+
+test('resolveOperationOwnerNodeId keeps critical REPLACE ACTIVE on target owner',
+  async (t) => {
+    const repo = createTestRepository();
+    const operation = {
+      type: OperationType.REPLACE,
+      partitionId: 'control_plane_publications-p1',
+      sourceNodeId: 'src-node',
+      targetNodeId: 'tgt-node',
+      workflowStep: WORKFLOW_STEP.ACTIVE,
+    };
+    t.equal(
+      repo.resolveOperationOwnerNodeId(operation),
+      'tgt-node',
+    );
+  });
+
+test('resolveOperationOwnerNodeId keeps critical REPLACE PENDING on target owner',
+  async (t) => {
+    const repo = createTestRepository();
+    const operation = {
+      type: OperationType.REPLACE,
+      partitionId: 'control_plane_publications-p1',
+      sourceNodeId: 'src-node',
+      targetNodeId: 'tgt-node',
+      workflowStep: WORKFLOW_STEP.PENDING,
+    };
+    t.equal(
+      repo.resolveOperationOwnerNodeId(operation),
+      'tgt-node',
+    );
   });
 
 // ── isOperationLocallyOwned ─────────────────────────────────────
@@ -850,19 +950,25 @@ test('queryOperationById returns null for missing operation',
 
 // ── persistNewOperation ─────────────────────────────────────────
 
-test('persistNewOperation writes via gateway and confirms authoritatively',
+test('persistNewOperation uses canonical gateway mutation ingress when ' +
+  'available and confirms authoritatively',
   async (t) => {
-    const executedQueries = [];
+    const insertedRows = [];
     const authoritativeReads = [];
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
+        cdcIntegrationService: {
+          async insertSystemTableRow() {
+            return {success: true};
+          },
+        },
         readRows: async (tableName, sql, params) => {
           authoritativeReads.push({tableName, sql, params});
           return {success: true, rows: [makeRow()]};
         },
-        executeQuery: async (sql, params) => {
-          executedQueries.push({sql, params});
-          return {success: true, changes: 1};
+        insertSystemTableRow: async (tableName, row, options = {}) => {
+          insertedRows.push({tableName, row, options});
+          return {success: true, affectedRows: 1};
         },
       },
     });
@@ -871,10 +977,15 @@ test('persistNewOperation writes via gateway and confirms authoritatively',
     const result = await repo.persistNewOperation(op);
 
     t.ok(result, 'should return true on success');
-    t.equal(executedQueries.length, 1);
+    t.equal(insertedRows.length, 1);
     t.ok(
-      executedQueries[0].sql.includes('INSERT INTO'),
-      'should execute INSERT',
+      insertedRows[0].row.operation_id === TEST_OPERATION_ID,
+      'should submit the canonical row shape through the mutation ingress',
+    );
+    t.equal(
+      insertedRows[0]?.options?.skipCacheWait,
+      true,
+      'canonical mutation ingress should skip cache wait and rely on authoritative confirmation',
     );
     t.equal(authoritativeReads.length, 1,
       'should confirm the write through the authoritative read path');
@@ -1002,15 +1113,21 @@ test('persistNewOperation confirmation prefers owner RPC but does not require it
       'confirmation should not fail closed on owner-rpc unavailability');
   });
 
-test('persistOperationUpdate writes via gateway',
+test('persistOperationUpdate uses canonical gateway mutation ingress when ' +
+  'available',
   async (t) => {
-    const executedQueries = [];
+    const gatewayMutations = [];
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
+        cdcIntegrationService: {
+          async updateSystemTableRow() {
+            return {success: true};
+          },
+        },
         readRows: async () => ({success: true, rows: [makeRow()]}),
-        executeQuery: async (sql, params) => {
-          executedQueries.push({sql, params});
-          return {success: true};
+        updateSystemTableRow: async (tableName, whereClause, data, options={}) => {
+          gatewayMutations.push({tableName, whereClause, data, options});
+          return {success: true, affectedRows: 1};
         },
       },
     });
@@ -1018,12 +1135,217 @@ test('persistOperationUpdate writes via gateway',
     const op = repo.rowToOperation(makeRow());
     await repo.persistOperationUpdate(op);
 
-    t.equal(executedQueries.length, 1);
-    t.ok(
-      executedQueries[0].sql.includes('UPDATE'),
-      'should execute UPDATE',
+    t.equal(gatewayMutations.length, 1);
+    t.equal(gatewayMutations[0].tableName, SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
+    t.same(
+      gatewayMutations[0].whereClause,
+      {operation_id: TEST_OPERATION_ID},
+      'should update the canonical operation row by primary key',
+    );
+    t.equal(
+      gatewayMutations[0].data.workflow_step,
+      WORKFLOW_STEP.CREATING,
+      'should pass the workflow fields through the canonical mutation ingress',
+    );
+    t.equal(
+      gatewayMutations[0]?.options?.mergePolicy,
+      CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+      'should replace older pending writes for the same operation row',
+    );
+    t.equal(
+      gatewayMutations[0]?.options?.skipCacheWait,
+      true,
+      'canonical mutation ingress should skip cache wait and rely on authoritative confirmation',
     );
   });
+
+test('persistOperationUpdate falls back to raw query mutations for reduced ' +
+  'gateway stubs', async (t) => {
+  const executedQueries = [];
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readRows: async () => ({success: true, rows: [makeRow()]}),
+      executeQuery: async (sql, params, options = {}) => {
+        executedQueries.push({sql, params, options});
+        return {success: true};
+      },
+    },
+  });
+
+  const op = repo.rowToOperation(makeRow());
+  await repo.persistOperationUpdate(op);
+
+  t.equal(executedQueries.length, 1);
+  t.ok(
+    executedQueries[0].sql.includes('UPDATE'),
+    'fallback stubs should continue to use the raw query path',
+  );
+});
+
+test('runReplicaOperationTransitionExclusive keeps priority control-plane ' +
+  'transitions off the ordinary transition lane', async (t) => {
+  const repo = createTestRepository();
+  const executionOrder = [];
+  let releaseOrdinaryTransition = null;
+  const ordinaryTransitionBlocked = new Promise((resolve) => {
+    releaseOrdinaryTransition = resolve;
+  });
+
+  const ordinaryPromise = repo.runReplicaOperationTransitionExclusive(
+    async () => {
+      executionOrder.push('ordinary-start');
+      await ordinaryTransitionBlocked;
+      executionOrder.push('ordinary-end');
+      return 'ordinary';
+    },
+    {
+      partitionId: 'user-data-p17',
+    },
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const priorityPromise = repo.runReplicaOperationTransitionExclusive(
+    async () => {
+      executionOrder.push('priority-start');
+      return 'priority';
+    },
+    {
+      partitionId:
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS],
+    },
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  t.same(
+    executionOrder,
+    ['ordinary-start', 'priority-start'],
+    'priority control-plane transitions should start before unrelated ordinary transitions finish',
+  );
+
+  releaseOrdinaryTransition();
+
+  const [ordinaryResult, priorityResult] =
+    await Promise.all([ordinaryPromise, priorityPromise]);
+  t.equal(ordinaryResult, 'ordinary');
+  t.equal(priorityResult, 'priority');
+});
+
+test('persistOperationUpdate forwards the enclosing timeout budget',
+  async (t) => {
+    const executedQueries = [];
+    const timeoutBudget = {
+      configuredBudgetMs: 1000,
+      startedAtMs: 1000,
+      deadlineMs: 2000,
+      operationName: 'transaction',
+    };
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        readRows: async () => ({success: true, rows: [makeRow()]}),
+        executeQuery: async (_sql, _params, options = {}) => {
+          executedQueries.push(options);
+          return {success: true};
+        },
+      },
+    });
+
+    const op = repo.rowToOperation(makeRow());
+    await repo.persistOperationUpdate(op, {timeoutBudget});
+
+    t.equal(executedQueries.length, 1,
+      'persistOperationUpdate should issue one mutation');
+    t.equal(
+      executedQueries[0].timeoutBudget,
+      timeoutBudget,
+      'persistOperationUpdate should preserve the enclosing timeout budget on the mutation query',
+    );
+  });
+
+test('persistOperationUpdate preserves structured retry metadata on ' +
+  'thrown participant failures', async (t) => {
+  const participantFailure = {
+    error: 'control_plane_pressure_degraded',
+    errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+    retryAfterMs: 250,
+    deferRetry: true,
+    failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  };
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      executeQuery: async () => ({
+        success: false,
+        error: 'Query execution failed',
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        firstFailedParticipant: participantFailure,
+        participantFailures: [participantFailure],
+      }),
+    },
+  });
+
+  const op = repo.rowToOperation(makeRow());
+
+  try {
+    await repo.persistOperationUpdate(op);
+    t.fail('persistOperationUpdate should throw the mutation failure');
+  } catch (error) {
+    t.equal(error.message, 'Query execution failed');
+    t.equal(
+      error.errorCode,
+      'DISTRIBUTED_PARTICIPANT_FAILURE',
+      'top-level error code should be preserved on the thrown error',
+    );
+    t.equal(
+      error.retryAfterMs,
+      250,
+      'nested retry-after hints should survive the repository throw boundary',
+    );
+    t.equal(
+      error.deferRetry,
+      true,
+      'nested defer markers should survive the repository throw boundary',
+    );
+    t.equal(
+      error.firstFailedParticipant?.errorCode,
+      'CONTROL_PLANE_PRESSURE_DEGRADED',
+      'first failed participant metadata should remain available to callers',
+    );
+    t.equal(
+      error.participantFailures?.length,
+      1,
+      'participant failure details should remain available to callers',
+    );
+  }
+});
+
+test('buildOperationPersistError marks retryable workflow participant lookup ' +
+  'failures for deferred retry', async (t) => {
+  const repo = createTestRepository({
+    random: () => 0,
+  });
+
+  const error = repo.buildOperationPersistError({
+    success: false,
+    error: 'Workflow participant replica_operations-p1 not found',
+    errorCode: 'INTERNAL_ERROR',
+  });
+
+  t.equal(
+    error.message,
+    'Workflow participant replica_operations-p1 not found',
+  );
+  t.equal(
+    error.deferRetry,
+    true,
+    'retryable participant lookup failures should be surfaced as deferred retries',
+  );
+  t.equal(
+    error.retryAfterMs,
+    250,
+    'repository should surface the bounded retry delay for owner-lane retries',
+  );
+});
 
 test('persistOperationUpdate fails when authoritative confirmation ' +
   'does not reflect workflow step/status', async (t) => {
@@ -1146,6 +1468,43 @@ test('executeOperationMutationWithRetry retries no-handler owner handoff errors'
       'retry loop should wait exactly once before succeeding');
   });
 
+test('executeOperationMutationWithRetry retries workflow participant ' +
+  'lookup gaps', async (t) => {
+  let attempts = 0;
+  let waitCalls = 0;
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      executeQuery: async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            success: false,
+            error: 'Workflow participant replica_operations-p1 not found',
+            errorCode: 'INTERNAL_ERROR',
+          };
+        }
+        return {success: true, changes: 1};
+      },
+    },
+  });
+  repo.waitForOperationPersistRetry = async () => {
+    waitCalls += 1;
+  };
+
+  const result = await repo.executeOperationMutationWithRetry(
+    'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+    [Date.now(), TEST_OPERATION_ID],
+    {ownerId: TEST_OPERATION_ID},
+  );
+
+  t.equal(result.success, true,
+    'workflow participant lookup gaps should be retried');
+  t.equal(attempts, 2,
+    'repository should retry once after a retryable participant lookup gap');
+  t.equal(waitCalls, 1,
+    'retry loop should wait exactly once before retrying the participant gap');
+});
+
 test('executeOperationMutationWithRetry retries control-plane admission defers',
   async (t) => {
     let attempts = 0;
@@ -1184,6 +1543,95 @@ test('executeOperationMutationWithRetry retries control-plane admission defers',
     t.equal(waitCalls, 1,
       'retry loop should wait exactly once before retrying the defer');
   });
+
+test('executeOperationMutationWithRetry preserves explicit sessions and ' +
+  'adds jitter for partition contention', async (t) => {
+  let attempts = 0;
+  const observedSessions = [];
+  const observedWaits = [];
+  const explicitSessionId = 'explicit-transition-session';
+  const repo = createTestRepository({
+    random: () => 1,
+    controlPlaneSystemTableGateway: {
+      executeQuery: async (_sql, _params, options = {}) => {
+        attempts += 1;
+        observedSessions.push(options.sessionId || null);
+        if (attempts === 1) {
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        }
+        return {success: true, changes: 1};
+      },
+    },
+  });
+  repo.waitForOperationPersistRetry = async (delayMs) => {
+    observedWaits.push(delayMs);
+  };
+
+  const result = await repo.executeOperationMutationWithRetry(
+    'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+    [Date.now(), TEST_OPERATION_ID],
+    {
+      ownerId: TEST_OPERATION_ID,
+      sessionId: explicitSessionId,
+    },
+  );
+
+  t.equal(result.success, true,
+    'partition contention should still recover on retry');
+  t.same(
+    observedSessions,
+    [explicitSessionId, explicitSessionId],
+    'explicit transition sessions must stay stable across contention retries',
+  );
+  t.equal(observedWaits.length, 1,
+    'contention should wait once before retrying');
+  t.ok(
+    observedWaits[0] > 250,
+    'partition contention retries should add jitter instead of retrying in lockstep',
+  );
+});
+
+test('executeOperationMutationWithRetry rotates implicit sessions on ' +
+  'partition contention retries', async (t) => {
+  let attempts = 0;
+  const observedSessions = [];
+  const repo = createTestRepository({
+    random: () => 0,
+    controlPlaneSystemTableGateway: {
+      executeQuery: async (_sql, _params, options = {}) => {
+        attempts += 1;
+        observedSessions.push(options.sessionId || null);
+        if (attempts === 1) {
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        }
+        return {success: true, changes: 1};
+      },
+    },
+  });
+  repo.waitForOperationPersistRetry = async () => {};
+
+  const result = await repo.executeOperationMutationWithRetry(
+    'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+    [Date.now(), TEST_OPERATION_ID],
+    {ownerId: TEST_OPERATION_ID},
+  );
+
+  t.equal(result.success, true,
+    'repository-generated sessions should still recover after partition contention');
+  t.equal(attempts, 2,
+    'partition contention should trigger one retry');
+  t.not(
+    observedSessions[0],
+    observedSessions[1],
+    'implicit owner-mutation retries should rotate the generated session after partition contention',
+  );
+});
 
 test('executeOperationMutationWithRetry stops at the enclosing timeout budget',
   async (t) => {
@@ -1248,6 +1696,59 @@ test('executeOperationMutationWithRetry stops at the enclosing timeout budget',
         observedTimeoutBudgets,
         [timeoutBudget, timeoutBudget],
         'gateway retries should receive the same enclosing timeout budget',
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+  });
+
+test('executeOperationMutationWithRetry stops at the local retry timeout',
+  async (t) => {
+    const originalDateNow = Date.now;
+    let nowMs = 1000;
+    Date.now = () => nowMs;
+    let attempts = 0;
+    let waitCalls = 0;
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        executeQuery: async () => {
+          attempts += 1;
+          nowMs += 5000;
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async (delayMs) => {
+      waitCalls += 1;
+      nowMs += delayMs;
+    };
+
+    try {
+      const result = await repo.executeOperationMutationWithRetry(
+        'UPDATE replica_operations SET updated_at = ? WHERE operation_id = ?',
+        [Date.now(), TEST_OPERATION_ID],
+        {ownerId: TEST_OPERATION_ID},
+      );
+
+      t.equal(result.success, false,
+        'retryable mutation should still fail when the shared local retry window runs out');
+      t.equal(
+        result.error,
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        'the original contention boundary should be returned after the local retry timeout expires',
+      );
+      t.equal(
+        attempts,
+        3,
+        'repository retry loop should stop once the shared local retry timeout is exhausted',
+      );
+      t.equal(
+        waitCalls,
+        2,
+        'repository should only sleep while the shared local retry timeout still has budget remaining',
       );
     } finally {
       Date.now = originalDateNow;

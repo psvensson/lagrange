@@ -25,6 +25,8 @@ import {
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {createMockMutationGateway} from
+  './failure-detector-test-helpers.js';
 
 /**
  * The detector's own node ID — always skipped during health checks.
@@ -169,6 +171,8 @@ test('Property 7: Failure detector single CDC write per status change',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -238,6 +242,8 @@ test('Property 7: Failure detector single CDC write per status change',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -311,6 +317,8 @@ test('Property 7: Failure detector single CDC write per status change',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 
@@ -388,6 +396,8 @@ test('Property 7: Failure detector single CDC write per status change',
                 nodeId: SELF_NODE_ID,
                 sqlQueryEngine: mockEngine,
                 cdcIntegrationService: mockCDC,
+                controlPlaneSystemTableGateway:
+                  createMockMutationGateway(mockEngine, mockCDC),
               });
               detector.initialize();
 

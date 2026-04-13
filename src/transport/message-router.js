@@ -4,37 +4,62 @@
  * Requirements: 4.21, 4.22, 11.6, 11.7, 11.8, 11.9
  */
 
-import {EventEmitter} from 'events';
-import {URL} from 'url';
-import {v4 as uuidv4} from 'uuid';
-import WebSocket, {WebSocketServer} from 'ws';
-import {ConfigurationManager} from '../config/configuration-manager.js';
-import {LoggingService} from '../logging/logging-service.js';
-import {
-  CONNECTION_STATE,
-  OUTBOUND_DELIVERY_PRIORITY,
-  ROUTER_ADDRESS,
-  ROUTER_ERROR_MSG,
-  ROUTER_LOG_MSG,
-  ROUTER_MESSAGE_TYPE,
-  ROUTER_VALID_ENTITY_TYPES,
-  TRANSPORT_CONFIG_KEY,
-  TRANSPORT_DEFAULT,
-  TRANSPORT_ERROR_MSG,
-  TRANSPORT_EVENT,
-  TRANSPORT_FORMAT,
-  TRANSPORT_METRIC,
-  TRANSPORT_METRIC_TRIGGER,
-  TRANSPORT_NUM,
-  TRANSPORT_SUBSYSTEM,
-  TRANSPORT_TYPEOF,
-  normalizeToWebSocketAddress,
-} from '../constants/transport.js';
-import {HOST, METRICS_LOG_TAG} from '../constants/index.js';
+import { EventEmitter } from 'events';
+import { URL } from 'url';
+import { v4 as uuidv4 } from 'uuid';
+import WebSocket, { WebSocketServer } from 'ws';
+import { ConfigurationManager } from '../config/configuration-manager.js';
+import { LoggingService } from '../logging/logging-service.js';
+import { CONNECTION_STATE, OUTBOUND_DELIVERY_PRIORITY, ROUTER_ADDRESS, ROUTER_ERROR_MSG, ROUTER_LOG_MSG, ROUTER_MESSAGE_TYPE, ROUTER_VALID_ENTITY_TYPES, TRANSPORT_CONFIG_KEY, TRANSPORT_DEFAULT, TRANSPORT_ERROR_MSG, TRANSPORT_EVENT, TRANSPORT_FORMAT, TRANSPORT_METRIC, TRANSPORT_METRIC_TRIGGER, TRANSPORT_NUM, TRANSPORT_SUBSYSTEM, TRANSPORT_TYPEOF, normalizeToWebSocketAddress } from '../constants/transport.js';
+import { HOST, METRICS_LOG_TAG } from '../constants/index.js';
+import { isRaftPacket } from '../raft/raft-packet-utils.js';
 
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
+const MESSAGE_ROUTER_LITERAL = Object.freeze({
+  STRING_UNKNOWN: "unknown",
+  STRING_SELECT: "select",
+  STRING_INSERT: "insert",
+  STRING_UPDATE: "update",
+  STRING_DELETE: "delete",
+  STRING_RAFT_APPEND_UNKNOWN: "raft:append:unknown",
+  STRING_CDC: "cdc",
+  STRING_CDC_BATCH: "cdc_batch",
+  STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN: "raft:append:cdc_batch:unknown",
+  STRING_MESSAGE: "message",
+  STRING_ACK: "ack",
+  STRING_RAFT_APPEND_ACK: "raft:append:ack",
+  STRING_APPEND: "append",
+  STRING_RAFT_APPEND_HEARTBEAT: "raft:append:heartbeat",
+  STRING_LATE_AFTER_TIMEOUT: "late_after_timeout",
+  STRING_LATE_AFTER_NODE_FAILURE: "late_after_node_failure",
+  STRING_LATE_AFTER_DEFERRED_DELIVERY: "late_after_deferred_delivery",
+  STRING_LATE_AFTER_ACK_REJECTED: "late_after_ack_rejected",
+  STRING_LATE_AFTER_INLINE_ACK: "late_after_inline_ack",
+  STRING_LATE_AFTER_CANCELLED: "late_after_cancelled",
+  STRING_LATE_AFTER_RETIRED_WAITER: "late_after_retired_waiter",
+  STRING_RESULT: "result",
+  STRING_QUEUEWAITMS: "queueWaitMs",
+  STRING_FUNCTION: "function",
+  STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER: "Invalid wsPort for in-process server",
+  STRING_EADDRINUSE: "EADDRINUSE",
+  STRING_VALUE: ":",
+  STRING_WEBSOCKET_CONNECTION_CLOSED_BEFORE_OPEN_FOR_NODE: "WebSocket connection closed before open for node ",
+  STRING_ECONNREFUSED: "ECONNREFUSED",
+  STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED: "Rejecting incoming connection while external admission is closed",
+  STRING_EXISTING_CONNECTION_PREFERRED: "existing_connection_preferred",
+  STRING_ORPHANED: "orphaned",
+  STRING_RESPONSETYPE: "responseType",
+  STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT: "Ignoring stale connection close event",
+  STRING_ROUTER_QUERY_TRANSPORT_NOT_READY: "ROUTER_QUERY_TRANSPORT_NOT_READY",
+  STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY: "Outbound queue saturated for node delivery",
+  STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY: "Failed to resolve node connection address for delivery recovery",
+  STRING_ENOTFOUND: "ENOTFOUND",
+  STRING_EAI_AGAIN: "EAI_AGAIN",
+  STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD: "Observed ACK timeout below quarantine threshold",
+  STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT: "Quarantining target connection after ACK timeout",
+  NUMBER_5: 5
+});
 const queueMicrotaskFn = globalThis.queueMicrotask;
-
 const ConnectionState = CONNECTION_STATE;
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
 const IPV6_ANY_HOST = '::';
@@ -43,47 +68,96 @@ const IPV6_HOST_SUFFIX = ']';
 const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = 'timeout.websocketConnectMs';
 const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = 'WS_CONNECT_TIMEOUT';
 const RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS = 5000;
+const UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS = 30000;
+const RETIRED_PENDING_RESPONSE_REASON = Object.freeze({
+  TIMEOUT: 'timeout',
+  CANCELLED: 'cancelled',
+  NODE_FAILURE: 'node_failure',
+  DEFERRED_DELIVERY: 'deferred_delivery',
+  ACK_REJECTED: 'ack_rejected',
+  INLINE_ACK: 'inline_ack_payload',
+  UNKNOWN: 'unknown'
+});
+const SERVICE_RESPONSE_DISPOSITION_KIND = Object.freeze({
+  SETTLED: 'settled',
+  ABSORBED: 'absorbed_late',
+  ORPHANED: 'orphaned'
+});
 const ROUTER_NO_CONNECTION_ERROR_CODE = 'ROUTER_NO_CONNECTION';
 const ROUTER_CONNECTION_CLOSED_ERROR_CODE = 'ROUTER_CONNECTION_CLOSED';
 const ROUTER_MESSAGE_TIMEOUT_ERROR_CODE = 'ROUTER_MESSAGE_TIMEOUT';
-const QUEUE_WAIT_BUCKETS = Object.freeze([
-  {upperBoundMs: 1, label: 'le_1ms'},
-  {upperBoundMs: 5, label: 'le_5ms'},
-  {upperBoundMs: 10, label: 'le_10ms'},
-  {upperBoundMs: 25, label: 'le_25ms'},
-  {upperBoundMs: 50, label: 'le_50ms'},
-  {upperBoundMs: 100, label: 'le_100ms'},
-  {upperBoundMs: 500, label: 'le_500ms'},
-  {upperBoundMs: 1000, label: 'le_1000ms'},
-]);
+const QUEUE_WAIT_BUCKETS = Object.freeze([{
+  upperBoundMs: 1,
+  label: 'le_1ms'
+}, {
+  upperBoundMs: 5,
+  label: 'le_5ms'
+}, {
+  upperBoundMs: 10,
+  label: 'le_10ms'
+}, {
+  upperBoundMs: 25,
+  label: 'le_25ms'
+}, {
+  upperBoundMs: 50,
+  label: 'le_50ms'
+}, {
+  upperBoundMs: 100,
+  label: 'le_100ms'
+}, {
+  upperBoundMs: 500,
+  label: 'le_500ms'
+}, {
+  upperBoundMs: 1000,
+  label: 'le_1000ms'
+}]);
 const QUEUE_WAIT_BUCKET_OVERFLOW = 'gt_1000ms';
 const QUERY_DATA_PLANE_MESSAGE_TYPE = 'QUERY';
-const OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE =
-  'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED';
+const OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE = 'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED';
 const OutboundDeliveryPriority = OUTBOUND_DELIVERY_PRIORITY;
+const CONNECTION_CLOSE_DISPOSITION = Object.freeze({
+  SHUTDOWN: 'shutdown',
+  RETIRED: 'retired',
+  SELF_DISCONNECT: 'self_disconnect',
+  RECONNECT: 'reconnect',
+  NO_ACTION: 'no_action'
+});
+const RECONNECT_DISPOSITION = Object.freeze({
+  RETIRE: 'retire',
+  PENDING: 'pending',
+  MAX_ATTEMPTS_REACHED: 'max_attempts_reached',
+  SCHEDULE: 'schedule'
+});
+const QUERY_TRANSPORT_SELECTION = Object.freeze({
+  UNAVAILABLE: 'unavailable',
+  DIRECT_SERVICE: 'direct_service',
+  SELECTION_SERVICE: 'selection_service'
+});
+const QUERY_TRANSPORT_DELIVERY_STATE = Object.freeze({
+  SUCCESS: 'success',
+  DEFER_RETRY: 'defer_retry',
+  HARD_FAILURE: 'hard_failure'
+});
+const EMPTY_ROUTER_REASON = '';
 
 // In-process transport for test environments. This is only enabled when explicitly
 // requested via options.inProcess to avoid hidden behavior in production.
 const INPROC = globalThis.__DDB_INPROC_MESSAGE_ROUTER__ ||= {
-  serversByPort: new Map(), // port -> {router, nodeId}
+  serversByPort: new Map() // port -> {router, nodeId}
 };
-
 class InProcWebSocket extends EventEmitter {
   constructor() {
     super();
     this.readyState = WebSocket.CONNECTING;
     this._peer = null;
   }
-
   _setPeer(peer) {
     this._peer = peer;
   }
-
   _open() {
     this.readyState = WebSocket.OPEN;
     queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.OPEN));
   }
-
   send(data) {
     if (this.readyState !== WebSocket.OPEN || !this._peer) {
       return;
@@ -95,11 +169,9 @@ class InProcWebSocket extends EventEmitter {
       }
     });
   }
-
   close() {
     this.terminate();
   }
-
   terminate() {
     if (this.readyState === WebSocket.CLOSED) {
       return;
@@ -112,7 +184,6 @@ class InProcWebSocket extends EventEmitter {
     }
   }
 }
-
 function createInProcWebSocketPair() {
   const a = new InProcWebSocket();
   const b = new InProcWebSocket();
@@ -120,9 +191,11 @@ function createInProcWebSocketPair() {
   b._setPeer(a);
   a._open();
   b._open();
-  return {a, b};
+  return {
+    a,
+    b
+  };
 }
-
 function normalizeIdentifier(value) {
   if (value === null || value === undefined) {
     return null;
@@ -130,7 +203,6 @@ function normalizeIdentifier(value) {
   const normalized = String(value).trim();
   return normalized.length > TRANSPORT_NUM.ZERO ? normalized : null;
 }
-
 function createQueueWaitHistogram() {
   const histogram = {};
   for (const bucket of QUEUE_WAIT_BUCKETS) {
@@ -139,11 +211,8 @@ function createQueueWaitHistogram() {
   histogram[QUEUE_WAIT_BUCKET_OVERFLOW] = TRANSPORT_NUM.ZERO;
   return histogram;
 }
-
 function resolveQueueWaitBucket(durationMs) {
-  const normalized = Number.isFinite(durationMs) ?
-    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
-    TRANSPORT_NUM.ZERO;
+  const normalized = Number.isFinite(durationMs) ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) : TRANSPORT_NUM.ZERO;
   for (const bucket of QUEUE_WAIT_BUCKETS) {
     if (normalized <= bucket.upperBoundMs) {
       return bucket.label;
@@ -151,147 +220,107 @@ function resolveQueueWaitBucket(durationMs) {
   }
   return QUEUE_WAIT_BUCKET_OVERFLOW;
 }
-
 function recordQueueWaitDuration(queue, durationMs) {
   if (!queue) {
     return;
   }
-  const normalized = Number.isFinite(durationMs) ?
-    Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) :
-    TRANSPORT_NUM.ZERO;
-  queue.queueWaitSampleCount =
-    (queue.queueWaitSampleCount || TRANSPORT_NUM.ZERO) +
-    TRANSPORT_NUM.ONE;
-  queue.queueWaitTotalMs =
-    (queue.queueWaitTotalMs || TRANSPORT_NUM.ZERO) +
-    normalized;
-  queue.queueWaitMaxMs = Math.max(
-    queue.queueWaitMaxMs || TRANSPORT_NUM.ZERO,
-    normalized,
-  );
+  const normalized = Number.isFinite(durationMs) ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(durationMs)) : TRANSPORT_NUM.ZERO;
+  queue.queueWaitSampleCount = (queue.queueWaitSampleCount || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
+  queue.queueWaitTotalMs = (queue.queueWaitTotalMs || TRANSPORT_NUM.ZERO) + normalized;
+  queue.queueWaitMaxMs = Math.max(queue.queueWaitMaxMs || TRANSPORT_NUM.ZERO, normalized);
   if (!queue.queueWaitHistogram) {
     queue.queueWaitHistogram = createQueueWaitHistogram();
   }
   const bucket = resolveQueueWaitBucket(normalized);
-  queue.queueWaitHistogram[bucket] =
-    (queue.queueWaitHistogram[bucket] || TRANSPORT_NUM.ZERO) +
-    TRANSPORT_NUM.ONE;
+  queue.queueWaitHistogram[bucket] = (queue.queueWaitHistogram[bucket] || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
 }
-
 function buildQueueWaitSummary(queue) {
   const sampleCount = queue?.queueWaitSampleCount || TRANSPORT_NUM.ZERO;
   const totalMs = queue?.queueWaitTotalMs || TRANSPORT_NUM.ZERO;
   return {
     sampleCount,
-    avgMs: sampleCount > TRANSPORT_NUM.ZERO ?
-      Math.round(totalMs / sampleCount) :
-      TRANSPORT_NUM.ZERO,
+    avgMs: sampleCount > TRANSPORT_NUM.ZERO ? Math.round(totalMs / sampleCount) : TRANSPORT_NUM.ZERO,
     maxMs: queue?.queueWaitMaxMs || TRANSPORT_NUM.ZERO,
-    histogram: {...(queue?.queueWaitHistogram || createQueueWaitHistogram())},
+    histogram: {
+      ...(queue?.queueWaitHistogram || createQueueWaitHistogram())
+    }
   };
 }
-
 function resolveRequestIdFromMessage(message) {
-  return normalizeIdentifier(
-    message?.requestId ||
-      message?.request_id ||
-      message?.payload?.requestId ||
-      message?.payload?.request_id,
-  );
+  return normalizeIdentifier(message?.requestId || message?.request_id || message?.payload?.requestId || message?.payload?.request_id);
 }
-
 function resolveOperationIdFromMessage(message) {
-  return normalizeIdentifier(
-    message?.operationId ||
-      message?.operation_id ||
-      message?.id ||
-      message?.payload?.operationId ||
-      message?.payload?.operation_id,
-  );
+  return normalizeIdentifier(message?.operationId || message?.operation_id || message?.id || message?.payload?.operationId || message?.payload?.operation_id);
 }
-
 function extractSqlOperationKind(sql) {
   if (typeof sql !== TRANSPORT_TYPEOF.STRING) {
-    return 'unknown';
+    return MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
   }
   const normalized = sql.trim().toLowerCase();
-  if (normalized.startsWith('select')) {
-    return 'select';
+  if (normalized.startsWith(MESSAGE_ROUTER_LITERAL.STRING_SELECT)) {
+    return MESSAGE_ROUTER_LITERAL.STRING_SELECT;
   }
-  if (normalized.startsWith('insert')) {
-    return 'insert';
+  if (normalized.startsWith(MESSAGE_ROUTER_LITERAL.STRING_INSERT)) {
+    return MESSAGE_ROUTER_LITERAL.STRING_INSERT;
   }
-  if (normalized.startsWith('update')) {
-    return 'update';
+  if (normalized.startsWith(MESSAGE_ROUTER_LITERAL.STRING_UPDATE)) {
+    return MESSAGE_ROUTER_LITERAL.STRING_UPDATE;
   }
-  if (normalized.startsWith('delete')) {
-    return 'delete';
+  if (normalized.startsWith(MESSAGE_ROUTER_LITERAL.STRING_DELETE)) {
+    return MESSAGE_ROUTER_LITERAL.STRING_DELETE;
   }
-  return 'unknown';
+  return MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
 }
-
 function extractSqlTableName(sql) {
-  if (typeof sql !== TRANSPORT_TYPEOF.STRING || sql.trim().length === 0) {
+  if (typeof sql !== TRANSPORT_TYPEOF.STRING || sql.trim().length === TRANSPORT_NUM.ZERO) {
     return null;
   }
   const normalizedSql = sql.trim();
-  for (const matcher of [
-    /^\s*select\b[\s\S]*?\bfrom\s+([a-zA-Z_][\w]*)/i,
-    /^\s*insert(?:\s+or\s+replace)?\s+into\s+([a-zA-Z_][\w]*)/i,
-    /^\s*update\s+([a-zA-Z_][\w]*)/i,
-    /^\s*delete\s+from\s+([a-zA-Z_][\w]*)/i,
-  ]) {
+  for (const matcher of [/^\s*select\b[\s\S]*?\bfrom\s+([a-zA-Z_][\w]*)/i, /^\s*insert(?:\s+or\s+replace)?\s+into\s+([a-zA-Z_][\w]*)/i, /^\s*update\s+([a-zA-Z_][\w]*)/i, /^\s*delete\s+from\s+([a-zA-Z_][\w]*)/i]) {
     const match = normalizedSql.match(matcher);
-    if (match?.[1]) {
-      return match[1].toLowerCase();
+    if (match?.[TRANSPORT_NUM.ONE]) {
+      return match[TRANSPORT_NUM.ONE].toLowerCase();
     }
   }
   return null;
 }
-
 function summarizeRaftAppendCommand(command) {
   const commandType = normalizeIdentifier(command?.type)?.toLowerCase();
   if (!commandType) {
-    return 'raft:append:unknown';
+    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_UNKNOWN;
   }
-  if (commandType === 'cdc') {
+  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC) {
     const tableName = normalizeIdentifier(command?.tableName)?.toLowerCase();
-    return `raft:append:cdc:${tableName || 'unknown'}`;
+    return `raft:append:cdc:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
   }
-  if (commandType === 'cdc_batch') {
+  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH) {
     const events = Array.isArray(command?.events) ? command.events : [];
     const eventCount = events.length;
-    const distinctTableNames = [...new Set(events
-      .map((event) => normalizeIdentifier(event?.tableName)?.toLowerCase())
-      .filter(Boolean))];
-    if (distinctTableNames.length === 1) {
-      return `raft:append:cdc_batch:${distinctTableNames[0]}:${eventCount}`;
+    const distinctTableNames = [...new Set(events.map(event => normalizeIdentifier(event?.tableName)?.toLowerCase()).filter(Boolean))];
+    if (distinctTableNames.length === TRANSPORT_NUM.ONE) {
+      return `raft:append:cdc_batch:${distinctTableNames[TRANSPORT_NUM.ZERO]}:${eventCount}`;
     }
-    if (distinctTableNames.length > 1) {
+    if (distinctTableNames.length > TRANSPORT_NUM.ONE) {
       return `raft:append:cdc_batch:mixed:${eventCount}`;
     }
-    return 'raft:append:cdc_batch:unknown';
+    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN;
   }
-  if (commandType === 'message') {
-    const payloadType = normalizeIdentifier(
-      command?.message?.payload?.type,
-    )?.toLowerCase();
-    return `raft:append:message:${payloadType || 'unknown'}`;
+  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_MESSAGE) {
+    const payloadType = normalizeIdentifier(command?.message?.payload?.type)?.toLowerCase();
+    return `raft:append:message:${payloadType || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
   }
-  if (commandType === 'ack') {
-    return 'raft:append:ack';
+  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_ACK) {
+    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_ACK;
   }
   return `raft:append:${commandType}`;
 }
-
 function isSupersedableRaftHeartbeatAppend(message) {
   const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  if (messageType !== 'append') {
+  if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
     return false;
   }
-  return !Array.isArray(message?.data) || message.data.length === 0;
+  return !Array.isArray(message?.data) || message.data.length === TRANSPORT_NUM.ZERO;
 }
-
 function resolvePendingReplacementKey(targetAddress, message, options = {}) {
   const explicitKey = normalizeIdentifier(options?.replacePendingKey);
   if (explicitKey) {
@@ -302,16 +331,15 @@ function resolvePendingReplacementKey(targetAddress, message, options = {}) {
   }
   const normalizedTargetAddress = normalizeIdentifier(targetAddress);
   if (!normalizedTargetAddress) {
-    return 'raft:append:heartbeat';
+    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
   }
   return `raft:append:heartbeat:${normalizedTargetAddress}`;
 }
-
 function buildDerivedDeliverySource(targetAddress, message) {
   const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  if (messageType === 'append') {
+  if (messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
     if (isSupersedableRaftHeartbeatAppend(message)) {
-      return 'raft:append:heartbeat';
+      return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
     }
     const entry = Array.isArray(message?.data) ? message.data[0] : null;
     return summarizeRaftAppendCommand(entry?.command);
@@ -319,7 +347,7 @@ function buildDerivedDeliverySource(targetAddress, message) {
   if (messageType === QUERY_DATA_PLANE_MESSAGE_TYPE.toLowerCase()) {
     const tableName = extractSqlTableName(message?.sql);
     const operationKind = extractSqlOperationKind(message?.sql);
-    return `query:${operationKind}:${tableName || 'unknown'}`;
+    return `query:${operationKind}:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
   }
   if (messageType) {
     return `message:${messageType}`;
@@ -328,9 +356,37 @@ function buildDerivedDeliverySource(targetAddress, message) {
   if (normalizedTarget) {
     return `target:${normalizedTarget}`;
   }
-  return 'unknown';
+  return MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN;
 }
-
+function buildRetiredPendingClassification(reason) {
+  switch (reason) {
+    case RETIRED_PENDING_RESPONSE_REASON.TIMEOUT:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_TIMEOUT;
+    case RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_NODE_FAILURE;
+    case RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_DEFERRED_DELIVERY;
+    case RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_ACK_REJECTED;
+    case RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_INLINE_ACK;
+    case RETIRED_PENDING_RESPONSE_REASON.CANCELLED:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_CANCELLED;
+    default:
+      return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_RETIRED_WAITER;
+  }
+}
+function buildServiceResponseDisposition(options = {}) {
+  return Object.freeze({
+    messageId: normalizeIdentifier(options?.messageId) || null,
+    kind: normalizeIdentifier(options?.kind) || SERVICE_RESPONSE_DISPOSITION_KIND.ORPHANED,
+    classification: normalizeIdentifier(options?.classification) || SERVICE_RESPONSE_DISPOSITION_KIND.ORPHANED,
+    absorbed: options?.absorbed === true,
+    retiredReason: normalizeIdentifier(options?.retiredReason) || null,
+    deliverySource: normalizeIdentifier(options?.deliverySource) || null,
+    targetNodeId: normalizeIdentifier(options?.targetNodeId) || null
+  });
+}
 function resolveDeliverySource(targetAddress, message, options = {}) {
   const explicitSource = normalizeIdentifier(options?.deliverySource);
   if (explicitSource) {
@@ -338,40 +394,32 @@ function resolveDeliverySource(targetAddress, message, options = {}) {
   }
   return buildDerivedDeliverySource(targetAddress, message);
 }
-
-function buildPendingSourceSummary(queue, limit = 5) {
-  if (!queue || !Array.isArray(queue.pending) || queue.pending.length === 0) {
+function buildPendingSourceSummary(queue, limit = MESSAGE_ROUTER_LITERAL.NUMBER_5) {
+  if (!queue || !Array.isArray(queue.pending) || queue.pending.length === TRANSPORT_NUM.ZERO) {
     return [];
   }
   const countsBySource = new Map();
   for (const item of queue.pending) {
     const source = normalizeIdentifier(item?.deliverySource) || 'unknown';
-    countsBySource.set(source, (countsBySource.get(source) || 0) + 1);
+    countsBySource.set(source, (countsBySource.get(source) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE);
   }
-  return [...countsBySource.entries()]
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, limit)
-    .map(([source, count]) => ({source, count}));
+  return [...countsBySource.entries()].sort((left, right) => right[TRANSPORT_NUM.ONE] - left[TRANSPORT_NUM.ONE] || left[TRANSPORT_NUM.ZERO].localeCompare(right[TRANSPORT_NUM.ZERO])).slice(TRANSPORT_NUM.ZERO, limit).map(([source, count]) => ({
+    source,
+    count
+  }));
 }
-
 function normalizeDeliveryOutcome(outcome) {
-  if (outcome &&
-    typeof outcome === TRANSPORT_TYPEOF.OBJECT &&
-    Object.prototype.hasOwnProperty.call(outcome, 'result') &&
-    Object.prototype.hasOwnProperty.call(outcome, 'queueWaitMs')) {
+  if (outcome && typeof outcome === TRANSPORT_TYPEOF.OBJECT && Object.prototype.hasOwnProperty.call(outcome, MESSAGE_ROUTER_LITERAL.STRING_RESULT) && Object.prototype.hasOwnProperty.call(outcome, MESSAGE_ROUTER_LITERAL.STRING_QUEUEWAITMS)) {
     return {
       result: outcome.result,
-      queueWaitMs: Number.isFinite(outcome.queueWaitMs) ?
-        Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) :
-        TRANSPORT_NUM.ZERO,
+      queueWaitMs: Number.isFinite(outcome.queueWaitMs) ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) : TRANSPORT_NUM.ZERO
     };
   }
   return {
     result: outcome,
-    queueWaitMs: TRANSPORT_NUM.ZERO,
+    queueWaitMs: TRANSPORT_NUM.ZERO
   };
 }
-
 function normalizeRetryAfterMs(value, fallback) {
   if (Number.isFinite(value) && value > TRANSPORT_NUM.ZERO) {
     return Math.floor(value);
@@ -381,56 +429,40 @@ function normalizeRetryAfterMs(value, fallback) {
   }
   return TRANSPORT_NUM.ZERO;
 }
-
 function buildSupersededPendingResult(replacedItem) {
   return {
     result: {
       acknowledged: true,
       coalesced: true,
       replacedPending: true,
-      deliverySource: replacedItem?.deliverySource || null,
+      deliverySource: replacedItem?.deliverySource || null
     },
-    queueWaitMs: TRANSPORT_NUM.ZERO,
+    queueWaitMs: TRANSPORT_NUM.ZERO
   };
 }
-
 function normalizeOutboundDeliveryPriority(priority) {
-  return priority === OutboundDeliveryPriority.CRITICAL ?
-    OutboundDeliveryPriority.CRITICAL :
-    OutboundDeliveryPriority.BACKGROUND;
+  return priority === OutboundDeliveryPriority.CRITICAL ? OutboundDeliveryPriority.CRITICAL : OutboundDeliveryPriority.BACKGROUND;
 }
-
 function countPendingByPriority(queue, priority) {
   if (!queue || !Array.isArray(queue.pending)) {
     return TRANSPORT_NUM.ZERO;
   }
   return queue.pending.reduce((count, item) => {
-    return item?.priority === priority ?
-      count + TRANSPORT_NUM.ONE :
-      count;
+    return item?.priority === priority ? count + TRANSPORT_NUM.ONE : count;
   }, TRANSPORT_NUM.ZERO);
 }
-
 function resolveBackgroundPendingLimit(queue) {
   if (!queue) {
     return TRANSPORT_NUM.ZERO;
   }
-  const criticalReserve = Number.isFinite(queue.criticalReserve) &&
-    queue.criticalReserve > TRANSPORT_NUM.ZERO ?
-    queue.criticalReserve :
-    TRANSPORT_NUM.ZERO;
-  return Math.max(
-    TRANSPORT_NUM.ZERO,
-    queue.maxPending - criticalReserve,
-  );
+  const criticalReserve = Number.isFinite(queue.criticalReserve) && queue.criticalReserve > TRANSPORT_NUM.ZERO ? queue.criticalReserve : TRANSPORT_NUM.ZERO;
+  return Math.max(TRANSPORT_NUM.ZERO, queue.maxPending - criticalReserve);
 }
-
 function dequeueNextPendingItem(queue) {
-  if (!queue || !Array.isArray(queue.pending) ||
-      queue.pending.length === TRANSPORT_NUM.ZERO) {
+  if (!queue || !Array.isArray(queue.pending) || queue.pending.length === TRANSPORT_NUM.ZERO) {
     return null;
   }
-  const criticalIndex = queue.pending.findIndex((item) => {
+  const criticalIndex = queue.pending.findIndex(item => {
     return item?.priority === OutboundDeliveryPriority.CRITICAL;
   });
   if (criticalIndex >= TRANSPORT_NUM.ZERO) {
@@ -455,15 +487,10 @@ class MessageRouter extends EventEmitter {
    */
   constructor(options = {}) {
     super();
-
     const nodeWsPort = options.wsPort || TRANSPORT_DEFAULT.WS_PORT;
     this.nodeId = options.nodeId || uuidv4();
-    this.nodeAddress = options.nodeAddress ||
-      TRANSPORT_FORMAT.buildDefaultNodeAddress(nodeWsPort);
-    this.advertisedAddress =
-      options.advertisedAddress ||
-      normalizeToWebSocketAddress(this.nodeAddress) ||
-      this.nodeAddress;
+    this.nodeAddress = options.nodeAddress || TRANSPORT_FORMAT.buildDefaultNodeAddress(nodeWsPort);
+    this.advertisedAddress = options.advertisedAddress || normalizeToWebSocketAddress(this.nodeAddress) || this.nodeAddress;
     this.wsPort = options.wsPort || null;
     this.routerId = uuidv4();
     this.identifyPayload = options.identifyPayload || null;
@@ -481,6 +508,9 @@ class MessageRouter extends EventEmitter {
     this.pendingMessages = new Map();
     // Pending SERVICE_RESPONSE payloads awaiting handler completion.
     this.pendingResponses = new Map();
+    // Recently retired response waiters kept briefly so one late response can
+    // be absorbed without being misclassified as an orphaned transport fault.
+    this.retiredPendingResponses = new Map();
     this.pendingPings = new Map();
 
     // Configuration
@@ -490,97 +520,32 @@ class MessageRouter extends EventEmitter {
     // listening on all interfaces (0.0.0.0), which can be disallowed in some
     // sandboxed environments. Production deployments can override via
     // `transport.wsHost` (e.g. 0.0.0.0).
-    this.wsHost = options.wsHost ||
-      (typeof configuredWsHost === TRANSPORT_TYPEOF.STRING &&
-        configuredWsHost.length > TRANSPORT_NUM.ZERO ?
-        configuredWsHost :
-        TRANSPORT_DEFAULT.WS_HOST);
-    this.messageTimeoutMs =
-      config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
-      TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
-    this.ackTimeoutQuarantineThreshold =
-      Number.isFinite(options.ackTimeoutQuarantineThreshold) &&
-      options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE ?
-        Math.floor(options.ackTimeoutQuarantineThreshold) :
-        Number.isFinite(
-          config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
-        ) &&
-        config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD) >=
-          TRANSPORT_NUM.ONE ?
-          Math.floor(
-            config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
-          ) :
-          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
-    const configuredConnectTimeoutMs =
-      config.get(WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY);
-    this.connectTimeoutMs =
-      Number.isFinite(options.connectTimeoutMs) &&
-      options.connectTimeoutMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(options.connectTimeoutMs) :
-        Number.isFinite(configuredConnectTimeoutMs) &&
-        configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO ?
-          Math.floor(configuredConnectTimeoutMs) :
-          this.messageTimeoutMs;
-    this.pingTimeoutMs =
-      config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS) ||
-      TRANSPORT_DEFAULT.PING_TIMEOUT_MS;
-    this.reconnectIntervalMs =
-      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS) ||
-      TRANSPORT_DEFAULT.RECONNECT_INTERVAL_MS;
-    this.reconnectMaxAttempts =
-      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_MAX_ATTEMPTS) ||
-      TRANSPORT_DEFAULT.RECONNECT_MAX_ATTEMPTS;
-    this.pingIntervalMs =
-      config.get(TRANSPORT_CONFIG_KEY.PING_INTERVAL_MS) ||
-      TRANSPORT_DEFAULT.PING_INTERVAL_MS;
-    this.reconnectBackoffMultiplier =
-      config.get(TRANSPORT_CONFIG_KEY.RECONNECT_BACKOFF_MULTIPLIER) ||
-      TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
-    const configuredMaxConcurrent =
-      Number.isFinite(options.outboundQueueMaxConcurrent) &&
-      options.outboundQueueMaxConcurrent > TRANSPORT_NUM.ZERO ?
-        options.outboundQueueMaxConcurrent :
-        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_CONCURRENT);
-    this.outboundQueueMaxConcurrent =
-      Number.isFinite(configuredMaxConcurrent) &&
-      configuredMaxConcurrent > TRANSPORT_NUM.ZERO ?
-        Math.floor(configuredMaxConcurrent) :
-        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CONCURRENCY;
-    const configuredMaxPending =
-      Number.isFinite(options.outboundQueueMaxPending) &&
-      options.outboundQueueMaxPending >= TRANSPORT_NUM.ZERO ?
-        options.outboundQueueMaxPending :
-        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_PENDING);
-    this.outboundQueueMaxPending =
-      Number.isFinite(configuredMaxPending) &&
-      configuredMaxPending >= TRANSPORT_NUM.ZERO ?
-        Math.floor(configuredMaxPending) :
-        TRANSPORT_DEFAULT.OUTBOUND_QUEUE_MAX_PENDING;
-    const configuredCriticalReserve =
-      Number.isFinite(options.outboundQueueCriticalReserve) &&
-      options.outboundQueueCriticalReserve >= TRANSPORT_NUM.ZERO ?
-        options.outboundQueueCriticalReserve :
-        config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_CRITICAL_RESERVE);
-    const maxCriticalReserve = Math.max(
-      TRANSPORT_NUM.ZERO,
-      this.outboundQueueMaxPending - TRANSPORT_NUM.ONE,
-    );
-    this.outboundQueueCriticalReserve =
-      Number.isFinite(configuredCriticalReserve) &&
-      configuredCriticalReserve >= TRANSPORT_NUM.ZERO ?
-        Math.min(
-          Math.floor(configuredCriticalReserve),
-          maxCriticalReserve,
-        ) :
-        Math.min(
-          TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE,
-          maxCriticalReserve,
-        );
+    this.wsHost = options.wsHost || (typeof configuredWsHost === TRANSPORT_TYPEOF.STRING && configuredWsHost.length > TRANSPORT_NUM.ZERO ? configuredWsHost : TRANSPORT_DEFAULT.WS_HOST);
+    this.messageTimeoutMs = config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) || TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    this.ackTimeoutQuarantineThreshold = Number.isFinite(options.ackTimeoutQuarantineThreshold) && options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE ? Math.floor(options.ackTimeoutQuarantineThreshold) : Number.isFinite(config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD)) && config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD) >= TRANSPORT_NUM.ONE ? Math.floor(config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD)) : TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
+    const configuredConnectTimeoutMs = config.get(WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY);
+    this.connectTimeoutMs = Number.isFinite(options.connectTimeoutMs) && options.connectTimeoutMs > TRANSPORT_NUM.ZERO ? Math.floor(options.connectTimeoutMs) : Number.isFinite(configuredConnectTimeoutMs) && configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO ? Math.floor(configuredConnectTimeoutMs) : this.messageTimeoutMs;
+    this.pingTimeoutMs = config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS) || TRANSPORT_DEFAULT.PING_TIMEOUT_MS;
+    this.reconnectIntervalMs = config.get(TRANSPORT_CONFIG_KEY.RECONNECT_INTERVAL_MS) || TRANSPORT_DEFAULT.RECONNECT_INTERVAL_MS;
+    this.reconnectMaxAttempts = config.get(TRANSPORT_CONFIG_KEY.RECONNECT_MAX_ATTEMPTS) || TRANSPORT_DEFAULT.RECONNECT_MAX_ATTEMPTS;
+    this.pingIntervalMs = config.get(TRANSPORT_CONFIG_KEY.PING_INTERVAL_MS) || TRANSPORT_DEFAULT.PING_INTERVAL_MS;
+    this.reconnectBackoffMultiplier = config.get(TRANSPORT_CONFIG_KEY.RECONNECT_BACKOFF_MULTIPLIER) || TRANSPORT_DEFAULT.RECONNECT_BACKOFF_MULTIPLIER;
+    const configuredMaxConcurrent = Number.isFinite(options.outboundQueueMaxConcurrent) && options.outboundQueueMaxConcurrent > TRANSPORT_NUM.ZERO ? options.outboundQueueMaxConcurrent : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_CONCURRENT);
+    this.outboundQueueMaxConcurrent = Number.isFinite(configuredMaxConcurrent) && configuredMaxConcurrent > TRANSPORT_NUM.ZERO ? Math.floor(configuredMaxConcurrent) : TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CONCURRENCY;
+    const configuredMaxPending = Number.isFinite(options.outboundQueueMaxPending) && options.outboundQueueMaxPending >= TRANSPORT_NUM.ZERO ? options.outboundQueueMaxPending : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_MAX_PENDING);
+    this.outboundQueueMaxPending = Number.isFinite(configuredMaxPending) && configuredMaxPending >= TRANSPORT_NUM.ZERO ? Math.floor(configuredMaxPending) : TRANSPORT_DEFAULT.OUTBOUND_QUEUE_MAX_PENDING;
+    const configuredCriticalReserve = Number.isFinite(options.outboundQueueCriticalReserve) && options.outboundQueueCriticalReserve >= TRANSPORT_NUM.ZERO ? options.outboundQueueCriticalReserve : config.get(TRANSPORT_CONFIG_KEY.OUTBOUND_QUEUE_CRITICAL_RESERVE);
+    const maxCriticalReserve = Math.max(TRANSPORT_NUM.ZERO, this.outboundQueueMaxPending - TRANSPORT_NUM.ONE);
+    this.outboundQueueCriticalReserve = Number.isFinite(configuredCriticalReserve) && configuredCriticalReserve >= TRANSPORT_NUM.ZERO ? Math.min(Math.floor(configuredCriticalReserve), maxCriticalReserve) : Math.min(TRANSPORT_DEFAULT.OUTBOUND_QUEUE_CRITICAL_RESERVE, maxCriticalReserve);
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) : console;
+    this.logger = loggingService.isInitialized() ? loggingService.forSubsystem(TRANSPORT_SUBSYSTEM.ROUTER) : console;
+    this.nowFn = typeof options.nowFn === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION ? options.nowFn : Date.now;
+    this.unmatchedServiceResponseWarnIntervalMs = Number.isFinite(options.unmatchedServiceResponseWarnIntervalMs) && options.unmatchedServiceResponseWarnIntervalMs >= TRANSPORT_NUM.ZERO ? Math.floor(options.unmatchedServiceResponseWarnIntervalMs) : UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS;
+    this.lastUnmatchedServiceResponseWarnAtMs = null;
+    this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
+    this.serviceResponseDispositionCounts = new Map();
 
     // State
     this.initialized = false;
@@ -588,8 +553,7 @@ class MessageRouter extends EventEmitter {
     this.messageCount = TRANSPORT_NUM.ZERO;
     this.isShuttingDown = false;
     this.inProcessTransport = false;
-    this.externalAdmissionEnabled =
-      options.externalAdmissionEnabled !== false;
+    this.externalAdmissionEnabled = options.externalAdmissionEnabled !== false;
 
     // Per-node outbound delivery queues
     this.outboundQueues = new Map();
@@ -602,14 +566,9 @@ class MessageRouter extends EventEmitter {
     // Function to resolve service address to node ID
     this.resolveServiceNode = options.resolveServiceNode || null;
     this.resolveNodeAddress = options.resolveNodeAddress || null;
-    this.resolveQueryMessageGroupService =
-      options.resolveQueryMessageGroupService || null;
+    this.resolveQueryMessageGroupService = options.resolveQueryMessageGroupService || null;
     this.pendingNodeConnections = new Map();
-    this.reconnectAddressSuppressionMs =
-      Number.isFinite(options.reconnectAddressSuppressionMs) &&
-      options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(options.reconnectAddressSuppressionMs) :
-        RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
+    this.reconnectAddressSuppressionMs = Number.isFinite(options.reconnectAddressSuppressionMs) && options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ? Math.floor(options.reconnectAddressSuppressionMs) : RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
     this.suppressedReconnectAddresses = new Map();
   }
 
@@ -661,7 +620,7 @@ class MessageRouter extends EventEmitter {
           await this.connectToSelf();
         } catch (error) {
           if (startedServerNow && this.server) {
-            await new Promise((resolve) => this.server.close(resolve));
+            await new Promise(resolve => this.server.close(resolve));
             this.server = null;
           }
           throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
@@ -670,12 +629,11 @@ class MessageRouter extends EventEmitter {
       return;
     }
     this.isShuttingDown = false;
-
     this.logger.info(ROUTER_LOG_MSG.INITIALIZING, {
       routerId: this.routerId,
       nodeId: this.nodeId,
       wsPort: this.wsPort,
-      wsHost: this.wsHost,
+      wsHost: this.wsHost
     });
 
     // Start WebSocket server if port specified
@@ -689,22 +647,20 @@ class MessageRouter extends EventEmitter {
       } catch (error) {
         this.logger.error(ROUTER_LOG_MSG.SELF_CONNECTION_FAILED, {
           error: error.message,
-          nodeId: this.nodeId,
+          nodeId: this.nodeId
         });
         // Clean up server if self-connection fails
         if (this.server) {
-          await new Promise((resolve) => this.server.close(resolve));
+          await new Promise(resolve => this.server.close(resolve));
           this.server = null;
         }
         throw new Error(ROUTER_ERROR_MSG.selfConnectionFailed(error.message));
       }
     }
-
     this.initialized = true;
-
     this.emit(TRANSPORT_EVENT.INITIALIZED, {
       routerId: this.routerId,
-      nodeId: this.nodeId,
+      nodeId: this.nodeId
     });
   }
 
@@ -721,42 +677,40 @@ class MessageRouter extends EventEmitter {
           resolve();
         }
       };
-      const rejectOnce = (error) => {
+      const rejectOnce = error => {
         if (!settled) {
           settled = true;
           reject(error);
         }
       };
-
       try {
         if (this.inProcess) {
           this.startInProcessServer();
           resolveOnce();
           return;
         }
-        const serverOptions = {port: this.wsPort};
+        const serverOptions = {
+          port: this.wsPort
+        };
         if (this.wsHost) {
           serverOptions.host = this.wsHost;
         }
         const wsServer = new WebSocketServer(serverOptions);
         this.server = wsServer;
-
         wsServer.on(TRANSPORT_EVENT.CONNECTION, (ws, req) => {
           this.handleIncomingConnection(ws, req);
         });
-
         wsServer.on(TRANSPORT_EVENT.LISTENING, () => {
           this.logger.info(ROUTER_LOG_MSG.WS_SERVER_LISTENING, {
             port: this.wsPort,
-            routerId: this.routerId,
+            routerId: this.routerId
           });
           resolveOnce();
         });
-
-        wsServer.on(TRANSPORT_EVENT.ERROR, (error) => {
+        wsServer.on(TRANSPORT_EVENT.ERROR, error => {
           this.logger.error(ROUTER_LOG_MSG.WS_SERVER_ERROR, {
             error: error.message,
-            routerId: this.routerId,
+            routerId: this.routerId
           });
           rejectOnce(error);
         });
@@ -773,28 +727,30 @@ class MessageRouter extends EventEmitter {
   startInProcessServer() {
     const portKey = Number(this.wsPort);
     if (!Number.isFinite(portKey)) {
-      throw new Error('Invalid wsPort for in-process server');
+      throw new Error(MESSAGE_ROUTER_LITERAL.STRING_INVALID_WSPORT_FOR_IN_PROCESS_SERVER);
     }
     if (INPROC.serversByPort.has(portKey)) {
       const err = new Error(`listen EADDRINUSE: address already in use 127.0.0.1:${portKey}`);
-      err.code = 'EADDRINUSE';
+      err.code = MESSAGE_ROUTER_LITERAL.STRING_EADDRINUSE;
       throw err;
     }
     this.inProcessTransport = true;
-    INPROC.serversByPort.set(portKey, {router: this, nodeId: this.nodeId});
+    INPROC.serversByPort.set(portKey, {
+      router: this,
+      nodeId: this.nodeId
+    });
 
     // Minimal server-like object for diagnostics; shutdown() handles in-process servers separately.
     this.server = {
       clients: new Set(),
-      close: (cb) => {
+      close: cb => {
         INPROC.serversByPort.delete(portKey);
         cb?.();
-      },
+      }
     };
-
     this.logger.info(ROUTER_LOG_MSG.WS_SERVER_LISTENING, {
       port: this.wsPort,
-      routerId: this.routerId,
+      routerId: this.routerId
     });
   }
 
@@ -813,39 +769,32 @@ class MessageRouter extends EventEmitter {
       nodeId: null,
       isIncoming: true,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
-
     this.logger.debug(ROUTER_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,
-      routerId: this.routerId,
+      routerId: this.routerId
     });
 
     // Set up message handler
-    ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+    ws.on(TRANSPORT_EVENT.MESSAGE, data => {
       this.handleMessage(connectionInfo.nodeId || connectionId, ws, data);
     });
-
     ws.on(TRANSPORT_EVENT.CLOSE, () => {
-      this.handleConnectionClose(
-        connectionInfo.nodeId || connectionId,
-        connectionInfo.connectionId,
-      );
+      this.handleConnectionClose(connectionInfo.nodeId || connectionId, connectionInfo.connectionId);
     });
-
-    ws.on(TRANSPORT_EVENT.ERROR, (error) => {
+    ws.on(TRANSPORT_EVENT.ERROR, error => {
       this.logger.error(ROUTER_LOG_MSG.WS_CONNECTION_ERROR, {
         connectionId,
-        error: error.message,
+        error: error.message
       });
     });
 
     // Store connection temporarily until we know the peer node ID
     this.nodeConnections.set(connectionId, connectionInfo);
-
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
       connectionId,
-      incoming: true,
+      incoming: true
     });
   }
 
@@ -859,9 +808,11 @@ class MessageRouter extends EventEmitter {
     const selfAddress = this.buildSelfConnectionAddress();
     this.logger.debug(ROUTER_LOG_MSG.SELF_CONNECTION_START, {
       nodeId: this.nodeId,
-      address: selfAddress,
+      address: selfAddress
     });
-    await this.connectToNode(this.nodeId, selfAddress, {isSelfConnection: true});
+    await this.connectToNode(this.nodeId, selfAddress, {
+      isSelfConnection: true
+    });
   }
 
   /**
@@ -883,29 +834,21 @@ class MessageRouter extends EventEmitter {
    */
   resolveSelfConnectionHost() {
     const configuredHost = this.wsHost || TRANSPORT_DEFAULT.WS_HOST;
-    const defaultHost =
-      configuredHost === HOST.ANY || configuredHost === IPV6_ANY_HOST ?
-        HOST.LOCALHOST :
-        configuredHost;
+    const defaultHost = configuredHost === HOST.ANY || configuredHost === IPV6_ANY_HOST ? HOST.LOCALHOST : configuredHost;
     if (!this.server || typeof this.server.address !== TRANSPORT_TYPEOF.FUNCTION) {
       return defaultHost;
     }
-
     const serverAddress = this.server.address();
     if (!serverAddress || typeof serverAddress !== TRANSPORT_TYPEOF.OBJECT) {
       return defaultHost;
     }
-
     const boundHost = serverAddress.address;
-    if (typeof boundHost !== TRANSPORT_TYPEOF.STRING ||
-      boundHost.length === TRANSPORT_NUM.ZERO) {
+    if (typeof boundHost !== TRANSPORT_TYPEOF.STRING || boundHost.length === TRANSPORT_NUM.ZERO) {
       return defaultHost;
     }
-
     if (boundHost === HOST.ANY || boundHost === IPV6_ANY_HOST) {
       return defaultHost;
     }
-
     return boundHost;
   }
 
@@ -916,7 +859,7 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   normalizeWebSocketHost(host) {
-    if (!host.includes(':')) {
+    if (!host.includes(MESSAGE_ROUTER_LITERAL.STRING_VALUE)) {
       return host;
     }
     if (host.startsWith(IPV6_HOST_PREFIX) && host.endsWith(IPV6_HOST_SUFFIX)) {
@@ -932,16 +875,13 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   extractWebSocketPort(address) {
-    if (typeof address !== TRANSPORT_TYPEOF.STRING ||
-        address.length === TRANSPORT_NUM.ZERO) {
+    if (typeof address !== TRANSPORT_TYPEOF.STRING || address.length === TRANSPORT_NUM.ZERO) {
       return null;
     }
     try {
       const parsed = new URL(address);
       const port = Number(parsed.port);
-      return Number.isFinite(port) && port > TRANSPORT_NUM.ZERO ?
-        port :
-        null;
+      return Number.isFinite(port) && port > TRANSPORT_NUM.ZERO ? port : null;
     } catch {
       return null;
     }
@@ -956,20 +896,14 @@ class MessageRouter extends EventEmitter {
    */
   buildObservedReconnectAddress(ws, candidateAddress = null) {
     const observedHost = ws?._socket?.remoteAddress;
-    if (typeof observedHost !== TRANSPORT_TYPEOF.STRING ||
-        observedHost.length === TRANSPORT_NUM.ZERO) {
+    if (typeof observedHost !== TRANSPORT_TYPEOF.STRING || observedHost.length === TRANSPORT_NUM.ZERO) {
       return null;
     }
-    const port = this.extractWebSocketPort(candidateAddress) ||
-      Number(ws?._socket?.remotePort) ||
-      null;
+    const port = this.extractWebSocketPort(candidateAddress) || Number(ws?._socket?.remotePort) || null;
     if (!Number.isFinite(port) || port <= TRANSPORT_NUM.ZERO) {
       return null;
     }
-    return TRANSPORT_FORMAT.buildWebSocketAddress(
-      this.normalizeWebSocketHost(observedHost),
-      port,
-    );
+    return TRANSPORT_FORMAT.buildWebSocketAddress(this.normalizeWebSocketHost(observedHost), port);
   }
 
   /**
@@ -985,24 +919,17 @@ class MessageRouter extends EventEmitter {
     if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
       return;
     }
-    const normalizedCandidateAddress =
-      normalizeToWebSocketAddress(candidateAddress) || candidateAddress;
-    if (typeof candidateAddress === TRANSPORT_TYPEOF.STRING &&
-        candidateAddress.length > TRANSPORT_NUM.ZERO &&
-        (!connectionInfo.configuredAddress ||
-          connectionInfo.configuredAddress.length === TRANSPORT_NUM.ZERO)) {
+    const normalizedCandidateAddress = normalizeToWebSocketAddress(candidateAddress) || candidateAddress;
+    if (typeof candidateAddress === TRANSPORT_TYPEOF.STRING && candidateAddress.length > TRANSPORT_NUM.ZERO && (!connectionInfo.configuredAddress || connectionInfo.configuredAddress.length === TRANSPORT_NUM.ZERO)) {
       connectionInfo.configuredAddress = normalizedCandidateAddress;
     }
-    const observedAddress =
-      this.buildObservedReconnectAddress(ws, normalizedCandidateAddress);
-    if (typeof observedAddress === TRANSPORT_TYPEOF.STRING &&
-        observedAddress.length > TRANSPORT_NUM.ZERO) {
+    const observedAddress = this.buildObservedReconnectAddress(ws, normalizedCandidateAddress);
+    if (typeof observedAddress === TRANSPORT_TYPEOF.STRING && observedAddress.length > TRANSPORT_NUM.ZERO) {
       connectionInfo.observedAddress = observedAddress;
       connectionInfo.address = observedAddress;
       return;
     }
-    if (typeof normalizedCandidateAddress === TRANSPORT_TYPEOF.STRING &&
-        normalizedCandidateAddress.length > TRANSPORT_NUM.ZERO) {
+    if (typeof normalizedCandidateAddress === TRANSPORT_TYPEOF.STRING && normalizedCandidateAddress.length > TRANSPORT_NUM.ZERO) {
       connectionInfo.address = normalizedCandidateAddress;
     }
   }
@@ -1080,27 +1007,24 @@ class MessageRouter extends EventEmitter {
     if (this.nodeConnections.has(nodeId)) {
       const existing = this.nodeConnections.get(nodeId);
       if (existing.state === ConnectionState.CONNECTED) {
-        this.logger.debug(ROUTER_LOG_MSG.ALREADY_CONNECTED, {nodeId});
+        this.logger.debug(ROUTER_LOG_MSG.ALREADY_CONNECTED, {
+          nodeId
+        });
         return;
       }
     }
-
     this.logger.debug(ROUTER_LOG_MSG.CONNECTING, {
       nodeId,
       address,
-      routerId: this.routerId,
+      routerId: this.routerId
     });
-    const normalizedAddress =
-      normalizeToWebSocketAddress(address) || address;
+    const normalizedAddress = normalizeToWebSocketAddress(address) || address;
     const existing = this.nodeConnections.get(nodeId) || null;
     if (existing) {
       this.refreshReconnectAuthority(existing, normalizedAddress);
       this.retireConnection(existing);
     }
-    const configuredAddress =
-      this.resolveCanonicalReconnectAddress(nodeId, normalizedAddress) ||
-      normalizedAddress;
-
+    const configuredAddress = this.resolveCanonicalReconnectAddress(nodeId, normalizedAddress) || normalizedAddress;
     const connectionInfo = {
       connectionId: uuidv4(),
       nodeId,
@@ -1118,11 +1042,9 @@ class MessageRouter extends EventEmitter {
       lastAckAt: null,
       lastAckTimeoutAt: null,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
-
     this.nodeConnections.set(nodeId, connectionInfo);
-
     await this.establishConnection(connectionInfo);
   }
 
@@ -1147,7 +1069,7 @@ class MessageRouter extends EventEmitter {
             connectTimeout = null;
           }
         };
-        const rejectPendingConnection = (error) => {
+        const rejectPendingConnection = error => {
           if (settled) {
             return;
           }
@@ -1158,9 +1080,7 @@ class MessageRouter extends EventEmitter {
           reject(error);
         };
         let connectTimeout = setTimeout(() => {
-          const error = new Error(
-            `WebSocket connection timeout after ${this.connectTimeoutMs}ms`,
-          );
+          const error = new Error(`WebSocket connection timeout after ${this.connectTimeoutMs}ms`);
           error.code = WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE;
           rejectPendingConnection(error);
           try {
@@ -1169,16 +1089,14 @@ class MessageRouter extends EventEmitter {
             // Best-effort cleanup for stalled handshakes.
           }
         }, this.connectTimeoutMs);
-        if (typeof connectTimeout?.unref === 'function') {
+        if (typeof connectTimeout?.unref === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION) {
           connectTimeout.unref();
         }
-
         ws.on(TRANSPORT_EVENT.OPEN, () => {
           if (settled) {
             return;
           }
-          if (!connectionInfo.isSelfConnection &&
-              !this.isCurrentConnection(connectionInfo)) {
+          if (!connectionInfo.isSelfConnection && !this.isCurrentConnection(connectionInfo)) {
             settled = true;
             clearConnectTimeout();
             connectionInfo.state = ConnectionState.CLOSED;
@@ -1200,15 +1118,10 @@ class MessageRouter extends EventEmitter {
           connectionInfo.reconnectDueAt = null;
           connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
           connectionInfo.lastAckTimeoutAt = null;
-          this.rememberReconnectAddress(
-            connectionInfo,
-            ws,
-            connectionInfo.address,
-          );
-
+          this.rememberReconnectAddress(connectionInfo, ws, connectionInfo.address);
           this.logger.info(ROUTER_LOG_MSG.CONNECTED, {
             nodeId: connectionInfo.nodeId,
-            address: connectionInfo.address,
+            address: connectionInfo.address
           });
 
           // Send identification message
@@ -1216,43 +1129,30 @@ class MessageRouter extends EventEmitter {
 
           // Start ping interval
           this.startPingInterval(connectionInfo);
-
           this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
             nodeId: connectionInfo.nodeId,
-            connectionId: connectionInfo.connectionId,
+            connectionId: connectionInfo.connectionId
           });
-
           resolve();
         });
-
-        ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+        ws.on(TRANSPORT_EVENT.MESSAGE, data => {
           this.handleMessage(connectionInfo.nodeId, ws, data);
         });
-
         ws.on(TRANSPORT_EVENT.CLOSE, () => {
           if (!connectionEstablished) {
             if (!settled) {
-              rejectPendingConnection(new Error(
-                `WebSocket connection closed before open for node ` +
-                `${connectionInfo.nodeId}`,
-              ));
+              rejectPendingConnection(new Error(MESSAGE_ROUTER_LITERAL.STRING_WEBSOCKET_CONNECTION_CLOSED_BEFORE_OPEN_FOR_NODE + connectionInfo.nodeId));
             }
             return;
           }
-          this.handleConnectionClose(
-            connectionInfo.nodeId,
-            connectionInfo.connectionId,
-          );
+          this.handleConnectionClose(connectionInfo.nodeId, connectionInfo.connectionId);
         });
-
-        ws.on(TRANSPORT_EVENT.ERROR, (error) => {
+        ws.on(TRANSPORT_EVENT.ERROR, error => {
           this.logger.error(ROUTER_LOG_MSG.WS_ERROR, {
             nodeId: connectionInfo.nodeId,
-            error: error.message,
+            error: error.message
           });
-
-          if (!connectionEstablished &&
-              connectionInfo.state === ConnectionState.CONNECTING) {
+          if (!connectionEstablished && connectionInfo.state === ConnectionState.CONNECTING) {
             rejectPendingConnection(error);
           }
         });
@@ -1275,11 +1175,13 @@ class MessageRouter extends EventEmitter {
     const target = INPROC.serversByPort.get(portKey);
     if (!target?.router) {
       const err = new Error(`connect ECONNREFUSED ${connectionInfo.address}`);
-      err.code = 'ECONNREFUSED';
+      err.code = MESSAGE_ROUTER_LITERAL.STRING_ECONNREFUSED;
       throw err;
     }
-
-    const {a: clientWs, b: serverWs} = createInProcWebSocketPair();
+    const {
+      a: clientWs,
+      b: serverWs
+    } = createInProcWebSocketPair();
 
     // Track the server-side ws so shutdown() can terminate it if needed.
     if (this.server?.clients) {
@@ -1291,52 +1193,39 @@ class MessageRouter extends EventEmitter {
 
     // Simulate the client-side "open" behavior from establishConnection().
     // Wire up client-side handlers so ACKs, pings, and service messages can flow back.
-    clientWs.on(TRANSPORT_EVENT.MESSAGE, (data) => {
+    clientWs.on(TRANSPORT_EVENT.MESSAGE, data => {
       this.handleMessage(connectionInfo.nodeId, clientWs, data);
     });
     clientWs.on(TRANSPORT_EVENT.CLOSE, () => {
-      this.handleConnectionClose(
-        connectionInfo.nodeId,
-        connectionInfo.connectionId,
-      );
+      this.handleConnectionClose(connectionInfo.nodeId, connectionInfo.connectionId);
     });
-    clientWs.on(TRANSPORT_EVENT.ERROR, (error) => {
+    clientWs.on(TRANSPORT_EVENT.ERROR, error => {
       this.logger.error(ROUTER_LOG_MSG.WS_ERROR, {
         nodeId: connectionInfo.nodeId,
-        error: error?.message || String(error),
+        error: error?.message || String(error)
       });
     });
-
-    if (!connectionInfo.isSelfConnection &&
-        !this.isCurrentConnection(connectionInfo)) {
+    if (!connectionInfo.isSelfConnection && !this.isCurrentConnection(connectionInfo)) {
       connectionInfo.state = ConnectionState.CLOSED;
       clientWs.terminate();
       return;
     }
-
     connectionInfo.ws = clientWs;
     connectionInfo.state = ConnectionState.CONNECTED;
     connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
     connectionInfo.reconnectDueAt = null;
     connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
     connectionInfo.lastAckTimeoutAt = null;
-    this.rememberReconnectAddress(
-      connectionInfo,
-      clientWs,
-      connectionInfo.address,
-    );
-
+    this.rememberReconnectAddress(connectionInfo, clientWs, connectionInfo.address);
     this.logger.info(ROUTER_LOG_MSG.CONNECTED, {
       nodeId: connectionInfo.nodeId,
-      address: connectionInfo.address,
+      address: connectionInfo.address
     });
-
     this.sendIdentification(connectionInfo);
     this.startPingInterval(connectionInfo);
-
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
       nodeId: connectionInfo.nodeId,
-      connectionId: connectionInfo.connectionId,
+      connectionId: connectionInfo.connectionId
     });
   }
 
@@ -1351,13 +1240,11 @@ class MessageRouter extends EventEmitter {
       nodeId: this.nodeId,
       nodeAddress: this.advertisedAddress,
       address: this.advertisedAddress,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     };
-
     if (this.identifyPayload && !connectionInfo.isSelfConnection) {
       message.bootstrap = this.identifyPayload;
     }
-
     this.sendRaw(connectionInfo.ws, message);
   }
 
@@ -1371,11 +1258,10 @@ class MessageRouter extends EventEmitter {
   handleMessage(connectionId, ws, data) {
     try {
       const message = JSON.parse(data.toString());
-
       this.logger.debug(ROUTER_LOG_MSG.MESSAGE_RECEIVED, {
         connectionId,
         type: message.type,
-        messageId: message.messageId,
+        messageId: message.messageId
       });
 
       // Handle identification
@@ -1389,11 +1275,10 @@ class MessageRouter extends EventEmitter {
         this.sendRaw(ws, {
           type: RouterMessageType.PONG,
           pingId: message.pingId || null,
-          timestamp: Date.now(),
+          timestamp: Date.now()
         });
         return;
       }
-
       if (message.type === RouterMessageType.PONG) {
         if (message.pingId && this.pendingPings.has(message.pingId)) {
           const pending = this.pendingPings.get(message.pingId);
@@ -1409,7 +1294,6 @@ class MessageRouter extends EventEmitter {
         this.handleAcknowledgment(message);
         return;
       }
-
       if (message.type === RouterMessageType.SERVICE_RESPONSE) {
         this.handleServiceResponse(message);
         return;
@@ -1424,12 +1308,12 @@ class MessageRouter extends EventEmitter {
       // Unknown message type
       this.logger.warn(ROUTER_LOG_MSG.MESSAGE_UNKNOWN, {
         type: message.type,
-        connectionId,
+        connectionId
       });
     } catch (error) {
       this.logger.error(ROUTER_LOG_MSG.MESSAGE_PARSE_FAILED, {
         connectionId,
-        error: error.message,
+        error: error.message
       });
       throw error;
     }
@@ -1445,31 +1329,29 @@ class MessageRouter extends EventEmitter {
   handleIdentification(connectionId, ws, message) {
     const nodeId = message?.nodeId;
     const nodeAddress = message?.nodeAddress || message?.address;
-
     if (!nodeId || !nodeAddress) {
       this.logger.warn(ROUTER_LOG_MSG.IDENTIFICATION_MISSING_FIELDS, {
         connectionId,
         hasNodeId: !!nodeId,
-        hasNodeAddress: !!nodeAddress,
+        hasNodeAddress: !!nodeAddress
       });
       try {
         ws.close();
       } catch (error) {
         this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
           connectionId,
-          error: error.message,
+          error: error.message
         });
         throw error;
       }
       return;
     }
-
     this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_RECEIVED, {
       connectionId,
       remoteNodeId: nodeId,
       remoteNodeAddress: nodeAddress,
       localNodeId: this.nodeId,
-      existingConnectionForNode: this.nodeConnections.has(nodeId),
+      existingConnectionForNode: this.nodeConnections.has(nodeId)
     });
 
     // Update connection with node ID
@@ -1479,72 +1361,51 @@ class MessageRouter extends EventEmitter {
         connection.state = ConnectionState.CLOSED;
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
-        this.logger.info(
-          'Rejecting incoming connection while external admission is closed',
-          {
-            connectionId,
-            remoteNodeId: nodeId,
-            localNodeId: this.nodeId,
-          },
-        );
+        this.logger.info(MESSAGE_ROUTER_LITERAL.STRING_REJECTING_INCOMING_CONNECTION_WHILE_EXTERNAL_ADMISSION_IS_CLOSED, {
+          connectionId,
+          remoteNodeId: nodeId,
+          localNodeId: this.nodeId
+        });
         try {
           ws.close();
         } catch (error) {
           this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
             connectionId,
-            error: error.message,
+            error: error.message
           });
         }
         return;
       }
-
-      const normalizedAddress =
-        normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
+      const normalizedAddress = normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
       connection.nodeAddress = normalizedAddress;
       connection.configuredAddress = normalizedAddress;
-      this.rememberReconnectAddress(
-        connection, ws, normalizedAddress,
-      );
-
+      this.rememberReconnectAddress(connection, ws, normalizedAddress);
       const existing = this.nodeConnections.get(nodeId);
       const isSelfConnection = existing?.isSelfConnection && nodeId === this.nodeId;
-      const existingConnected = Boolean(existing) &&
-        existing.state === ConnectionState.CONNECTED;
-      const preferIncomingConnection =
-        this.nodeId.localeCompare(nodeId) > TRANSPORT_NUM.ZERO;
-      const existingPreferredIncomingConnection =
-        existingConnected &&
-        preferIncomingConnection &&
-        existing?.isIncoming === true;
-      const shouldAdoptIncomingConnection = !existing ||
-        (!isSelfConnection &&
-          (!existingConnected ||
-            (preferIncomingConnection &&
-              !existingPreferredIncomingConnection)));
-
+      const existingConnected = Boolean(existing) && existing.state === ConnectionState.CONNECTED;
+      const preferIncomingConnection = this.nodeId.localeCompare(nodeId) > TRANSPORT_NUM.ZERO;
+      const existingPreferredIncomingConnection = existingConnected && preferIncomingConnection && existing?.isIncoming === true;
+      const shouldAdoptIncomingConnection = !existing || !isSelfConnection && (!existingConnected || preferIncomingConnection && !existingPreferredIncomingConnection);
       if (isSelfConnection) {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
-          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED
         });
       } else if (shouldAdoptIncomingConnection) {
-        if (existing &&
-            existing.ws &&
-            existing.connectionId !== connectionId) {
+        if (existing && existing.ws && existing.connectionId !== connectionId) {
           this.retireConnection(existing);
           try {
             existing.ws.terminate();
           } catch (error) {
             this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
               nodeId,
-              error: error.message,
+              error: error.message
             });
           }
         }
-        if (existing &&
-            this.nodeConnections.get(nodeId) === existing) {
+        if (existing && this.nodeConnections.get(nodeId) === existing) {
           this.nodeConnections.delete(nodeId);
         }
         this.nodeConnections.delete(connectionId);
@@ -1552,13 +1413,13 @@ class MessageRouter extends EventEmitter {
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
           newKey: nodeId,
-          localNodeId: this.nodeId,
+          localNodeId: this.nodeId
         });
       } else {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
-          reason: 'existing_connection_preferred',
+          reason: MESSAGE_ROUTER_LITERAL.STRING_EXISTING_CONNECTION_PREFERRED
         });
         this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
@@ -1567,21 +1428,20 @@ class MessageRouter extends EventEmitter {
         } catch (error) {
           this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
             nodeId,
-            error: error.message,
+            error: error.message
           });
         }
       }
     }
-
     this.emit(TRANSPORT_EVENT.NODE_CONNECTED, {
       nodeId,
       nodeAddress,
-      connectionId,
+      connectionId
     });
     this.emit(TRANSPORT_EVENT.NODE_IDENTIFIED, {
       nodeId,
       nodeAddress,
-      connectionId,
+      connectionId
     });
   }
 
@@ -1594,33 +1454,35 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   handleServiceMessage(ws, message) {
-    const {targetAddress, messageId, payload} = message;
-
+    const {
+      targetAddress,
+      messageId,
+      payload
+    } = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_MESSAGE_HANDLING, {
       messageId,
       targetAddress,
       sourceNodeId: message.sourceNodeId,
       registeredHandlers: Array.from(this.handlers.keys()),
-      hasHandler: this.handlers.has(targetAddress),
+      hasHandler: this.handlers.has(targetAddress)
     });
 
     // Always ACK immediately so the sender can release outbound queue slots.
     this.sendRaw(ws, {
       type: RouterMessageType.ACK,
       messageId,
-      acknowledged: true,
+      acknowledged: true
     });
 
     // Find handler for target address
     const handler = this.handlers.get(targetAddress);
-
     if (!handler) {
       this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
         payload,
         sourceAddress: message.sourceAddress,
-        sourceNodeId: message.sourceNodeId,
+        sourceNodeId: message.sourceNodeId
       });
       this.sendRaw(ws, {
         type: RouterMessageType.SERVICE_RESPONSE,
@@ -1628,48 +1490,43 @@ class MessageRouter extends EventEmitter {
         sourceAddress: message.sourceAddress,
         result: {
           noHandler: true,
-          error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-        },
+          error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress)
+        }
       });
       return;
     }
-
     const envelope = {
       messageId,
       sourceAddress: message.sourceAddress,
       sourceNodeId: message.sourceNodeId,
       targetAddress,
       payload,
-      timestamp: message.timestamp,
+      timestamp: message.timestamp
     };
-
-    Promise.resolve()
-      .then(() => handler(envelope))
-      .then((result) => {
-        this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
-          messageId,
-          targetAddress,
-        });
-        this.sendRaw(ws, {
-          type: RouterMessageType.SERVICE_RESPONSE,
-          messageId,
-          sourceAddress: message.sourceAddress,
-          result,
-        });
-      })
-      .catch((error) => {
-        this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
-          messageId,
-          targetAddress,
-          error: error.message,
-        });
-        this.sendRaw(ws, {
-          type: RouterMessageType.SERVICE_RESPONSE,
-          messageId,
-          sourceAddress: message.sourceAddress,
-          error: error.message,
-        });
+    Promise.resolve().then(() => handler(envelope)).then(result => {
+      this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
+        messageId,
+        targetAddress
       });
+      this.sendRaw(ws, {
+        type: RouterMessageType.SERVICE_RESPONSE,
+        messageId,
+        sourceAddress: message.sourceAddress,
+        result
+      });
+    }).catch(error => {
+      this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
+        messageId,
+        targetAddress,
+        error: error.message
+      });
+      this.sendRaw(ws, {
+        type: RouterMessageType.SERVICE_RESPONSE,
+        messageId,
+        sourceAddress: message.sourceAddress,
+        error: error.message
+      });
+    });
   }
 
   /**
@@ -1678,20 +1535,213 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   handleServiceResponse(message) {
-    const {messageId, result, error} = message;
+    const {
+      messageId,
+      result,
+      error
+    } = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_RECEIVED, {
       messageId,
-      hasError: Boolean(error),
+      hasError: Boolean(error)
     });
-    const settled = this.settlePendingResponse(messageId, {
+    const disposition = this.resolveServiceResponseDisposition(messageId, {
       result,
-      error,
+      error
     });
-    if (!settled) {
-      this.logger.warn(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
+    this.recordServiceResponseDisposition(disposition);
+    if (disposition.kind === SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED) {
+      return;
+    }
+    if (disposition.absorbed === true) {
+      this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
         messageId,
+        ignoredRetiredPending: true,
+        unmatchedClassification: disposition.classification,
+        retiredReason: disposition.retiredReason,
+        deliverySource: disposition.deliverySource,
+        targetNodeId: disposition.targetNodeId
+      });
+      return;
+    }
+    this.logUnmatchedServiceResponse(disposition);
+  }
+
+  /**
+   * Rate-limit unmatched service-response warnings so response storms do not
+   * bury the underlying transport/control-plane failure that caused them.
+   * @param {Object} unmatchedResponseClassification
+   * @return {void}
+   * @private
+   */
+  logUnmatchedServiceResponse(unmatchedResponseClassification) {
+    const messageId = unmatchedResponseClassification?.messageId || null;
+    const nowMs = Number(this.nowFn());
+    const warnIntervalMs = this.unmatchedServiceResponseWarnIntervalMs;
+    const lastWarnAtMs = this.lastUnmatchedServiceResponseWarnAtMs;
+    const shouldWarnNow = !Number.isFinite(lastWarnAtMs) || warnIntervalMs <= TRANSPORT_NUM.ZERO || !Number.isFinite(nowMs) || nowMs - lastWarnAtMs >= warnIntervalMs;
+    if (!shouldWarnNow) {
+      this.unmatchedServiceResponseWarnSuppressedCount += TRANSPORT_NUM.ONE;
+      this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
+        messageId,
+        suppressedByRateLimit: true,
+        unmatchedClassification: unmatchedResponseClassification?.classification || MESSAGE_ROUTER_LITERAL.STRING_ORPHANED
+      });
+      return;
+    }
+    const suppressedSinceLastWarn = this.unmatchedServiceResponseWarnSuppressedCount;
+    this.unmatchedServiceResponseWarnSuppressedCount = TRANSPORT_NUM.ZERO;
+    this.lastUnmatchedServiceResponseWarnAtMs = Number.isFinite(nowMs) ? nowMs : null;
+    const context = {
+      messageId,
+      unmatchedClassification: unmatchedResponseClassification?.classification || 'orphaned'
+    };
+    if (typeof unmatchedResponseClassification?.retiredReason === TRANSPORT_TYPEOF.STRING && unmatchedResponseClassification.retiredReason.length > TRANSPORT_NUM.ZERO) {
+      context.retiredReason = unmatchedResponseClassification.retiredReason;
+    }
+    if (typeof unmatchedResponseClassification?.deliverySource === TRANSPORT_TYPEOF.STRING && unmatchedResponseClassification.deliverySource.length > TRANSPORT_NUM.ZERO) {
+      context.deliverySource = unmatchedResponseClassification.deliverySource;
+    }
+    if (typeof unmatchedResponseClassification?.targetNodeId === TRANSPORT_TYPEOF.STRING && unmatchedResponseClassification.targetNodeId.length > TRANSPORT_NUM.ZERO) {
+      context.targetNodeId = unmatchedResponseClassification.targetNodeId;
+    }
+    if (suppressedSinceLastWarn > TRANSPORT_NUM.ZERO) {
+      context.suppressedSinceLastWarn = suppressedSinceLastWarn;
+    }
+    this.logger.warn(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, context);
+  }
+
+  /**
+   * @param {Object} disposition
+   * @return {void}
+   * @private
+   */
+  recordServiceResponseDisposition(disposition) {
+    const classification = normalizeIdentifier(disposition?.classification) || 'orphaned';
+    this.serviceResponseDispositionCounts.set(classification, (this.serviceResponseDispositionCounts.get(classification) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE);
+  }
+
+  /**
+   * @return {Object}
+   */
+  getServiceResponseDispositionCounts() {
+    return Object.freeze(Object.fromEntries([...this.serviceResponseDispositionCounts.entries()].sort((left, right) => left[TRANSPORT_NUM.ZERO].localeCompare(right[TRANSPORT_NUM.ZERO]))));
+  }
+
+  /**
+   * Settle one SERVICE_RESPONSE if possible, otherwise classify its late
+   * disposition under the retired-waiter model.
+   *
+   * @param {string} messageId
+   * @param {Object} payload
+   * @return {Object}
+   * @private
+   */
+  resolveServiceResponseDisposition(messageId, payload = {}) {
+    const settled = this.settlePendingResponse(messageId, payload);
+    if (settled) {
+      return buildServiceResponseDisposition({
+        messageId,
+        kind: SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED,
+        classification: SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED
       });
     }
+    return this.classifyUnmatchedServiceResponse(messageId);
+  }
+
+  /**
+   * Classify one SERVICE_RESPONSE that no longer has a live waiter.
+   * @param {string} messageId
+   * @return {Object}
+   * @private
+   */
+  classifyUnmatchedServiceResponse(messageId) {
+    const retiredPendingResponse = this.consumeRetiredPendingResponse(messageId);
+    if (retiredPendingResponse) {
+      return buildServiceResponseDisposition({
+        messageId,
+        kind: SERVICE_RESPONSE_DISPOSITION_KIND.ABSORBED,
+        classification: buildRetiredPendingClassification(retiredPendingResponse.reason),
+        absorbed: true,
+        retiredReason: retiredPendingResponse.reason || RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
+        deliverySource: retiredPendingResponse.deliverySource || null,
+        targetNodeId: retiredPendingResponse.targetNodeId || null
+      });
+    }
+    return buildServiceResponseDisposition({
+      messageId,
+      kind: SERVICE_RESPONSE_DISPOSITION_KIND.ORPHANED,
+      classification: MESSAGE_ROUTER_LITERAL.STRING_ORPHANED
+    });
+  }
+
+  /**
+   * Resolve the grace window for one retired SERVICE_RESPONSE waiter.
+   * Mirrors retired-socket termination so one late response can still be
+   * absorbed after timeout/defer/disconnect without persisting forever.
+   * @return {number}
+   * @private
+   */
+  getRetiredPendingResponseGraceMs() {
+    return Math.max(this.reconnectIntervalMs, this.messageTimeoutMs);
+  }
+
+  /**
+   * Prune expired retired SERVICE_RESPONSE waiters.
+   * @param {number|null} [nowMs]
+   * @return {void}
+   * @private
+   */
+  pruneRetiredPendingResponses(nowMs = null) {
+    const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : Number(this.nowFn());
+    for (const [messageId, entry] of this.retiredPendingResponses.entries()) {
+      if (!entry || !Number.isFinite(entry.expiresAtMs) || !Number.isFinite(effectiveNowMs) || entry.expiresAtMs <= effectiveNowMs) {
+        this.retiredPendingResponses.delete(messageId);
+      }
+    }
+  }
+
+  /**
+   * Remember one response waiter that was intentionally retired before the
+   * peer finished the round-trip.
+   * @param {string} messageId
+   * @return {void}
+   * @private
+   */
+  rememberRetiredPendingResponse(messageId, pending = null, reason = RETIRED_PENDING_RESPONSE_REASON.UNKNOWN) {
+    const normalizedMessageId = normalizeIdentifier(messageId);
+    if (!normalizedMessageId) {
+      return;
+    }
+    const nowMs = Number(this.nowFn());
+    const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+    this.pruneRetiredPendingResponses(effectiveNowMs);
+    this.retiredPendingResponses.set(normalizedMessageId, {
+      reason: typeof reason === TRANSPORT_TYPEOF.STRING && reason.length > TRANSPORT_NUM.ZERO ? reason : RETIRED_PENDING_RESPONSE_REASON.UNKNOWN,
+      deliverySource: normalizeIdentifier(pending?.deliverySource) || null,
+      targetNodeId: normalizeIdentifier(pending?.targetNodeId) || null,
+      expiresAtMs: effectiveNowMs + this.getRetiredPendingResponseGraceMs()
+    });
+  }
+
+  /**
+   * Consume one retired waiter marker when a late response finally arrives.
+   * @param {string} messageId
+   * @return {Object|null}
+   * @private
+   */
+  consumeRetiredPendingResponse(messageId) {
+    const normalizedMessageId = normalizeIdentifier(messageId);
+    if (!normalizedMessageId) {
+      return null;
+    }
+    const nowMs = Number(this.nowFn());
+    this.pruneRetiredPendingResponses(nowMs);
+    const retiredEntry = this.retiredPendingResponses.get(normalizedMessageId);
+    if (!retiredEntry) {
+      return null;
+    }
+    this.retiredPendingResponses.delete(normalizedMessageId);
+    return retiredEntry;
   }
 
   /**
@@ -1701,13 +1751,14 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<*>} Resolves with handler result.
    * @private
    */
-  registerPendingResponse(messageId, targetNodeId = null) {
+  registerPendingResponse(messageId, targetNodeId = null, options = {}) {
     return new Promise((resolve, reject) => {
       this.pendingResponses.set(messageId, {
         resolve,
         reject,
         timeoutId: null,
         targetNodeId,
+        deliverySource: normalizeIdentifier(options?.deliverySource) || null
       });
     });
   }
@@ -1728,6 +1779,7 @@ class MessageRouter extends EventEmitter {
     }
     const timeoutId = setTimeout(() => {
       this.pendingResponses.delete(messageId);
+      this.rememberRetiredPendingResponse(messageId, pending, RETIRED_PENDING_RESPONSE_REASON.TIMEOUT);
       pending.reject(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT));
     }, timeoutMs);
     if (typeof timeoutId.unref === TRANSPORT_TYPEOF.FUNCTION) {
@@ -1746,7 +1798,10 @@ class MessageRouter extends EventEmitter {
    * @return {boolean} True when pending waiter was found.
    * @private
    */
-  settlePendingResponse(messageId, {result, error}) {
+  settlePendingResponse(messageId, {
+    result,
+    error
+  }) {
     const pending = this.pendingResponses.get(messageId);
     if (!pending) {
       return false;
@@ -1755,7 +1810,6 @@ class MessageRouter extends EventEmitter {
       clearTimeout(pending.timeoutId);
     }
     this.pendingResponses.delete(messageId);
-
     if (error) {
       pending.reject(new Error(error));
     } else {
@@ -1770,7 +1824,7 @@ class MessageRouter extends EventEmitter {
    * @return {boolean} True when a waiter was removed.
    * @private
    */
-  cancelPendingResponse(messageId) {
+  cancelPendingResponse(messageId, options = {}) {
     const pending = this.pendingResponses.get(messageId);
     if (!pending) {
       return false;
@@ -1779,6 +1833,9 @@ class MessageRouter extends EventEmitter {
       clearTimeout(pending.timeoutId);
     }
     this.pendingResponses.delete(messageId);
+    if (options?.ignoreLateResponse === true) {
+      this.rememberRetiredPendingResponse(messageId, pending, options?.retiredReason || RETIRED_PENDING_RESPONSE_REASON.CANCELLED);
+    }
     return true;
   }
 
@@ -1795,6 +1852,7 @@ class MessageRouter extends EventEmitter {
           clearTimeout(pending.timeoutId);
         }
         this.pendingResponses.delete(messageId);
+        this.rememberRetiredPendingResponse(messageId, pending, RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE);
         pending.reject(error);
       }
     }
@@ -1807,17 +1865,11 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   hasInlineAckPayload(ackResult) {
-    if (!ackResult ||
-      typeof ackResult !== TRANSPORT_TYPEOF.OBJECT ||
-      ackResult.acknowledged !== true) {
+    if (!ackResult || typeof ackResult !== TRANSPORT_TYPEOF.OBJECT || ackResult.acknowledged !== true) {
       return false;
     }
-    const passthroughKeys = new Set([
-      'messageId',
-      'acknowledged',
-      'correlationId',
-    ]);
-    return Object.keys(ackResult).some((key) => !passthroughKeys.has(key));
+    const passthroughKeys = new Set(['messageId', 'acknowledged', 'correlationId']);
+    return Object.keys(ackResult).some(key => !passthroughKeys.has(key));
   }
 
   /**
@@ -1830,8 +1882,12 @@ class MessageRouter extends EventEmitter {
     if (!result || typeof result !== TRANSPORT_TYPEOF.OBJECT) {
       return {};
     }
-    const {acknowledged: _ack, type: handlerType, ...rest} = result;
-    if (handlerType && !Object.prototype.hasOwnProperty.call(rest, 'responseType')) {
+    const {
+      acknowledged: _ack,
+      type: handlerType,
+      ...rest
+    } = result;
+    if (handlerType && !Object.prototype.hasOwnProperty.call(rest, MESSAGE_ROUTER_LITERAL.STRING_RESPONSETYPE)) {
       rest.responseType = handlerType;
     }
     return rest;
@@ -1844,23 +1900,29 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   handleAcknowledgment(message) {
-    const {messageId, acknowledged, error, type: _type, ...rest} = message;
-
+    const {
+      messageId,
+      acknowledged,
+      error,
+      type: _type,
+      ...rest
+    } = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
       clearTimeout(pending.timeout);
       this.pendingMessages.delete(messageId);
-
       if (acknowledged) {
         const connection = this.nodeConnections.get(pending.targetNodeId);
-        if (connection &&
-            connection.isIncoming !== true &&
-            connection.isSelfConnection !== true) {
+        if (connection && connection.isIncoming !== true && connection.isSelfConnection !== true) {
           connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
           connection.lastAckAt = Date.now();
           connection.lastAckTimeoutAt = null;
         }
-        const resolved = {messageId, acknowledged: true, ...rest};
+        const resolved = {
+          messageId,
+          acknowledged: true,
+          ...rest
+        };
         if (error !== undefined) {
           resolved.error = error;
         }
@@ -1882,63 +1944,71 @@ class MessageRouter extends EventEmitter {
    */
   handleConnectionClose(nodeId, expectedConnectionId = null) {
     const connection = this.nodeConnections.get(nodeId);
-    if (expectedConnectionId &&
-        connection &&
-        connection.connectionId !== expectedConnectionId) {
-      this.logger.debug('Ignoring stale connection close event', {
+    if (expectedConnectionId && connection && connection.connectionId !== expectedConnectionId) {
+      this.logger.debug(MESSAGE_ROUTER_LITERAL.STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT, {
         nodeId,
         expectedConnectionId,
-        actualConnectionId: connection.connectionId,
+        actualConnectionId: connection.connectionId
       });
       return;
     }
-
     if (connection) {
       this.logger.info(ROUTER_LOG_MSG.CONNECTION_CLOSED, {
         nodeId,
         connectionId: connection.connectionId,
-        isSelfConnection: connection.isSelfConnection,
+        isSelfConnection: connection.isSelfConnection
       });
-
-      connection.state = ConnectionState.DISCONNECTED;
       connection.ws = null;
 
       // Stop ping interval
       this.clearPingInterval(connection);
-
-      const disconnectError = new Error(
-        ROUTER_ERROR_MSG.connectionClosed(nodeId),
-      );
+      const disconnectError = new Error(ROUTER_ERROR_MSG.connectionClosed(nodeId));
       this.failOutboundQueue(nodeId, disconnectError);
       this.failPendingMessagesForNode(nodeId, disconnectError);
       this.failPendingResponsesForNode(nodeId, disconnectError);
-
-      this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {nodeId});
-
-      if (this.isShuttingDown) {
+      this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {
+        nodeId
+      });
+      const closeDisposition = this.resolveConnectionCloseDisposition(connection);
+      connection.state = closeDisposition.state;
+      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.SHUTDOWN) {
         return;
       }
-
-      if (connection.retired) {
-        connection.state = ConnectionState.CLOSED;
+      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.RETIRED) {
         return;
       }
-
-      // Self-disconnection is fatal - do not attempt reconnection
-      if (connection.isSelfConnection) {
+      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.SELF_DISCONNECT) {
         this.logger.error(ROUTER_LOG_MSG.SELF_CONNECTION_LOST, {
           nodeId,
-          connectionId: connection.connectionId,
+          connectionId: connection.connectionId
         });
-        this.emit(TRANSPORT_EVENT.SELF_DISCONNECT, {nodeId});
+        this.emit(TRANSPORT_EVENT.SELF_DISCONNECT, {
+          nodeId
+        });
         return;
       }
-
-      // Attempt reconnection for outgoing connections to other nodes
-      if (!connection.isIncoming && connection.address) {
+      if (closeDisposition.kind === CONNECTION_CLOSE_DISPOSITION.RECONNECT) {
         this.scheduleReconnect(connection);
       }
     }
+  }
+  resolveConnectionCloseDisposition(connection) {
+    let kind = CONNECTION_CLOSE_DISPOSITION.NO_ACTION;
+    let state = ConnectionState.DISCONNECTED;
+    if (this.isShuttingDown) {
+      kind = CONNECTION_CLOSE_DISPOSITION.SHUTDOWN;
+    } else if (connection.retired) {
+      kind = CONNECTION_CLOSE_DISPOSITION.RETIRED;
+      state = ConnectionState.CLOSED;
+    } else if (connection.isSelfConnection) {
+      kind = CONNECTION_CLOSE_DISPOSITION.SELF_DISCONNECT;
+    } else if (!connection.isIncoming && connection.address) {
+      kind = CONNECTION_CLOSE_DISPOSITION.RECONNECT;
+    }
+    return {
+      kind,
+      state
+    };
   }
 
   /**
@@ -1950,39 +2020,32 @@ class MessageRouter extends EventEmitter {
     if (this.isShuttingDown) {
       return;
     }
-    if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
+    const reconnectDisposition = this.resolveReconnectDisposition(connectionInfo);
+    if (reconnectDisposition.state) {
+      connectionInfo.state = reconnectDisposition.state;
+    }
+    if (reconnectDisposition.kind === RECONNECT_DISPOSITION.RETIRE) {
       this.retireConnection(connectionInfo);
-      connectionInfo.state = ConnectionState.CLOSED;
       return;
     }
-    if (connectionInfo.reconnectTimeout) {
+    if (reconnectDisposition.kind === RECONNECT_DISPOSITION.PENDING) {
       return;
     }
-    if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
+    if (reconnectDisposition.kind === RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED) {
       this.logger.error(ROUTER_LOG_MSG.MAX_RECONNECTS_REACHED, {
         nodeId: connectionInfo.nodeId,
-        attempts: connectionInfo.reconnectAttempts,
+        attempts: connectionInfo.reconnectAttempts
       });
-      connectionInfo.state = ConnectionState.CLOSED;
       return;
     }
-
-    connectionInfo.state = ConnectionState.RECONNECTING;
     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
-
-    const delay = this.reconnectIntervalMs *
-      Math.pow(
-        this.reconnectBackoffMultiplier,
-        connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE,
-      );
+    const delay = this.reconnectIntervalMs * Math.pow(this.reconnectBackoffMultiplier, connectionInfo.reconnectAttempts - TRANSPORT_NUM.ONE);
     connectionInfo.reconnectDueAt = Date.now() + delay;
-
     this.logger.debug(ROUTER_LOG_MSG.SCHEDULING_RECONNECT, {
       nodeId: connectionInfo.nodeId,
       attempt: connectionInfo.reconnectAttempts,
-      delayMs: delay,
+      delayMs: delay
     });
-
     connectionInfo.reconnectTimeout = setTimeout(async () => {
       connectionInfo.reconnectTimeout = null;
       connectionInfo.reconnectDueAt = null;
@@ -1992,21 +2055,15 @@ class MessageRouter extends EventEmitter {
         return;
       }
       try {
-        this.refreshReconnectAuthority(
-          connectionInfo,
-          connectionInfo.address || connectionInfo.configuredAddress,
-        );
-        if ((!connectionInfo.address ||
-            connectionInfo.address.length === TRANSPORT_NUM.ZERO) &&
-            typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING &&
-            connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO) {
+        this.refreshReconnectAuthority(connectionInfo, connectionInfo.address || connectionInfo.configuredAddress);
+        if ((!connectionInfo.address || connectionInfo.address.length === TRANSPORT_NUM.ZERO) && typeof connectionInfo.configuredAddress === TRANSPORT_TYPEOF.STRING && connectionInfo.configuredAddress.length > TRANSPORT_NUM.ZERO) {
           connectionInfo.address = connectionInfo.configuredAddress;
         }
         await this.establishConnection(connectionInfo);
       } catch (error) {
         this.logger.error(ROUTER_LOG_MSG.RECONNECT_FAILED, {
           nodeId: connectionInfo.nodeId,
-          error: error.message,
+          error: error.message
         });
         if (this.isShuttingDown) {
           return;
@@ -2014,9 +2071,27 @@ class MessageRouter extends EventEmitter {
         this.scheduleReconnect(connectionInfo);
       }
     }, delay);
-    if (typeof connectionInfo.reconnectTimeout?.unref === 'function') {
+    if (typeof connectionInfo.reconnectTimeout?.unref === MESSAGE_ROUTER_LITERAL.STRING_FUNCTION) {
       connectionInfo.reconnectTimeout.unref();
     }
+  }
+  resolveReconnectDisposition(connectionInfo) {
+    let kind = RECONNECT_DISPOSITION.SCHEDULE;
+    let state = ConnectionState.RECONNECTING;
+    if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
+      kind = RECONNECT_DISPOSITION.RETIRE;
+      state = ConnectionState.CLOSED;
+    } else if (connectionInfo.reconnectTimeout) {
+      kind = RECONNECT_DISPOSITION.PENDING;
+      state = null;
+    } else if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
+      kind = RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED;
+      state = ConnectionState.CLOSED;
+    }
+    return {
+      kind,
+      state
+    };
   }
 
   /**
@@ -2026,11 +2101,10 @@ class MessageRouter extends EventEmitter {
    */
   startPingInterval(connectionInfo) {
     connectionInfo.pingInterval = setInterval(() => {
-      if (connectionInfo.ws &&
-          connectionInfo.ws.readyState === WebSocket.OPEN) {
+      if (connectionInfo.ws && connectionInfo.ws.readyState === WebSocket.OPEN) {
         this.sendRaw(connectionInfo.ws, {
           type: RouterMessageType.PING,
-          timestamp: Date.now(),
+          timestamp: Date.now()
         });
       }
     }, this.pingIntervalMs);
@@ -2054,13 +2128,11 @@ class MessageRouter extends EventEmitter {
     if (!this.isValidAddress(address)) {
       throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(address));
     }
-
     this.handlers.set(address, handler);
-
     this.logger.debug(ROUTER_LOG_MSG.HANDLER_REGISTERED, {
       address,
       routerId: this.routerId,
-      totalHandlers: this.handlers.size,
+      totalHandlers: this.handlers.size
     });
   }
 
@@ -2084,17 +2156,24 @@ class MessageRouter extends EventEmitter {
    */
   parseAddress(address) {
     if (!address || typeof address !== TRANSPORT_TYPEOF.STRING) {
-      return {nodeId: null, entityType: null, entityId: null};
+      return {
+        nodeId: null,
+        entityType: null,
+        entityId: null
+      };
     }
-
     const parts = address.split(ROUTER_ADDRESS.SEPARATOR);
     if (parts.length !== TRANSPORT_NUM.THREE) {
-      return {nodeId: null, entityType: null, entityId: null};
+      return {
+        nodeId: null,
+        entityType: null,
+        entityId: null
+      };
     }
     return {
       nodeId: parts[TRANSPORT_NUM.ZERO] || null,
       entityType: parts[TRANSPORT_NUM.ONE] || null,
-      entityId: parts[TRANSPORT_NUM.TWO] || null,
+      entityId: parts[TRANSPORT_NUM.TWO] || null
     };
   }
 
@@ -2110,12 +2189,10 @@ class MessageRouter extends EventEmitter {
     if (!address || typeof address !== TRANSPORT_TYPEOF.STRING) {
       return false;
     }
-
     const parts = address.split(ROUTER_ADDRESS.SEPARATOR);
     if (parts.length !== TRANSPORT_NUM.THREE) {
       return false;
     }
-
     const [nodeId, entityType, entityId] = parts;
 
     // All parts must be non-empty
@@ -2133,11 +2210,10 @@ class MessageRouter extends EventEmitter {
    */
   unregister(address) {
     this.handlers.delete(address);
-
     this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
       address,
       routerId: this.routerId,
-      totalHandlers: this.handlers.size,
+      totalHandlers: this.handlers.size
     });
   }
 
@@ -2194,20 +2270,8 @@ class MessageRouter extends EventEmitter {
     const selection = this.resolveQueryDataPlaneTransportSelection();
     return {
       ready: Boolean(selection?.service),
-      reason:
-        selection?.service ?
-          null :
-          (
-            typeof selection?.reason === TRANSPORT_TYPEOF.STRING &&
-            selection.reason.length > TRANSPORT_NUM.ZERO ?
-              selection.reason :
-              ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED
-          ),
-      retryAfterMs:
-        Number.isFinite(selection?.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-          Math.floor(selection.retryAfterMs) :
-          TRANSPORT_NUM.ZERO,
+      reason: selection?.service ? null : typeof selection?.reason === TRANSPORT_TYPEOF.STRING && selection.reason.length > TRANSPORT_NUM.ZERO ? selection.reason : ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+      retryAfterMs: Number.isFinite(selection?.retryAfterMs) && selection.retryAfterMs > TRANSPORT_NUM.ZERO ? Math.floor(selection.retryAfterMs) : TRANSPORT_NUM.ZERO
     };
   }
 
@@ -2218,11 +2282,7 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   isQueryDataPlaneMessage(message) {
-    return Boolean(
-      message &&
-      typeof message === TRANSPORT_TYPEOF.OBJECT &&
-      message.type === QUERY_DATA_PLANE_MESSAGE_TYPE,
-    );
+    return Boolean(message && typeof message === TRANSPORT_TYPEOF.OBJECT && message.type === QUERY_DATA_PLANE_MESSAGE_TYPE);
   }
 
   /**
@@ -2232,50 +2292,41 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   resolveQueryDataPlaneTransportSelection() {
-    if (typeof this.resolveQueryMessageGroupService !==
-      TRANSPORT_TYPEOF.FUNCTION) {
-      return {
-        service: null,
-        reason: ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-        retryAfterMs: this.reconnectIntervalMs,
-      };
+    let selectionResult;
+    if (typeof this.resolveQueryMessageGroupService !== TRANSPORT_TYPEOF.FUNCTION) {
+      selectionResult = this.buildQueryTransportSelectionResult(QUERY_TRANSPORT_SELECTION.UNAVAILABLE);
+    } else {
+      const selection = this.resolveQueryMessageGroupService();
+      if (selection && typeof selection.sendMessage === TRANSPORT_TYPEOF.FUNCTION) {
+        selectionResult = this.buildQueryTransportSelectionResult(QUERY_TRANSPORT_SELECTION.DIRECT_SERVICE, {
+          service: selection
+        });
+      } else if (selection?.service && typeof selection.service.sendMessage === TRANSPORT_TYPEOF.FUNCTION) {
+        selectionResult = this.buildQueryTransportSelectionResult(QUERY_TRANSPORT_SELECTION.SELECTION_SERVICE, selection);
+      } else {
+        selectionResult = this.buildQueryTransportSelectionResult(QUERY_TRANSPORT_SELECTION.UNAVAILABLE, selection);
+      }
     }
-
-    const selection = this.resolveQueryMessageGroupService();
-    if (selection &&
-        typeof selection.sendMessage === TRANSPORT_TYPEOF.FUNCTION) {
-      return {
-        service: selection,
-        reason: '',
-        retryAfterMs: TRANSPORT_NUM.ZERO,
-      };
-    }
-
-    if (selection?.service &&
-        typeof selection.service.sendMessage === TRANSPORT_TYPEOF.FUNCTION) {
+    return selectionResult;
+  }
+  buildQueryTransportSelectionResult(kind, selection = {}) {
+    if (kind === QUERY_TRANSPORT_SELECTION.DIRECT_SERVICE) {
       return {
         service: selection.service,
-        reason: '',
-        retryAfterMs:
-          Number.isFinite(selection.retryAfterMs) &&
-            selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-            Math.floor(selection.retryAfterMs) :
-            TRANSPORT_NUM.ZERO,
+        reason: EMPTY_ROUTER_REASON,
+        retryAfterMs: TRANSPORT_NUM.ZERO
+      };
+    } else if (kind === QUERY_TRANSPORT_SELECTION.SELECTION_SERVICE) {
+      return {
+        service: selection.service,
+        reason: EMPTY_ROUTER_REASON,
+        retryAfterMs: Number.isFinite(selection.retryAfterMs) && selection.retryAfterMs > TRANSPORT_NUM.ZERO ? Math.floor(selection.retryAfterMs) : TRANSPORT_NUM.ZERO
       };
     }
-
     return {
       service: null,
-      reason:
-        typeof selection?.reason === TRANSPORT_TYPEOF.STRING &&
-          selection.reason.length > TRANSPORT_NUM.ZERO ?
-          selection.reason :
-          ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-      retryAfterMs:
-        Number.isFinite(selection?.retryAfterMs) &&
-          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-          Math.floor(selection.retryAfterMs) :
-          this.reconnectIntervalMs,
+      reason: typeof selection?.reason === TRANSPORT_TYPEOF.STRING && selection.reason.length > TRANSPORT_NUM.ZERO ? selection.reason : ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+      retryAfterMs: Number.isFinite(selection?.retryAfterMs) && selection.retryAfterMs > TRANSPORT_NUM.ZERO ? Math.floor(selection.retryAfterMs) : this.reconnectIntervalMs
     };
   }
 
@@ -2286,20 +2337,145 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   buildDeferredQueryTransportOutcome(selection = {}) {
-    const retryAfterMs =
-      Number.isFinite(selection.retryAfterMs) &&
-        selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(selection.retryAfterMs) :
-        this.reconnectIntervalMs;
+    const retryAfterMs = Number.isFinite(selection.retryAfterMs) && selection.retryAfterMs > TRANSPORT_NUM.ZERO ? Math.floor(selection.retryAfterMs) : this.reconnectIntervalMs;
     return {
       acknowledged: false,
-      error:
-        selection.reason ||
-        ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-      errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+      error: selection.reason || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+      errorCode: MESSAGE_ROUTER_LITERAL.STRING_ROUTER_QUERY_TRANSPORT_NOT_READY,
       deferRetry: true,
-      retryAfterMs,
+      retryAfterMs
     };
+  }
+  buildCanonicalDeferredQueryTransportOutcome(messageId, correlationId, failure) {
+    return this.buildDeferredDeliveryFailure(messageId, correlationId, failure?.error || failure?.message || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED, {
+      errorCode: typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING && failure.errorCode.length > TRANSPORT_NUM.ZERO ? failure.errorCode : typeof failure?.code === TRANSPORT_TYPEOF.STRING && failure.code.length > TRANSPORT_NUM.ZERO ? failure.code : null,
+      retryAfterMs: Number.isFinite(failure?.retryAfterMs) ? failure.retryAfterMs : this.reconnectIntervalMs
+    });
+  }
+  buildQueryTransportFailureError(failure, targetNodeId) {
+    const normalizedMessage = typeof failure?.error === TRANSPORT_TYPEOF.STRING && failure.error.length > TRANSPORT_NUM.ZERO ? failure.error : typeof failure?.message === TRANSPORT_TYPEOF.STRING && failure.message.length > TRANSPORT_NUM.ZERO ? failure.message : ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
+    const error = failure instanceof Error ? failure : new Error(normalizedMessage);
+    error.message = normalizedMessage;
+    if (typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING && failure.errorCode.length > TRANSPORT_NUM.ZERO) {
+      error.code = failure.errorCode;
+    } else if (typeof failure?.code === TRANSPORT_TYPEOF.STRING && failure.code.length > TRANSPORT_NUM.ZERO) {
+      error.code = failure.code;
+    }
+    if (failure?.deferRetry === true) {
+      error.deferRetry = true;
+    }
+    if (Number.isFinite(failure?.retryAfterMs)) {
+      error.retryAfterMs = Math.max(TRANSPORT_NUM.ZERO, Math.floor(failure.retryAfterMs));
+    }
+    if (failure?.recoverableBeforeSend === true) {
+      error.recoverableBeforeSend = true;
+    }
+    return error;
+  }
+  resolveQueryTransportDeliveryState(failure) {
+    if (failure?.acknowledged === true) {
+      return QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS;
+    }
+    if (failure?.deferRetry === true) {
+      return QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY;
+    }
+    return QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE;
+  }
+  async normalizeQueryTransportFailure({
+    failure,
+    targetNodeId,
+    targetAddress,
+    messageId,
+    message,
+    correlationId
+  }) {
+    const deliveryState = this.resolveQueryTransportDeliveryState(failure);
+    if (deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY) {
+      return this.buildCanonicalDeferredQueryTransportOutcome(messageId, correlationId, failure);
+    }
+    const transportError = this.buildQueryTransportFailureError(failure, targetNodeId);
+    const recoverableFailure = await this.resolveRecoverableDeliveryError({
+      error: transportError,
+      targetNodeId,
+      targetAddress,
+      messageId,
+      payload: message,
+      correlationId
+    });
+    if (recoverableFailure) {
+      return recoverableFailure;
+    }
+    if (deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE && failure instanceof Error) {
+      throw failure;
+    }
+    return failure;
+  }
+  buildQueryTransportSendOptions(options = {}) {
+    const transportDeliveryOptions = {};
+    if (Number.isFinite(options?.timeoutMs) &&
+        options.timeoutMs > TRANSPORT_NUM.ZERO) {
+      transportDeliveryOptions.timeoutMs =
+        Math.floor(options.timeoutMs);
+    }
+    if (typeof options?.deliveryPriority === TRANSPORT_TYPEOF.STRING &&
+        options.deliveryPriority.length > TRANSPORT_NUM.ZERO) {
+      transportDeliveryOptions.deliveryPriority =
+        options.deliveryPriority;
+    }
+    if (Object.keys(transportDeliveryOptions).length ===
+        TRANSPORT_NUM.ZERO) {
+      return {};
+    }
+    return {
+      transportDeliveryOptions
+    };
+  }
+  async resolveQueryTransportDeliveryOutcome(targetAddress, message, targetNodeId, messageId, correlationId, queryTransportSelection, options = {}) {
+    const queryTransport = queryTransportSelection.service;
+    if (!queryTransport) {
+      return this.buildDeferredQueryTransportOutcome(queryTransportSelection);
+    }
+    try {
+      const queryResult = await queryTransport.sendMessage(
+        targetAddress,
+        message,
+        this.buildQueryTransportSendOptions(options),
+      );
+      return await this.normalizeQueryTransportFailure({
+        failure: queryResult,
+        targetNodeId,
+        targetAddress,
+        messageId,
+        message,
+        correlationId
+      });
+    } catch (error) {
+      return this.normalizeQueryTransportFailure({
+        failure: error,
+        targetNodeId,
+        targetAddress,
+        messageId,
+        message,
+        correlationId
+      });
+    }
+  }
+  buildDeliveryOutcomeResult(result) {
+    return {
+      result,
+      queueWaitMs: TRANSPORT_NUM.ZERO
+    };
+  }
+  async resolveDeliveryOutcome(targetAddress, message, messageId, targetNodeId, correlationId, options) {
+    if (this.isQueryDataPlaneMessage(message)) {
+      const queryTransportSelection = this.resolveQueryDataPlaneTransportSelection();
+      const queryResult = await this.resolveQueryTransportDeliveryOutcome(targetAddress, message, targetNodeId, messageId, correlationId, queryTransportSelection, options);
+      return this.buildDeliveryOutcomeResult(queryResult);
+    }
+    if (targetNodeId === this.nodeId) {
+      return this.deliverLocal(targetAddress, messageId, message, correlationId);
+    }
+    return this.deliverRemote(targetAddress, messageId, message, targetNodeId, correlationId, options);
   }
 
   /**
@@ -2320,7 +2496,7 @@ class MessageRouter extends EventEmitter {
         queueWaitSampleCount: TRANSPORT_NUM.ZERO,
         queueWaitTotalMs: TRANSPORT_NUM.ZERO,
         queueWaitMaxMs: TRANSPORT_NUM.ZERO,
-        queueWaitHistogram: createQueueWaitHistogram(),
+        queueWaitHistogram: createQueueWaitHistogram()
       });
     }
     return this.outboundQueues.get(nodeId);
@@ -2348,30 +2524,15 @@ class MessageRouter extends EventEmitter {
    */
   enqueueOutbound(nodeId, deliverFn, options = {}) {
     const queue = this.getOutboundQueue(nodeId);
-    const deliveryPriority = normalizeOutboundDeliveryPriority(
-      options.deliveryPriority,
-    );
-    const deliverySource = resolveDeliverySource(
-      options.targetAddress,
-      options.message,
-      options,
-    );
-    const replacePendingKey = resolvePendingReplacementKey(
-      options.targetAddress,
-      options.message,
-      options,
-    );
-
+    const deliveryPriority = normalizeOutboundDeliveryPriority(options.deliveryPriority);
+    const deliverySource = resolveDeliverySource(options.targetAddress, options.message, options);
+    const replacePendingKey = resolvePendingReplacementKey(options.targetAddress, options.message, options);
     return new Promise((resolve, reject) => {
       if (replacePendingKey) {
-        const existingPendingIndex = queue.pending.findIndex((item) =>
-          item?.replacePendingKey === replacePendingKey,
-        );
+        const existingPendingIndex = queue.pending.findIndex(item => item?.replacePendingKey === replacePendingKey);
         if (existingPendingIndex >= TRANSPORT_NUM.ZERO) {
           const existingPendingItem = queue.pending[existingPendingIndex];
-          existingPendingItem.resolve(
-            buildSupersededPendingResult(existingPendingItem),
-          );
+          existingPendingItem.resolve(buildSupersededPendingResult(existingPendingItem));
           queue.pending[existingPendingIndex] = {
             deliverFn,
             resolve,
@@ -2379,46 +2540,31 @@ class MessageRouter extends EventEmitter {
             queuedAt: Date.now(),
             priority: deliveryPriority,
             deliverySource,
-            replacePendingKey,
+            replacePendingKey
           };
           return;
         }
       }
-      const pendingBackground = countPendingByPriority(
-        queue,
-        OutboundDeliveryPriority.BACKGROUND,
-      );
+      const pendingBackground = countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND);
       const backgroundPendingLimit = resolveBackgroundPendingLimit(queue);
-      const isBackpressured =
-        deliveryPriority === OutboundDeliveryPriority.CRITICAL ?
-          queue.pending.length >= queue.maxPending :
-          pendingBackground >= backgroundPendingLimit;
+      const isBackpressured = deliveryPriority === OutboundDeliveryPriority.CRITICAL ? queue.pending.length >= queue.maxPending : pendingBackground >= backgroundPendingLimit;
       if (isBackpressured) {
-        const error = new Error(
-          ROUTER_ERROR_MSG.outboundQueueBackpressured(
-            nodeId,
-            queue.maxPending,
-          ),
-        );
+        const error = new Error(ROUTER_ERROR_MSG.outboundQueueBackpressured(nodeId, queue.maxPending));
         error.code = OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE;
-        this.logger.warn('Outbound queue saturated for node delivery', {
+        this.logger.warn(MESSAGE_ROUTER_LITERAL.STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY, {
           localNodeId: this.nodeId,
           targetNodeId: nodeId,
           deliveryPriority,
           attemptedDeliverySource: deliverySource,
-          attemptedTargetAddress:
-            normalizeIdentifier(options.targetAddress),
+          attemptedTargetAddress: normalizeIdentifier(options.targetAddress),
           pending: queue.pending.length,
-          pendingCritical: countPendingByPriority(
-            queue,
-            OutboundDeliveryPriority.CRITICAL,
-          ),
+          pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
           pendingBackground,
           backgroundPendingLimit,
           criticalReserve: queue.criticalReserve,
           maxPending: queue.maxPending,
           inFlight: queue.inFlight,
-          pendingSourceSummary: buildPendingSourceSummary(queue),
+          pendingSourceSummary: buildPendingSourceSummary(queue)
         });
         reject(error);
         return;
@@ -2430,7 +2576,7 @@ class MessageRouter extends EventEmitter {
         queuedAt: Date.now(),
         priority: deliveryPriority,
         deliverySource,
-        replacePendingKey,
+        replacePendingKey
       });
       this.processOutboundQueue(nodeId);
     });
@@ -2446,29 +2592,23 @@ class MessageRouter extends EventEmitter {
     if (!queue) {
       return;
     }
-
-    while (queue.inFlight < queue.maxConcurrent &&
-      queue.pending.length > TRANSPORT_NUM.ZERO) {
+    while (queue.inFlight < queue.maxConcurrent && queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = dequeueNextPendingItem(queue);
       queue.inFlight += TRANSPORT_NUM.ONE;
-      const queueWaitMs = Math.max(
-        TRANSPORT_NUM.ZERO,
-        Date.now() - (item?.queuedAt || Date.now()),
-      );
+      const queueWaitMs = Math.max(TRANSPORT_NUM.ZERO, Date.now() - (item?.queuedAt || Date.now()));
       recordQueueWaitDuration(queue, queueWaitMs);
-
-      Promise.resolve()
-        .then(() => item.deliverFn())
-        .then((result) => {
-          queue.inFlight -= TRANSPORT_NUM.ONE;
-          item.resolve({result, queueWaitMs});
-          this.processOutboundQueue(nodeId);
-        })
-        .catch((error) => {
-          queue.inFlight -= TRANSPORT_NUM.ONE;
-          item.reject(error);
-          this.processOutboundQueue(nodeId);
+      Promise.resolve().then(() => item.deliverFn()).then(result => {
+        queue.inFlight -= TRANSPORT_NUM.ONE;
+        item.resolve({
+          result,
+          queueWaitMs
         });
+        this.processOutboundQueue(nodeId);
+      }).catch(error => {
+        queue.inFlight -= TRANSPORT_NUM.ONE;
+        item.reject(error);
+        this.processOutboundQueue(nodeId);
+      });
     }
   }
 
@@ -2483,7 +2623,6 @@ class MessageRouter extends EventEmitter {
     if (!queue) {
       return;
     }
-
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = dequeueNextPendingItem(queue);
       item.reject(error);
@@ -2502,14 +2641,13 @@ class MessageRouter extends EventEmitter {
     if (!queue) {
       return;
     }
-
     const errorMessage = error?.message || ROUTER_ERROR_MSG.SHUTDOWN;
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = dequeueNextPendingItem(queue);
       item.resolve({
         acknowledged: false,
         error: errorMessage,
-        shutdown: true,
+        shutdown: true
       });
     }
   }
@@ -2543,56 +2681,32 @@ class MessageRouter extends EventEmitter {
    */
   getDeliverMetricTrigger(targetNodeId, durationMs, queueDepth, acknowledged) {
     if (!acknowledged) {
-      const faultSampleCount = (
-        this.deliverMetricFaultSampleByTarget.get(targetNodeId) ||
-        TRANSPORT_NUM.ZERO
-      ) + TRANSPORT_NUM.ONE;
-      this.deliverMetricFaultSampleByTarget.set(
-        targetNodeId,
-        faultSampleCount,
-      );
-      if (
-        faultSampleCount === TRANSPORT_NUM.ONE ||
-        faultSampleCount %
-          TRANSPORT_METRIC.DELIVER_FAULT_SAMPLE_EVERY === TRANSPORT_NUM.ZERO
-      ) {
+      const faultSampleCount = (this.deliverMetricFaultSampleByTarget.get(targetNodeId) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
+      this.deliverMetricFaultSampleByTarget.set(targetNodeId, faultSampleCount);
+      if (faultSampleCount === TRANSPORT_NUM.ONE || faultSampleCount % TRANSPORT_METRIC.DELIVER_FAULT_SAMPLE_EVERY === TRANSPORT_NUM.ZERO) {
         return TRANSPORT_METRIC_TRIGGER.FAULT;
       }
       return null;
     }
     this.deliverMetricFaultSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
-
     if (durationMs >= TRANSPORT_METRIC.DELIVER_SLOW_THRESHOLD_MS) {
       return TRANSPORT_METRIC_TRIGGER.SLOW;
     }
-
-    const previousQueueDepth =
-      this.deliverMetricQueueDepthByTarget.get(targetNodeId) ||
-      TRANSPORT_NUM.ZERO;
-
+    const previousQueueDepth = this.deliverMetricQueueDepthByTarget.get(targetNodeId) || TRANSPORT_NUM.ZERO;
     if (queueDepth >= TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD) {
       const queueDepthDelta = Math.abs(queueDepth - previousQueueDepth);
-      if (previousQueueDepth <
-        TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD ||
-        queueDepthDelta >= TRANSPORT_METRIC.DELIVER_QUEUE_CHANGE_THRESHOLD) {
+      if (previousQueueDepth < TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD || queueDepthDelta >= TRANSPORT_METRIC.DELIVER_QUEUE_CHANGE_THRESHOLD) {
         return TRANSPORT_METRIC_TRIGGER.BACKPRESSURE;
       }
-    } else if (
-      previousQueueDepth >=
-      TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD
-    ) {
+    } else if (previousQueueDepth >= TRANSPORT_METRIC.DELIVER_QUEUE_BACKPRESSURE_THRESHOLD) {
       return TRANSPORT_METRIC_TRIGGER.QUEUE_DRAINED;
     }
-
-    const sampleCount = (this.deliverMetricSampleByTarget.get(targetNodeId) ||
-      TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
+    const sampleCount = (this.deliverMetricSampleByTarget.get(targetNodeId) || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
     this.deliverMetricSampleByTarget.set(targetNodeId, sampleCount);
-
     if (sampleCount >= TRANSPORT_METRIC.DELIVER_SUCCESS_SAMPLE_EVERY) {
       this.deliverMetricSampleByTarget.set(targetNodeId, TRANSPORT_NUM.ZERO);
       return TRANSPORT_METRIC_TRIGGER.SAMPLE;
     }
-
     return null;
   }
 
@@ -2611,21 +2725,16 @@ class MessageRouter extends EventEmitter {
     const handler = this.handlers.get(targetAddress);
     if (!handler) {
       // Fall back to remote path for special handlers (join request, etc.)
-      return this.deliverRemote(
-        targetAddress, messageId, payload,
-        this.nodeId, correlationId,
-      );
+      return this.deliverRemote(targetAddress, messageId, payload, this.nodeId, correlationId);
     }
-
     const envelope = {
       messageId,
       sourceAddress: ROUTER_ADDRESS.buildSourceAddress(this.nodeId),
       sourceNodeId: this.nodeId,
       targetAddress,
       payload,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     };
-
     try {
       const result = await Promise.resolve(handler(envelope));
       return {
@@ -2633,20 +2742,20 @@ class MessageRouter extends EventEmitter {
           messageId,
           correlationId,
           acknowledged: true,
-          ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT
-            ? (() => {
-              const {
-                acknowledged: _ack,
-                type: handlerType,
-                ...rest
-              } = result;
-              const merged = {...rest};
-              if (handlerType) merged.responseType = handlerType;
-              return merged;
-            })()
-            : {}),
+          ...(result && typeof result === TRANSPORT_TYPEOF.OBJECT ? (() => {
+            const {
+              acknowledged: _ack,
+              type: handlerType,
+              ...rest
+            } = result;
+            const merged = {
+              ...rest
+            };
+            if (handlerType) merged.responseType = handlerType;
+            return merged;
+          })() : {})
         },
-        queueWaitMs: TRANSPORT_NUM.ZERO,
+        queueWaitMs: TRANSPORT_NUM.ZERO
       };
     } catch (error) {
       return {
@@ -2654,13 +2763,12 @@ class MessageRouter extends EventEmitter {
           messageId,
           correlationId,
           acknowledged: false,
-          error: error.message,
+          error: error.message
         },
-        queueWaitMs: TRANSPORT_NUM.ZERO,
+        queueWaitMs: TRANSPORT_NUM.ZERO
       };
     }
   }
-
 
   /**
    * Deliver a message to a target service via WebSocket connections.
@@ -2675,12 +2783,7 @@ class MessageRouter extends EventEmitter {
     if (!this.initialized) {
       await this.initialize();
     }
-
-    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO ?
-      Math.floor(options.timeoutMs) :
-      this.messageTimeoutMs;
-
+    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > TRANSPORT_NUM.ZERO ? Math.floor(options.timeoutMs) : this.messageTimeoutMs;
     const messageId = message.messageId || uuidv4();
     const correlationId = message.correlationId || messageId;
     const requestId = resolveRequestIdFromMessage(message);
@@ -2699,68 +2802,27 @@ class MessageRouter extends EventEmitter {
         targetNodeId = parsed.nodeId;
       }
     }
-
     if (!targetNodeId && this.resolveServiceNode) {
       targetNodeId = this.resolveServiceNode(targetAddress);
     }
-
     if (!targetNodeId) {
       throw new Error(ROUTER_ERROR_MSG.invalidAddressFormat(targetAddress));
     }
-
-    let deliveryOutcome;
-    if (this.isQueryDataPlaneMessage(message)) {
-      const queryTransportSelection =
-        this.resolveQueryDataPlaneTransportSelection();
-      const queryTransport = queryTransportSelection.service;
-      if (queryTransport) {
-        const queryResult = await queryTransport.sendMessage(
-          targetAddress,
-          message,
-        );
-        deliveryOutcome = {
-          result: queryResult,
-          queueWaitMs: TRANSPORT_NUM.ZERO,
-        };
-      } else {
-        deliveryOutcome = {
-          result: this.buildDeferredQueryTransportOutcome(
-            queryTransportSelection,
-          ),
-          queueWaitMs: TRANSPORT_NUM.ZERO,
-        };
-      }
-    }
-    if (!deliveryOutcome && targetNodeId === this.nodeId) {
-      deliveryOutcome = await this.deliverLocal(
-        targetAddress, messageId, message, correlationId,
-      );
-    } else if (!deliveryOutcome) {
-      deliveryOutcome = await this.deliverRemote(
-        targetAddress, messageId, message,
-        targetNodeId, correlationId, {
-          ...options,
-          deliverySource,
-          timeoutMs: deliveryTimeoutMs,
-        },
-      );
-    }
+    const deliveryOutcome = await this.resolveDeliveryOutcome(targetAddress, message, messageId, targetNodeId, correlationId, {
+      ...options,
+      deliverySource,
+      timeoutMs: deliveryTimeoutMs
+    });
     const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
     const result = normalizedOutcome.result;
     const queueWaitMs = normalizedOutcome.queueWaitMs;
-
     try {
       const queue = this.outboundQueues.get(targetNodeId);
       const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
       const queueWaitSummary = buildQueueWaitSummary(queue);
       const durationMs = Date.now() - deliverStartMs;
       const acknowledged = result?.acknowledged === true;
-      const trigger = this.getDeliverMetricTrigger(
-        targetNodeId,
-        durationMs,
-        queueDepth,
-        acknowledged,
-      );
+      const trigger = this.getDeliverMetricTrigger(targetNodeId, durationMs, queueDepth, acknowledged);
       if (trigger) {
         this.deliverMetricQueueDepthByTarget.set(targetNodeId, queueDepth);
         if (trigger !== TRANSPORT_METRIC_TRIGGER.SAMPLE) {
@@ -2779,14 +2841,57 @@ class MessageRouter extends EventEmitter {
           queueWaitSummary,
           acknowledged,
           trigger,
-          error: acknowledged ? null : (result?.error || null),
+          error: acknowledged ? null : result?.error || null
         });
       }
     } catch (_metricsErr) {
       // Metrics logging must not propagate to callers
     }
-
     return result;
+  }
+
+  /**
+   * Deliver a native Raft packet on an already-open socket so consensus
+   * traffic does not contend with the general outbound queue.
+   * @param {string} targetAddress - Target address.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Message payload.
+   * @param {string} targetNodeId - Target node ID.
+   * @return {Object|null} Direct delivery result when sent, else null.
+   * @private
+   */
+  tryDeliverRaftDirect(targetAddress, messageId, payload, targetNodeId) {
+    if (!isRaftPacket(payload)) {
+      return null;
+    }
+    const connection = this.nodeConnections.get(targetNodeId);
+    if (!connection || connection.state !== ConnectionState.CONNECTED || !connection.ws || connection.ws.readyState !== WebSocket.OPEN) {
+      return null;
+    }
+    const message = {
+      type: RouterMessageType.SERVICE_MESSAGE,
+      messageId,
+      targetAddress,
+      sourceAddress: ROUTER_ADDRESS.buildSourceAddress(this.nodeId),
+      sourceNodeId: this.nodeId,
+      payload,
+      timestamp: Date.now()
+    };
+    this.logger.debug(ROUTER_LOG_MSG.RAFT_DIRECT_DELIVERY, {
+      messageId,
+      targetAddress,
+      targetNodeId
+    });
+    try {
+      connection.ws.send(JSON.stringify(message));
+      return {
+        messageId,
+        acknowledged: true,
+        direct: true
+      };
+    } catch (_sendError) {
+      return null;
+    }
   }
 
   /**
@@ -2798,61 +2903,36 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Delivery result.
    * @private
    */
-  async deliverRemote(
-    targetAddress,
-    messageId,
-    payload,
-    targetNodeId,
-    correlationId,
-    options = {},
-  ) {
-    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) &&
-      options.timeoutMs > TRANSPORT_NUM.ZERO ?
-      Math.floor(options.timeoutMs) :
-      this.messageTimeoutMs;
+  async deliverRemote(targetAddress, messageId, payload, targetNodeId, correlationId, options = {}) {
+    const directRaftDelivery = this.tryDeliverRaftDirect(targetAddress, messageId, payload, targetNodeId);
+    if (directRaftDelivery) {
+      return directRaftDelivery;
+    }
+    const deliveryTimeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > TRANSPORT_NUM.ZERO ? Math.floor(options.timeoutMs) : this.messageTimeoutMs;
     // Register pending response before send to avoid races where the
     // SERVICE_RESPONSE arrives immediately after ACK.
-    const responsePromise = this.registerPendingResponse(
-      messageId,
-      targetNodeId,
-    );
+    const responsePromise = this.registerPendingResponse(messageId, targetNodeId, {
+      deliverySource: resolveDeliverySource(targetAddress, payload, options)
+    });
     let earlyResponseError = null;
-    responsePromise.catch((error) => {
+    responsePromise.catch(error => {
       earlyResponseError = error;
     });
-
     let ackResult;
     let queueWaitMs = TRANSPORT_NUM.ZERO;
     try {
       const ackOutcome = await this.enqueueOutbound(targetNodeId, () => {
-        let connection = this.nodeConnections.get(targetNodeId);
-        const reconnectInProgress = this.buildReconnectInProgressFailure(
-          targetNodeId,
-          messageId,
-          correlationId,
-        );
+        const connection = this.nodeConnections.get(targetNodeId);
+        const reconnectInProgress = this.buildReconnectInProgressFailure(targetNodeId, messageId, correlationId);
         if (reconnectInProgress) {
           return reconnectInProgress;
         }
-
-        if ((!connection || connection.state !== ConnectionState.CONNECTED) &&
-            !this.isShuttingDown) {
-          const reconnectAddress =
-            this.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] ||
-            null;
+        if ((!connection || connection.state !== ConnectionState.CONNECTED) && !this.isShuttingDown) {
+          const reconnectAddress = this.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] || null;
           if (reconnectAddress) {
-            return this.tryDeliverAfterReconnect(
-              reconnectAddress,
-              targetAddress,
-              messageId,
-              payload,
-              targetNodeId,
-              correlationId,
-              deliveryTimeoutMs,
-            );
+            return this.tryDeliverAfterReconnect(reconnectAddress, targetAddress, messageId, payload, targetNodeId, correlationId, deliveryTimeoutMs);
           }
         }
-
         if (!connection || connection.state !== ConnectionState.CONNECTED) {
           this.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
             messageId,
@@ -2861,34 +2941,19 @@ class MessageRouter extends EventEmitter {
             localNodeId: this.nodeId,
             connectionExists: !!connection,
             connectionState: connection?.state,
-            availableConnections: Array.from(this.nodeConnections.keys()),
+            availableConnections: Array.from(this.nodeConnections.keys())
           });
-
-          return this.buildDeferredDeliveryFailure(
-            messageId,
-            correlationId,
-            ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
-            {
-              errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
-              retryAfterMs: this.reconnectIntervalMs,
-            },
-          );
+          return this.buildDeferredDeliveryFailure(messageId, correlationId, ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId), {
+            errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+            retryAfterMs: this.reconnectIntervalMs
+          });
         }
-
-        return this.sendMessage(
-          connection,
-          targetAddress,
-          messageId,
-          payload,
-          targetNodeId,
-          correlationId,
-          deliveryTimeoutMs,
-        );
+        return this.sendMessage(connection, targetAddress, messageId, payload, targetNodeId, correlationId, deliveryTimeoutMs);
       }, {
         deliveryPriority: options.deliveryPriority,
         deliverySource: options.deliverySource,
         targetAddress,
-        message: payload,
+        message: payload
       });
       const normalizedAckOutcome = normalizeDeliveryOutcome(ackOutcome);
       ackResult = normalizedAckOutcome.result;
@@ -2900,53 +2965,58 @@ class MessageRouter extends EventEmitter {
         targetAddress,
         messageId,
         payload,
-        correlationId,
+        correlationId
       });
       if (deferredFailure) {
-        this.cancelPendingResponse(messageId);
+        this.cancelPendingResponse(messageId, {
+          ignoreLateResponse: true,
+          retiredReason: RETIRED_PENDING_RESPONSE_REASON.DEFERRED_DELIVERY
+        });
         return {
           result: deferredFailure,
-          queueWaitMs: TRANSPORT_NUM.ZERO,
+          queueWaitMs: TRANSPORT_NUM.ZERO
         };
       }
-      this.cancelPendingResponse(messageId);
+      this.cancelPendingResponse(messageId, {
+        ignoreLateResponse: true,
+        retiredReason: RETIRED_PENDING_RESPONSE_REASON.CANCELLED
+      });
       if (error?.code === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
         return {
-          result: this.buildDeferredDeliveryFailure(
-            messageId,
-            correlationId,
-            error.message,
-            {
-              errorCode: error.code,
-              retryAfterMs: this.reconnectIntervalMs,
-            },
-          ),
-          queueWaitMs: TRANSPORT_NUM.ZERO,
+          result: this.buildDeferredDeliveryFailure(messageId, correlationId, error.message, {
+            errorCode: error.code,
+            retryAfterMs: this.reconnectIntervalMs
+          }),
+          queueWaitMs: TRANSPORT_NUM.ZERO
         };
       }
       throw error;
     }
-
     if (!ackResult?.acknowledged) {
-      this.cancelPendingResponse(messageId);
+      this.cancelPendingResponse(messageId, {
+        ignoreLateResponse: true,
+        retiredReason: RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED
+      });
       return {
         result: ackResult,
-        queueWaitMs,
+        queueWaitMs
       };
     }
 
     // Compatibility: tolerate legacy ACKs that still include handler payload.
     if (this.hasInlineAckPayload(ackResult)) {
-      this.cancelPendingResponse(messageId);
+      this.cancelPendingResponse(messageId, {
+        ignoreLateResponse: true,
+        retiredReason: RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK
+      });
       return {
         result: ackResult,
-        queueWaitMs,
+        queueWaitMs
       };
     }
 
     // Start response timeout only after ACK succeeded.
     this.armPendingResponseTimeout(messageId, deliveryTimeoutMs);
-
     try {
       if (earlyResponseError) {
         throw earlyResponseError;
@@ -2957,9 +3027,9 @@ class MessageRouter extends EventEmitter {
           messageId,
           correlationId,
           acknowledged: true,
-          ...this.normalizeServiceResponseResult(serviceResult),
+          ...this.normalizeServiceResponseResult(serviceResult)
         },
-        queueWaitMs,
+        queueWaitMs
       };
     } catch (error) {
       return {
@@ -2967,9 +3037,9 @@ class MessageRouter extends EventEmitter {
           messageId,
           correlationId,
           acknowledged: true,
-          error: error.message,
+          error: error.message
         },
-        queueWaitMs,
+        queueWaitMs
       };
     }
   }
@@ -2987,15 +3057,12 @@ class MessageRouter extends EventEmitter {
     }
     try {
       const resolved = this.resolveNodeAddress(targetNodeId);
-      return typeof resolved === TRANSPORT_TYPEOF.STRING &&
-        resolved.length > TRANSPORT_NUM.ZERO ?
-        resolved :
-        null;
+      return typeof resolved === TRANSPORT_TYPEOF.STRING && resolved.length > TRANSPORT_NUM.ZERO ? resolved : null;
     } catch (error) {
-      this.logger.warn('Failed to resolve node connection address for delivery recovery', {
+      this.logger.warn(MESSAGE_ROUTER_LITERAL.STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY, {
         targetNodeId,
         localNodeId: this.nodeId,
-        error: error?.message || String(error),
+        error: error?.message || String(error)
       });
       return null;
     }
@@ -3011,17 +3078,11 @@ class MessageRouter extends EventEmitter {
    */
   resolveCanonicalReconnectAddress(targetNodeId, fallbackAddress = null) {
     const resolvedAddress = this.resolveNodeAddressForDelivery(targetNodeId);
-    if (typeof resolvedAddress === TRANSPORT_TYPEOF.STRING &&
-        resolvedAddress.length > TRANSPORT_NUM.ZERO) {
+    if (typeof resolvedAddress === TRANSPORT_TYPEOF.STRING && resolvedAddress.length > TRANSPORT_NUM.ZERO) {
       return normalizeToWebSocketAddress(resolvedAddress) || resolvedAddress;
     }
-
-    const normalizedFallback =
-      normalizeToWebSocketAddress(fallbackAddress) || fallbackAddress;
-    return typeof normalizedFallback === TRANSPORT_TYPEOF.STRING &&
-      normalizedFallback.length > TRANSPORT_NUM.ZERO ?
-      normalizedFallback :
-      null;
+    const normalizedFallback = normalizeToWebSocketAddress(fallbackAddress) || fallbackAddress;
+    return typeof normalizedFallback === TRANSPORT_TYPEOF.STRING && normalizedFallback.length > TRANSPORT_NUM.ZERO ? normalizedFallback : null;
   }
 
   /**
@@ -3037,34 +3098,17 @@ class MessageRouter extends EventEmitter {
     if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
       return null;
     }
-
-    const previousConfigured =
-      normalizeToWebSocketAddress(connectionInfo.configuredAddress) ||
-      connectionInfo.configuredAddress ||
-      null;
-    const canonicalAddress = this.resolveCanonicalReconnectAddress(
-      connectionInfo.nodeId,
-      fallbackAddress,
-    );
+    const previousConfigured = normalizeToWebSocketAddress(connectionInfo.configuredAddress) || connectionInfo.configuredAddress || null;
+    const canonicalAddress = this.resolveCanonicalReconnectAddress(connectionInfo.nodeId, fallbackAddress);
     if (!canonicalAddress) {
       return null;
     }
-
     connectionInfo.configuredAddress = canonicalAddress;
-    const currentAddress =
-      normalizeToWebSocketAddress(connectionInfo.address) ||
-      connectionInfo.address ||
-      null;
-    const hasObservedAddress =
-      typeof connectionInfo.observedAddress === TRANSPORT_TYPEOF.STRING &&
-      connectionInfo.observedAddress.length > TRANSPORT_NUM.ZERO;
-    if (!hasObservedAddress ||
-        !currentAddress ||
-        connectionInfo.state !== ConnectionState.CONNECTED ||
-        currentAddress === previousConfigured) {
+    const currentAddress = normalizeToWebSocketAddress(connectionInfo.address) || connectionInfo.address || null;
+    const hasObservedAddress = typeof connectionInfo.observedAddress === TRANSPORT_TYPEOF.STRING && connectionInfo.observedAddress.length > TRANSPORT_NUM.ZERO;
+    if (!hasObservedAddress || !currentAddress || connectionInfo.state !== ConnectionState.CONNECTED || currentAddress === previousConfigured) {
       connectionInfo.address = canonicalAddress;
     }
-
     return canonicalAddress;
   }
 
@@ -3075,11 +3119,7 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   hasScheduledReconnect(connectionInfo) {
-    return Boolean(
-      connectionInfo &&
-      connectionInfo.state === ConnectionState.RECONNECTING &&
-      connectionInfo.reconnectTimeout,
-    );
+    return Boolean(connectionInfo && connectionInfo.state === ConnectionState.RECONNECTING && connectionInfo.reconnectTimeout);
   }
 
   /**
@@ -3093,10 +3133,7 @@ class MessageRouter extends EventEmitter {
     if (!Number.isFinite(dueAt)) {
       return this.reconnectIntervalMs;
     }
-    return Math.max(
-      TRANSPORT_NUM.ZERO,
-      Math.ceil(dueAt - Date.now()),
-    );
+    return Math.max(TRANSPORT_NUM.ZERO, Math.ceil(dueAt - Date.now()));
   }
 
   /**
@@ -3109,15 +3146,10 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   buildConnectionClosedError(targetNodeId, options = {}) {
-    const error = new Error(
-      ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
-    );
+    const error = new Error(ROUTER_ERROR_MSG.connectionClosed(targetNodeId));
     error.code = ROUTER_CONNECTION_CLOSED_ERROR_CODE;
     error.deferRetry = true;
-    error.retryAfterMs = normalizeRetryAfterMs(
-      options.retryAfterMs,
-      this.reconnectIntervalMs,
-    );
+    error.retryAfterMs = normalizeRetryAfterMs(options.retryAfterMs, this.reconnectIntervalMs);
     error.recoverableBeforeSend = options.beforeSend === true;
     return error;
   }
@@ -3135,15 +3167,10 @@ class MessageRouter extends EventEmitter {
     if (!this.hasScheduledReconnect(connection)) {
       return null;
     }
-    return this.buildDeferredDeliveryFailure(
-      messageId,
-      correlationId,
-      ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
-      {
-        errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-        retryAfterMs: this.resolveReconnectRetryAfterMs(connection),
-      },
-    );
+    return this.buildDeferredDeliveryFailure(messageId, correlationId, ROUTER_ERROR_MSG.connectionClosed(targetNodeId), {
+      errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+      retryAfterMs: this.resolveReconnectRetryAfterMs(connection)
+    });
   }
 
   /**
@@ -3164,73 +3191,35 @@ class MessageRouter extends EventEmitter {
     targetAddress,
     messageId,
     payload,
-    correlationId,
+    correlationId
   }) {
     if (!error || this.isShuttingDown) {
       return null;
     }
-
-    const retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
-      Math.max(TRANSPORT_NUM.ZERO, Math.floor(error.retryAfterMs)) :
-      this.resolveReconnectRetryAfterMs(
-        this.nodeConnections.get(targetNodeId) || null,
-      );
-
-    if (error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE &&
-        error.recoverableBeforeSend === true) {
-      const reconnectInProgress = this.buildReconnectInProgressFailure(
-        targetNodeId,
-        messageId,
-        correlationId,
-      );
+    const retryAfterMs = Number.isFinite(error?.retryAfterMs) ? Math.max(TRANSPORT_NUM.ZERO, Math.floor(error.retryAfterMs)) : this.resolveReconnectRetryAfterMs(this.nodeConnections.get(targetNodeId) || null);
+    if (error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE && error.recoverableBeforeSend === true) {
+      const reconnectInProgress = this.buildReconnectInProgressFailure(targetNodeId, messageId, correlationId);
       if (reconnectInProgress) {
         return reconnectInProgress;
       }
-
-      const reconnectAddress =
-        this.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] ||
-        null;
+      const reconnectAddress = this.resolveReconnectAddresses(targetNodeId)[TRANSPORT_NUM.ZERO] || null;
       if (reconnectAddress) {
         try {
-          return await this.tryDeliverAfterReconnect(
-            reconnectAddress,
-            targetAddress,
-            messageId,
-            payload,
-            targetNodeId,
-            correlationId,
-          );
+          return await this.tryDeliverAfterReconnect(reconnectAddress, targetAddress, messageId, payload, targetNodeId, correlationId);
         } catch (reconnectError) {
-          return this.buildDeferredDeliveryFailure(
-            messageId,
-            correlationId,
-            reconnectError?.message ||
-              ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
-            {
-              errorCode:
-                reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-              retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
-                reconnectError.retryAfterMs :
-                retryAfterMs,
-            },
-          );
+          return this.buildDeferredDeliveryFailure(messageId, correlationId, reconnectError?.message || ROUTER_ERROR_MSG.connectionClosed(targetNodeId), {
+            errorCode: reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+            retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ? reconnectError.retryAfterMs : retryAfterMs
+          });
         }
       }
     }
-
-    if (error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
-        error.message === ROUTER_ERROR_MSG.connectionClosed(targetNodeId)) {
-      return this.buildDeferredDeliveryFailure(
-        messageId,
-        correlationId,
-        error.message,
-        {
-          errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-          retryAfterMs,
-        },
-      );
+    if (error.code === ROUTER_CONNECTION_CLOSED_ERROR_CODE || error.message === ROUTER_ERROR_MSG.connectionClosed(targetNodeId)) {
+      return this.buildDeferredDeliveryFailure(messageId, correlationId, error.message, {
+        errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        retryAfterMs
+      });
     }
-
     return null;
   }
 
@@ -3242,10 +3231,7 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   getReconnectAddressSuppressionKey(targetNodeId, address) {
-    if (typeof targetNodeId !== TRANSPORT_TYPEOF.STRING ||
-        targetNodeId.length === TRANSPORT_NUM.ZERO ||
-        typeof address !== TRANSPORT_TYPEOF.STRING ||
-        address.length === TRANSPORT_NUM.ZERO) {
+    if (typeof targetNodeId !== TRANSPORT_TYPEOF.STRING || targetNodeId.length === TRANSPORT_NUM.ZERO || typeof address !== TRANSPORT_TYPEOF.STRING || address.length === TRANSPORT_NUM.ZERO) {
       return null;
     }
     return `${targetNodeId}::${address}`;
@@ -3294,18 +3280,11 @@ class MessageRouter extends EventEmitter {
     if (!key) {
       return;
     }
-    const suppressionMs =
-      Number.isFinite(this.reconnectAddressSuppressionMs) &&
-      this.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
-        this.reconnectAddressSuppressionMs :
-        TRANSPORT_NUM.ZERO;
+    const suppressionMs = Number.isFinite(this.reconnectAddressSuppressionMs) && this.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ? this.reconnectAddressSuppressionMs : TRANSPORT_NUM.ZERO;
     if (suppressionMs <= TRANSPORT_NUM.ZERO) {
       return;
     }
-    this.suppressedReconnectAddresses.set(
-      key,
-      Date.now() + suppressionMs,
-    );
+    this.suppressedReconnectAddresses.set(key, Date.now() + suppressionMs);
   }
 
   /**
@@ -3331,12 +3310,10 @@ class MessageRouter extends EventEmitter {
    */
   shouldSuppressReconnectAddress(error) {
     const errorMessage = error?.message || null;
-    if (typeof errorMessage !== TRANSPORT_TYPEOF.STRING ||
-        errorMessage.length === TRANSPORT_NUM.ZERO) {
+    if (typeof errorMessage !== TRANSPORT_TYPEOF.STRING || errorMessage.length === TRANSPORT_NUM.ZERO) {
       return false;
     }
-    return errorMessage.includes('ENOTFOUND') ||
-      errorMessage.includes('EAI_AGAIN');
+    return errorMessage.includes(MESSAGE_ROUTER_LITERAL.STRING_ENOTFOUND) || errorMessage.includes(MESSAGE_ROUTER_LITERAL.STRING_EAI_AGAIN);
   }
 
   /**
@@ -3350,28 +3327,18 @@ class MessageRouter extends EventEmitter {
    */
   resolveReconnectAddresses(targetNodeId, preferredAddress = null) {
     const addresses = [];
-    const pushUniqueAddress = (candidate) => {
-      if (typeof candidate !== TRANSPORT_TYPEOF.STRING ||
-          candidate.length === TRANSPORT_NUM.ZERO ||
-          this.isReconnectAddressSuppressed(targetNodeId, candidate) ||
-          addresses.includes(candidate)) {
+    const pushUniqueAddress = candidate => {
+      if (typeof candidate !== TRANSPORT_TYPEOF.STRING || candidate.length === TRANSPORT_NUM.ZERO || this.isReconnectAddressSuppressed(targetNodeId, candidate) || addresses.includes(candidate)) {
         return;
       }
       addresses.push(candidate);
     };
-
     const existing = this.nodeConnections.get(targetNodeId) || null;
-    const canonicalAddress = existing ?
-      this.refreshReconnectAuthority(existing, preferredAddress) :
-      this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);
-    pushUniqueAddress(normalizeToWebSocketAddress(preferredAddress) ||
-      preferredAddress);
-    pushUniqueAddress(normalizeToWebSocketAddress(
-      existing?.observedAddress) || existing?.observedAddress);
-    pushUniqueAddress(normalizeToWebSocketAddress(existing?.address) ||
-      existing?.address);
-    pushUniqueAddress(normalizeToWebSocketAddress(
-      existing?.configuredAddress) || existing?.configuredAddress);
+    const canonicalAddress = existing ? this.refreshReconnectAuthority(existing, preferredAddress) : this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(preferredAddress) || preferredAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(existing?.observedAddress) || existing?.observedAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(existing?.address) || existing?.address);
+    pushUniqueAddress(normalizeToWebSocketAddress(existing?.configuredAddress) || existing?.configuredAddress);
     pushUniqueAddress(canonicalAddress);
     return addresses;
   }
@@ -3388,26 +3355,20 @@ class MessageRouter extends EventEmitter {
     const existing = this.nodeConnections.get(targetNodeId) || null;
     if (existing) {
       this.refreshReconnectAuthority(existing, preferredAddress);
-      if (typeof preferredAddress === TRANSPORT_TYPEOF.STRING &&
-          preferredAddress.length > TRANSPORT_NUM.ZERO) {
-        if (typeof existing.configuredAddress !== TRANSPORT_TYPEOF.STRING ||
-            existing.configuredAddress.length === TRANSPORT_NUM.ZERO) {
+      if (typeof preferredAddress === TRANSPORT_TYPEOF.STRING && preferredAddress.length > TRANSPORT_NUM.ZERO) {
+        if (typeof existing.configuredAddress !== TRANSPORT_TYPEOF.STRING || existing.configuredAddress.length === TRANSPORT_NUM.ZERO) {
           existing.configuredAddress = preferredAddress;
         }
-        if (typeof existing.address !== TRANSPORT_TYPEOF.STRING ||
-            existing.address.length === TRANSPORT_NUM.ZERO) {
+        if (typeof existing.address !== TRANSPORT_TYPEOF.STRING || existing.address.length === TRANSPORT_NUM.ZERO) {
           existing.address = preferredAddress;
         }
       }
       return existing;
     }
-    if (typeof preferredAddress !== TRANSPORT_TYPEOF.STRING ||
-        preferredAddress.length === TRANSPORT_NUM.ZERO) {
+    if (typeof preferredAddress !== TRANSPORT_TYPEOF.STRING || preferredAddress.length === TRANSPORT_NUM.ZERO) {
       return null;
     }
-    const canonicalPreferredAddress =
-      this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress) ||
-      preferredAddress;
+    const canonicalPreferredAddress = this.resolveCanonicalReconnectAddress(targetNodeId, preferredAddress) || preferredAddress;
     const connectionInfo = {
       connectionId: uuidv4(),
       nodeId: targetNodeId,
@@ -3426,7 +3387,7 @@ class MessageRouter extends EventEmitter {
       lastAckAt: null,
       lastAckTimeoutAt: null,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
     this.nodeConnections.set(targetNodeId, connectionInfo);
     return connectionInfo;
@@ -3441,19 +3402,11 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   armReconnectAfterConnectFailure(targetNodeId, preferredAddress = null) {
-    const connection = this.ensureReconnectOwnerConnection(
-      targetNodeId,
-      preferredAddress,
-    );
-    if (!connection ||
-        connection.isIncoming === true ||
-        connection.isSelfConnection === true ||
-        connection.state === ConnectionState.CONNECTED ||
-        this.hasScheduledReconnect(connection)) {
+    const connection = this.ensureReconnectOwnerConnection(targetNodeId, preferredAddress);
+    if (!connection || connection.isIncoming === true || connection.isSelfConnection === true || connection.state === ConnectionState.CONNECTED || this.hasScheduledReconnect(connection)) {
       return connection;
     }
-    if (typeof connection.address !== TRANSPORT_TYPEOF.STRING ||
-        connection.address.length === TRANSPORT_NUM.ZERO) {
+    if (typeof connection.address !== TRANSPORT_TYPEOF.STRING || connection.address.length === TRANSPORT_NUM.ZERO) {
       return connection;
     }
     connection.state = ConnectionState.DISCONNECTED;
@@ -3476,50 +3429,36 @@ class MessageRouter extends EventEmitter {
     if (this.hasScheduledReconnect(existing)) {
       return null;
     }
-
     if (this.pendingNodeConnections.has(targetNodeId)) {
       return this.pendingNodeConnections.get(targetNodeId);
     }
-
     const connectionPromise = (async () => {
-      const reconnectAddresses =
-        this.resolveReconnectAddresses(targetNodeId, address);
+      const reconnectAddresses = this.resolveReconnectAddresses(targetNodeId, address);
       let lastError = null;
       try {
         for (const reconnectAddress of reconnectAddresses) {
           try {
             await this.connectToNode(targetNodeId, reconnectAddress);
-            this.clearReconnectAddressSuppression(
-              targetNodeId,
-              reconnectAddress,
-            );
+            this.clearReconnectAddressSuppression(targetNodeId, reconnectAddress);
             lastError = null;
             break;
           } catch (error) {
             lastError = error;
             if (this.shouldSuppressReconnectAddress(error)) {
-              this.suppressReconnectAddress(
-                targetNodeId,
-                reconnectAddress,
-              );
+              this.suppressReconnectAddress(targetNodeId, reconnectAddress);
             }
             this.logger.warn('Failed to reconnect target node before delivery', {
               targetNodeId,
               address: reconnectAddress,
               localNodeId: this.nodeId,
-              error: error?.message || String(error),
+              error: error?.message || String(error)
             });
           }
         }
       } finally {
         this.pendingNodeConnections.delete(targetNodeId);
       }
-
-      this.armReconnectAfterConnectFailure(
-        targetNodeId,
-        reconnectAddresses[reconnectAddresses.length - TRANSPORT_NUM.ONE] ||
-          address,
-      );
+      this.armReconnectAfterConnectFailure(targetNodeId, reconnectAddresses[reconnectAddresses.length - TRANSPORT_NUM.ONE] || address);
       const connection = this.nodeConnections.get(targetNodeId) || null;
       if (!connection || connection.state !== ConnectionState.CONNECTED) {
         if (lastError && reconnectAddresses.length === TRANSPORT_NUM.ZERO) {
@@ -3527,13 +3466,11 @@ class MessageRouter extends EventEmitter {
             targetNodeId,
             address: null,
             localNodeId: this.nodeId,
-            error: lastError?.message || String(lastError),
+            error: lastError?.message || String(lastError)
           });
         }
       }
-      return connection && connection.state === ConnectionState.CONNECTED ?
-        connection :
-        null;
+      return connection && connection.state === ConnectionState.CONNECTED ? connection : null;
     })();
     this.pendingNodeConnections.set(targetNodeId, connectionPromise);
     return connectionPromise;
@@ -3550,25 +3487,10 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>}
    * @private
    */
-  async tryDeliverAfterReconnect(
-    reconnectAddress,
-    targetAddress,
-    messageId,
-    payload,
-    targetNodeId,
-    correlationId,
-    timeoutMs = null,
-  ) {
-    const connection = await this.ensureNodeConnection(
-      targetNodeId,
-      reconnectAddress,
-    );
+  async tryDeliverAfterReconnect(reconnectAddress, targetAddress, messageId, payload, targetNodeId, correlationId, timeoutMs = null) {
+    const connection = await this.ensureNodeConnection(targetNodeId, reconnectAddress);
     if (!connection || connection.state !== ConnectionState.CONNECTED) {
-      const reconnectInProgress = this.buildReconnectInProgressFailure(
-        targetNodeId,
-        messageId,
-        correlationId,
-      );
+      const reconnectInProgress = this.buildReconnectInProgressFailure(targetNodeId, messageId, correlationId);
       if (reconnectInProgress) {
         return reconnectInProgress;
       }
@@ -3581,28 +3503,14 @@ class MessageRouter extends EventEmitter {
         connectionState: connection?.state,
         availableConnections: Array.from(this.nodeConnections.keys()),
         reconnectAddress,
-        recoveredViaResolver: true,
+        recoveredViaResolver: true
       });
-      return this.buildDeferredDeliveryFailure(
-        messageId,
-        correlationId,
-        ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
-        {
-          errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
-          retryAfterMs: this.reconnectIntervalMs,
-        },
-      );
+      return this.buildDeferredDeliveryFailure(messageId, correlationId, ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId), {
+        errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+        retryAfterMs: this.reconnectIntervalMs
+      });
     }
-
-    return this.sendMessage(
-      connection,
-      targetAddress,
-      messageId,
-      payload,
-      targetNodeId,
-      correlationId,
-      timeoutMs,
-    );
+    return this.sendMessage(connection, targetAddress, messageId, payload, targetNodeId, correlationId, timeoutMs);
   }
 
   /**
@@ -3614,15 +3522,10 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   scheduleRetiredSocketTermination(staleWs) {
-    if (!staleWs ||
-        (typeof staleWs.terminate !== TRANSPORT_TYPEOF.FUNCTION &&
-          typeof staleWs.close !== TRANSPORT_TYPEOF.FUNCTION)) {
+    if (!staleWs || typeof staleWs.terminate !== TRANSPORT_TYPEOF.FUNCTION && typeof staleWs.close !== TRANSPORT_TYPEOF.FUNCTION) {
       return;
     }
-    const graceMs = Math.max(
-      this.reconnectIntervalMs,
-      this.messageTimeoutMs,
-    );
+    const graceMs = Math.max(this.reconnectIntervalMs, this.messageTimeoutMs);
     const timeout = setTimeout(() => {
       try {
         if (typeof staleWs.terminate === TRANSPORT_TYPEOF.FUNCTION) {
@@ -3650,51 +3553,36 @@ class MessageRouter extends EventEmitter {
    * @return {Object|null}
    * @private
    */
-  quarantineConnectionAfterAckTimeout(
-    targetNodeId,
-    connection,
-    messageId,
-    targetAddress,
-  ) {
-    if (!connection ||
-        connection.isIncoming === true ||
-        connection.isSelfConnection === true) {
+  quarantineConnectionAfterAckTimeout(targetNodeId, connection, messageId, targetAddress) {
+    if (!connection || connection.isIncoming === true || connection.isSelfConnection === true) {
       return;
     }
-
     const activeConnection = this.nodeConnections.get(targetNodeId);
-    if (!activeConnection ||
-        activeConnection.connectionId !== connection.connectionId ||
-        activeConnection.state !== ConnectionState.CONNECTED) {
+    if (!activeConnection || activeConnection.connectionId !== connection.connectionId || activeConnection.state !== ConnectionState.CONNECTED) {
       return activeConnection || null;
     }
-
-    activeConnection.ackTimeoutStreak =
-      (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) +
-      TRANSPORT_NUM.ONE;
+    activeConnection.ackTimeoutStreak = (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) + TRANSPORT_NUM.ONE;
     activeConnection.lastAckTimeoutAt = Date.now();
-    if (activeConnection.ackTimeoutStreak <
-      this.ackTimeoutQuarantineThreshold) {
-      this.logger.debug('Observed ACK timeout below quarantine threshold', {
+    if (activeConnection.ackTimeoutStreak < this.ackTimeoutQuarantineThreshold) {
+      this.logger.debug(MESSAGE_ROUTER_LITERAL.STRING_OBSERVED_ACK_TIMEOUT_BELOW_QUARANTINE_THRESHOLD, {
         messageId,
         targetAddress,
         targetNodeId,
         localNodeId: this.nodeId,
         connectionId: activeConnection.connectionId,
         ackTimeoutStreak: activeConnection.ackTimeoutStreak,
-        ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold,
+        ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold
       });
       return activeConnection;
     }
-
-    this.logger.warn('Quarantining target connection after ACK timeout', {
+    this.logger.warn(MESSAGE_ROUTER_LITERAL.STRING_QUARANTINING_TARGET_CONNECTION_AFTER_ACK_TIMEOUT, {
       messageId,
       targetAddress,
       targetNodeId,
       localNodeId: this.nodeId,
       connectionId: activeConnection.connectionId,
       ackTimeoutStreak: activeConnection.ackTimeoutStreak,
-      ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold,
+      ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold
     });
     const staleWs = activeConnection.ws || null;
     const reconnectOwner = {
@@ -3702,8 +3590,7 @@ class MessageRouter extends EventEmitter {
       nodeId: activeConnection.nodeId,
       nodeAddress: activeConnection.nodeAddress,
       address: activeConnection.address,
-      configuredAddress:
-        activeConnection.configuredAddress || activeConnection.address,
+      configuredAddress: activeConnection.configuredAddress || activeConnection.address,
       observedAddress: activeConnection.observedAddress || null,
       ws: null,
       state: ConnectionState.DISCONNECTED,
@@ -3717,9 +3604,8 @@ class MessageRouter extends EventEmitter {
       lastAckAt: activeConnection.lastAckAt || null,
       lastAckTimeoutAt: activeConnection.lastAckTimeoutAt || null,
       retired: false,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
-
     this.retireConnection(activeConnection);
     activeConnection.state = ConnectionState.CLOSED;
     this.nodeConnections.set(targetNodeId, reconnectOwner);
@@ -3740,25 +3626,16 @@ class MessageRouter extends EventEmitter {
    * @return {Object}
    * @private
    */
-  buildDeferredDeliveryFailure(
-    messageId,
-    correlationId,
-    error,
-    options = {},
-  ) {
+  buildDeferredDeliveryFailure(messageId, correlationId, error, options = {}) {
     const result = {
       messageId,
       correlationId,
       acknowledged: false,
       error,
       deferRetry: true,
-      retryAfterMs: normalizeRetryAfterMs(
-        options.retryAfterMs,
-        this.reconnectIntervalMs,
-      ),
+      retryAfterMs: normalizeRetryAfterMs(options.retryAfterMs, this.reconnectIntervalMs)
     };
-    if (typeof options.errorCode === TRANSPORT_TYPEOF.STRING &&
-        options.errorCode.length > TRANSPORT_NUM.ZERO) {
+    if (typeof options.errorCode === TRANSPORT_TYPEOF.STRING && options.errorCode.length > TRANSPORT_NUM.ZERO) {
       result.errorCode = options.errorCode;
     }
     return result;
@@ -3773,15 +3650,7 @@ class MessageRouter extends EventEmitter {
    * @return {Promise<Object>} Send result.
    * @private
    */
-  sendMessage(
-    connection,
-    targetAddress,
-    messageId,
-    payload,
-    targetNodeId,
-    correlationId,
-    timeoutMs = null,
-  ) {
+  sendMessage(connection, targetAddress, messageId, payload, targetNodeId, correlationId, timeoutMs = null) {
     return new Promise((resolve, reject) => {
       const message = {
         type: RouterMessageType.SERVICE_MESSAGE,
@@ -3790,25 +3659,15 @@ class MessageRouter extends EventEmitter {
         sourceAddress: ROUTER_ADDRESS.buildSourceAddress(this.nodeId),
         sourceNodeId: this.nodeId,
         payload,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       };
-
-      const deliveryTimeoutMs = Number.isFinite(timeoutMs) &&
-        timeoutMs > TRANSPORT_NUM.ZERO ?
-        Math.floor(timeoutMs) :
-        this.messageTimeoutMs;
-
+      const deliveryTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > TRANSPORT_NUM.ZERO ? Math.floor(timeoutMs) : this.messageTimeoutMs;
       const failBeforeSend = () => {
         const activeConnection = this.nodeConnections.get(targetNodeId) || connection;
         const retryAfterMs = this.resolveReconnectRetryAfterMs(activeConnection);
-        if (activeConnection &&
-            activeConnection.isIncoming !== true &&
-            activeConnection.isSelfConnection !== true) {
+        if (activeConnection && activeConnection.isIncoming !== true && activeConnection.isSelfConnection !== true) {
           const staleWs = activeConnection.ws;
-          this.handleConnectionClose(
-            targetNodeId,
-            activeConnection.connectionId,
-          );
+          this.handleConnectionClose(targetNodeId, activeConnection.connectionId);
           try {
             if (typeof staleWs?.terminate === TRANSPORT_TYPEOF.FUNCTION) {
               staleWs.terminate();
@@ -3821,10 +3680,9 @@ class MessageRouter extends EventEmitter {
         }
         reject(this.buildConnectionClosedError(targetNodeId, {
           beforeSend: true,
-          retryAfterMs,
+          retryAfterMs
         }));
       };
-
       if (!connection?.ws || connection.ws.readyState !== WebSocket.OPEN) {
         failBeforeSend();
         return;
@@ -3833,23 +3691,11 @@ class MessageRouter extends EventEmitter {
       // Set up timeout
       const timeout = setTimeout(() => {
         this.pendingMessages.delete(messageId);
-        const recoveryOwner = this.quarantineConnectionAfterAckTimeout(
-          targetNodeId,
-          connection,
-          messageId,
-          targetAddress,
-        );
-        resolve(this.buildDeferredDeliveryFailure(
-          messageId,
-          correlationId,
-          TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-          {
-            errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-            retryAfterMs: this.resolveReconnectRetryAfterMs(
-              recoveryOwner || connection,
-            ),
-          },
-        ));
+        const recoveryOwner = this.quarantineConnectionAfterAckTimeout(targetNodeId, connection, messageId, targetAddress);
+        resolve(this.buildDeferredDeliveryFailure(messageId, correlationId, TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT, {
+          errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+          retryAfterMs: this.resolveReconnectRetryAfterMs(recoveryOwner || connection)
+        }));
       }, deliveryTimeoutMs);
 
       // Track pending message
@@ -3859,9 +3705,8 @@ class MessageRouter extends EventEmitter {
         reject,
         timeout,
         sentAt: Date.now(),
-        targetNodeId,
+        targetNodeId
       });
-
       try {
         connection.ws.send(JSON.stringify(message));
       } catch (_sendError) {
@@ -3922,21 +3767,21 @@ class MessageRouter extends EventEmitter {
     if (!connection || connection.state !== ConnectionState.CONNECTED || !connection.ws) {
       return false;
     }
-
     const pingId = uuidv4();
     const timeout = timeoutMs ?? this.pingTimeoutMs;
-
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const timer = setTimeout(() => {
         this.pendingPings.delete(pingId);
         resolve(false);
       }, timeout);
-
-      this.pendingPings.set(pingId, {resolve, timeout: timer});
+      this.pendingPings.set(pingId, {
+        resolve,
+        timeout: timer
+      });
       this.sendRaw(connection.ws, {
         type: RouterMessageType.PING,
         pingId,
-        timestamp: Date.now(),
+        timestamp: Date.now()
       });
     });
   }
@@ -3961,9 +3806,7 @@ class MessageRouter extends EventEmitter {
    */
   hasSelfConnection() {
     const connection = this.nodeConnections.get(this.nodeId);
-    return connection &&
-           connection.isSelfConnection &&
-           connection.state === ConnectionState.CONNECTED;
+    return connection && connection.isSelfConnection && connection.state === ConnectionState.CONNECTED;
   }
 
   /**
@@ -3977,31 +3820,23 @@ class MessageRouter extends EventEmitter {
         state: connection.state,
         isIncoming: connection.isIncoming,
         reconnectAttempts: connection.reconnectAttempts,
-        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO,
+        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO
       };
     }
-
     const outboundQueueStats = {};
     for (const [nodeId, queue] of this.outboundQueues) {
       outboundQueueStats[nodeId] = {
         inFlight: queue.inFlight,
         pending: queue.pending.length,
-        pendingCritical: countPendingByPriority(
-          queue,
-          OutboundDeliveryPriority.CRITICAL,
-        ),
-        pendingBackground: countPendingByPriority(
-          queue,
-          OutboundDeliveryPriority.BACKGROUND,
-        ),
+        pendingCritical: countPendingByPriority(queue, OutboundDeliveryPriority.CRITICAL),
+        pendingBackground: countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND),
         criticalReserve: queue.criticalReserve,
         backgroundPendingLimit: resolveBackgroundPendingLimit(queue),
         maxConcurrent: queue.maxConcurrent,
         maxPending: queue.maxPending,
-        queueWait: buildQueueWaitSummary(queue),
+        queueWait: buildQueueWaitSummary(queue)
       };
     }
-
     return {
       routerId: this.routerId,
       nodeId: this.nodeId,
@@ -4011,10 +3846,11 @@ class MessageRouter extends EventEmitter {
       messageCount: this.messageCount,
       pendingMessages: this.pendingMessages.size,
       pendingResponses: this.pendingResponses.size,
+      serviceResponseDispositions: this.getServiceResponseDispositionCounts(),
       handlers: this.handlers.size,
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,
-      outboundQueues: outboundQueueStats,
+      outboundQueues: outboundQueueStats
     };
   }
 
@@ -4026,35 +3862,24 @@ class MessageRouter extends EventEmitter {
     let saturatedNodeCount = TRANSPORT_NUM.ZERO;
     let totalPending = TRANSPORT_NUM.ZERO;
     let maxPendingUtilization = TRANSPORT_NUM.ZERO;
-
     for (const queue of this.outboundQueues.values()) {
       const pending = queue.pending.length;
-      const pendingBackground = countPendingByPriority(
-        queue,
-        OutboundDeliveryPriority.BACKGROUND,
-      );
+      const pendingBackground = countPendingByPriority(queue, OutboundDeliveryPriority.BACKGROUND);
       const backgroundPendingLimit = resolveBackgroundPendingLimit(queue);
-      const backpressured =
-        pending >= queue.maxPending ||
-        (pending > TRANSPORT_NUM.ZERO &&
-          pendingBackground >= backgroundPendingLimit);
+      const backpressured = pending >= queue.maxPending || pending > TRANSPORT_NUM.ZERO && pendingBackground >= backgroundPendingLimit;
       if (backpressured) {
         saturatedNodeCount += TRANSPORT_NUM.ONE;
       }
       totalPending += pending;
       if (queue.maxPending > TRANSPORT_NUM.ZERO) {
-        maxPendingUtilization = Math.max(
-          maxPendingUtilization,
-          pending / queue.maxPending,
-        );
+        maxPendingUtilization = Math.max(maxPendingUtilization, pending / queue.maxPending);
       }
     }
-
     return Object.freeze({
       backpressured: saturatedNodeCount > TRANSPORT_NUM.ZERO,
       saturatedNodeCount,
       totalPending,
-      maxPendingUtilization,
+      maxPendingUtilization
     });
   }
 
@@ -4064,7 +3889,7 @@ class MessageRouter extends EventEmitter {
    */
   async shutdown() {
     this.logger.debug(ROUTER_LOG_MSG.SHUTTING_DOWN, {
-      routerId: this.routerId,
+      routerId: this.routerId
     });
     this.isShuttingDown = true;
 
@@ -4075,24 +3900,23 @@ class MessageRouter extends EventEmitter {
         messageId: pending.messageId,
         acknowledged: false,
         error: ROUTER_ERROR_MSG.SHUTDOWN,
-        shutdown: true,
+        shutdown: true
       });
     }
     this.pendingMessages.clear();
-
     const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     for (const [, pending] of this.pendingResponses) {
       clearTimeout(pending.timeoutId);
       pending.reject(shutdownError);
     }
     this.pendingResponses.clear();
-
+    this.retiredPendingResponses.clear();
+    this.serviceResponseDispositionCounts.clear();
     for (const [, pending] of this.pendingPings) {
       clearTimeout(pending.timeout);
       pending.resolve(false);
     }
     this.pendingPings.clear();
-
     for (const [nodeId] of this.outboundQueues) {
       this.failOutboundQueueGracefully(nodeId, shutdownError);
     }
@@ -4112,7 +3936,7 @@ class MessageRouter extends EventEmitter {
       if (connection.ws) {
         const ws = connection.ws;
         if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          closePromises.push(new Promise((resolve) => {
+          closePromises.push(new Promise(resolve => {
             ws.once(TRANSPORT_EVENT.CLOSE, resolve);
             ws.terminate(); // Force close instead of graceful close
           }));
@@ -4123,12 +3947,9 @@ class MessageRouter extends EventEmitter {
     // Wait for all connections to close (with timeout that gets cleared)
     if (closePromises.length > TRANSPORT_NUM.ZERO) {
       let timeoutId;
-      await Promise.race([
-        Promise.all(closePromises),
-        new Promise((resolve) => {
-          timeoutId = setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
-        }),
-      ]).finally(() => {
+      await Promise.race([Promise.all(closePromises), new Promise(resolve => {
+        timeoutId = setTimeout(resolve, TRANSPORT_DEFAULT.SHUTDOWN_WAIT_MS);
+      })]).finally(() => {
         clearTimeout(timeoutId);
       });
     }
@@ -4140,7 +3961,7 @@ class MessageRouter extends EventEmitter {
         for (const client of this.server.clients || []) {
           client.terminate();
         }
-        await new Promise((resolve) => this.server.close(resolve));
+        await new Promise(resolve => this.server.close(resolve));
         this.server = null;
         this.inProcessTransport = false;
       } else {
@@ -4151,37 +3972,29 @@ class MessageRouter extends EventEmitter {
         for (const client of wsServer.clients) {
           client.terminate();
         }
-
-        await new Promise((resolve) => {
+        await new Promise(resolve => {
           wsServer.close(() => resolve());
         });
-
         if (httpServer) {
           if (typeof httpServer.closeAllConnections === TRANSPORT_TYPEOF.FUNCTION) {
             httpServer.closeAllConnections();
           }
-          await new Promise((resolve) => {
+          await new Promise(resolve => {
             httpServer.close(() => resolve());
           });
           if (typeof httpServer.unref === TRANSPORT_TYPEOF.FUNCTION) {
             httpServer.unref();
           }
         }
-
         this.server = null;
       }
     }
-
     this.nodeConnections.clear();
     this.handlers.clear();
     this.initialized = false;
-
-    this.emit(TRANSPORT_EVENT.SHUTDOWN, {routerId: this.routerId});
+    this.emit(TRANSPORT_EVENT.SHUTDOWN, {
+      routerId: this.routerId
+    });
   }
 }
-
-export {
-  MessageRouter,
-  ConnectionState,
-  RouterMessageType,
-};
+export { MessageRouter, ConnectionState, RouterMessageType };

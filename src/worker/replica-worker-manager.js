@@ -27,6 +27,7 @@ import {
   WORKER_HEALTH_STATUS,
   WORKER_ENTITY_TYPE,
   WORKER_ERROR_MSG,
+  WORKER_RESPONSE_STATUS,
   FACADE_MESSAGE_TYPE,
   LEADERSHIP_MESSAGE_TYPE,
 } from './worker-constants.js';
@@ -51,8 +52,13 @@ const MANAGER_ERROR_MSG = Object.freeze({
   WORKER_SPAWN_FAILED: 'Failed to spawn worker process',
   WORKER_STOP_FAILED: 'Failed to stop worker process',
   MISSING_MESSAGE_ROUTER: 'messageRouter is required',
+  INVALID_TARGET_ADDRESS_FORMAT: 'Invalid target address format',
   // Timeout error message generators - Requirements 7.1, 7.2
   createReplicaTimeout: (timeoutMs) => `CREATE_REPLICA timeout after ${timeoutMs}ms`,
+});
+const WORKER_MANAGER_ADDRESS_SEGMENT = Object.freeze({
+  REPLICA_INDEX: 2,
+  MIN_LENGTH: 3,
 });
 
 /**
@@ -500,7 +506,7 @@ class ReplicaWorkerManager extends EventEmitter {
 
     // Extract replica ID from target address (format: nodeId/entityType/replicaId)
     const targetParts = targetAddress.split('/');
-    if (targetParts.length < 3) {
+    if (targetParts.length < WORKER_MANAGER_ADDRESS_SEGMENT.MIN_LENGTH) {
       this.logger.warn('Invalid target address format', {
         targetAddress,
         messageId,
@@ -508,7 +514,7 @@ class ReplicaWorkerManager extends EventEmitter {
       return;
     }
 
-    const targetReplicaId = targetParts[2];
+    const targetReplicaId = targetParts[WORKER_MANAGER_ADDRESS_SEGMENT.REPLICA_INDEX];
 
     // Check if target replica exists in this manager
     const targetHandle = this.workers.get(targetReplicaId);
@@ -519,18 +525,40 @@ class ReplicaWorkerManager extends EventEmitter {
       });
       // If we have a messageRouter, try to route externally
       if (this.messageRouter) {
-        await this.messageRouter.deliver(targetAddress, payload);
+        try {
+          await this.messageRouter.deliver(targetAddress, payload);
+        } catch (error) {
+          this.logger.warn('Failed to route external worker message', {
+            nodeId: this.nodeId,
+            sourceAddress,
+            targetAddress,
+            messageId,
+            correlationId,
+            error: error.message,
+          });
+        }
       }
       return;
     }
-    const response = await this.deliverMessage(targetReplicaId, payload);
+    try {
+      await this.deliverMessage(targetReplicaId, payload);
 
-    this.logger.debug('Worker message delivered', {
-      nodeId: this.nodeId,
-      targetReplicaId,
-      messageId,
-      acknowledged: response?.acknowledged,
-    });
+      this.logger.debug('Worker message delivered', {
+        nodeId: this.nodeId,
+        targetReplicaId,
+        messageId,
+      });
+    } catch (error) {
+      this.logger.warn('Failed to route local worker message', {
+        nodeId: this.nodeId,
+        sourceAddress,
+        targetAddress,
+        targetReplicaId,
+        messageId,
+        correlationId,
+        error: error.message,
+      });
+    }
   }
 
   /**

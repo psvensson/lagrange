@@ -411,7 +411,11 @@ test('BootstrapAPI - bootstrap control-plane mutations use runtime-owner CDC whe
       },
     });
 
-    t.same(result, {success: true, outcome: 'applied-via-runtime-owner'},
+    t.same(result, {
+      success: true,
+      outcome: 'applied-via-runtime-owner',
+      completionState: 'applied',
+    },
       'runtime-owner CDC should satisfy bootstrap mutation ingress');
     t.same(capturedRow, {
       tableName: TABLES.SERVICES,
@@ -956,6 +960,7 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -978,6 +983,60 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata
       'bootstrap join readiness should project ready=true for startup gate');
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear tolerated blocker reasons');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - bootstrap join readiness tolerates isolated local query transport blockers',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: [LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(strictReadyResponse.statusCode, 503,
+      'strict readiness should stay blocked on local query transport lag');
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should allow CONTROL_READY local query transport lag');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true while local query transport wiring catches up');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated local query transport blockers');
 
     await api.shutdown();
   });
@@ -1014,6 +1073,7 @@ test('BootstrapAPI - readiness probes surface monotonic progress metadata',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -1333,6 +1393,7 @@ test('BootstrapAPI - bootstrap join readiness keeps blocking when additional blo
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -1382,6 +1443,7 @@ test('BootstrapAPI - bootstrap join readiness allows stable-window-only join-rea
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -1435,6 +1497,13 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
           return {
             publicationEpoch: 14,
             status: 'ACK_PENDING',
+            membershipLifecycleSummary: {
+              projectedServingNodeIds: ['seed-node-1'],
+              locallyEligibleNodeIds: ['seed-node-1'],
+              recoveryActiveNodeIds: ['seed-node-1'],
+              recoveryActiveNodeSource: 'recovery_eligible_projection',
+              missingPublishedRecoveryActiveNodeIds: ['seed-node-1'],
+            },
             priorityPartitionSummary: {
               satisfied: false,
               missingPartitionIds: ['replica_operations-p1'],
@@ -1473,6 +1542,27 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
       'bootstrap join readiness should project ready=true while allowing recovery fan-out');
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear the tolerated priority recovery blocker');
+    t.equal(
+      bootstrapReadyBody.recoveryProtocolState,
+      'publication_pending',
+      'bootstrap join readiness should surface the shared recovery protocol phase',
+    );
+    t.same(
+      bootstrapReadyBody.priorityRecoveryReasonCodes,
+      [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      'bootstrap join readiness should surface the canonical recovery reason codes',
+    );
+    t.match(
+      bootstrapReadyBody.targetParticipation,
+      {
+        nodeId: 'seed-node-1',
+        state: 'recovery_pending_publish',
+      },
+      'bootstrap join readiness should surface target participation from the shared protocol',
+    );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
       .getPriorityControlPlaneRecoveryHealth();
@@ -1486,6 +1576,110 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
       ],
       'priority recovery health should preserve the underlying control-plane reason codes',
     );
+    t.equal(
+      priorityRecoveryHealth.details.recoveryProtocolState,
+      'publication_pending',
+      'bootstrap readiness should expose the shared recovery protocol phase',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness uses bootstrap-service control-plane readiness fallback',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should reuse the bootstrap-service control-plane readiness owner');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true when bootstrap-service recovery authority is available');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness uses bootstrap-service rebalance-coordinator readiness fallback',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      state: 'warming',
+      reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        rebalanceCoordinator: {
+          controlPlaneReadinessService:
+            createSatisfiedControlPlaneReadinessService(),
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should reuse bootstrap-service rebalance-coordinator readiness state');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true when the bootstrap rebalance coordinator exposes recovery authority');
 
     await api.shutdown();
   });
@@ -1523,6 +1717,7 @@ test('BootstrapAPI - bootstrap join readiness allows bootstrap-init recovery byp
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
 
     await api.initialize(0, {listen: false});
@@ -1672,14 +1867,18 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
       method: 'GET',
       url: '/bootstrap/ready',
     });
-    t.equal(bootstrapReadyResponse.statusCode, 200,
-      'bootstrap join readiness should stay open so recovery fan-out can continue',
+    t.equal(bootstrapReadyResponse.statusCode, 503,
+      'bootstrap join readiness should fail closed when authoritative diagnostics are unavailable',
     );
     const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
-    t.equal(bootstrapReadyBody.ready, true,
-      'bootstrap join readiness should project ready=true for priority recovery blockers');
-    t.same(bootstrapReadyBody.reasons, [],
-      'bootstrap join readiness should clear tolerated priority recovery blockers');
+    t.equal(bootstrapReadyBody.ready, false,
+      'bootstrap join readiness should not project ready without authoritative diagnostics');
+    t.ok(
+      bootstrapReadyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'bootstrap join readiness should preserve the pending recovery blocker when authority is missing',
+    );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
       .getPriorityControlPlaneRecoveryHealth();
@@ -1750,14 +1949,18 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
       method: 'GET',
       url: '/bootstrap/ready',
     });
-    t.equal(bootstrapReadyResponse.statusCode, 200,
-      'bootstrap join readiness should stay open when diagnostics are missing',
+    t.equal(bootstrapReadyResponse.statusCode, 503,
+      'bootstrap join readiness should fail closed when diagnostics are missing',
     );
     const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
-    t.equal(bootstrapReadyBody.ready, true,
-      'bootstrap join readiness should project ready=true for pending recovery states');
-    t.same(bootstrapReadyBody.reasons, [],
-      'bootstrap join readiness should clear tolerated pending-recovery reasons');
+    t.equal(bootstrapReadyBody.ready, false,
+      'bootstrap join readiness should not project ready without a control snapshot authority basis');
+    t.ok(
+      bootstrapReadyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'bootstrap join readiness should preserve pending recovery when diagnostics are absent',
+    );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
       .getPriorityControlPlaneRecoveryHealth();
@@ -1843,6 +2046,94 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
     await api.shutdown();
   });
 
+test('BootstrapAPI - readiness probes bound async diagnostics and fall back to sync',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+      demotionFailureThreshold: 1,
+    });
+    const diagnostics = Object.freeze({
+      publicationEpoch: 42,
+      status: 'PUBLISHED',
+      priorityPartitionSummary: Object.freeze({
+        satisfied: true,
+        missingPartitionIds: Object.freeze([]),
+      }),
+    });
+    let asyncReadCount = 0;
+    let syncReadCount = 0;
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      controlPlaneReadinessService: {
+        async getMembershipPublicationDiagnostics() {
+          asyncReadCount += 1;
+          await new Promise((resolve) => {
+            const timer = setTimeout(resolve, 750);
+            timer.unref?.();
+          });
+          return diagnostics;
+        },
+        getMembershipPublicationDiagnosticsSync() {
+          syncReadCount += 1;
+          return diagnostics;
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyStartedAt = Date.now();
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    const readyElapsedMs = Date.now() - readyStartedAt;
+    t.ok(
+      readyResponse.statusCode === 200 || readyResponse.statusCode === 503,
+      'readyz should remain responsive under slow async diagnostics',
+    );
+    t.ok(
+      readyElapsedMs < 650,
+      'readyz should use bounded async diagnostics before falling back',
+    );
+
+    const bootstrapReadyStartedAt = Date.now();
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    const bootstrapReadyElapsedMs = Date.now() - bootstrapReadyStartedAt;
+    t.ok(
+      bootstrapReadyResponse.statusCode === 200 ||
+        bootstrapReadyResponse.statusCode === 503,
+      'bootstrap readiness probe should remain responsive under slow async diagnostics',
+    );
+    t.ok(
+      bootstrapReadyElapsedMs < 650,
+      'bootstrap readiness probe should use bounded async diagnostics before fallback',
+    );
+    t.ok(asyncReadCount >= 2,
+      'probe handlers should still attempt async diagnostics reads');
+    t.ok(syncReadCount >= 2,
+      'probe handlers should fall back to synchronous diagnostics snapshots');
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - readiness fails closed when control-plane readiness service is missing',
   async (t) => {
     initializeTestEnvironment();
@@ -1887,13 +2178,17 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
       method: 'GET',
       url: '/bootstrap/ready',
     });
-    t.equal(bootstrapReadyResponse.statusCode, 200,
-      'bootstrap join readiness should remain open while recovery safety is unknown');
+    t.equal(bootstrapReadyResponse.statusCode, 503,
+      'bootstrap join readiness should fail closed while recovery safety is unknown');
     const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
-    t.equal(bootstrapReadyBody.ready, true,
-      'bootstrap join readiness should project ready=true for recovery-pending blockers');
-    t.same(bootstrapReadyBody.reasons, [],
-      'bootstrap join readiness should clear tolerated recovery-pending blockers');
+    t.equal(bootstrapReadyBody.ready, false,
+      'bootstrap join readiness should not project ready when the control-plane readiness service is missing');
+    t.ok(
+      bootstrapReadyBody.reasons.includes(
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      'bootstrap join readiness should preserve the recovery-pending blocker when authority is unavailable',
+    );
 
     const priorityRecoveryHealth = api.bootstrapReadinessOwner
       .getPriorityControlPlaneRecoveryHealth();
@@ -2280,6 +2575,129 @@ test('BootstrapAPI - readyz blocks on local query transport readiness before pro
       'readyz should promote once local query transport is ready and the stable window elapses');
     body = JSON.parse(response.body);
     t.equal(body.ready, true, 'readyz should expose ready=true after promotion');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readyz treats unknown local query transport state as not ready',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessCache = {
+      get() {
+        return null;
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: 'partition-1',
+            table_name: TABLES.NODES,
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.MESSAGE_GROUPS) {
+          return [{
+            group_id: 'mg-1',
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [{
+            service_id: 'partition-1-leader',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: 'partition-1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/partition/partition-1-leader',
+            raft_role: RAFT_ROLE.LEADER,
+            status: SERVICE_STATUS.ACTIVE,
+          }];
+        }
+        return [];
+      },
+    };
+
+    let nowMs = 1000;
+    let localTransportState = 'unknown';
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 50,
+      demotionFailureThreshold: 2,
+      now: () => nowMs,
+      retryAfterMs: 250,
+    });
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: readinessCache,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+      },
+      readinessState,
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
+      messageRouter: {
+        getQueryDataPlaneTransportReadiness() {
+          if (localTransportState === 'ready') {
+            return {ready: true, state: 'ready'};
+          }
+          if (localTransportState === 'deferred') {
+            return {
+              ready: false,
+              state: 'deferred',
+              reason: 'Query/data-plane message-group transport is not configured',
+              retryAfterMs: 75,
+            };
+          }
+          return {
+            state: 'unknown',
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    let response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should stay unavailable while local query transport readiness is unknown');
+    let body = JSON.parse(response.body);
+    t.ok(
+      body.reasons.includes(LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY),
+      'readyz should block on unknown local query transport state',
+    );
+
+    localTransportState = 'ready';
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should still honor the stable window after transport becomes explicitly ready');
+    body = JSON.parse(response.body);
+    t.ok(
+      body.reasons.includes(LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING),
+      'readyz should move into the stable window once explicit transport readiness arrives',
+    );
+
+    nowMs += 60;
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 200,
+      'readyz should promote only after explicit local query transport readiness and stable-window completion');
 
     await api.shutdown();
   });
@@ -3667,6 +4085,40 @@ test('BootstrapAPI - buildSystemTableSnapshots handles missing cache', async (t)
   await api.shutdown();
 });
 
+test('BootstrapAPI - buildSystemTableSnapshots falls back to runtime owner cache', async (t) => {
+  initializeTestEnvironment();
+
+  const nodeRow = {
+    node_id: 'seed-node-1',
+    node_address: 'ws://localhost:8080',
+    status: 'active',
+  };
+  const runtimeOwnerCache = createEmptySystemTableCache();
+  runtimeOwnerCache.getAll = (tableName) =>
+    tableName === TABLES.NODES ? [nodeRow] : [];
+
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: null,
+    runtimeOwner: {
+      get systemTableCache() {
+        return runtimeOwnerCache;
+      },
+    },
+  });
+
+  await api.initialize(0, {listen: false});
+
+  t.same(
+    api.buildSystemTableSnapshots()[TABLES.NODES],
+    [nodeRow],
+    'should use runtime owner cache when explicit bootstrap cache is absent',
+  );
+
+  await api.shutdown();
+});
+
 test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', async (t) => {
   initializeTestEnvironment();
 
@@ -3784,7 +4236,8 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
   await api.shutdown();
 });
 
-test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async (t) => {
+test('BootstrapAPI - getReadyNodes includes seed node when lease expired only with explicit readiness evidence',
+  async (t) => {
   initializeTestEnvironment();
 
   const now = Date.now();
@@ -3832,15 +4285,20 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: mockCache,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return nodeId === 'seed-node-1' ? {ready: true} : null;
+      },
+    },
   });
 
   await api.initialize(0, {listen: false});
 
   const readyNodes = api.getReadyNodes();
 
-  // Should include seed node even though its lease expired
+  // Should include seed node only because readiness explicitly confirms it.
   t.ok(readyNodes.includes('seed-node-1'),
-    'should include seed node despite expired lease');
+    'should include seed node when readiness explicitly confirms bootstrap readiness');
   t.ok(readyNodes.includes('other-node'),
     'should include other ready nodes');
   t.equal(readyNodes.length, 2, 'should have 2 ready nodes');
@@ -3888,6 +4346,11 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: mockCache,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return nodeId === 'seed-node-1' ? {ready: true} : null;
+      },
+    },
   });
 
   await api.initialize(0, {listen: false});
@@ -3902,7 +4365,8 @@ test('BootstrapAPI - getReadyNodes does not duplicate seed node', async (t) => {
   await api.shutdown();
 });
 
-test('BootstrapAPI - getReadyNodes handles empty cache', async (t) => {
+test('BootstrapAPI - getReadyNodes does not synthesize seed readiness from empty cache alone',
+  async (t) => {
   initializeTestEnvironment();
 
   // Create cache with no nodes
@@ -3924,13 +4388,73 @@ test('BootstrapAPI - getReadyNodes handles empty cache', async (t) => {
 
   const readyNodes = api.getReadyNodes();
 
-  // Should still include seed node
-  t.ok(readyNodes.includes('seed-node-1'),
-    'should include seed node even with empty cache');
-  t.equal(readyNodes.length, 1, 'should have exactly 1 ready node (seed)');
+  t.same(
+    readyNodes,
+    [],
+    'bootstrap should not advertise the seed as ready without explicit readiness evidence',
+  );
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - getReadyNodes does not treat repair-only seed readiness as bootstrap-ready',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const now = Date.now();
+    const mockCache = {
+      get: () => null,
+      getAll: (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return [
+            {
+              node_id: 'seed-node-1',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: now + 10000,
+              status: 'active',
+            },
+          ];
+        }
+        return [];
+      },
+      filter: (tableName, predicate) => {
+        const all = mockCache.getAll(tableName);
+        return all.filter(predicate);
+      },
+      find: () => null,
+      getReadyNodes: () => ['seed-node-1'],
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId !== 'seed-node-1') {
+            return null;
+          }
+          return {
+            ready: false,
+            dimensions: {
+              repairEligible: true,
+              controlPlaneRecoveryEligible: true,
+            },
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    t.same(
+      api.getReadyNodes(),
+      [],
+      'repair-only readiness should no longer make the seed appear bootstrap-ready',
+    );
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - strict ready-node reads use published membership without seed fallback',
   async (t) => {
@@ -3980,6 +4504,11 @@ test('BootstrapAPI - strict ready-node reads use published membership without se
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: mockCache,
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return nodeId === 'seed-node-1' ? {ready: true} : null;
+        },
+      },
     });
 
     await api.initialize(0, {listen: false});
@@ -4113,6 +4642,11 @@ test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibil
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: mockCache,
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return nodeId === 'seed-node-1' ? {ready: true} : null;
+        },
+      },
     });
 
     await api.initialize(0, {listen: false});

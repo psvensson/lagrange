@@ -11,6 +11,11 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 
+const READY_LOCAL_QUERY_TRANSPORT = Object.freeze({
+  ready: true,
+  state: 'ready',
+});
+
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -172,6 +177,11 @@ test('signalReadyForReplicas - calls awaitCdcSubscriptionsForReadiness',
     service.awaitCdcSubscriptionsForReadiness = async () => {
       gateChecked = true;
       return originalGate();
+    };
+    service.messageRouter = {
+      getQueryDataPlaneTransportReadiness: () => ({
+        ...READY_LOCAL_QUERY_TRANSPORT,
+      }),
     };
 
     // Mock heartbeat service to avoid real network calls

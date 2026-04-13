@@ -45,10 +45,10 @@ const TEST_TIMEOUTS = {
 
 /**
  * Get a unique port for this test file.
- * @returns {number} Unique port number
+ * @returns {Promise<number>} Unique port number
  */
 function getUniquePort() {
-  return ports.getPort();
+  return ports.getAvailable();
 }
 
 /**
@@ -92,7 +92,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
     // =========================================================================
 
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
-    const seedWsPort = getUniquePort();
+    const seedWsPort = await getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
@@ -201,7 +201,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
     // =========================================================================
 
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
-    const seedWsPort = getUniquePort();
+    const seedWsPort = await getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
@@ -298,7 +298,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
     // =========================================================================
 
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
-    const seedWsPort = getUniquePort();
+    const seedWsPort = await getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
@@ -400,7 +400,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
     // =========================================================================
 
     const seedNodeId = generateUniqueNodeId(nodeIdCounter++);
-    const seedWsPort = getUniquePort();
+    const seedWsPort = await getUniquePort();
 
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,

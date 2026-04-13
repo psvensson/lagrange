@@ -19,9 +19,14 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {COLUMN, NUM} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {PRESSURE_WORK_CLASS} from
+  '../../src/control-plane/pressure-governor.js';
 
 const TEST_NODE_ID = 'node-budget-preserve';
 const TEST_NODE_ADDRESS = '10.0.0.99:8080';
@@ -87,44 +92,44 @@ HeartbeatService.prototype = RawHeartbeatService.prototype;
 
 
 test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missing',
-async (t) => {
-  initEnv();
+  async (t) => {
+    initEnv();
 
-  const updates = [];
-  const upserts = [];
-  const service = new HeartbeatService({
-    nodeId: TEST_NODE_ID,
-    nodeAddress: TEST_NODE_ADDRESS,
-    cdcIntegrationService: {
-      updateSystemTableRow: async (_table, _where, row) => {
-        updates.push(row);
-        return {
-          success: true,
-          partitionResult: {affectedRows: NUM.ZERO},
-        };
+    const updates = [];
+    const upserts = [];
+    const service = new HeartbeatService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_table, _where, row) => {
+          updates.push(row);
+          return {
+            success: true,
+            partitionResult: {affectedRows: NUM.ZERO},
+          };
+        },
+        upsertSystemTableRow: async (_table, row) => {
+          upserts.push(row);
+          return {success: true};
+        },
       },
-      upsertSystemTableRow: async (_table, row) => {
-        upserts.push(row);
-        return {success: true};
-      },
-    },
-    systemTableCache: createCacheWithBudget(),
-    now: () => TEST_NOW,
+      systemTableCache: createCacheWithBudget(),
+      now: () => TEST_NOW,
+    });
+
+    try {
+      await t.rejects(
+        service.sendHeartbeat(null, null),
+        /node row .*missing/i,
+        'missing authoritative rows should fail instead of being recreated',
+      );
+      t.equal(updates.length, 1, 'should still attempt one heartbeat update');
+      t.equal(upserts.length, 0, 'steady-state heartbeat should not recreate rows');
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
   });
-
-  try {
-    await t.rejects(
-      service.sendHeartbeat(null, null),
-      /node row .*missing/i,
-      'missing authoritative rows should fail instead of being recreated',
-    );
-    t.equal(updates.length, 1, 'should still attempt one heartbeat update');
-    t.equal(upserts.length, 0, 'steady-state heartbeat should not recreate rows');
-  } finally {
-    ConfigurationManager.resetInstance();
-    LoggingService.resetInstance();
-  }
-});
 
 test('reporter payload includes storage budget fields from cache ' +
   'so dispatch-side resolveNodeStateUpdateBudgetFields can extract them',
@@ -220,6 +225,85 @@ async (t) => {
       capturedUpdateRow[COLUMN.STORAGE_BUDGET_UPDATED_AT],
       TEST_BUDGET_UPDATED_AT,
       'partial UPDATE must include storage_budget_updated_at',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('sendHeartbeat coalesces deferred heartbeat metadata writes through the ' +
+  'shared control-plane gateway contract',
+async (t) => {
+  initEnv();
+
+  const nodeWrites = [];
+  const endpointWrites = [];
+  const service = new HeartbeatService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        nodeWrites.push({tableName, whereClause, row, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async upsertSystemTableRow(tableName, row, options) {
+        endpointWrites.push({tableName, row, options});
+        return {success: true};
+      },
+    },
+    systemTableCache: createCacheWithBudget(),
+    now: () => TEST_NOW,
+  });
+
+  try {
+    await service.sendHeartbeat(null, null);
+
+    t.equal(nodeWrites.length, 1, 'heartbeat should issue one node update');
+    t.equal(
+      nodeWrites[0].tableName,
+      SYSTEM_TABLE_NAME.NODES,
+      'heartbeat should update the nodes table',
+    );
+    t.same(
+      nodeWrites[0].options,
+      {
+        allowCoalescing: true,
+        allowPressureDefer: true,
+        coalescingKey: `heartbeat:nodes:${TEST_NODE_ID}`,
+        deliveryPriority: 'background',
+        mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+        pressureRetryAfterMs: service.heartbeatIntervalMs,
+        queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
+        skipCacheWait: true,
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      },
+      'node heartbeat writes should use the shared coalesced deferred write contract',
+    );
+
+    t.equal(endpointWrites.length, 1, 'heartbeat should issue one endpoint upsert');
+    t.equal(
+      endpointWrites[0].tableName,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+      'heartbeat should upsert the node endpoint row',
+    );
+    t.same(
+      endpointWrites[0].options,
+      {
+        allowCoalescing: true,
+        allowPressureDefer: true,
+        coalescingKey: `heartbeat:endpoint:ep-${TEST_NODE_ID}-ws`,
+        deliveryPriority: 'background',
+        mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+        pressureRetryAfterMs: service.heartbeatIntervalMs,
+        queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
+        skipCacheWait: true,
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      },
+      'endpoint upserts should reuse the same coalesced deferred write contract',
     );
   } finally {
     ConfigurationManager.resetInstance();

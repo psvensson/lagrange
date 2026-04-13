@@ -447,6 +447,192 @@ test('ReplicaRecoveryService - handles no healthy nodes', async (t) => {
   t.end();
 });
 
+test('ReplicaRecoveryService - selectTargetNodes prefers distinct healthy nodes before duplicates',
+  async (t) => {
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+    });
+
+    const selected = service.selectTargetNodes(
+      [
+        {node_id: 'node-2', cpu_usage_percent: 5},
+      ],
+      [
+        {node_id: 'node-2', cpu_usage_percent: 5},
+        {node_id: 'node-3', cpu_usage_percent: 15},
+        {node_id: 'node-1', cpu_usage_percent: 25},
+      ],
+      2,
+    );
+
+    t.same(
+      selected.map((node) => node.node_id),
+      ['node-2', 'node-3'],
+      'recovery should use an unselected healthy node before reusing the preferred node',
+    );
+    t.end();
+  });
+
+test('ReplicaRecoveryService - selectTargetNodes duplicates only after unique healthy nodes are exhausted',
+  async (t) => {
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+    });
+
+    const selected = service.selectTargetNodes(
+      [
+        {node_id: 'node-2', cpu_usage_percent: 5},
+      ],
+      [
+        {node_id: 'node-2', cpu_usage_percent: 5},
+        {node_id: 'node-3', cpu_usage_percent: 15},
+        {node_id: 'node-1', cpu_usage_percent: 25},
+      ],
+      4,
+    );
+
+    t.equal(selected.length, 4, 'recovery should still satisfy the requested count');
+    t.equal(
+      new Set(selected.map((node) => node.node_id)).size,
+      3,
+      'recovery should exhaust distinct healthy nodes before duplicating placements',
+    );
+    t.end();
+  });
+
+test('ReplicaRecoveryService - clears pending partition recovery after create failure',
+  async (t) => {
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+      systemTableCache: createMockCache({
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
+      }),
+    });
+    let attempts = 0;
+    service.createPartitionReplica = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('transient partition create failure');
+      }
+      return {success: true};
+    };
+
+    try {
+      await service.triggerPartitionRecovery(
+        {partition_id: 'partition-1', table_id: 'table-1'},
+        [],
+        1,
+      );
+      t.fail('first recovery should throw');
+    } catch (error) {
+      t.equal(error.message, 'transient partition create failure');
+    }
+
+    t.equal(
+      service.pendingRecoveries.size,
+      0,
+      'failed partition recovery should release the in-flight guard',
+    );
+
+    await service.triggerPartitionRecovery(
+      {partition_id: 'partition-1', table_id: 'table-1'},
+      [],
+      1,
+    );
+
+    t.equal(attempts, 2, 'next recovery cycle should be allowed to retry');
+    t.end();
+  });
+
+test('ReplicaRecoveryService - clears pending message group recovery after create failure',
+  async (t) => {
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+      systemTableCache: createMockCache({
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
+      }),
+    });
+    let attempts = 0;
+    service.createMessageGroupReplica = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error('transient message-group create failure');
+      }
+      return {success: true};
+    };
+
+    try {
+      await service.triggerMessageGroupRecovery(
+        {group_id: 'group-1'},
+        [],
+        1,
+      );
+      t.fail('first recovery should throw');
+    } catch (error) {
+      t.equal(error.message, 'transient message-group create failure');
+    }
+
+    t.equal(
+      service.pendingRecoveries.size,
+      0,
+      'failed message-group recovery should release the in-flight guard',
+    );
+
+    await service.triggerMessageGroupRecovery(
+      {group_id: 'group-1'},
+      [],
+      1,
+    );
+
+    t.equal(attempts, 2, 'next recovery cycle should be allowed to retry');
+    t.end();
+  });
+
+test('ReplicaRecoveryService - continues partition recovery cycle after one entity fails',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new ReplicaRecoveryService({
+      nodeId: 'test-node',
+      systemTableCache: createMockCache({
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {partition_id: 'partition-1', table_id: 'table-1', replica_count: 1},
+          {partition_id: 'partition-2', table_id: 'table-2', replica_count: 1},
+        ],
+        services: [],
+      }),
+      cdcIntegrationService: mockCDC,
+    });
+    service.initialize();
+
+    const attemptedPartitionIds = [];
+    service.createPartitionReplica = async (partition) => {
+      attemptedPartitionIds.push(partition.partition_id);
+      if (partition.partition_id === 'partition-1') {
+        throw new Error('transient partition create failure');
+      }
+      return {success: true};
+    };
+
+    const summary = await service.checkReplicaCounts();
+
+    t.same(
+      attemptedPartitionIds,
+      ['partition-1', 'partition-2'],
+      'recovery should keep processing later partitions after one failure',
+    );
+    t.equal(summary.deficitCount, 2, 'both deficient partitions should be counted');
+    t.equal(summary.recoveryCount, 1, 'successful later recovery should still count');
+    t.end();
+  });
+
 test('ReplicaRecoveryService - getStats', async (t) => {
   const mockCache = createMockCache();
   const mockCDC = createMockCDCService();

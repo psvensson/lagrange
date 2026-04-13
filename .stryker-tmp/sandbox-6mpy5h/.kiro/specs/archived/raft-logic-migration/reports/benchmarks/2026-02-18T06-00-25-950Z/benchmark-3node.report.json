@@ -1,0 +1,303 @@
+{
+  "timestamp": "2026-02-18T06:03:45.635Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 97151
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "tail_latency_path",
+        "count": 2,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 0,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 1,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 1,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 97151,
+          "opsPerSec": 46.357828501717556,
+          "p99LatencyMs": 995,
+          "opsPerSecPerNode": 15.45260950057252
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.011078262090337247,
+          "p99LatencyRatioSutToBaselineAvg": 520.6698063840921,
+          "sutOpsPerSec": 46.357828501717556,
+          "baselineTps": 4184.575895,
+          "sutP99LatencyMs": 995,
+          "baselineLatencyAvgMs": 1.911,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+            "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+            "cachedAt": "2026-02-18T06:03:32.813Z",
+            "reason": "cache-stored"
+          }
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 97151,
+      "clusterSize": 3,
+      "startedAt": "2026-02-18T06:01:56.525Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1771394516526,
+        "endedAt": 1771394625633,
+        "durationMs": 109107,
+        "files": {
+          "events": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/events.ndjson",
+          "samples": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 127,
+          "samples": 270,
+          "snapshots": 75
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 1444,
+          "success": 1444,
+          "failed": 0,
+          "errors": 0,
+          "latency": {
+            "p50": 8,
+            "p95": 674,
+            "p99": 995
+          },
+          "opsPerSec": 46.357828501717556
+        },
+        "details": {
+          "benchmark": {
+            "tool": "pgbench",
+            "workload": "custom-mixed-insert-select",
+            "durationSeconds": 30,
+            "clients": 8,
+            "jobs": 4
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.19.0.5",
+            "replicaContainerIps": [
+              "172.19.0.6",
+              "172.19.0.7"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638",
+              "path": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/benchmarks/2026-02-18T06-00-25-950Z/.playback/benchmark-3node/postgres-baseline-cache/v1-30d7dec06f30c1a61e2e2b2ff79a73af288b34ce571f0fb173975a40187fa638.json",
+              "cachedAt": "2026-02-18T06:03:32.813Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "tps": 4184.575895,
+              "latencyAverageMs": 1.911,
+              "latencyStddevMs": 1.096,
+              "transactionsProcessed": 125531,
+              "failedTransactions": 0,
+              "raw": "pgbench (16.9 (Debian 16.9-1.pgdg120+1))\ntransaction type: /tmp/ddb-pgbench-workload.sql\nscaling factor: 1\nquery mode: simple\nnumber of clients: 8\nnumber of threads: 4\nmaximum number of tries: 1\nduration: 30 s\nnumber of transactions actually processed: 125531\nnumber of failed transactions: 0 (0.000%)\nlatency average = 1.911 ms\nlatency stddev = 1.096 ms\ninitial connection time = 2.654 ms\ntps = 4184.575895 (without initial connection time)\n",
+              "durationSeconds": 30,
+              "clients": 8,
+              "jobs": 4,
+              "host": "127.0.0.1",
+              "port": 5432
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "ee1e4fba-02a1-4d35-b5bb-be3a7206dfa9",
+            "metrics": {
+              "opsPerSec": 46.357828501717556,
+              "latency": {
+                "p50": 8,
+                "p95": 674,
+                "p99": 995
+              },
+              "total": 1444,
+              "success": 1444,
+              "failed": 0,
+              "errors": 0
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 46.357828501717556,
+            "sutP99LatencyMs": 995,
+            "baselineTps": 4184.575895,
+            "baselineLatencyAvgMs": 1.911,
+            "throughputRatioSutToBaseline": 0.011078262090337247,
+            "p99LatencyRatioSutToBaselineAvg": 520.6698063840921
+          },
+          "convergence": {
+            "settledAfterMs": 5368,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1444,
+        "success": 1444,
+        "failed": 0,
+        "errors": 0,
+        "latency": {
+          "p50": 8,
+          "p95": 674,
+          "p99": 995
+        },
+        "opsPerSec": 46.357828501717556
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 520.6698063840921,
+            "sutP99LatencyMs": 995,
+            "baselineLatencyAvgMs": 1.911
+          }
+        },
+        {
+          "component": "replication_write_path",
+          "signal": "baseline_throughput_gap",
+          "priority": "high",
+          "score": 80,
+          "reason": "System throughput is significantly below baseline under identical workload.",
+          "evidence": {
+            "throughputRatioSutToBaseline": 0.011078262090337247,
+            "sutOpsPerSec": 46.357828501717556,
+            "baselineTps": 4184.575895
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "internal_tail_latency",
+          "priority": "high",
+          "score": 80,
+          "reason": "Large p99/p50 spread indicates queueing or lock contention on slow-path operations.",
+          "evidence": {
+            "p50LatencyMs": 8,
+            "p99LatencyMs": 995,
+            "p99ToP50Ratio": 124.375
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": true,
+    "status": "skipped",
+    "reason": "baseline-missing",
+    "settings": {
+      "enabled": true,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"custom-mixed-insert-select\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}"
+      }
+    ],
+    "comparisons": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

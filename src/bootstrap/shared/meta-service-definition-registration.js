@@ -25,6 +25,8 @@ import {resolveAdvertisedEndpointHost} from
 const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
   UPSERT_REQUIRED: 'Meta service definition registration requires upsertRow function',
   NODE_ID_REQUIRED: 'Meta service endpoint registration requires nodeId',
+  ENDPOINT_ADDRESS_REQUIRED:
+    'Meta service endpoint registration requires a valid address',
   ENDPOINT_PORT_REQUIRED: 'Meta service endpoint registration requires a valid port',
 });
 const POSTGRES_WIRE_DEFAULT_PORT = 5432;
@@ -85,6 +87,11 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
     advertisedNodeWsAddress,
     nodeId,
   });
+  if (typeof endpointAddress !== TYPEOF.STRING || endpointAddress.length === 0) {
+    throw new Error(
+      META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_ADDRESS_REQUIRED,
+    );
+  }
   const endpointPort = resolveEndpointPort(wsPort, nodeAddress);
   if (!Number.isInteger(endpointPort) || endpointPort <= 0) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_PORT_REQUIRED);
@@ -116,19 +123,18 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
 }
 
 /**
- * Resolve endpoint address from node address or fallback to node ID.
+ * Resolve endpoint address from advertised/node transport authority.
  * @param {Object} options
  * @param {string|undefined|null} options.nodeAddress
  * @param {string|undefined|null} options.advertisedNodeWsAddress
  * @param {string} options.nodeId
- * @return {string}
+ * @return {string|null}
  */
 function resolveEndpointAddress(options = {}) {
   const advertisedHost = resolveAdvertisedEndpointHost({
     advertisedAddress: options.advertisedNodeWsAddress,
     nodeAddress: options.nodeAddress,
     wsPort: null,
-    fallbackHost: options.nodeId,
   });
   if (typeof advertisedHost === TYPEOF.STRING &&
       advertisedHost.length > 0) {
@@ -136,14 +142,13 @@ function resolveEndpointAddress(options = {}) {
   }
 
   const nodeAddress = options.nodeAddress;
-  const nodeId = options.nodeId;
   if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === 0) {
-    return nodeId;
+    return null;
   }
 
   const trimmed = nodeAddress.trim();
   if (trimmed.length === 0) {
-    return nodeId;
+    return null;
   }
 
   if (trimmed.includes('://')) {

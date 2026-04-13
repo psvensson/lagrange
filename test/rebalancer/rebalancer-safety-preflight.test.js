@@ -213,3 +213,99 @@ test('UnifiedRebalancer - defers non-failed REMOVE when no ADD target is ready',
       LoggingService.resetInstance();
     }
   });
+
+test('UnifiedRebalancer - continues standalone-safe cleanup REMOVE when ADD target is not ready',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    let createdOperations = 0;
+    const createdMoveTypes = [];
+    const mockCoordinator = {
+      getMoveSafetyError: () => null,
+      createOperation: async (move) => {
+        createdOperations++;
+        createdMoveTypes.push(move.type);
+        return {
+          operationId: `op-${createdOperations}`,
+          replicaId: move.replicaId || `replica-${createdOperations}`,
+        };
+      },
+      getStats: () => ({
+        operationsCreated: createdOperations,
+        operationsCompleted: 0,
+        operationsFailed: 0,
+        operationsTimedOut: 0,
+        inFlightOperations: 0,
+        totalOperations: createdOperations,
+      }),
+    };
+
+    const rebalancer = new UnifiedRebalancer({
+      entityId: 'nodes-p1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'seed-node',
+      systemTableCache: createMockCache([
+        createReadyNode('seed-node'),
+        createReadyNode('node-unready'),
+      ]),
+      cdcIntegrationService: {
+        insertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({targetReplicaCount: 3, minReplicaCount: 3}),
+      },
+      messageRouter: {
+        getConnectionState: () => 'connected',
+        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      },
+      rebalanceCoordinator: mockCoordinator,
+      controlPlaneReadinessService: createAlwaysReadyReadinessService(),
+    });
+
+    rebalancer.initialize();
+    rebalancer.isNodeReady = async (nodeId) => nodeId !== 'node-unready';
+    try {
+      const results = await rebalancer.executeRebalancingMoves([
+        {
+          type: MoveType.ADD,
+          nodeId: 'node-unready',
+          reason: 'increase_replica_count',
+        },
+        {
+          type: MoveType.REMOVE,
+          nodeId: 'seed-node',
+          replicaId: 'nodes-p1-r4',
+          reason: 'node_not_in_target',
+          standaloneSafe: true,
+        },
+      ]);
+
+      t.equal(createdOperations, 1,
+        'should still create one operation for standalone-safe cleanup');
+      t.same(createdMoveTypes, ['REMOVE'],
+        'should only schedule the cleanup remove');
+      t.ok(
+        results.some((result) =>
+          result.success === true &&
+          result.operation === 'remove' &&
+          result.replicaId === 'nodes-p1-r4'),
+        'should execute the cleanup remove',
+      );
+      t.ok(
+        results.some((result) =>
+          result.skipped === true &&
+          result.reason === 'node_not_ready'),
+        'should still skip the blocked add',
+      );
+    } finally {
+      rebalancer.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });

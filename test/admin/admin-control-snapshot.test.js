@@ -5,6 +5,61 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
+test('AdminControlSnapshot routes publication convergence through the shared recovery protocol snapshot',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+    });
+
+    const diagnostics = snapshot.resolvePublicationConvergenceDiagnostics([], {
+      publicationEpoch: 12,
+      status: 'ACK_PENDING',
+      publishedActiveNodeIds: ['node-1'],
+      requiredAckNodeIds: ['node-1', 'node-2'],
+      acknowledgedNodeIds: ['node-1'],
+      priorityPartitionSummary: {
+        satisfied: false,
+        missingPartitionIds: ['replica_operations-p1'],
+      },
+      membershipLifecycleSummary: {
+        publishedActiveNodeIds: ['node-1'],
+        projectedServingNodeIds: ['node-1', 'node-2'],
+        locallyEligibleNodeIds: ['node-1', 'node-2'],
+        recoveryActiveNodeIds: ['node-1', 'node-2'],
+        recoveryActiveNodeSource: 'recovery_eligible_projection',
+        missingPublishedRecoveryActiveNodeIds: ['node-2'],
+      },
+    });
+
+    t.equal(
+      diagnostics?.recoveryProtocolState,
+      'publication_pending',
+      'admin convergence diagnostics should expose the shared recovery protocol phase',
+    );
+    t.same(
+      diagnostics?.priorityRecoveryReasonCodes,
+      [
+        'publication_epoch_pending',
+        'priority_partitions_not_spread',
+      ],
+      'admin convergence diagnostics should preserve canonical protocol reasons',
+    );
+    t.match(
+      diagnostics?.participationByNodeId || {},
+      {
+        'node-1': {
+          state: 'recovery_pending_publish',
+        },
+        'node-2': {
+          state: 'recovery_pending_publish',
+          recoveryActive: true,
+        },
+      },
+      'admin convergence diagnostics should preserve canonical node participation',
+    );
+  });
+
 test('AdminControlSnapshot resolves active nodes from published membership only', async (t) => {
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',
@@ -165,6 +220,118 @@ test('AdminControlSnapshot prefers published membership observation over newer o
     activeNodeIds,
     ['node-1', 'node-2'],
     'control snapshots should keep using the last published membership while a newer publication is still open',
+  );
+});
+
+test('AdminControlSnapshot falls back to durable published membership from ack-pending convergence when published observation is unavailable', async (t) => {
+  const snapshot = new AdminControlSnapshot({
+    nodeId: 'node-1',
+    nowFn: () => 1000,
+  });
+
+  const activeNodeViews = snapshot.resolveControlSnapshotNodeViews(
+    [
+      {
+        node_id: 'node-1',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+      {
+        node_id: 'node-2',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+      {
+        node_id: 'node-3',
+        status: 'active',
+        connection_state: 'ready',
+        ready_lease_expires_at: 2000,
+      },
+    ],
+    [
+      {
+        service_id: 'svc-1',
+        node_id: 'node-1',
+        status: 'active',
+      },
+      {
+        service_id: 'svc-2',
+        node_id: 'node-2',
+        status: 'active',
+      },
+      {
+        service_id: 'svc-3',
+        node_id: 'node-3',
+        status: 'active',
+      },
+    ],
+    [
+      {
+        endpoint_id: 'node-1-ws',
+        node_id: 'node-1',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-1:8082',
+      },
+      {
+        endpoint_id: 'node-2-ws',
+        node_id: 'node-2',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-2:8082',
+      },
+      {
+        endpoint_id: 'node-3-ws',
+        node_id: 'node-3',
+        transport_type: 'ws',
+        status: 'active',
+        address: 'ws://node-3:8082',
+      },
+    ],
+    {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        status: 'ACK_PENDING',
+        publishedActiveNodeIds: ['node-1', 'node-2'],
+        requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+        acknowledgedNodeIds: ['node-1', 'node-2'],
+      },
+      readinessByNodeId: {
+        'node-1': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        'node-2': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        'node-3': {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+      },
+    },
+  );
+
+  t.same(
+    activeNodeViews.authoritativeActiveNodeIds,
+    ['node-1', 'node-2'],
+    'control snapshots should retain the durable published membership while the latest epoch is ack-pending',
+  );
+  t.same(
+    activeNodeViews.projectedActiveNodeIds,
+    ['node-1', 'node-2', 'node-3'],
+    'control snapshots should still expose the wider local projection separately',
+  );
+  t.equal(
+    activeNodeViews.publishedMembershipAvailable,
+    true,
+    'control snapshots should preserve published-membership availability from ack-pending convergence when the durable set is known',
   );
 });
 
@@ -474,7 +641,7 @@ test('AdminControlSnapshot uses repaired publication rows when publication servi
   );
 });
 
-test('AdminControlSnapshot falls back to repaired publication rows when publication services return null', async (t) => {
+test('AdminControlSnapshot falls back to repaired publication rows when publication services return null without acknowledging from the read path', async (t) => {
   let acknowledgedPublicationRow = null;
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-2',
@@ -553,28 +720,21 @@ test('AdminControlSnapshot falls back to repaired publication rows when publicat
 
   const result = await snapshot.buildLocalControlSnapshot();
 
-  t.match(
+  t.equal(
     acknowledgedPublicationRow,
-    {
-      publicationEpoch: 11,
-      status: 'OPEN',
-      acknowledgedNodeIds: ['node-1'],
-    },
-    'acknowledgements should reuse the repaired publication row when service reads return null',
+    null,
+    'control snapshot reads should not acknowledge repaired publication rows as a side effect',
   );
   t.same(
     result.nodes,
     ['node-1', 'node-2'],
-    'fallback publication acknowledgement should restore strict snapshot node coverage',
+    'fallback publication observation should still restore strict snapshot node coverage',
   );
-  t.match(
-    result.controlPlaneDiagnostics.publishedMembershipObservation,
-    {
-      publicationEpoch: 11,
-      status: 'PUBLISHED',
-      publishedActiveNodeIds: ['node-1', 'node-2'],
-    },
-    'diagnostics should publish the repaired membership observation after fallback acknowledgement',
+  t.equal(
+    result.controlPlaneDiagnostics.publishedMembershipObservation
+      ?.publicationObservation?.state,
+    'unavailable',
+    'control snapshot diagnostics should surface explicit observation absence instead of null',
   );
 });
 
@@ -677,7 +837,7 @@ test('AdminControlSnapshot keeps the last published membership when publication 
   );
 });
 
-test('AdminControlSnapshot prefers the authoritative latest publication when control snapshots acknowledge membership',
+test('AdminControlSnapshot prefers the authoritative latest publication when control snapshots observe membership',
   async (t) => {
     let observedAckPublicationRow = null;
     let observedLatestPublicationReadOptions = null;
@@ -723,17 +883,16 @@ test('AdminControlSnapshot prefers the authoritative latest publication when con
 
     t.same(
       observedLatestPublicationReadOptions,
-      {preferAuthoritativeRead: true},
+      {
+        preferAuthoritativeRead: true,
+        readProfile: 'diagnostics',
+      },
       'authoritative control snapshots should bypass the synchronous cache publication read',
     );
-    t.match(
+    t.equal(
       observedAckPublicationRow,
-      {
-        publication_epoch: 18,
-        status: 'ACK_PENDING',
-        acknowledged_node_ids: ['node-1', 'node-2'],
-      },
-      'acknowledgements should start from the authoritative publication state instead of the stale cache row',
+      null,
+      'control snapshot observation should not acknowledge membership as a side effect',
     );
   });
 
@@ -799,9 +958,9 @@ test('AdminControlSnapshot prefers cached membership publication observation ove
               acknowledged_node_ids: ['node-1', 'node-2'],
             };
           },
-          async reconcileClusterMembership() {
+          async enqueueClusterMembershipReconcile() {
             reconcileCallCount += 1;
-            throw new Error('should not reconcile when cached publication exists');
+            throw new Error('should not queue reconcile when cached publication exists');
           },
         },
       },
@@ -821,9 +980,9 @@ test('AdminControlSnapshot prefers cached membership publication observation ove
     );
   });
 
-test('AdminControlSnapshot authoritative membership observation reconciles when published membership lags cluster growth',
+test('AdminControlSnapshot authoritative membership observation stays read-only when published membership lags cluster growth',
   async (t) => {
-    let observedReconcileOptions = null;
+    let observedEnqueueOptions = null;
     let observedAckPublicationRow = null;
     const snapshot = new AdminControlSnapshot({
       nodeId: 'node-2',
@@ -837,7 +996,10 @@ test('AdminControlSnapshot authoritative membership observation reconciles when 
           async getLatestClusterPublication(options = {}) {
             t.same(
               options,
-              {preferAuthoritativeRead: true},
+              {
+                preferAuthoritativeRead: true,
+                readProfile: 'diagnostics',
+              },
               'authoritative snapshot reads should request an authoritative publication read before reconciling',
             );
             return {
@@ -845,24 +1007,13 @@ test('AdminControlSnapshot authoritative membership observation reconciles when 
               publication_kind: 'cluster_membership',
               publication_epoch: 1,
               status: 'PUBLISHED',
-              published_active_node_ids: ['node-1'],
-              required_ack_node_ids: ['node-1'],
+              published_active_node_ids: ['node-1', 'node-2'],
+              required_ack_node_ids: ['node-1', 'node-2'],
               acknowledged_node_ids: ['node-1'],
             };
           },
-          async reconcileClusterMembership(options = {}) {
-            observedReconcileOptions = options;
-            return {
-              publicationRow: {
-                publication_id: 'publication-2',
-                publication_kind: 'cluster_membership',
-                publication_epoch: 2,
-                status: 'OPEN',
-                published_active_node_ids: ['node-1', 'node-2'],
-                required_ack_node_ids: ['node-1', 'node-2'],
-                acknowledged_node_ids: [],
-              },
-            };
+          async enqueueClusterMembershipReconcile(reason, context = {}) {
+            observedEnqueueOptions = {reason, context};
           },
           async acknowledgePublication(_publicationId, _nodeId, options = {}) {
             observedAckPublicationRow = options.publicationRow || null;
@@ -876,44 +1027,32 @@ test('AdminControlSnapshot authoritative membership observation reconciles when 
       preferAuthoritativeRead: true,
     });
 
-    t.match(
-      observedReconcileOptions,
-      {
-        preferAuthoritativeRead: true,
-        latestPublicationRow: {
-          publication_id: 'publication-1',
-          publication_epoch: 1,
-          status: 'PUBLISHED',
-        },
-      },
-      'authoritative snapshot observation should reconcile against the latest observed publication row',
+    t.equal(
+      observedEnqueueOptions,
+      null,
+      'authoritative snapshot observation should not queue reconcile from the read path',
     );
-    t.match(
+    t.equal(
       observedAckPublicationRow,
-      {
-        publication_id: 'publication-2',
-        publication_epoch: 2,
-        status: 'OPEN',
-        required_ack_node_ids: ['node-1', 'node-2'],
-      },
-      'acknowledgements should advance the reconciled publication rather than the stale published epoch',
+      null,
+      'authoritative snapshot observation should not acknowledge publication from the read path',
     );
     t.match(
       publicationRow,
       {
-        publication_id: 'publication-2',
-        publication_epoch: 2,
-        status: 'OPEN',
+        publication_id: 'publication-1',
+        publication_epoch: 1,
+        status: 'PUBLISHED',
       },
-      'the reconciled publication should become the authoritative membership observation',
+      'the observed publication should remain the returned snapshot observation when reconcile is queued',
     );
   });
 
-test('AdminControlSnapshot auto-repaired snapshots use authoritative membership publication before acknowledging',
+test('AdminControlSnapshot auto-repaired snapshots use authoritative membership publication without acknowledging',
   async (t) => {
     let authoritativeLatestPublicationReadOptions = null;
     let acknowledgePublicationRow = null;
-    let authoritativeReconcileCallCount = 0;
+    let authoritativeRepairQueueCount = 0;
     const snapshot = new AdminControlSnapshot({
       nodeId: 'node-2',
       nowFn: () => 1000,
@@ -957,19 +1096,8 @@ test('AdminControlSnapshot auto-repaired snapshots use authoritative membership 
               acknowledged_node_ids: ['node-1'],
             };
           },
-          async reconcileClusterMembership() {
-            authoritativeReconcileCallCount += 1;
-            return {
-              publicationRow: {
-                publication_id: 'publication-3',
-                publication_kind: 'cluster_membership',
-                publication_epoch: 3,
-                status: 'OPEN',
-                published_active_node_ids: ['node-1', 'node-2'],
-                required_ack_node_ids: ['node-1', 'node-2'],
-                acknowledged_node_ids: [],
-              },
-            };
+          async enqueueClusterMembershipReconcile() {
+            authoritativeRepairQueueCount += 1;
           },
           async acknowledgePublication(_publicationId, _nodeId, options = {}) {
             acknowledgePublicationRow = options.publicationRow || null;
@@ -988,23 +1116,21 @@ test('AdminControlSnapshot auto-repaired snapshots use authoritative membership 
 
     t.same(
       authoritativeLatestPublicationReadOptions,
-      {preferAuthoritativeRead: true},
+      {
+        preferAuthoritativeRead: true,
+        readProfile: 'diagnostics',
+      },
       'post-repair control snapshots should bypass stale cached publication observations before acknowledging',
     );
     t.equal(
-      authoritativeReconcileCallCount,
+      authoritativeRepairQueueCount,
       0,
-      'post-repair control snapshots should observe the authoritative publication without minting a newer epoch from transient repaired state',
+      'post-repair control snapshots should not queue reconcile from the read path',
     );
-    t.match(
+    t.equal(
       acknowledgePublicationRow,
-      {
-        publication_id: 'publication-2',
-        publication_epoch: 2,
-        status: 'ACK_PENDING',
-        required_ack_node_ids: ['node-1', 'node-2'],
-      },
-      'post-repair acknowledgements should target the authoritative publication epoch instead of the stale cached publication',
+      null,
+      'post-repair control snapshots should not acknowledge the authoritative publication from the read path',
     );
   });
 
@@ -1219,7 +1345,10 @@ test('AdminControlSnapshot prefers authoritative published membership when cache
     );
     t.same(
       publishedReadOptions,
-      {preferAuthoritativeRead: true},
+      {
+        preferAuthoritativeRead: true,
+        readProfile: 'diagnostics',
+      },
       'published membership recovery should request authoritative publication history explicitly',
     );
     t.match(
@@ -1347,7 +1476,10 @@ test('AdminControlSnapshot default snapshots recover published membership after 
     );
     t.same(
       publishedReadOptions,
-      [{}, {preferAuthoritativeRead: true}],
+      [
+        {readProfile: 'diagnostics'},
+        {preferAuthoritativeRead: true, readProfile: 'diagnostics'},
+      ],
       'default snapshots should escalate to an authoritative published-membership read after a cache miss',
     );
     t.match(
@@ -1407,7 +1539,10 @@ test('AdminControlSnapshot authoritative published membership bypasses stale cac
             authoritativePublishedReadCount += 1;
             t.same(
               options,
-              {preferAuthoritativeRead: true},
+              {
+                preferAuthoritativeRead: true,
+                readProfile: 'diagnostics',
+              },
               'authoritative published membership should request an authoritative history read',
             );
             return {
@@ -1446,10 +1581,10 @@ test('AdminControlSnapshot authoritative published membership bypasses stale cac
     );
   });
 
-test('AdminControlSnapshot forced authoritative repair uses authoritative published membership with reconciling membership epochs',
+test('AdminControlSnapshot forced authoritative repair uses authoritative published membership without reconciling from observation',
   async (t) => {
     let authoritativePublishedReadCount = 0;
-    let authoritativeReconcileCallCount = 0;
+    let authoritativeQueueEnqueueCount = 0;
     const snapshot = new AdminControlSnapshot({
       nodeId: 'node-1',
       nowFn: () => 1000,
@@ -1513,7 +1648,10 @@ test('AdminControlSnapshot forced authoritative repair uses authoritative publis
           async getLatestClusterPublication(options = {}) {
             t.same(
               options,
-              {preferAuthoritativeRead: true},
+              {
+                preferAuthoritativeRead: true,
+                readProfile: 'diagnostics',
+              },
               'forced repair should still request an authoritative publication read',
             );
             return {
@@ -1530,7 +1668,10 @@ test('AdminControlSnapshot forced authoritative repair uses authoritative publis
             authoritativePublishedReadCount += 1;
             t.same(
               options,
-              {preferAuthoritativeRead: true},
+              {
+                preferAuthoritativeRead: true,
+                readProfile: 'diagnostics',
+              },
               'forced repair should request authoritative published membership history',
             );
             return {
@@ -1543,31 +1684,20 @@ test('AdminControlSnapshot forced authoritative repair uses authoritative publis
               acknowledged_node_ids: ['node-1', 'node-2'],
             };
           },
-          async reconcileClusterMembership(options = {}) {
-            authoritativeReconcileCallCount += 1;
+          enqueueClusterMembershipReconcile(_reason, context = {}) {
+            authoritativeQueueEnqueueCount += 1;
             t.match(
-              options,
+              context,
               {
-                preferAuthoritativeRead: true,
                 latestPublicationRow: {
                   publication_id: 'publication-8',
                   publication_epoch: 8,
                   status: 'OPEN',
                 },
+                preferAuthoritativeRead: true,
               },
-              'forced repair should reconcile using the authoritative latest publication row',
+              'forced repair should queue reconciliation using the authoritative latest publication row',
             );
-            return {
-              publicationRow: {
-                publication_id: 'publication-9',
-                publication_kind: 'cluster_membership',
-                publication_epoch: 9,
-                status: 'OPEN',
-                published_active_node_ids: ['node-1', 'node-2', 'node-3'],
-                required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
-                acknowledged_node_ids: ['node-1'],
-              },
-            };
           },
         },
       },
@@ -1588,9 +1718,9 @@ test('AdminControlSnapshot forced authoritative repair uses authoritative publis
       'forced repair should still read published membership history authoritatively',
     );
     t.equal(
-      authoritativeReconcileCallCount,
-      1,
-      'forced repair snapshot polling should reconcile membership publications to close ack-pending deadlocks',
+      authoritativeQueueEnqueueCount,
+      0,
+      'forced repair snapshot polling should not enqueue reconciliation from publication observation',
     );
     t.match(
       result.controlPlaneDiagnostics.publishedMembershipObservation,
@@ -1719,7 +1849,10 @@ test('AdminControlSnapshot forced authoritative repair retries after stale publi
             authoritativePublicationReadCount += 1;
             t.same(
               options,
-              {preferAuthoritativeRead: true},
+              {
+                preferAuthoritativeRead: true,
+                readProfile: 'diagnostics',
+              },
               'forced repair should retry authoritative membership publication reads',
             );
             if (!repairApplied) {
@@ -2049,6 +2182,7 @@ test('AdminControlSnapshot builds priority-recovery decision snapshots with cros
       decisionSnapshots.partitionIdsBySemanticState,
       {
         converged: [],
+        spread_satisfied_in_flight: [],
         needs_operation: ['orders-p1', 'payments-p1'],
         operation_stalled: [],
         learner_promotion_blocked: [],
@@ -2108,6 +2242,7 @@ test('AdminControlSnapshot classifies spread-gap partitions with only terminal o
         publicationStatus: 'PUBLISHED',
         pendingAckNodeIds: [],
         priorityPartitionSummary: {
+          readyEligibleNodeCount: 2,
           blockedPartitions: [{
             partitionId: 'sql_transaction_participants-p1',
             requiredDistinctNodeCount: 3,
@@ -2158,6 +2293,7 @@ test('AdminControlSnapshot classifies spread-gap partitions with only terminal o
       decisionSnapshots.partitionIdsBySemanticState,
       {
         converged: [],
+        spread_satisfied_in_flight: [],
         needs_operation: ['sql_transaction_participants-p1'],
         operation_stalled: [],
         learner_promotion_blocked: [],
@@ -2179,8 +2315,414 @@ test('AdminControlSnapshot classifies spread-gap partitions with only terminal o
       'terminal operation context should still emit eligible/no-operation blocker',
     );
     t.equal(
+      targetSnapshot.admission.eligibilityEvidenceSource,
+      'priority_summary_ready_eligible',
+      'terminal-only context should record when needs-operation inference came from the shared priority summary',
+    );
+    t.equal(
       targetSnapshot.semanticState,
       'needs_operation',
       'terminal-only context should resolve a needs-operation semantic state',
+    );
+  });
+
+test('AdminControlSnapshot derives concrete eligible cohorts from publication membership summary',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => 5000,
+    });
+
+    const decisionSnapshots = snapshot.buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: 5000,
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: ['node-a'],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          readyEligibleNodeCount: 2,
+          blockedPartitions: [{
+            partitionId: 'replica_operations-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['replica_operations-p1'],
+          requiredDistinctNodeCount: 3,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: ['node-b', 'node-c'],
+          locallyEligibleNodeIds: ['node-b', 'node-c'],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [],
+      replicaOperations: {
+        operationTimelineById: {},
+      },
+      serviceRows: [],
+    });
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === 'replica_operations-p1',
+    );
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.same(
+      targetSnapshot.admission.effectiveEligibleNodeIds,
+      ['node-a', 'node-b', 'node-c'],
+      'publication membership summary should provide the concrete eligible cohort',
+    );
+    t.equal(
+      targetSnapshot.admission.effectiveEligibleNodeCount,
+      3,
+      'effective eligible count should match the publication cohort size',
+    );
+    t.equal(
+      targetSnapshot.admission.eligibilityEvidenceSource,
+      'publication_membership',
+      'publication membership should outrank count-only summary evidence',
+    );
+    t.equal(
+      targetSnapshot.admission.eligibilityCohortComplete,
+      true,
+      'publication-derived cohorts should be marked complete',
+    );
+    t.same(
+      targetSnapshot.publication.missingPublishedEligibleNodeIds,
+      ['node-b', 'node-c'],
+      'decision snapshots should expose the concrete eligible nodes still missing from publication',
+    );
+  });
+
+test('AdminControlSnapshot leaves spread-gap partitions blocked-unclassified when no eligibility evidence exists',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => 5000,
+    });
+
+    const decisionSnapshots = snapshot.buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: 5000,
+      publicationConvergence: {
+        publicationEpoch: 12,
+        publicationStatus: 'PUBLISHED',
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          blockedPartitions: [{
+            partitionId: 'sql_write_operations-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['sql_write_operations-p1'],
+          requiredDistinctNodeCount: 3,
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [],
+      replicaOperations: {
+        operationTimelineById: {},
+      },
+      serviceRows: [],
+    });
+
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason,
+      {
+        eligible_but_no_operation_created: [],
+        operation_created_but_no_step_transitions: [],
+        learner_active_but_never_promotable: [],
+        publication_recovery_eligible_but_coordinator_excludes_node: [],
+      },
+      'missing admission evidence should not be reported as eligible/no-operation by default',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState,
+      {
+        converged: [],
+        spread_satisfied_in_flight: [],
+        needs_operation: [],
+        operation_stalled: [],
+        learner_promotion_blocked: [],
+        coordination_mismatch: [],
+        recovering_in_flight: [],
+        blocked_unclassified: ['sql_write_operations-p1'],
+      },
+      'spread gaps without eligibility evidence should remain blocked-unclassified',
+    );
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === 'sql_write_operations-p1',
+    );
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.equal(
+      targetSnapshot.admission.eligibilityEvidenceSource,
+      'unknown',
+      'blocked-unclassified snapshots should retain the lack of eligibility evidence explicitly',
+    );
+  });
+
+test('AdminControlSnapshot classifies eligible ACTIVE replace operations as spread-satisfied in flight',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => 5000,
+    });
+
+    const decisionSnapshots = snapshot.buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: 5000,
+      publicationConvergence: {
+        publicationEpoch: 12,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: ['node-a'],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          blockedPartitions: [{
+            partitionId: 'control_plane_publications-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['control_plane_publications-p1'],
+          requiredDistinctNodeCount: 3,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: ['node-a', 'node-b'],
+          locallyEligibleNodeIds: ['node-a', 'node-b'],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: 'op-replace-active',
+        partition_id: 'control_plane_publications-p1',
+        entity_type: 'partition',
+        operation_type: 'REPLACE',
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        source_node_id: 'node-a',
+        target_node_id: 'node-b',
+        replica_id: 'control_plane_publications-p1-r4',
+        created_at: 1000,
+        updated_at: 2000,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          'op-replace-active': [{
+            step: 'ACTIVE',
+            status: 'active',
+            inFlight: true,
+          }],
+        },
+      },
+      serviceRows: [{
+        partition_id: 'control_plane_publications-p1',
+        status: 'active',
+        raft_role: 'voter',
+        node_id: 'node-b',
+      }],
+    });
+
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason,
+      {
+        eligible_but_no_operation_created: [],
+        operation_created_but_no_step_transitions: [],
+        learner_active_but_never_promotable: [],
+        publication_recovery_eligible_but_coordinator_excludes_node: [],
+      },
+      'eligible ACTIVE replace operations should stop surfacing blocker reasons',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState,
+      {
+        converged: [],
+        spread_satisfied_in_flight: ['control_plane_publications-p1'],
+        needs_operation: [],
+        operation_stalled: [],
+        learner_promotion_blocked: [],
+        coordination_mismatch: [],
+        recovering_in_flight: [],
+        blocked_unclassified: [],
+      },
+      'eligible ACTIVE replace operations should move onto the spread-satisfied semantic lane',
+    );
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === 'control_plane_publications-p1' &&
+      entry.operationId === 'op-replace-active',
+    );
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.same(
+      targetSnapshot.blockerReasons,
+      [],
+      'eligible ACTIVE replace context should no longer emit blocker reasons',
+    );
+    t.same(
+      targetSnapshot.spreadCompletion,
+      {
+        satisfied: true,
+        reasonCode: 'replace_remove_dispatch_phase_on_eligible_target',
+        satisfyingOperationIds: ['op-replace-active'],
+        satisfyingOperationCount: 1,
+        blockingOperationIds: [],
+        blockingOperationCount: 0,
+      },
+      'decision snapshots should surface the canonical spread-completion invariant',
+    );
+    t.equal(
+      targetSnapshot.semanticState,
+      'spread_satisfied_in_flight',
+      'eligible ACTIVE replace context should resolve onto the spread-satisfied semantic state',
+    );
+  });
+
+test('AdminControlSnapshot treats status-only ACTIVE add operations as terminal',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-a',
+      nowFn: () => 5000,
+    });
+
+    const decisionSnapshots = snapshot.buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: 5000,
+      publicationConvergence: {
+        publicationEpoch: 15,
+        publicationStatus: 'PUBLISHED',
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          readyEligibleNodeCount: 2,
+          blockedPartitions: [{
+            partitionId: 'sql_transactions-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+          missingPartitionIds: ['sql_transactions-p1'],
+          requiredDistinctNodeCount: 3,
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: 'op-add-active-no-step',
+        partition_id: 'sql_transactions-p1',
+        entity_type: 'partition',
+        operation_type: 'ADD',
+        status: 'active',
+        workflow_step: 'UNTRACKED',
+        source_node_id: 'node-a',
+        target_node_id: 'node-b',
+        replica_id: 'sql_transactions-p1-r4',
+        created_at: 1000,
+        updated_at: 2000,
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          'op-add-active-no-step': [{
+            step: 'UNTRACKED',
+            status: 'active',
+            inFlight: false,
+          }],
+        },
+      },
+      serviceRows: [],
+    });
+
+    t.same(
+      decisionSnapshots.blockerPartitionIdsByReason,
+      {
+        eligible_but_no_operation_created: ['sql_transactions-p1'],
+        operation_created_but_no_step_transitions: [],
+        learner_active_but_never_promotable: [],
+        publication_recovery_eligible_but_coordinator_excludes_node: [],
+      },
+      'status-only ACTIVE add rows should not be treated as in-flight recovery blockers',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsBySemanticState,
+      {
+        converged: [],
+        spread_satisfied_in_flight: [],
+        needs_operation: ['sql_transactions-p1'],
+        operation_stalled: [],
+        learner_promotion_blocked: [],
+        coordination_mismatch: [],
+        recovering_in_flight: [],
+        blocked_unclassified: [],
+      },
+      'status-only ACTIVE add rows should classify as needs-operation when spread remains blocked',
+    );
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.partitionId === 'sql_transactions-p1' &&
+      entry.operationId === 'op-add-active-no-step',
+    );
+    t.ok(targetSnapshot, 'target partition snapshot should exist');
+    t.same(
+      targetSnapshot.blockerReasons,
+      ['eligible_but_no_operation_created'],
+      'status-only ACTIVE add context should not emit in-flight transition blockers',
+    );
+    t.equal(
+      targetSnapshot.semanticState,
+      'needs_operation',
+      'status-only ACTIVE add context should resolve needs-operation',
+    );
+  });
+
+test('AdminControlSnapshot degrades non-forced repair failures under control-plane backpressure when local query transport is ready',
+  async (t) => {
+    let repairCallCount = 0;
+    const localSnapshot = {
+      nodes: ['node-1'],
+      controlPlaneDiagnostics: {
+        publicationConvergence: null,
+      },
+    };
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+    });
+    snapshot.buildLocalControlSnapshot = async () => localSnapshot;
+    snapshot.canRunAuthoritativeControlSnapshotRepair = () => true;
+    snapshot.evaluateAuthoritativeControlSnapshotRepair = () => ({
+      shouldRepair: true,
+      triggerCodes: ['replica_operations_stale'],
+      nodeCoverage: {
+        activeProjection: {
+          hasCoverageGap: false,
+        },
+      },
+    });
+    snapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => {
+      repairCallCount += 1;
+      return {
+        applied: false,
+        failedTables: [TABLES.SERVICES],
+        causeChain: ['control_plane_backpressure'],
+        localQueryTransport: {
+          state: 'ready',
+          ready: true,
+        },
+        errors: ['control_plane_pressure_degraded'],
+      };
+    };
+
+    const result = await snapshot.resolveLocalControlSnapshot({
+      allowAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      repairCallCount,
+      1,
+      'non-forced snapshots should still attempt one authoritative repair before degrading',
+    );
+    t.same(
+      result,
+      localSnapshot,
+      'backpressure-shaped repair failures should degrade to the local snapshot instead of failing the control snapshot outright',
     );
   });

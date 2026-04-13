@@ -154,7 +154,7 @@ test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
       errorMessage: 'boom',
     });
 
-    t.equal(calls.length, 2, 'should persist both transitions');
+    t.equal(calls.length, 3, 'should persist both service transitions plus canonical leader clear');
     const failedUpdate = calls[1];
     t.equal(failedUpdate.type, 'update', 'stable follow-up transition should use update');
     t.equal(failedUpdate.options.skipCacheWait, true,
@@ -165,6 +165,75 @@ test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
       'stable state writes should remain critical work');
     t.equal(failedUpdate.options.coalescingKey, 'replica-state:svc-4',
       'stable writes should use the canonical coalescing key');
+    t.equal(calls[2].tableName, 'partitions',
+      'stable leader loss should also clear canonical partition leader');
+
+    stateMachine.clear();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
+test('ReplicaStateMachine clears canonical partition leader when a partition replica becomes non-routable',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    const mutations = [];
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'node-1',
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation, options) {
+          mutations.push({mutation, options});
+          return {success: true};
+        },
+      },
+    });
+
+    await stateMachine.transition('svc-leader', ReplicaState.PENDING, {
+      partitionId: 'partition-9',
+      nodeId: 'node-1',
+      reason: 'pending',
+      serviceId: 'svc-leader',
+      serviceType: 'partition',
+      serviceAddress: 'node-1/partition/svc-leader',
+    });
+    await stateMachine.transition('svc-leader', ReplicaState.FAILED, {
+      partitionId: 'partition-9',
+      nodeId: 'node-1',
+      reason: 'failed',
+      serviceId: 'svc-leader',
+      serviceType: 'partition',
+      errorMessage: 'boom',
+    });
+
+    t.equal(mutations.length, 3, 'should persist service create, service failure, and leader clear');
+    t.equal(mutations[0].mutation.tableName, 'services');
+    t.equal(mutations[1].mutation.tableName, 'services');
+    t.equal(mutations[2].mutation.tableName, 'partitions');
+    t.same(mutations[2].mutation.whereClause, {
+      partition_id: 'partition-9',
+      leader_node_id: 'node-1',
+    });
+    t.same(mutations[2].mutation.data, {
+      leader_node_id: null,
+      updated_at: mutations[1].mutation.data.updated_at,
+    });
+    t.equal(
+      mutations[2].options.coalescingKey,
+      'partitions:leader:partition-9',
+      'leader clear should coalesce by partition',
+    );
+    t.equal(
+      mutations[2].options.deliveryPriority,
+      'critical',
+      'leader clear should stay on the critical lane',
+    );
 
     stateMachine.clear();
     ConfigurationManager.resetInstance();

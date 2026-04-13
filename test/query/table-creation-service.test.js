@@ -554,3 +554,173 @@ test('TableCreationService - surfaces initial partition provisioning failures',
       'create table should fail when partition provisioning fails',
     );
   });
+
+test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
+  'initial partition metadata before continuing provisioning', async (t) => {
+  const submittedMutations = [];
+  const provisionCalls = [];
+  const existingTable = {
+    table_id: 'tbl-users',
+    table_name: 'users',
+    active_partition_version: 1,
+  };
+  const service = new TableCreationService({
+    systemCache: {
+      find(tableName, predicate) {
+        if (tableName === 'tables') {
+          return predicate(existingTable) ? existingTable : null;
+        }
+        return null;
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async submitMutation(mutation) {
+        submittedMutations.push(mutation);
+        return {success: true};
+      },
+      async readRows() {
+        return {rows: []};
+      },
+    },
+    partitionProvisioner: async (context) => {
+      provisionCalls.push(context);
+    },
+  });
+
+  const result = await service.createTable({
+    ...createCreateTableAst(),
+    ifNotExists: true,
+  });
+
+  t.equal(result.success, true);
+  t.equal(result.skipped, true);
+  t.equal(result.partitionMetadataCreated, true);
+  t.equal(result.completionState, 'pending_creation');
+  t.equal(result.completionReason, 'replica_convergence_pending');
+  t.equal(submittedMutations.length, 1);
+  t.equal(submittedMutations[0].tableName, 'partitions');
+  t.equal(submittedMutations[0].row.partition_id, 'tbl-users-p1');
+  t.equal(provisionCalls.length, 1);
+  t.equal(provisionCalls[0].partitionId, 'tbl-users-p1');
+});
+
+test('TableCreationService - CREATE TABLE opts metadata writes into pending visibility semantics',
+  async (t) => {
+    const submittedMutations = [];
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation, options) {
+          submittedMutations.push({mutation, options});
+          return {success: true, visibilityState: 'pending_visibility'};
+        },
+      },
+      partitionProvisioner: async () => {},
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+
+    t.equal(submittedMutations.length, 2);
+    t.equal(
+      submittedMutations[0].options.allowPendingVisibility,
+      true,
+      'table metadata writes should tolerate pending cache visibility after authoritative commit',
+    );
+    t.equal(
+      submittedMutations[1].options.allowPendingVisibility,
+      true,
+      'partition metadata writes should tolerate pending cache visibility after authoritative commit',
+    );
+    t.equal(
+      result.visibilityState,
+      'pending_visibility',
+      'create table should surface that metadata commit succeeded while visibility is still converging',
+    );
+    t.equal(result.visibilityPending, true);
+    t.equal(
+      result.completionState,
+      'pending_creation',
+      'create table should not claim full convergence when provisioning exposes no replica evidence',
+    );
+    t.equal(result.completionReason, 'metadata_visibility_pending');
+  });
+
+test('TableCreationService - CREATE TABLE stays pending when only the minimum routable cohort is converged',
+  async (t) => {
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+      },
+      partitionProvisioner: async () => {
+        return {
+          requestedReplicaCount: 3,
+          resolvedReplicaCount: 3,
+          minimumRoutableReplicaCount: 2,
+          routableReplicaCount: 2,
+        };
+      },
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+
+    t.equal(result.completionState, 'pending_creation');
+    t.equal(result.completionReason, 'replica_convergence_pending');
+    t.equal(result.visibilityState, 'visible');
+    t.equal(result.visibilityPending, false);
+    t.same(
+      result.provisioningSummary,
+      {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        fullReplicaCountConverged: false,
+      },
+      'table creation should surface that write quorum exists while full replica convergence is still pending',
+    );
+  });
+
+test('TableCreationService - CREATE TABLE without provisioning detail stays pending on the quorum contract',
+  async (t) => {
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async insertSystemTableRow() {
+          return {success: true};
+        },
+      },
+      partitionProvisioner: async () => {},
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+
+    t.equal(result.completionState, 'pending_creation');
+    t.equal(result.completionReason, 'replica_convergence_pending');
+    t.same(
+      result.provisioningSummary,
+      {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+        fullReplicaCountConverged: false,
+      },
+      'table creation should default to the quorum-sized routable contract when the provisioner does not report convergence detail',
+    );
+  });

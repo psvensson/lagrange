@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {NUM, TYPEOF} from '../../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
@@ -14,6 +15,13 @@ import {
   DISTRIBUTED_ROLE_HINT,
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
+
+const PLAN_HASH = Object.freeze({
+  SHA1: 'sha1',
+  HEX: 'hex',
+  PREFIX: 'dqp-',
+  LENGTH: NUM.SIXTEEN,
+});
 
 /**
  * Canonical planner for distributed SQL plans.
@@ -358,7 +366,7 @@ class DistributedQueryPlanner {
    * @return {Object[]|null} Join plan edges.
    */
   buildJoinPlan(ast, tablePlans) {
-    if (!ast.joins || ast.joins.length === 0) {
+    if (!ast.joins || ast.joins.length === NUM.ZERO) {
       return null;
     }
 
@@ -395,8 +403,8 @@ class DistributedQueryPlanner {
       return DISTRIBUTED_JOIN_STRATEGY.NESTED_LOOP;
     }
 
-    const leftPartitions = leftPlan?.partitions?.length || 0;
-    const rightPartitions = rightPlan?.partitions?.length || 0;
+    const leftPartitions = leftPlan?.partitions?.length || NUM.ZERO;
+    const rightPartitions = rightPlan?.partitions?.length || NUM.ZERO;
     const minPartitions = Math.min(leftPartitions, rightPartitions);
     const maxPartitions = Math.max(leftPartitions, rightPartitions);
 
@@ -481,11 +489,11 @@ class DistributedQueryPlanner {
       tablePlans: serializedTablePlans,
       joinPlan: joinPlan || null,
     };
-    const digest = createHash('sha1')
+    const digest = createHash(PLAN_HASH.SHA1)
       .update(JSON.stringify(payload))
-      .digest('hex')
-      .slice(0, 16);
-    return `dqp-${digest}`;
+      .digest(PLAN_HASH.HEX)
+      .slice(NUM.ZERO, PLAN_HASH.LENGTH);
+    return `${PLAN_HASH.PREFIX}${digest}`;
   }
 
   /**
@@ -497,7 +505,7 @@ class DistributedQueryPlanner {
     if (Array.isArray(value)) {
       return value.map((entry) => this.normalizePlanPayload(entry));
     }
-    if (!value || typeof value !== 'object') {
+    if (!value || typeof value !== TYPEOF.OBJECT) {
       return value;
     }
 
@@ -505,7 +513,7 @@ class DistributedQueryPlanner {
     const keys = Object.keys(value).sort();
     for (const key of keys) {
       const entry = value[key];
-      if (typeof entry === 'function' || entry === undefined) {
+      if (typeof entry === TYPEOF.FUNCTION || entry === undefined) {
         continue;
       }
       normalized[key] = this.normalizePlanPayload(entry);
@@ -557,7 +565,7 @@ class DistributedQueryPlanner {
    * @return {boolean} True when local to target alias.
    */
   expressionReferencesAlias(expr, tableAlias) {
-    if (!expr || typeof expr !== 'object') {
+    if (!expr || typeof expr !== TYPEOF.OBJECT) {
       return true;
     }
     if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
@@ -621,7 +629,7 @@ class DistributedQueryPlanner {
     for (const join of ast.joins || []) {
       this.collectProjectedColumns(join.condition, tableAlias, projected);
     }
-    if (projected.size === 0) {
+    if (projected.size === NUM.ZERO) {
       return null;
     }
     return Array.from(projected.values());
@@ -634,7 +642,7 @@ class DistributedQueryPlanner {
    * @param {Set<string>} out - Output column set.
    */
   collectProjectedColumns(expr, tableAlias, out) {
-    if (!expr || typeof expr !== 'object') {
+    if (!expr || typeof expr !== TYPEOF.OBJECT) {
       return;
     }
     if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
@@ -681,7 +689,7 @@ class DistributedQueryPlanner {
    */
   buildFragmentSql(tablePlan) {
     const projection = Array.isArray(tablePlan.projectedColumns) &&
-      tablePlan.projectedColumns.length > 0 ?
+      tablePlan.projectedColumns.length > NUM.ZERO ?
       tablePlan.projectedColumns.join(', ') :
       '*';
     const aliasSuffix = tablePlan.tableAlias &&
@@ -702,7 +710,7 @@ class DistributedQueryPlanner {
    * @private
    */
   renderExpression(expr) {
-    if (!expr || typeof expr !== 'object') {
+    if (!expr || typeof expr !== TYPEOF.OBJECT) {
       return '';
     }
 
@@ -710,7 +718,7 @@ class DistributedQueryPlanner {
       if (expr.value === null) {
         return 'NULL';
       }
-      if (typeof expr.value === 'string') {
+      if (typeof expr.value === TYPEOF.STRING) {
         return `'${expr.value.replace(/'/g, '\'\'')}'`;
       }
       return String(expr.value);

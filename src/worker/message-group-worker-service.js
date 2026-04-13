@@ -896,6 +896,73 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
   }
 
   /**
+   * Handle one CDC_EVENT message through the canonical CDC dispatcher.
+   * @param {Object} message - Incoming CDC message.
+   * @return {Object} Worker response.
+   * @private
+   */
+  handleCDCMessage(message) {
+    const cdcEvent = message.cdcEvent || message;
+    const isLeaderReplica = this.isLeaderReplica();
+    let leaderAddress = null;
+
+    if (isLeaderReplica) {
+      // Avoid deadlock in single-thread worker pools:
+      // leader-side CDC replication requires processing incoming append-ack
+      // packets, so we must not block this handler waiting for quorum.
+      this.applyCDCEvent(cdcEvent).catch((error) => {
+        this.logger.error(
+          MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_APPLY_FAILED,
+          {
+            groupId: this.groupId,
+            replicaId: this.replicaId,
+            tableName: cdcEvent.tableName,
+            operation: cdcEvent.operation,
+            error: error.message,
+          },
+        );
+      });
+    } else {
+      leaderAddress = this.resolveLeaderAddress();
+      const relayCount = Number(message.cdcRelayCount) || NUM.ZERO;
+      const shouldRelay = leaderAddress &&
+        leaderAddress !== this.unifiedAddress &&
+        relayCount < MESSAGE_GROUP_WORKER_DEFAULT.CDC_RELAY_MAX_HOPS &&
+        this.messageBridge;
+      if (shouldRelay) {
+        try {
+          this.messageBridge.sendFireAndForget(leaderAddress, {
+            type: CDC_MESSAGE_TYPE.CDC_EVENT,
+            cdcEvent,
+            cdcRelayCount: relayCount + NUM.ONE,
+          });
+        } catch (error) {
+          this.logger.warn(
+            MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_APPLY_FAILED,
+            {
+              groupId: this.groupId,
+              replicaId: this.replicaId,
+              leaderAddress,
+              error: error.message,
+            },
+          );
+        }
+      }
+    }
+
+    return isLeaderReplica ?
+      {
+        status: WORKER_RESPONSE_STATUS.OK,
+        replicaId: this.replicaId,
+      } :
+      {
+        status: WORKER_RESPONSE_STATUS.OK,
+        replicaId: this.replicaId,
+        leaderAddress,
+      };
+  }
+
+  /**
    * Handle incoming message from MessageRouter.
    * Detects Raft packets and routes them to RaftGroup.
    * @param {Object} message - Incoming message.
@@ -909,103 +976,29 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       return this.handleRaftPacket(message);
     }
 
-    // Handle CDC event messages (from partition leaders)
-    if (message.type === CDC_MESSAGE_TYPE.CDC_EVENT) {
-      const cdcEvent = message.cdcEvent || message;
-      // Avoid deadlock in single-thread worker pools:
-      // leader-side CDC replication requires processing incoming append-ack
-      // packets, so we must not block this handler waiting for quorum.
-      if (this.isLeaderReplica()) {
-        this.applyCDCEvent(cdcEvent).catch((error) => {
-          this.logger.error(
-            MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_APPLY_FAILED,
-            {
-              groupId: this.groupId,
-              replicaId: this.replicaId,
-              tableName: cdcEvent.tableName,
-              operation: cdcEvent.operation,
-              error: error.message,
-            },
-          );
-        });
-        return {
-          status: WORKER_RESPONSE_STATUS.OK,
-          replicaId: this.replicaId,
-        };
-      } else {
-        const leaderAddress = this.resolveLeaderAddress();
-        const relayCount = Number(message.cdcRelayCount) || NUM.ZERO;
-        if (leaderAddress &&
-          leaderAddress !== this.unifiedAddress &&
-          relayCount < MESSAGE_GROUP_WORKER_DEFAULT.CDC_RELAY_MAX_HOPS &&
-          this.messageBridge) {
-          try {
-            this.messageBridge.sendFireAndForget(leaderAddress, {
-              type: CDC_MESSAGE_TYPE.CDC_EVENT,
-              cdcEvent,
-              cdcRelayCount: relayCount + NUM.ONE,
-            });
-          } catch (error) {
-            this.logger.warn(
-              MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_APPLY_FAILED,
-              {
-                groupId: this.groupId,
-                replicaId: this.replicaId,
-                leaderAddress,
-                error: error.message,
-              },
-            );
-          }
-        }
-        return {
-          status: WORKER_RESPONSE_STATUS.OK,
-          replicaId: this.replicaId,
-          leaderAddress,
-        };
-      }
-    }
-
-    // Handle SEED_CACHE message (during bootstrap)
-    if (message.type === SEED_CACHE_MESSAGE_TYPE.SEED_CACHE) {
+    switch (message.type) {
+    case CDC_MESSAGE_TYPE.CDC_EVENT:
+      return this.handleCDCMessage(message);
+    case SEED_CACHE_MESSAGE_TYPE.SEED_CACHE:
       return this.handleSeedCache(message);
-    }
-
-    // Handle SET_BOOTSTRAP_PHASE message
-    if (message.type ===
-      SEED_CACHE_MESSAGE_TYPE.SET_BOOTSTRAP_PHASE) {
+    case SEED_CACHE_MESSAGE_TYPE.SET_BOOTSTRAP_PHASE:
       return this.handleSetBootstrapPhase(message);
-    }
-
-    // Handle cache query messages
-    if (message.type === CACHE_MESSAGE_TYPE.CACHE_GET) {
+    case CACHE_MESSAGE_TYPE.CACHE_GET:
       return this.handleCacheGet(message);
-    }
-
-    if (message.type === CACHE_MESSAGE_TYPE.CACHE_QUERY) {
+    case CACHE_MESSAGE_TYPE.CACHE_QUERY:
       return this.handleCacheQuery(message);
-    }
-
-    if (message.type === CACHE_MESSAGE_TYPE.CACHE_FILTER) {
+    case CACHE_MESSAGE_TYPE.CACHE_FILTER:
       return this.handleCacheFilter(message);
-    }
-
-    if (message.type === CACHE_MESSAGE_TYPE.CACHE_GET_ALL) {
+    case CACHE_MESSAGE_TYPE.CACHE_GET_ALL:
       return this.handleCacheGetAll(message);
-    }
-
-    // Handle leadership status query
-    if (message.type ===
-      LEADERSHIP_MESSAGE_TYPE.GET_LEADERSHIP_STATUS) {
+    case LEADERSHIP_MESSAGE_TYPE.GET_LEADERSHIP_STATUS:
       return this.handleGetLeadershipStatus();
-    }
-
-    // Handle facade START_ELECTION message
-    if (message.type === FACADE_MESSAGE_TYPE.START_ELECTION) {
+    case FACADE_MESSAGE_TYPE.START_ELECTION:
       return this.handleStartElection();
+    default:
+      // Delegate to base class
+      return super.handleMessage(message);
     }
-
-    // Delegate to base class
-    return super.handleMessage(message);
   }
 
   /**

@@ -384,6 +384,33 @@ test('getInFlightOperations matches runtime-service ops', async (t) => {
     t.equal(ops.length, 1);
     t.equal(ops[0].entity_id, 'sys-postgres-wire');
   });
+
+  await t.test('excludes workflow-terminal rows even when status is stale',
+    async (t) => {
+      const rebalancer = createRebalancer({
+        replicaOperations: [
+          {
+            operation_id: 'op-stale-terminal',
+            type: 'ADD',
+            entity_type: 'runtime_service',
+            entity_id: 'sys-postgres-wire',
+            status: 'pending',
+            workflow_step: 'FAILED',
+          },
+          {
+            operation_id: 'op-inflight',
+            type: 'ADD',
+            entity_type: 'runtime_service',
+            entity_id: 'sys-postgres-wire',
+            status: 'pending',
+            workflow_step: 'CREATING',
+          },
+        ],
+      });
+      const ops = rebalancer.getInFlightOperations();
+      t.equal(ops.length, 1);
+      t.equal(ops[0].operation_id, 'op-inflight');
+    });
 });
 
 // --- CDC event handling ---

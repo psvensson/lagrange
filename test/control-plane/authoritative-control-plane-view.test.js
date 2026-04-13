@@ -240,6 +240,63 @@ test('AuthoritativeControlPlaneView coalesces identical in-flight table reads',
     );
   });
 
+test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
+  'replica fallback policy differs', async (t) => {
+  const calls = [];
+  let releaseRead = null;
+  const readBlocked = new Promise((resolve) => {
+    releaseRead = resolve;
+  });
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        await readBlocked;
+        return {
+          success: true,
+          rows: [{node_id: FIXTURE_NODE_ID}],
+          source: 'local_partition_replica',
+        };
+      },
+    },
+  });
+
+  const firstRead = view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+    {
+      replicaFallbackConsistency: 'any_replica',
+    },
+  );
+  const secondRead = view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+  );
+  await Promise.resolve();
+
+  t.equal(
+    calls.length,
+    2,
+    'reads with different replica fallback contracts should not coalesce',
+  );
+
+  releaseRead();
+  await Promise.all([firstRead, secondRead]);
+  t.same(
+    calls.map((call) => call.options?.replicaFallbackConsistency || null),
+    ['any_replica', null],
+    'the in-flight cache key should preserve the requested fallback policy',
+  );
+});
+
 test('AuthoritativeControlPlaneView coalesces concurrent readNodeSnapshot calls',
   async (t) => {
     const calls = [];
@@ -354,5 +411,116 @@ test('AuthoritativeControlPlaneView readRows fails with typed degraded result ' 
     result.errorCode,
     'CONTROL_PLANE_PRESSURE_DEGRADED',
     'view should return a typed degraded result',
+  );
+});
+
+test('AuthoritativeControlPlaneView retries one owner-rpc failure through ' +
+  'local/sql authoritative fallback when local transport is still ready',
+async (t) => {
+  const calls = [];
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        if (calls.length === 1) {
+          return {
+            success: false,
+            error: 'Connection to node node-seed closed',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            source: 'owner_rpc_lane',
+            localQueryTransport: {
+              ready: true,
+              state: 'ready',
+            },
+            rows: [],
+          };
+        }
+        return {
+          success: true,
+          rows: [{
+            node_id: FIXTURE_NODE_ID,
+            last_heartbeat: FIXTURE_LAST_HEARTBEAT_MS,
+          }],
+          source: 'sql_query_engine',
+        };
+      },
+    },
+  });
+
+  const result = await view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+  );
+
+  t.equal(calls.length, 2,
+    'view should retry once without owner-rpc after a routed connection failure');
+  t.equal(calls[0].options.allowOwnerRpcFallback, true,
+    'first attempt should retain owner-rpc fallback');
+  t.equal(calls[1].options.allowOwnerRpcFallback, false,
+    'retry should disable owner-rpc fallback');
+  t.equal(calls[1].options.preferOwnerRpcRead, false,
+    'retry should not preserve owner-rpc preference');
+  t.match(
+    String(calls[1].options.queryOptions?.sessionId || ''),
+    /:owner-rpc-recovery$/,
+    'retry should isolate recovery reads in a distinct session',
+  );
+  t.equal(result.success, true,
+    'fallback retry should recover the authoritative read');
+  t.equal(
+    result.source,
+    AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE.SQL_QUERY_ENGINE,
+    'recovered read should surface the canonical local/sql source classification',
+  );
+});
+
+test('AuthoritativeControlPlaneView resolves diagnostics readProfile to the ' +
+  'strict owner-rpc contract', async (t) => {
+  const calls = [];
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{
+            node_id: FIXTURE_NODE_ID,
+            last_heartbeat: FIXTURE_LAST_HEARTBEAT_MS,
+          }],
+          source: 'owner_rpc_lane',
+        };
+      },
+    },
+  });
+
+  const result = await view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+    {readProfile: 'diagnostics'},
+  );
+
+  t.equal(result.success, true);
+  t.equal(calls.length, 1, 'diagnostics profile should issue one strict authoritative read');
+  t.equal(calls[0].options.preferOwnerRpcRead, true);
+  t.equal(calls[0].options.requireOwnerRpcRead, true);
+  t.equal(calls[0].options.allowSqlFallback, false);
+  t.equal(
+    calls[0].options.queryOptions?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    'diagnostics profile should route through repair-eligible readiness',
   );
 });

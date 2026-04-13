@@ -6,12 +6,16 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from '../harness/constants.js';
 
 const ZERO = 0;
 const DEFAULT_ACTION_COUNT = 3;
 const DEFAULT_CONSISTENCY_TIMEOUT_MS = 60000;
-const DEFAULT_CONSISTENCY_POLL_INTERVAL_MS = 500;
+const DEFAULT_CONSISTENCY_POLL_INTERVAL_MS =
+  SCENARIO_TIMING_DEFAULTS.pollIntervalMs;
 const CHAOS_ACTION = Object.freeze({
   KILL_RESTART: 'kill_restart',
   PAUSE_UNPAUSE: 'pause_unpause',
@@ -111,7 +115,7 @@ function resolveInClusterChaosInjectionScenarioConfig(options = {}) {
       '60s',
     preChaosDelayMs: Number.isFinite(options.preChaosDelayMs) ?
       Number(options.preChaosDelayMs) :
-      2000,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
     faultHoldMs: Number.isFinite(options.faultHoldMs) ?
       Number(options.faultHoldMs) :
       1500,

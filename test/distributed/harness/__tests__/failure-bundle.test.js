@@ -429,6 +429,123 @@ function buildPlaybackDerivedFailureResult() {
   };
 }
 
+function buildPlaybackActiveGateStageEvent({
+  readinessMode = 'startup',
+  activeGateAdmissionState = {
+    mode: 'blocked',
+    blockedNodeIds: ['seed-1'],
+    reasonCode: 'metadata_publication_degraded',
+  },
+  activeGateCurrentProgress,
+} = {}) {
+  return {
+    timestamp: 5000,
+    type: 'cluster.stage',
+    scope: 'cluster',
+    entityId: 'cluster',
+    details: {
+      stage: 'setup.cluster.waiting-active',
+      nodeDiagnostics: [],
+      snapshotCoverage: {
+        completeCoverage: true,
+        bestCoverageNodeCount: 2,
+        expectedNodeCount: 2,
+        selectedNodeId: 'seed-1',
+        selectedCapturedAtMs: 4990,
+        selectedObservedNodeIds: ['seed-1', 'joiner-1'],
+        selectedControlPlaneDiagnosticsAvailable: true,
+        selectedPublicationConvergence: {
+          publicationEpoch: 3,
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+        },
+      },
+      publicationConvergenceGate: {
+        ready: false,
+        reasons: [],
+        publicationStatus: 'PUBLISHED',
+        pendingAckNodeIds: [],
+        missingPublishedNodeIds: [],
+      },
+      activeGateNoProgress: {
+        enabled: true,
+        mode: readinessMode,
+        maxAttempts: 45,
+        attemptsSinceProgress: 22,
+        stalled: false,
+        currentProgress: activeGateCurrentProgress || {
+          expectedNodeCount: 2,
+          activeNodeCount: 2,
+          inactiveNodeCount: 0,
+          snapshotCoverageNodeCount: 2,
+          snapshotCoverageComplete: false,
+          publicationStatus: 'PUBLISHED',
+          pendingAckCount: 0,
+          missingPublishedCount: 1,
+          gateReasons: [],
+          selectedSnapshotReachableBy: 'admin_health',
+          selectedSnapshotError: 'metadata_publication_degraded',
+          selectedReachabilityError: null,
+          selectedError: null,
+        },
+      },
+      activeGateAdmissionState,
+    },
+  };
+}
+
+function buildStartupModeWitnessProgress({
+  snapshotCoverageNodeCount = 0,
+  isTimeoutError = true,
+  readinessDelay = null,
+} = {}) {
+  const selectedSnapshotReachableBy = 'admin_health';
+  const selectedSnapshotError = isTimeoutError ?
+    'Admin API query timed out for node seed-1 on lane snapshot after 30ms' :
+    'metadata_publication_degraded';
+  const progress = {
+    expectedNodeCount: 2,
+    activeNodeCount: 2,
+    inactiveNodeCount: 0,
+    snapshotCoverageNodeCount,
+    snapshotCoverageComplete: false,
+    publicationStatus: 'PUBLISHED',
+    pendingAckCount: 0,
+    missingPublishedCount: 1,
+    gateReasons: [],
+    prioritySpreadSatisfied: false,
+    selectedSnapshotReachableBy,
+    selectedSnapshotError,
+    selectedReachabilityError: null,
+    selectedError: null,
+  };
+  if (readinessDelay &&
+      typeof readinessDelay === 'object' &&
+      !Array.isArray(readinessDelay)) {
+    progress.readinessDelay = readinessDelay;
+  } else if (isTimeoutError === true &&
+      readinessDelay === null) {
+    progress.readinessDelay = {
+      timedOut: true,
+      cause: 'snapshot_timeout',
+      source: 'selectedSnapshotError',
+      recoverability: 'terminal',
+      error: selectedSnapshotError,
+    };
+  } else if (isTimeoutError === false &&
+      readinessDelay === null) {
+    progress.readinessDelay = {
+      timedOut: false,
+      cause: 'none',
+      source: 'selectedSnapshotError',
+      recoverability: 'recoverable',
+      error: selectedSnapshotError,
+    };
+  }
+  return progress;
+}
+
 function buildConvergenceDiagnosticsOnlyScenario() {
   return {
     scenario: 'rolling-restart',
@@ -457,6 +574,11 @@ function buildConvergenceDiagnosticsOnlyScenario() {
             requiredAckNodeIds: ['seed-1', 'joiner-1', 'joiner-2'],
             acknowledgedNodeIds: ['seed-1', 'joiner-2'],
             publishedActiveNodeIds: ['seed-1', 'joiner-2'],
+            recoveryProtocolState: 'publication_pending',
+            priorityRecoveryReasonCodes: [
+              'publication_epoch_pending',
+              'priority_partitions_not_spread',
+            ],
           },
           publicationMode: {
             currentMode: 'recovering',
@@ -961,8 +1083,22 @@ describe('failure-bundle', () => {
         1,
       );
       assert.equal(
+        scenarioBundle.publicationConvergence.recoveryProtocolState,
+        'publication_pending',
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
+        ['publication_epoch_pending', 'priority_partitions_not_spread'],
+      );
+      assert.equal(
         scenarioBundle.summary.failureClassification.failureClass,
         'publication_convergence_blocked',
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'recoveryProtocolState=publication_pending',
+        ),
+        true,
       );
       assert.equal(
         scenarioBundle.recoveryReadiness.pendingAckRepairEligibleNodeIds[0],
@@ -1680,6 +1816,275 @@ describe('failure-bundle', () => {
       assert.match(
         scenarioMarkdown,
           /Priority Recovery Partition Witnesses: control_plane_publications-p1#state=blocked_unclassified#gap=1#blockers=eligible_but_no_operation_created#decision=repairEligible#eligible=1, replica_operations-p1#state=recovering_in_flight#gap=1#blockers=operation_created_but_no_step_transitions\|learner_active_but_never_promotable#decision=controlPlaneRecoveryEligible#eligible=1#ops=op-1#step=CREATE_REPLICA#status=open#learners=joiner-1/,
+      );
+    });
+
+  it('classifies startup playback active-gate no-progress witness as CL-006 and preserves admission state',
+    async () => {
+      const scenarioDir = join(outputDir, 'seed-restart-under-load');
+      await mkdir(scenarioDir, {recursive: true});
+      const activeGateAdmissionState = {
+        mode: 'blocked',
+        blockedNodeCount: 2,
+        blockedNodeIds: ['seed-1', 'joiner-1'],
+      };
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify(buildPlaybackActiveGateStageEvent({
+            readinessMode: 'startup',
+            activeGateAdmissionState,
+            activeGateCurrentProgress:
+              buildStartupModeWitnessProgress({
+                snapshotCoverageNodeCount: 2,
+                isTimeoutError: false,
+              }),
+          })),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(
+        'seed-restart-under-load',
+        buildPlaybackDerivedFailureResult(),
+      );
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-006',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'startup_active_publication_lag',
+      );
+      assert.deepEqual(
+        scenarioBundle.controlPlane.activeGateAdmissionState,
+        activeGateAdmissionState,
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.activeGateNoProgress
+          .currentProgress.selectedSnapshotReachableBy,
+        'admin_health',
+      );
+      assert.equal(
+        scenarioBundle.summary.readinessFailure?.mode,
+        'startup',
+      );
+      assert.equal(
+        scenarioBundle.summary.readinessFailure?.cause,
+        'none',
+      );
+      assert.equal(
+        scenarioBundle.summary.failureAction,
+        null,
+      );
+    });
+
+  it('classifies startup playback active-gate timeout witness with explicit readiness delay metadata',
+    async () => {
+      const scenarioDir = join(outputDir, 'seed-restart-under-load-timeout');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify(buildPlaybackActiveGateStageEvent({
+            readinessMode: 'startup',
+            activeGateCurrentProgress: buildStartupModeWitnessProgress({
+              snapshotCoverageNodeCount: 0,
+              isTimeoutError: true,
+            }),
+          })),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(
+        'seed-restart-under-load-timeout',
+        buildPlaybackDerivedFailureResult(),
+      );
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-004',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'startup_active_snapshot_timeout',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateReadinessDelay?.timedOut,
+        true,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateReadinessDelay?.cause,
+        'snapshot_timeout',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.activeGateReadinessDelay?.recoverability,
+        'terminal',
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'activeGateReadinessDelay=timeout',
+        ),
+        true,
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'activeGateReadinessCause=snapshot_timeout',
+        ),
+        true,
+      );
+      assert.equal(
+        scenarioBundle.summary.failureClassification.signals.includes(
+          'activeGateReadinessRecoverability=terminal',
+        ),
+        true,
+      );
+
+      assert.equal(
+        scenarioBundle.summary.readinessFailure?.classCode,
+        'snapshot_timeout',
+      );
+      assert.equal(
+        scenarioBundle.summary.readinessFailure?.recoverability,
+        'terminal',
+      );
+      assert.equal(
+        scenarioBundle.summary.failureAction,
+        'Snapshot/reachability timeout is blocking convergence.',
+      );
+      assert.equal(
+        scenarioBundle.summary.operatorRecommendation,
+        'Inspect snapshot query latency, admin readiness, and host/network stability before rerun.',
+      );
+
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      assert.equal(
+        triageSummary.summary.readinessFailure?.classCode,
+        'snapshot_timeout',
+      );
+      assert.equal(
+        triageSummary.summary.failureAction,
+        'Snapshot/reachability timeout is blocking convergence.',
+      );
+
+      const reportJson = JSON.parse(await readFile(reportPath, UTF8_ENCODING));
+      assert.equal(
+        reportJson.scenarios[0].readinessFailure.classCode,
+        'snapshot_timeout',
+      );
+      assert.equal(
+        reportJson.scenarios[0].failureAction,
+        'Snapshot/reachability timeout is blocking convergence.',
+      );
+
+      const scenarioMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.markdownPath),
+        UTF8_ENCODING,
+      );
+      assert.match(scenarioMarkdown, /## Readiness Guidance/);
+      assert.match(scenarioMarkdown, /Snapshot\/reachability timeout is blocking convergence/);
+
+      const triageMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.triageMarkdownPath),
+        UTF8_ENCODING,
+      );
+      assert.match(triageMarkdown, /Readiness Failure: class=snapshot_timeout/);
+      assert.match(
+        triageMarkdown,
+        /Operator Recommendation: Inspect snapshot query latency, admin readiness, and host\/network stability before rerun/,
+      );
+    });
+
+  it('does not classify startup-only active-gate witness in load-mode playback details',
+    async () => {
+      const scenarioDir = join(outputDir, 'seed-restart-under-load-load');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify(buildPlaybackActiveGateStageEvent({
+            readinessMode: 'load',
+            activeGateCurrentProgress:
+              buildStartupModeWitnessProgress({
+                snapshotCoverageNodeCount: 2,
+                isTimeoutError: false,
+              }),
+          })),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult(
+        'seed-restart-under-load-load',
+        buildPlaybackDerivedFailureResult(),
+      );
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        null,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        null,
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.activeGateNoProgress.mode,
+        'load',
       );
     });
 

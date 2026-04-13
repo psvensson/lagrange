@@ -77,4 +77,41 @@ describe('write-ack-visibility scenario', () => {
       assert.ok(result.maxPropagationMs >= 0);
       assert.equal(result.propagationSamples.length, 2);
     });
+
+  it('prefers convergence settling over the load active gate when both exist',
+    async () => {
+      let waitForConvergenceCalls = 0;
+      let waitForAllActiveCalls = 0;
+
+      const nodes = [
+        {
+          id: 'seed-1',
+          role: 'seed',
+          isReachable: async () => true,
+          query: async () => ({rows: [{log_id: 'ack-vis-fixed'}]}),
+        },
+      ];
+
+      const cluster = {
+        getNodes: () => nodes,
+        waitForConvergence: async () => {
+          waitForConvergenceCalls += 1;
+          return {settledAfterMs: 1};
+        },
+        waitForAllActive: async () => {
+          waitForAllActiveCalls += 1;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      const result = await run(cluster, {
+        writeCount: 1,
+        propagationTimeoutMs: 10,
+        pollIntervalMs: 1,
+      });
+
+      assert.equal(waitForConvergenceCalls, 1);
+      assert.equal(waitForAllActiveCalls, 0);
+      assert.deepEqual(result.convergenceTiming, {settledAfterMs: 1});
+    });
 });

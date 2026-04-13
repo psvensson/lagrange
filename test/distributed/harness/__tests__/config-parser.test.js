@@ -439,6 +439,34 @@ test('Unit: mergeWithDefaults preserves optional docker fast-local fields', asyn
     });
 });
 
+test('Unit: mergeWithDefaults preserves scenario timing overrides', async (t) => {
+  await t.test('passes through scenario-scoped override objects',
+    async () => {
+      const config = mergeWithDefaults({
+        scenarios: {
+          rollingRestart: {
+            loadDuration: '180s',
+            perNodeConvergenceTimeoutMs: 120000,
+          },
+          seedRestartUnderLoad: {
+            restartReadinessTimeoutMs: 120000,
+          },
+          ignoredScenario: 'invalid',
+        },
+      });
+
+      assert.deepStrictEqual(config.scenarios, {
+        rollingRestart: {
+          loadDuration: '180s',
+          perNodeConvergenceTimeoutMs: 120000,
+        },
+        seedRestartUnderLoad: {
+          restartReadinessTimeoutMs: 120000,
+        },
+      });
+    });
+});
+
 test('Unit: mergeWithDefaults passes through gcp config', async (t) => {
   await t.test('includes gcp section when present', async () => {
     const partial = {

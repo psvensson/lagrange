@@ -382,6 +382,61 @@ test('MovePlanner calculateMoves for runtime_service', async (t) => {
       t.equal(moves.length, 0);
     });
 
+  await t.test('priority control-plane partitions keep planning with in-flight operations',
+    async (t) => {
+      const nodes = [
+        {node_id: 'n1', cpu_usage_percent: 10},
+        {node_id: 'n2', cpu_usage_percent: 20},
+        {node_id: 'n3', cpu_usage_percent: 30},
+      ];
+      const currentReplicas = [
+        {
+          replica_id: 'r1',
+          service_id: 'r1',
+          node_id: 'n1',
+          status: ReplicaStatus.ACTIVE,
+        },
+      ];
+      const planner = new MovePlanner({
+        entityId: 'nodes-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider: createMoveStateProvider({
+          nodes,
+          currentReplicas,
+          inFlightOperations: [
+            {
+              operation_id: 'op-priority-pending',
+              type: 'ADD',
+              partition_id: 'nodes-p1',
+              entity_type: 'partition',
+              entity_id: 'nodes-p1',
+              status: 'pending',
+              target_node_id: 'n2',
+            },
+          ],
+          pendingAddNodes: new Set(['n2']),
+        }),
+      });
+      planner.isControlPlanePriorityPartition = () => true;
+
+      const targetState = {
+        targetReplicaCount: 3,
+        targetNodes: ['n1', 'n2', 'n3'],
+        degraded: false,
+      };
+      const moves = planner.calculateMoves(currentReplicas, targetState);
+      const addMoves = moves.filter((move) =>
+        move.type === REBALANCER_MOVE_TYPE.ADD,
+      );
+
+      t.equal(
+        addMoves.length,
+        1,
+        'priority planning should continue and schedule the remaining add',
+      );
+      t.equal(addMoves[0]?.nodeId, 'n3');
+    });
+
   await t.test('returns no moves when at target', async (t) => {
     const nodes = [
       {node_id: 'n1', cpu_usage_percent: 10},

@@ -496,6 +496,32 @@ class NodeRegistrationOwner {
     }
   }
 
+  async publishNodeMembershipViaHeartbeat(rowData) {
+    const heartbeatService =
+      this.delegates.getHeartbeatService?.() || null;
+    if (!hasFunction(heartbeatService?.writeNodeHeartbeat) ||
+        !hasFunction(heartbeatService?.nodeStateReporter)) {
+      return null;
+    }
+
+    const now = Number.isFinite(rowData?.[COLUMN.LAST_HEARTBEAT]) ?
+      rowData[COLUMN.LAST_HEARTBEAT] :
+      this.delegates.getNow()();
+    const queryTimeoutMs =
+      Math.max(NUM.ONE, this.getJoinAdmissionWriteRetryTimeoutMs());
+
+    await heartbeatService.writeNodeHeartbeat(
+      rowData,
+      this.delegates.getNodeCapabilities?.() || null,
+      now,
+      queryTimeoutMs,
+    );
+    return {
+      success: true,
+      publicationPath: 'node_state_reporter',
+    };
+  }
+
   async upsertSystemTableRow(tableName, rowData) {
     const cdcIntegrationService =
       this.delegates.getCdcIntegrationService();
@@ -559,11 +585,11 @@ class NodeRegistrationOwner {
   }
 
   getJoinTimeUpsertOptions() {
-    const options = {deliveryPriority: 'critical'};
-    if (this.delegates.getCdcSubscriptionsActive?.() !== true) {
-      options.skipCacheWait = true;
-    }
-    return options;
+    return {
+      deliveryPriority: 'critical',
+      skipCacheWait: true,
+      queryTimeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
+    };
   }
 
   seedJoinTimeCacheRow(tableName, rowData) {

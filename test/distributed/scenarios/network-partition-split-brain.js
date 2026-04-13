@@ -9,12 +9,15 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from '../harness/constants.js';
 
 const PARTITION_HOLD_MS = 10000;
 const POST_HEAL_CONVERGENCE_TIMEOUT_MS = 180000;
 const CONSISTENCY_TIMEOUT_MS = 15000;
-const CONSISTENCY_POLL_INTERVAL_MS = 500;
+const CONSISTENCY_POLL_INTERVAL_MS = SCENARIO_TIMING_DEFAULTS.pollIntervalMs;
 const MIN_GROUP_SIZE = 1;
 
 /**

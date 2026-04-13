@@ -13,6 +13,44 @@ import {
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {normalizeToWebSocketAddress} from '../constants/transport.js';
 
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON = Object.freeze({
+  TARGET_NODE_MISSING: 'target_node_missing',
+  CANONICAL_METADATA_MISSING: 'canonical_websocket_metadata_missing',
+});
+
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE = Object.freeze({
+  RESOLVED: 'resolved',
+  UNAVAILABLE: 'unavailable',
+});
+
+const ADDRESS_PARSE_STATE = Object.freeze({
+  EMPTY: 'empty',
+  INVALID: 'invalid',
+  PARSED: 'parsed',
+});
+
+const ADDRESS_PART_STATE = Object.freeze({
+  ABSENT: 'absent',
+  PRESENT: 'present',
+});
+
+const NETWORK_FAMILY = Object.freeze({
+  IPV4: 'IPv4',
+});
+
+const WEBSOCKET_URL_PROTOCOL = Object.freeze({
+  WS: 'ws:',
+  WSS: 'wss:',
+});
+
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE = Object.freeze({
+  BOOTSTRAP_SEED_ADDRESS: 'bootstrap_seed_address',
+  BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS: 'bootstrap_snapshot_node_endpoints',
+  CACHE_NODE_ENDPOINTS: 'cache_node_endpoints',
+});
+
+const ADDRESS_PROTOCOL_SEPARATOR = '://';
+
 function normalizeAddressString(value) {
   return typeof value === TYPEOF.STRING ?
     value.trim() :
@@ -20,60 +58,129 @@ function normalizeAddressString(value) {
 }
 
 function parseAddressParts(address) {
+  return parseAddressPartsResult(address);
+}
+
+function buildAddressStateResult(state) {
+  return Object.freeze({state});
+}
+
+function buildAddressStringPart(value) {
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+    Object.freeze({
+      state: ADDRESS_PART_STATE.PRESENT,
+      value,
+    }) :
+    Object.freeze({
+      state: ADDRESS_PART_STATE.ABSENT,
+    });
+}
+
+function buildAddressPortPart(value) {
+  return Number.isInteger(value) && value > NUM.ZERO ?
+    Object.freeze({
+      state: ADDRESS_PART_STATE.PRESENT,
+      value,
+    }) :
+    Object.freeze({
+      state: ADDRESS_PART_STATE.ABSENT,
+    });
+}
+
+function buildParsedAddressResult(options = {}) {
+  return Object.freeze({
+    state: ADDRESS_PARSE_STATE.PARSED,
+    host: buildAddressStringPart(options.host || null),
+    port: buildAddressPortPart(options.port),
+    protocol: buildAddressStringPart(options.protocol || null),
+  });
+}
+
+function normalizeParsedUrlHost(host) {
+  return typeof host === TYPEOF.STRING &&
+    host.startsWith('[') &&
+    host.endsWith(']') ?
+    host.substring(NUM.ONE, host.length - NUM.ONE) :
+    host;
+}
+
+function readParsedAddressPartValue(parsedAddress, partName) {
+  return parsedAddress?.state === ADDRESS_PARSE_STATE.PARSED &&
+    parsedAddress?.[partName]?.state === ADDRESS_PART_STATE.PRESENT ?
+    parsedAddress[partName].value :
+    null;
+}
+
+function parseUrlAddressParts(normalizedAddress) {
+  try {
+    const parsed = new URL(normalizedAddress);
+    return buildParsedAddressResult({
+      host: normalizeParsedUrlHost(parsed.hostname),
+      port: Number(parsed.port),
+      protocol: parsed.protocol,
+    });
+  } catch (_error) {
+    return buildAddressStateResult(ADDRESS_PARSE_STATE.INVALID);
+  }
+}
+
+function parseBracketedAddressParts(normalizedAddress) {
+  if (!normalizedAddress.startsWith('[')) {
+    return null;
+  }
+
+  const closingBracket = normalizedAddress.indexOf(']');
+  if (closingBracket <= NUM.ZERO) {
+    return null;
+  }
+
+  const host = normalizedAddress.substring(NUM.ONE, closingBracket);
+  const remainder = normalizedAddress.substring(closingBracket + NUM.ONE);
+  const port = remainder.startsWith(':') ?
+    Number(remainder.substring(NUM.ONE)) :
+    null;
+  return buildParsedAddressResult({
+    host,
+    port,
+  });
+}
+
+function parseSingleColonAddressParts(normalizedAddress) {
+  const firstColon = normalizedAddress.indexOf(':');
+  const lastColon = normalizedAddress.lastIndexOf(':');
+  if (firstColon <= NUM.ZERO || firstColon !== lastColon) {
+    return null;
+  }
+
+  return buildParsedAddressResult({
+    host: normalizedAddress.substring(NUM.ZERO, lastColon),
+    port: Number(normalizedAddress.substring(lastColon + NUM.ONE)),
+  });
+}
+
+function parseAddressPartsResult(address) {
   const normalized = normalizeAddressString(address);
   if (normalized.length === NUM.ZERO) {
-    return {host: null, port: null, protocol: null};
+    return buildAddressStateResult(ADDRESS_PARSE_STATE.EMPTY);
   }
 
-  if (normalized.includes('://')) {
-    try {
-      const parsed = new URL(normalized);
-      const parsedPort = Number(parsed.port);
-      return {
-        host: parsed.hostname || null,
-        port: Number.isInteger(parsedPort) && parsedPort > NUM.ZERO ?
-          parsedPort :
-          null,
-        protocol: parsed.protocol || null,
-      };
-    } catch (_error) {
-      return {host: null, port: null, protocol: null};
-    }
+  if (normalized.includes(ADDRESS_PROTOCOL_SEPARATOR)) {
+    return parseUrlAddressParts(normalized);
   }
 
-  if (normalized.startsWith('[')) {
-    const closingBracket = normalized.indexOf(']');
-    if (closingBracket > NUM.ZERO) {
-      const host = normalized.substring(NUM.ONE, closingBracket);
-      const remainder = normalized.substring(closingBracket + NUM.ONE);
-      const port = remainder.startsWith(':') ?
-        Number(remainder.substring(NUM.ONE)) :
-        null;
-      return {
-        host: host || null,
-        port: Number.isInteger(port) && port > NUM.ZERO ? port : null,
-        protocol: null,
-      };
-    }
+  const bracketedParts = parseBracketedAddressParts(normalized);
+  if (bracketedParts) {
+    return bracketedParts;
   }
 
-  const firstColon = normalized.indexOf(':');
-  const lastColon = normalized.lastIndexOf(':');
-  if (firstColon > NUM.ZERO && firstColon === lastColon) {
-    const host = normalized.substring(NUM.ZERO, lastColon);
-    const port = Number(normalized.substring(lastColon + NUM.ONE));
-    return {
-      host: host || null,
-      port: Number.isInteger(port) && port > NUM.ZERO ? port : null,
-      protocol: null,
-    };
+  const hostPortParts = parseSingleColonAddressParts(normalized);
+  if (hostPortParts) {
+    return hostPortParts;
   }
 
-  return {
+  return buildParsedAddressResult({
     host: normalized,
-    port: null,
-    protocol: null,
-  };
+  });
 }
 
 function formatHostForWebSocketUrl(host) {
@@ -131,7 +238,7 @@ function resolveRoutableLocalIpAddress() {
       const family = typeof entry.family === TYPEOF.STRING ?
         entry.family :
         String(entry.family || '');
-      if (family === 'IPv4') {
+      if (family === NETWORK_FAMILY.IPV4) {
         ipv4Candidates.push(entry.address);
         continue;
       }
@@ -144,63 +251,104 @@ function resolveRoutableLocalIpAddress() {
     null;
 }
 
-function resolveAdvertisedWebSocketAddress(options = {}) {
-  const explicitAddress = normalizeAddressString(options.advertisedAddress);
-  const explicitWsPort =
-    Number.isInteger(options.wsPort) && options.wsPort > NUM.ZERO ?
-      Math.floor(options.wsPort) :
-      null;
+function resolveExplicitWebSocketPort(wsPort) {
+  return Number.isInteger(wsPort) && wsPort > NUM.ZERO ?
+    Math.floor(wsPort) :
+    null;
+}
 
-  if (explicitAddress.length > NUM.ZERO) {
-    if (explicitAddress.startsWith(PROTOCOL.WS) ||
-        explicitAddress.startsWith(PROTOCOL.WSS)) {
-      return explicitAddress;
-    }
-    const parsedExplicit = parseAddressParts(explicitAddress);
-    const explicitPort = parsedExplicit.port || explicitWsPort;
-    const explicitWsAddress =
-      buildWebSocketAddress(parsedExplicit.host, explicitPort);
-    if (explicitWsAddress) {
-      return explicitWsAddress;
-    }
+function resolveExplicitAdvertisedWebSocketAddress(
+  explicitAddress,
+  explicitWsPort,
+) {
+  if (explicitAddress.length === NUM.ZERO) {
+    return null;
+  }
+  if (explicitAddress.startsWith(PROTOCOL.WS) ||
+      explicitAddress.startsWith(PROTOCOL.WSS)) {
+    return explicitAddress;
   }
 
-  const nodeAddress = normalizeAddressString(options.nodeAddress);
-  const parsedNodeAddress = parseAddressParts(nodeAddress);
-  const derivedWsPort = explicitWsPort ||
-    (Number.isInteger(parsedNodeAddress.port) &&
-      parsedNodeAddress.port > NUM.ZERO ?
-      ((parsedNodeAddress.protocol === 'ws:' ||
-          parsedNodeAddress.protocol === 'wss:') ?
-        parsedNodeAddress.port :
-        parsedNodeAddress.port + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET) :
-      null);
+  const parsedExplicit = parseAddressPartsResult(explicitAddress);
+  return buildWebSocketAddress(
+    readParsedAddressPartValue(parsedExplicit, 'host'),
+    readParsedAddressPartValue(parsedExplicit, 'port') || explicitWsPort,
+  );
+}
 
-  let host = parsedNodeAddress.host;
-  const shouldPreferRoutableInterface =
-    options.preferRoutableInterface === true ||
+function resolveDerivedAdvertisedWebSocketPort(
+  parsedNodeAddress,
+  explicitWsPort,
+) {
+  if (Number.isInteger(explicitWsPort) && explicitWsPort > NUM.ZERO) {
+    return explicitWsPort;
+  }
+
+  const nodeAddressPort = readParsedAddressPartValue(parsedNodeAddress, 'port');
+  if (!Number.isInteger(nodeAddressPort) || nodeAddressPort <= NUM.ZERO) {
+    return null;
+  }
+
+  const nodeAddressProtocol =
+    readParsedAddressPartValue(parsedNodeAddress, 'protocol');
+  if (nodeAddressProtocol === WEBSOCKET_URL_PROTOCOL.WS ||
+      nodeAddressProtocol === WEBSOCKET_URL_PROTOCOL.WSS) {
+    return nodeAddressPort;
+  }
+  return nodeAddressPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+}
+
+function shouldPreferRoutableAdvertisedHost(options, host) {
+  return options.preferRoutableInterface === true ||
     (options.wsHost === HOST.ANY &&
       typeof host === TYPEOF.STRING &&
       host.length > NUM.ZERO &&
       !isIpLiteral(host) &&
       !isLocalOnlyHost(host));
-  if (shouldPreferRoutableInterface) {
-    host = resolveRoutableLocalIpAddress() || host;
+}
+
+function resolveAdvertisedWebSocketHost(options, parsedNodeAddress) {
+  const host = readParsedAddressPartValue(parsedNodeAddress, 'host');
+  if (!shouldPreferRoutableAdvertisedHost(options, host)) {
+    return host;
+  }
+  return resolveRoutableLocalIpAddress() || host;
+}
+
+function resolveAdvertisedWebSocketAddress(options = {}) {
+  const explicitAddress = normalizeAddressString(options.advertisedAddress);
+  const explicitWsPort = resolveExplicitWebSocketPort(options.wsPort);
+  const explicitWsAddress = resolveExplicitAdvertisedWebSocketAddress(
+    explicitAddress,
+    explicitWsPort,
+  );
+  if (explicitWsAddress) {
+    return explicitWsAddress;
   }
 
-  const advertisedWsAddress = buildWebSocketAddress(host, derivedWsPort);
+  const nodeAddress = normalizeAddressString(options.nodeAddress);
+  const parsedNodeAddress = parseAddressPartsResult(nodeAddress);
+  const advertisedWsAddress = buildWebSocketAddress(
+    resolveAdvertisedWebSocketHost(options, parsedNodeAddress),
+    resolveDerivedAdvertisedWebSocketPort(parsedNodeAddress, explicitWsPort),
+  );
   return advertisedWsAddress || normalizeToWebSocketAddress(nodeAddress);
 }
 
 function resolveAdvertisedEndpointHost(options = {}) {
   const advertisedWsAddress =
     resolveAdvertisedWebSocketAddress(options);
-  const advertisedHost =
-    parseAddressParts(advertisedWsAddress).host;
+  const advertisedHost = readParsedAddressPartValue(
+    parseAddressPartsResult(advertisedWsAddress),
+    'host',
+  );
   if (advertisedHost) {
     return advertisedHost;
   }
-  const nodeHost = parseAddressParts(options.nodeAddress).host;
+  const nodeHost = readParsedAddressPartValue(
+    parseAddressPartsResult(options.nodeAddress),
+    'host',
+  );
   if (nodeHost) {
     return nodeHost;
   }
@@ -259,44 +407,77 @@ function getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId) {
 }
 
 function resolveNodeWebSocketAddress(options = {}) {
+  return resolveNodeWebSocketAddressResult(options);
+}
+
+function resolveNodeWebSocketAddressResult(options = {}) {
   const targetNodeId = options.targetNodeId;
   if (!targetNodeId) {
-    return null;
+    return Object.freeze({
+      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
+      reason: NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.TARGET_NODE_MISSING,
+    });
   }
 
-  const bootstrapResponse = options.bootstrapResponse || null;
+  const bootstrapResponse = options.bootstrapResponse;
   if (targetNodeId === bootstrapResponse?.seedNodeId &&
       typeof bootstrapResponse?.seedNodeWsAddress === TYPEOF.STRING &&
       bootstrapResponse.seedNodeWsAddress.length > NUM.ZERO) {
-    return bootstrapResponse.seedNodeWsAddress;
+    return Object.freeze({
+      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+      address: bootstrapResponse.seedNodeWsAddress,
+      source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.BOOTSTRAP_SEED_ADDRESS,
+    });
   }
 
-  const systemTableCache = options.systemTableCache || null;
+  const systemTableCache = options.systemTableCache;
   const cacheEndpointRows =
     getCacheEndpointRows(systemTableCache, targetNodeId);
-  const cacheEndpointAddress =
-    cacheEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
-  if (cacheEndpointAddress) {
-    return normalizeToWebSocketAddress(cacheEndpointAddress) ||
-      cacheEndpointAddress;
+  const cacheEndpointAddress = cacheEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
+  if (typeof cacheEndpointAddress === TYPEOF.STRING &&
+      cacheEndpointAddress.length > NUM.ZERO) {
+    return Object.freeze({
+      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+      address:
+        normalizeToWebSocketAddress(cacheEndpointAddress) ||
+        cacheEndpointAddress,
+      source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.CACHE_NODE_ENDPOINTS,
+    });
   }
 
   const bootstrapEndpointRows =
     getBootstrapSnapshotEndpointRows(bootstrapResponse, targetNodeId);
   const bootstrapEndpointAddress =
-    bootstrapEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
-  if (bootstrapEndpointAddress) {
-    return normalizeToWebSocketAddress(bootstrapEndpointAddress) ||
-      bootstrapEndpointAddress;
+    bootstrapEndpointRows[NUM.ZERO]?.[COLUMN.ADDRESS];
+  if (typeof bootstrapEndpointAddress === TYPEOF.STRING &&
+      bootstrapEndpointAddress.length > NUM.ZERO) {
+    return Object.freeze({
+      state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+      address:
+        normalizeToWebSocketAddress(bootstrapEndpointAddress) ||
+        bootstrapEndpointAddress,
+      source:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE
+          .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS,
+    });
   }
 
-  return null;
+  return Object.freeze({
+    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
+    reason:
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.CANONICAL_METADATA_MISSING,
+  });
 }
 
 export {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   parseAddressParts,
+  parseAddressPartsResult,
   resolveAdvertisedEndpointHost,
   resolveAdvertisedWebSocketAddress,
   resolveNodeWebSocketAddress,
+  resolveNodeWebSocketAddressResult,
   resolveRoutableLocalIpAddress,
 };

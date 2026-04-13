@@ -56,7 +56,6 @@ class MockParentPort extends EventEmitter {
 async function createTestBridge(mockPort, options = {}) {
   // Dynamically import and create a modified version for testing
   const {
-    WORKER_DEFAULT,
     WORKER_ERROR_MSG,
     WORKER_EVENT,
     WORKER_LOG_MSG,
@@ -67,9 +66,14 @@ async function createTestBridge(mockPort, options = {}) {
 
   const IPC_MESSAGE_TYPE = Object.freeze({
     SEND: 'WORKER_SEND',
-    INCOMING: 'WORKER_INCOMING',
-    RESPONSE: 'WORKER_RESPONSE',
   });
+
+  function buildLocalDeliveryAcknowledgment() {
+    return {
+      acknowledged: true,
+      status: WORKER_RESPONSE_STATUS.OK,
+    };
+  }
 
   /**
    * Test version of WorkerMessageBridge that uses injected parentPort.
@@ -79,13 +83,9 @@ async function createTestBridge(mockPort, options = {}) {
       super();
       this.parentPort = testOptions.parentPort;
       this.logger = testOptions.logger || console;
-      this.requestTimeoutMs = testOptions.requestTimeoutMs ||
-        WORKER_DEFAULT.OPERATION_TIMEOUT_MS;
       this.unifiedAddress = testOptions.unifiedAddress || null;
-      this.pendingRequests = new Map();
       this.messageHandler = null;
       this.initialized = false;
-      this.boundMessageHandler = this.handleIPCMessage.bind(this);
     }
 
     async initialize() {
@@ -95,7 +95,6 @@ async function createTestBridge(mockPort, options = {}) {
       if (!this.parentPort) {
         throw new Error(WORKER_ERROR_MSG.NOT_INITIALIZED);
       }
-      this.parentPort.on('message', this.boundMessageHandler);
       this.initialized = true;
       this.logger.info(WORKER_LOG_MSG.INITIALIZED);
       this.emit(WORKER_EVENT.INITIALIZED);
@@ -128,12 +127,8 @@ async function createTestBridge(mockPort, options = {}) {
         targetAddress,
         correlationId,
       });
-      const response = await this.sendIPCRequest(envelope);
-      if (response.status === WORKER_RESPONSE_STATUS.ERROR) {
-        const errorMsg = response.error || WORKER_ERROR_MSG.MESSAGE_DELIVERY_FAILED;
-        throw new Error(errorMsg);
-      }
-      return response.payload || response;
+      this.parentPort.postMessage(envelope);
+      return buildLocalDeliveryAcknowledgment();
     }
 
     async handleIncoming(envelope) {
@@ -172,57 +167,9 @@ async function createTestBridge(mockPort, options = {}) {
     }
 
     async shutdown() {
-      // Clear all pending requests first to prevent timeout errors
-      for (const [messageId, pending] of this.pendingRequests) {
-        clearTimeout(pending.timeout);
-        this.pendingRequests.delete(messageId);
-      }
-      if (this.parentPort && this.initialized) {
-        this.parentPort.off('message', this.boundMessageHandler);
-      }
       this.initialized = false;
       this.messageHandler = null;
       this.logger.info(WORKER_LOG_MSG.STOPPED);
-    }
-
-    sendIPCRequest(message) {
-      return new Promise((resolve, reject) => {
-        const messageId = message.messageId;
-        const timeout = setTimeout(() => {
-          this.pendingRequests.delete(messageId);
-          reject(new Error(WORKER_ERROR_MSG.OPERATION_TIMEOUT));
-        }, this.requestTimeoutMs);
-        this.pendingRequests.set(messageId, {
-          resolve,
-          reject,
-          timeout,
-          timestamp: Date.now(),
-        });
-        this.parentPort.postMessage(message);
-      });
-    }
-
-    async handleIPCMessage(message) {
-      if (!message || !message.type) {
-        return;
-      }
-      if (message.type === IPC_MESSAGE_TYPE.RESPONSE) {
-        const pending = this.pendingRequests.get(message.messageId);
-        if (pending) {
-          clearTimeout(pending.timeout);
-          this.pendingRequests.delete(message.messageId);
-          pending.resolve(message);
-        }
-        return;
-      }
-      if (message.type === IPC_MESSAGE_TYPE.INCOMING) {
-        const response = await this.handleIncoming(message);
-        this.parentPort.postMessage({
-          type: IPC_MESSAGE_TYPE.RESPONSE,
-          messageId: message.messageId,
-          ...response,
-        });
-      }
     }
 
     isInitialized() {
@@ -237,7 +184,7 @@ async function createTestBridge(mockPort, options = {}) {
       return {
         initialized: this.initialized,
         unifiedAddress: this.unifiedAddress,
-        pendingRequestCount: this.pendingRequests.size,
+        pendingRequestCount: 0,
       };
     }
   }
@@ -300,25 +247,17 @@ test('WorkerMessageBridge - send message', async (t) => {
   const targetAddress = 'node-2/partition/replica-2';
   const payload = {type: 'query', sql: 'SELECT * FROM users'};
 
-  const sendPromise = bridge.send(targetAddress, payload);
-
-  // Wait a tick for the message to be posted
-  await new Promise((resolve) => setImmediate(resolve));
+  const result = await bridge.send(targetAddress, payload);
 
   const sendMsg = mockPort.getLastMessage();
   t.equal(sendMsg.type, 'WORKER_SEND', 'sends WORKER_SEND message');
   t.equal(sendMsg.targetAddress, targetAddress, 'includes target address');
   t.equal(sendMsg.sourceAddress, sourceAddress, 'includes source address');
   t.same(sendMsg.payload, payload, 'includes payload');
-
-  // Simulate response
-  mockPort.simulateResponse(sendMsg.messageId, {
+  t.same(result, {
+    acknowledged: true,
     status: 'ok',
-    payload: {rows: [{id: 1, name: 'Alice'}]},
-  });
-
-  const result = await sendPromise;
-  t.same(result, {rows: [{id: 1, name: 'Alice'}]}, 'returns payload from response');
+  }, 'returns local delivery acknowledgment');
 
   await bridge.shutdown();
 });
@@ -337,6 +276,24 @@ test('WorkerMessageBridge - send without initialization throws', async (t) => {
   } catch (error) {
     t.ok(error.message.includes('not initialized'), 'throws not initialized error');
   }
+
+  await bridge.shutdown();
+});
+
+test('WorkerMessageBridge - send is outbound-only and does not await response', async (t) => {
+  const mockPort = new MockParentPort();
+  const bridge = await createTestBridge(mockPort, {
+    unifiedAddress: 'node-1/partition/replica-1',
+  });
+
+  await bridge.initialize();
+
+  const result = await bridge.send('node-2/partition/replica-2', {type: 'test'});
+
+  t.same(result, {
+    acknowledged: true,
+    status: 'ok',
+  }, 'send returns a local acknowledgment without waiting for a reply');
 
   await bridge.shutdown();
 });
@@ -367,8 +324,6 @@ test('WorkerMessageBridge - handle incoming message', async (t) => {
 
   await bridge.initialize();
 
-  mockPort.clearMessages();
-
   // Set up message handler
   let receivedEnvelope = null;
   bridge.setMessageHandler(async (envelope) => {
@@ -385,19 +340,13 @@ test('WorkerMessageBridge - handle incoming message', async (t) => {
     correlationId: 'corr-456',
   };
 
-  mockPort.simulateIncoming(incomingEnvelope);
-
-  // Wait for async processing
-  await new Promise((resolve) => setTimeout(resolve, 10));
+  const responseMsg = await bridge.handleIncoming(incomingEnvelope);
 
   t.ok(receivedEnvelope, 'message handler was called');
   t.equal(receivedEnvelope.messageId, 'msg-123', 'received correct message ID');
   t.equal(receivedEnvelope.sourceAddress, 'node-2/partition/replica-2',
     'received source address');
 
-  // Check response was sent back
-  const responseMsg = mockPort.getLastMessage();
-  t.equal(responseMsg.type, 'WORKER_RESPONSE', 'sends WORKER_RESPONSE');
   t.equal(responseMsg.messageId, 'msg-123', 'response has correct message ID');
   t.equal(responseMsg.status, 'ok', 'response status is ok');
   t.same(responseMsg.payload, {result: 'processed'}, 'response includes handler result');
@@ -454,15 +403,11 @@ test('WorkerMessageBridge - message event emitted on incoming', async (t) => {
     messageEvent = envelope;
   });
 
-  // Simulate incoming message
-  mockPort.simulateIncoming({
+  await bridge.handleIncoming({
     messageId: 'msg-789',
     sourceAddress: 'node-2/partition/replica-2',
     payload: {data: 'test'},
   });
-
-  // Wait for async processing
-  await new Promise((resolve) => setTimeout(resolve, 10));
 
   t.ok(messageEvent, 'message event was emitted');
   t.equal(messageEvent.messageId, 'msg-789', 'event has correct message ID');

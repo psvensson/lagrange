@@ -735,16 +735,11 @@ export class ConfigView extends BaseView {
    */
   canEdit(configKey) {
     const config = this.data.find((c) => c.config_key === configKey);
-    if (!config) {
-      return {editable: false, reason: 'Config key not found'};
-    }
-
-    // Check if config is marked as read-only
-    if (config.read_only) {
-      return {editable: false, reason: 'Config is read-only'};
-    }
-
-    return {editable: true};
+    return !config ?
+      {editable: false, reason: 'Config key not found'} :
+      config.read_only ?
+        {editable: false, reason: 'Config is read-only'} :
+        {editable: true};
   }
 
   /**
@@ -754,22 +749,16 @@ export class ConfigView extends BaseView {
    */
   canRevert(configKey) {
     const config = this.data.find((c) => c.config_key === configKey);
-    if (!config) {
-      return {revertable: false, reason: 'Config key not found'};
-    }
-
-    if (!Object.prototype.hasOwnProperty.call(config, 'default_value')) {
-      return {revertable: false, reason: 'No default value defined'};
-    }
-
-    if (!this.isDifferentFromDefault(config)) {
-      return {revertable: false, reason: 'Already at default value'};
-    }
-
-    if (config.read_only) {
-      return {revertable: false, reason: 'Config is read-only'};
-    }
-
-    return {revertable: true};
+    const hasDefaultValue = config &&
+      Object.prototype.hasOwnProperty.call(config, 'default_value');
+    return !config ?
+      {revertable: false, reason: 'Config key not found'} :
+      !hasDefaultValue ?
+        {revertable: false, reason: 'No default value defined'} :
+        !this.isDifferentFromDefault(config) ?
+          {revertable: false, reason: 'Already at default value'} :
+          config.read_only ?
+            {revertable: false, reason: 'Config is read-only'} :
+            {revertable: true};
   }
 }

@@ -26,7 +26,6 @@ import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -36,6 +35,11 @@ import {
   SPLIT_MERGE_LOG_MSG,
 } from './partition-constants.js';
 import {SPLIT_PARTICIPANT_PREFIX} from './split-ack-constants.js';
+import {
+  isRetryableManagedSplitExecutionFailure,
+  isRetryableManagedSplitTransition,
+  resolveRetryableManagedSplitExecutionDecisionType,
+} from './managed-split-retry-policy.js';
 
 const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_QUORUM_REPLICA_COUNT = 1;
@@ -44,6 +48,14 @@ const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
 const SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+
+function bindTopologyMethod(topologyAdapter, methodName) {
+  if (!topologyAdapter ||
+      typeof topologyAdapter[methodName] !== 'function') {
+    return null;
+  }
+  return topologyAdapter[methodName].bind(topologyAdapter);
+}
 
 /**
  * First-class managed split workflow owner.
@@ -54,51 +66,92 @@ class ManagedSplitWorkflow {
    */
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
-    this.getCDCIntegrationService = options.getCDCIntegrationService ||
+    this.topologyAdapter = options.topologyAdapter || null;
+    this.getCDCIntegrationService =
+      bindTopologyMethod(this.topologyAdapter, 'getCDCIntegrationService') ||
+      options.getCDCIntegrationService ||
       (() => options.cdcIntegrationService || null);
-    this.getPartitionInfo = options.getPartitionInfo || (() => null);
-    this.getTableInfo = options.getTableInfo || (() => null);
-    this.listTableInfos = options.listTableInfos || (() => []);
-    this.parsePartitionTransition = options.parsePartitionTransition ||
+    this.getPartitionInfo =
+      bindTopologyMethod(this.topologyAdapter, 'getPartitionInfo') ||
+      options.getPartitionInfo || (() => null);
+    this.getTableInfo =
+      bindTopologyMethod(this.topologyAdapter, 'getTableInfo') ||
+      options.getTableInfo || (() => null);
+    this.listTableInfos =
+      bindTopologyMethod(this.topologyAdapter, 'listTableInfos') ||
+      options.listTableInfos || (() => []);
+    this.parsePartitionTransition =
+      bindTopologyMethod(this.topologyAdapter, 'parsePartitionTransition') ||
+      options.parsePartitionTransition ||
       (() => null);
-    this.isLocalManagedSplitLeader = options.isLocalManagedSplitLeader ||
+    this.isLocalManagedSplitLeader =
+      bindTopologyMethod(this.topologyAdapter, 'isLocalManagedSplitLeader') ||
+      options.isLocalManagedSplitLeader ||
       (() => false);
-    this.resolveActivePartitionVersion = options.resolveActivePartitionVersion ||
+    this.resolveActivePartitionVersion =
+      bindTopologyMethod(this.topologyAdapter, 'resolveActivePartitionVersion') ||
+      options.resolveActivePartitionVersion ||
       (() => 1);
-    this.buildManagedSplitPlan = options.buildManagedSplitPlan ||
+    this.buildManagedSplitPlan =
+      bindTopologyMethod(this.topologyAdapter, 'buildManagedSplitPlan') ||
+      options.buildManagedSplitPlan ||
       (async () => {
         throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
       });
     this.resolveProvisionTargetNodeIds =
+      bindTopologyMethod(this.topologyAdapter, 'resolveProvisionTargetNodeIds') ||
       options.resolveProvisionTargetNodeIds ||
       (() => []);
     this.getRoutablePartitionServiceNodeIds =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        'getRoutablePartitionServiceNodeIds',
+      ) ||
       options.getRoutablePartitionServiceNodeIds ||
       (() => []);
-    this.isCriticalSystemPartition = options.isCriticalSystemPartition ||
+    this.isCriticalSystemPartition =
+      bindTopologyMethod(this.topologyAdapter, 'isCriticalSystemPartition') ||
+      options.isCriticalSystemPartition ||
       (() => false);
     this.captureTopologySnapshot =
+      bindTopologyMethod(this.topologyAdapter, 'captureTopologySnapshot') ||
       options.captureTopologySnapshot || null;
     this.calculateQuorumReplicaCount =
+      bindTopologyMethod(this.topologyAdapter, 'calculateQuorumReplicaCount') ||
       options.calculateQuorumReplicaCount ||
       (() => DEFAULT_QUORUM_REPLICA_COUNT);
-    this.storageAdmissionService = options.storageAdmissionService || null;
+    this.storageAdmissionService =
+      options.storageAdmissionService ||
+      this.topologyAdapter?.storageAdmissionService || null;
     this.createExecutionTimeoutBudget =
+      bindTopologyMethod(this.topologyAdapter, 'createExecutionTimeoutBudget') ||
       options.createExecutionTimeoutBudget || null;
-    this.messageRouter = options.messageRouter || null;
+    this.messageRouter =
+      options.messageRouter || this.topologyAdapter?.messageRouter || null;
     this.pressureGovernor = options.pressureGovernor || null;
     this.estimateSplitAdmissionBytes =
+      bindTopologyMethod(this.topologyAdapter, 'estimateSplitAdmissionBytes') ||
       options.estimateSplitAdmissionBytes ||
       ((partitionInfo) => this.defaultEstimateSplitAdmissionBytes(partitionInfo));
     this.waitForTablePartitionMetadata =
+      bindTopologyMethod(this.topologyAdapter, 'waitForTablePartitionMetadata') ||
       options.waitForTablePartitionMetadata || (async () => {});
     this.probeInitialTablePartitionProvisioning =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        'probeInitialTablePartitionProvisioning',
+      ) ||
       options.probeInitialTablePartitionProvisioning || null;
     this.provisionInitialTablePartition =
+      bindTopologyMethod(this.topologyAdapter, 'provisionInitialTablePartition') ||
       options.provisionInitialTablePartition || (async () => {});
     this.startSplitReplicationOnSourcePartition =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        'startSplitReplicationOnSourcePartition',
+      ) ||
       options.startSplitReplicationOnSourcePartition || (async () => {});
-    this.logger = options.logger || console;
+    this.logger = options.logger || this.topologyAdapter?.logger || console;
     this.now = options.now || (() => Date.now());
     this.retryBaseDelayMs =
       Number.isFinite(options.retryBaseDelayMs) &&
@@ -110,7 +163,10 @@ class ManagedSplitWorkflow {
       options.retryMaxDelayMs > 0 ?
         Math.floor(options.retryMaxDelayMs) :
         DEFAULT_RETRY_MAX_DELAY_MS;
-    this.transactionCoordinator = options.transactionCoordinator || null;
+    this.transactionCoordinator =
+      options.transactionCoordinator ||
+      this.topologyAdapter?.transactionCoordinator ||
+      null;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) =>
@@ -329,6 +385,133 @@ class ManagedSplitWorkflow {
   }
 
   /**
+   * Build one canonical scheduled-retry gate result.
+   * @param {Object} input - Scheduled-retry execution context.
+   * @return {Object} Split execution result.
+   * @private
+   */
+  buildScheduledRetryExecutionResult(input) {
+    return {
+      success: false,
+      partitionId: input.partitionId,
+      tableId: input.tableId,
+      tableName: input.tableName,
+      workflowId: input.workflowId,
+      targetVersion: input.targetVersion,
+      state: input.existingTransition.state,
+      retryScheduled: true,
+      nextAttemptAt: input.scheduledRetry.nextAttemptAt,
+      retry: input.scheduledRetry,
+    };
+  }
+
+  /**
+   * Build one canonical admission-denied execution result.
+   * @param {Object} input - Admission-denied execution context.
+   * @return {Object} Split execution result.
+   * @private
+   */
+  buildAdmissionDeniedExecutionResult(input) {
+    return {
+      success: false,
+      partitionId: input.partitionId,
+      tableId: input.tableId,
+      tableName: input.tableName,
+      workflowId: input.workflowId,
+      targetVersion: input.targetVersion,
+      state: input.deniedState,
+      admission: input.compactAdmission,
+      retry: input.deniedRetryMetadata,
+    };
+  }
+
+  /**
+   * Build an open execution-gate outcome.
+   * @return {{blocked: boolean}} Open gate outcome.
+   * @private
+   */
+  buildOpenExecutionGateOutcome() {
+    return {blocked: false};
+  }
+
+  /**
+   * Build a blocked execution-gate outcome.
+   * @param {Object} result - Blocked execution result.
+   * @return {{blocked: boolean, result: Object}} Blocked gate outcome.
+   * @private
+   */
+  buildBlockedExecutionGateOutcome(result) {
+    return {
+      blocked: true,
+      result,
+    };
+  }
+
+  /**
+   * Resolve one canonical execution-gate outcome.
+   * @param {Object} input - Execution-gate evidence.
+   * @return {Promise<{blocked: boolean, result?: Object}>} Gate outcome.
+   * @private
+   */
+  async resolveExecutionGateOutcome(input) {
+    if (input.scheduledRetry &&
+        input.scheduledRetry.retryDue === false) {
+      return this.buildBlockedExecutionGateOutcome(
+        this.buildScheduledRetryExecutionResult(input),
+      );
+    }
+
+    if (input.pressureDecision &&
+        input.pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+      return this.buildBlockedExecutionGateOutcome(
+        this.buildPressureDeferredResult({
+          partitionId: input.partitionId,
+          tableId: input.tableId,
+          tableName: input.tableName,
+          retryMetadata: input.retryMetadata,
+          pressureDecision: input.pressureDecision,
+        }),
+      );
+    }
+
+    if (input.admissionResult &&
+        input.admissionResult.allowed === false) {
+      const deniedState = this.resolveAdmissionDeniedState(
+        input.admissionResult.decisionType,
+      );
+      const deniedRetryMetadata = this.buildScheduledRetryMetadata(
+        input.retryMetadata,
+        deniedState,
+      );
+      const deniedMetadata = {
+        ...input.workflowMetadata,
+        [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
+          input.compactAdmission,
+        [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
+          deniedRetryMetadata,
+      };
+      await this.workflowCoordinator.updateWorkflow(input.workflowId, {
+        status: deniedState,
+        metadata: deniedMetadata,
+      });
+      return this.buildBlockedExecutionGateOutcome(
+        this.buildAdmissionDeniedExecutionResult({
+          partitionId: input.partitionId,
+          tableId: input.tableId,
+          tableName: input.tableName,
+          workflowId: input.workflowId,
+          targetVersion: input.targetVersion,
+          deniedState,
+          compactAdmission: input.compactAdmission,
+          deniedRetryMetadata,
+        }),
+      );
+    }
+
+    return this.buildOpenExecutionGateOutcome();
+  }
+
+  /**
    * Execute one managed split after single-flight admission.
    * @param {string} partitionId - Source partition ID.
    * @return {Promise<Object>} Split orchestration result.
@@ -351,7 +534,7 @@ class ManagedSplitWorkflow {
     }
     const existingTransition = this.parsePartitionTransition(tableInfo);
     if (existingTransition &&
-        !this.isRetryableAdmissionState(existingTransition.state)) {
+        !this.isRetryableAdmissionState(existingTransition)) {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_ALREADY_IN_PROGRESS);
     }
 
@@ -395,29 +578,28 @@ class ManagedSplitWorkflow {
       existingTransition,
     );
     const scheduledRetry = this.resolveScheduledRetry(existingTransition);
-    if (scheduledRetry && scheduledRetry.retryDue === false) {
-      return {
-        success: false,
-        partitionId,
-        tableId,
-        tableName,
-        workflowId,
-        targetVersion,
-        state: existingTransition.state,
-        retryScheduled: true,
-        nextAttemptAt: scheduledRetry.nextAttemptAt,
-        retry: scheduledRetry,
-      };
+    const scheduledRetryOutcome = await this.resolveExecutionGateOutcome({
+      partitionId,
+      tableId,
+      tableName,
+      workflowId,
+      targetVersion,
+      existingTransition,
+      scheduledRetry,
+    });
+    if (scheduledRetryOutcome.blocked === true) {
+      return scheduledRetryOutcome.result;
     }
     const pressureDecision = this.evaluatePressure(executionContext);
-    if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
-      return this.buildPressureDeferredResult({
-        partitionId,
-        tableId,
-        tableName,
-        retryMetadata,
-        pressureDecision,
-      });
+    const pressureGateOutcome = await this.resolveExecutionGateOutcome({
+      partitionId,
+      tableId,
+      tableName,
+      retryMetadata,
+      pressureDecision,
+    });
+    if (pressureGateOutcome.blocked === true) {
+      return pressureGateOutcome.result;
     }
     this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_START, {
       partitionId,
@@ -517,36 +699,19 @@ class ManagedSplitWorkflow {
           isCriticalSystemPartition: criticalSystemPartition,
         },
       );
-      if (!admissionResult.allowed) {
-        const deniedState = this.resolveAdmissionDeniedState(
-          admissionResult.decisionType,
-        );
-        const deniedRetryMetadata = this.buildScheduledRetryMetadata(
-          retryMetadata,
-          deniedState,
-        );
-        const deniedMetadata = {
-          ...workflow.metadata,
-          [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
-            compactAdmission,
-          [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
-            deniedRetryMetadata,
-        };
-        await this.workflowCoordinator.updateWorkflow(workflowId, {
-          status: deniedState,
-          metadata: deniedMetadata,
-        });
-        return {
-          success: false,
-          partitionId,
-          tableId,
-          tableName,
-          workflowId,
-          targetVersion,
-          state: deniedState,
-          admission: compactAdmission,
-          retry: deniedRetryMetadata,
-        };
+      const admissionGateOutcome = await this.resolveExecutionGateOutcome({
+        partitionId,
+        tableId,
+        tableName,
+        workflowId,
+        targetVersion,
+        retryMetadata,
+        admissionResult,
+        compactAdmission,
+        workflowMetadata: workflow.metadata,
+      });
+      if (admissionGateOutcome.blocked === true) {
+        return admissionGateOutcome.result;
       }
 
       let splitPlan = this.resolvePersistedSplitPlan(
@@ -704,6 +869,10 @@ class ManagedSplitWorkflow {
           childProvisioningTargetNodeIdsByPartitionId[
             splitPlan.leftPartition.partitionId
           ] || snapshotCandidateTargetNodeIds,
+        admissionConvergence:
+          childProvisioningAdmissionByPartitionId[
+            splitPlan.leftPartition.partitionId
+          ] || null,
         timeoutBudget: executionTimeoutBudget,
         topologySnapshot: transitionTopologySnapshot,
         routingReadinessDimension:
@@ -721,6 +890,10 @@ class ManagedSplitWorkflow {
           childProvisioningTargetNodeIdsByPartitionId[
             splitPlan.rightPartition.partitionId
           ] || snapshotCandidateTargetNodeIds,
+        admissionConvergence:
+          childProvisioningAdmissionByPartitionId[
+            splitPlan.rightPartition.partitionId
+          ] || null,
         timeoutBudget: executionTimeoutBudget,
         topologySnapshot: transitionTopologySnapshot,
         routingReadinessDimension:
@@ -1408,8 +1581,16 @@ class ManagedSplitWorkflow {
    * @return {boolean}
    * @private
    */
-  isRetryableAdmissionState(state) {
-    return RETRYABLE_PARTITION_TRANSITION_STATES.has(state);
+  isRetryableAdmissionState(transitionOrState) {
+    if (transitionOrState &&
+        typeof transitionOrState === 'object') {
+      return isRetryableManagedSplitTransition(transitionOrState);
+    }
+    const state = String(transitionOrState || '');
+    if (RETRYABLE_PARTITION_TRANSITION_STATES.has(state)) {
+      return true;
+    }
+    return isRetryableManagedSplitTransition({state});
   }
 
   /**
@@ -1489,7 +1670,7 @@ class ManagedSplitWorkflow {
    * @private
    */
   resolvePersistedSplitPlan(existingTransition, sourcePartitionInfo) {
-    if (!this.isRetryableAdmissionState(existingTransition?.state)) {
+    if (!this.isRetryableAdmissionState(existingTransition)) {
       return null;
     }
 
@@ -1633,19 +1814,7 @@ class ManagedSplitWorkflow {
    * @private
    */
   isRetryablePostAdmissionExecutionError(error) {
-    const message = String(error?.message || '').toLowerCase();
-    if (!message) {
-      return false;
-    }
-
-    return message.includes(
-      QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX
-        .toLowerCase(),
-    ) ||
-      message.includes(STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY) ||
-      message.includes(CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY) ||
-      message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED) ||
-      message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_REPAIR_ONLY);
+    return isRetryableManagedSplitExecutionFailure(error);
   }
 
   /**
@@ -1655,19 +1824,7 @@ class ManagedSplitWorkflow {
    * @private
    */
   resolveRetryableExecutionDecisionType(error) {
-    const message = String(error?.message || '').toLowerCase();
-    if (message.includes(STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY) ||
-        message.includes(CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY) ||
-        message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED) ||
-        message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_REPAIR_ONLY)) {
-      return STORAGE_ADMISSION_DECISION_TYPE.DEFERRED;
-    }
-    if (message.includes(
-      STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
-    )) {
-      return STORAGE_ADMISSION_DECISION_TYPE.BLOCKED;
-    }
-    return STORAGE_ADMISSION_DECISION_TYPE.DEFERRED;
+    return resolveRetryableManagedSplitExecutionDecisionType(error);
   }
 
   /**
@@ -1733,11 +1890,11 @@ class ManagedSplitWorkflow {
       ]?.attemptCount,
     );
     const isRetryingExistingWorkflow =
-      this.isRetryableAdmissionState(existingTransition?.state);
+      this.isRetryableAdmissionState(existingTransition);
     const attemptCount = Number.isInteger(previousAttemptCount) &&
       previousAttemptCount > 0 ?
-        previousAttemptCount + 1 :
-        (isRetryingExistingWorkflow ? 2 : 1);
+      previousAttemptCount + 1 :
+      (isRetryingExistingWorkflow ? 2 : 1);
     return {
       attemptCount,
       lastAttemptAt: new Date(this.now()).toISOString(),
@@ -1753,7 +1910,7 @@ class ManagedSplitWorkflow {
    * @private
    */
   resolveScheduledRetry(existingTransition) {
-    if (!this.isRetryableAdmissionState(existingTransition?.state)) {
+    if (!this.isRetryableAdmissionState(existingTransition)) {
       return null;
     }
 
@@ -1790,8 +1947,8 @@ class ManagedSplitWorkflow {
   buildScheduledRetryMetadata(retryMetadata, state) {
     const attemptCount = Number.isInteger(retryMetadata?.attemptCount) &&
       retryMetadata.attemptCount > 0 ?
-        retryMetadata.attemptCount :
-        1;
+      retryMetadata.attemptCount :
+      1;
     const backoffMs = Math.min(
       this.retryMaxDelayMs,
       this.retryBaseDelayMs * Math.pow(2, attemptCount - 1),
@@ -1867,8 +2024,8 @@ class ManagedSplitWorkflow {
   normalizeNodeIdList(nodeIds, fallbackNodeIds = []) {
     const resolvedNodeIds = Array.isArray(nodeIds) &&
       nodeIds.length > 0 ?
-        nodeIds :
-        fallbackNodeIds;
+      nodeIds :
+      fallbackNodeIds;
     const normalizedNodeIds = [];
     const seenNodeIds = new Set();
     for (const nodeId of resolvedNodeIds) {
@@ -1901,8 +2058,8 @@ class ManagedSplitWorkflow {
 
     const replicaCount = Number.isInteger(options.replicaCount) &&
       options.replicaCount > 0 ?
-        options.replicaCount :
-        1;
+      options.replicaCount :
+      1;
     const sourceRoutableNodeIds = this.normalizeNodeIdList(
       options.sourceRoutableNodeIds,
     );
@@ -2413,7 +2570,7 @@ class ManagedSplitWorkflow {
 
     if (mismatches.length > 0) {
       throw new Error(
-        `Managed split child partition metadata mismatch for ` +
+        'Managed split child partition metadata mismatch for ' +
         `${expected.partition_id}: ${JSON.stringify(mismatches)}`,
       );
     }

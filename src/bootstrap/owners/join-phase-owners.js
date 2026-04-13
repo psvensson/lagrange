@@ -6,8 +6,6 @@
  */
 
 import {assertCritical} from '../../utils/assert.js';
-import {TYPEOF} from '../../constants/index.js';
-
 const JOIN_PHASE_OWNER = Object.freeze({
   CONTACT_SEED: 'contactSeed',
   CONNECT_WEBSOCKET: 'connectWebSocket',
@@ -17,27 +15,64 @@ const JOIN_PHASE_OWNER = Object.freeze({
   QUERY_SYSTEM_STATE: 'querySystemState',
 });
 
+const PHASE_OWNER_FIELD = Object.freeze({
+  [JOIN_PHASE_OWNER.CONTACT_SEED]: 'contactSeedPhase',
+  [JOIN_PHASE_OWNER.CONNECT_WEBSOCKET]: 'connectWebSocketPhase',
+  [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP]:
+    'createMessageGroupPhase',
+  [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]:
+    'joinMessageGroupRuntimeOwner',
+  [JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP]: 'waitForLeadershipPhase',
+  [JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE]: 'querySystemStatePhase',
+});
+
+const PHASE_METHOD = Object.freeze({
+  [JOIN_PHASE_OWNER.CONTACT_SEED]: 'phaseContactSeed',
+  [JOIN_PHASE_OWNER.CONNECT_WEBSOCKET]: 'phaseConnectWebSocket',
+  [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP]:
+    'phaseCreateSelfHostedMessageGroup',
+  [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]:
+    'phaseJoinExistingMessageGroup',
+  [JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP]: 'phaseWaitForLeadership',
+  [JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE]: 'phaseQuerySystemState',
+});
+
 const OWNER_ERROR_MSG = Object.freeze({
-  missingMethod: (methodName) =>
-    `NodeJoiningService owner method missing: ${methodName}`,
+  missingPhaseOwner: (ownerField) =>
+    `Phase owner not initialized: ${ownerField}`,
 });
 
 /**
- * Create dynamic owner invoker.
- * Looks up the method at execution time so tests can monkey-patch phase methods.
+ * Create direct phase-owner invoker.
+ * Routes through the extracted phase owner module rather than
+ * back through wrapper methods on NodeJoiningService.
+ *
+ * Compatibility: if one test or local caller explicitly monkey-patches the
+ * instance wrapper method, honor that override. The default runtime path still
+ * routes directly to the extracted phase owner.
  * @param {Object} service - NodeJoiningService instance.
- * @param {string} methodName - Method name.
+ * @param {string} ownerField - Phase owner field name on service.
+ * @param {string} methodName - Phase method name on the owner.
  * @return {Function} Owner invoker.
  * @private
  */
-function createOwnerInvoker(service, methodName) {
+function createPhaseInvoker(service, ownerField, methodName) {
   return async (...args) => {
-    const phaseFn = service[methodName];
+    const patchedWrapper = Object.prototype.hasOwnProperty.call(
+      service,
+      methodName,
+    ) &&
+      service[methodName] !== Object.getPrototypeOf(service)?.[methodName];
+    if (patchedWrapper) {
+      return service[methodName](...args);
+    }
+
+    const owner = service[ownerField];
     assertCritical(
-      typeof phaseFn === TYPEOF.FUNCTION,
-      OWNER_ERROR_MSG.missingMethod(methodName),
+      owner,
+      OWNER_ERROR_MSG.missingPhaseOwner(ownerField),
     );
-    return phaseFn.apply(service, args);
+    return owner[methodName](...args);
   };
 }
 
@@ -49,20 +84,15 @@ function createOwnerInvoker(service, methodName) {
 function createJoiningPhaseOwners(service) {
   assertCritical(service, 'NodeJoiningService is required for joining phase owners');
 
-  return Object.freeze({
-    [JOIN_PHASE_OWNER.CONTACT_SEED]:
-      createOwnerInvoker(service, 'phaseContactSeed'),
-    [JOIN_PHASE_OWNER.CONNECT_WEBSOCKET]:
-      createOwnerInvoker(service, 'phaseConnectWebSocket'),
-    [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP]:
-      createOwnerInvoker(service, 'phaseCreateSelfHostedMessageGroup'),
-    [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]:
-      createOwnerInvoker(service, 'phaseJoinExistingMessageGroup'),
-    [JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP]:
-      createOwnerInvoker(service, 'phaseWaitForLeadership'),
-    [JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE]:
-      createOwnerInvoker(service, 'phaseQuerySystemState'),
-  });
+  const owners = {};
+  for (const key of Object.values(JOIN_PHASE_OWNER)) {
+    owners[key] = createPhaseInvoker(
+      service,
+      PHASE_OWNER_FIELD[key],
+      PHASE_METHOD[key],
+    );
+  }
+  return Object.freeze(owners);
 }
 
 export {JOIN_PHASE_OWNER, createJoiningPhaseOwners};

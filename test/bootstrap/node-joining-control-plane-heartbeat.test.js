@@ -25,6 +25,12 @@ function initializeTestEnvironment() {
   }
 }
 
+function setHeartbeatNodeStateUpdateTargets(service, targetAddress) {
+  const resolver = () => [targetAddress];
+  service.resolveNodeStateUpdateTargetCandidates = resolver;
+  service.resolveControlPlaneTargetAddressCandidates = resolver;
+}
+
 test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages',
   async (t) => {
     initializeTestEnvironment();
@@ -42,9 +48,7 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
         return {acknowledged: true};
       },
     };
-    service.resolveControlPlaneTargetAddressCandidates = () => [
-      'seed-node/message-group/mg-1-r1',
-    ];
+    setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
 
     await service.sendControlPlaneNodeStateUpdate({
       state: STATE.READY,
@@ -52,6 +56,7 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
       heartbeatAt: 123,
       readyLeaseExpiresAt: 456,
       nodeRow: {cpu_cores: 4, memory_mb: 256},
+      heartbeatOnly: true,
     });
 
     t.equal(deliveries.length, 1, 'should send exactly one node-state update');
@@ -76,9 +81,19 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
       'should attach the full node-row heartbeat payload',
     );
     t.equal(
+      deliveries[0].message[ControlPlaneField.HEARTBEAT_ONLY],
+      true,
+      'READY reporter heartbeats should be heartbeat-only control-plane updates',
+    );
+    t.equal(
       deliveries[0].options?.timeoutMs,
       30000,
       'should use the broader control-plane delivery timeout budget',
+    );
+    t.equal(
+      deliveries[0].options?.deliveryPriority,
+      'background',
+      'heartbeat-only control-plane updates should use background delivery priority',
     );
     t.equal(
       service.controlPlaneTargetAddress,
@@ -142,9 +157,7 @@ test('NodeJoiningService treats unacknowledged control-plane heartbeats as failu
         error: 'Message timeout',
       }),
     };
-    service.resolveControlPlaneTargetAddressCandidates = () => [
-      'seed-node/message-group/mg-1-r1',
-    ];
+    setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
 
     await t.rejects(
       service.sendControlPlaneNodeStateUpdate({
@@ -180,9 +193,7 @@ test('NodeJoiningService does not block READY heartbeats on cluster mesh reconci
       connectAttempts++;
       await new Promise(() => {});
     };
-    service.resolveControlPlaneTargetAddressCandidates = () => [
-      'seed-node/message-group/mg-1-r1',
-    ];
+    setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
 
     const outcome = await Promise.race([
       service.sendControlPlaneNodeStateUpdate({
@@ -229,9 +240,7 @@ test('NodeJoiningService does not block CONNECTED publication on cluster mesh re
       connectAttempts++;
       await new Promise(() => {});
     };
-    service.resolveControlPlaneTargetAddressCandidates = () => [
-      'seed-node/message-group/mg-1-r1',
-    ];
+    setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
 
     const outcome = await Promise.race([
       service.sendControlPlaneNodeStateUpdate({

@@ -1,10 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  buildMembershipPublicationActiveSnapshot,
   buildReadinessByNodeId,
   resolveActiveNodeViews,
   resolveCanonicalActiveNodeIds,
   resolveLatestPublicationRow,
   resolveLatestPublishedPublicationRow,
+  resolvePublishedActiveNodeIds,
 } from '../../src/control-plane/active-node-projection.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -163,7 +165,7 @@ test('active-node projection can include recovery-eligible nodes during publicat
             [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
-            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
           },
         },
       ],
@@ -204,6 +206,244 @@ test('active-node projection can include recovery-eligible nodes during publicat
         recoveryEligibleIncludedNodeIds: ['node-2'],
       },
       'convergence projection diagnostics should show recovery-eligible inclusion',
+    );
+  });
+
+test('active-node projection can retain recovery-eligible nodes when endpoint and service rows lag',
+  async (t) => {
+    const projectionOptions = {
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+        },
+      ],
+      nowMs: 1000,
+    };
+
+    const strictProjection = resolveActiveNodeViews(projectionOptions);
+    const recoveryProjection = resolveActiveNodeViews({
+      ...projectionOptions,
+      allowControlPlaneRecoveryEligibleProjection: true,
+    });
+
+    t.same(
+      strictProjection.projectedServingNodeIds,
+      ['node-1'],
+      'strict projection should exclude nodes without endpoint/service evidence',
+    );
+    t.same(
+      recoveryProjection.projectedServingNodeIds,
+      ['node-1', 'node-2'],
+      'recovery projection should keep recovery-eligible nodes even when discovery evidence lags',
+    );
+    t.match(
+      recoveryProjection.projectionDiagnostics,
+      {
+        readinessDecisionMode: 'cluster_member_or_recovery_eligible',
+        recoveryEligibleProjectionEnabled: true,
+        recoveryEligibleIncludedNodeIds: ['node-2'],
+      },
+      'projection diagnostics should explicitly record recovery-eligibility inclusion',
+    );
+  });
+
+test('active-node projection can fail open on fresh liveness when recovery projection is enabled',
+  async (t) => {
+    const projectionOptions = {
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 3000,
+        },
+      ],
+      serviceRows: [
+        {
+          service_id: 'svc-1',
+          node_id: 'node-1',
+          status: 'active',
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+          },
+        },
+      ],
+      allowControlPlaneRecoveryEligibleProjection: true,
+      nowMs: 1000,
+    };
+
+    const strictRecoveryProjection = resolveActiveNodeViews(projectionOptions);
+    const livenessFallbackProjection = resolveActiveNodeViews({
+      ...projectionOptions,
+      allowLivenessFallbackProjection: true,
+    });
+
+    t.same(
+      strictRecoveryProjection.projectedServingNodeIds,
+      [],
+      'without liveness fail-open, negative readiness evidence should keep the node out of projection',
+    );
+    t.same(
+      livenessFallbackProjection.projectedServingNodeIds,
+      ['node-1'],
+      'fresh liveness should keep the node in projection during recovery fail-open mode',
+    );
+    t.match(
+      livenessFallbackProjection.projectionDiagnostics,
+      {
+        livenessFallbackIncludedNodeIds: ['node-1'],
+      },
+      'diagnostics should record liveness-based fail-open inclusion',
+    );
+  });
+
+test('active-node projection can retain connected healthy nodes when discovery rows lag',
+  async (t) => {
+    const activeNodeViews = resolveActiveNodeViews({
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          nodeEvidence: {
+            transportConnected: true,
+          },
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          nodeEvidence: {
+            transportConnected: true,
+          },
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+      ],
+      connectedNodeIds: ['node-2'],
+      nowMs: 1000,
+    });
+
+    t.same(
+      activeNodeViews.projectedServingNodeIds,
+      ['node-1', 'node-2'],
+      'live transport connectivity should keep healthy connected nodes in projection while endpoint rows catch up',
+    );
+  });
+
+test('active-node projection can retain the responsive local node when self rows lag',
+  async (t) => {
+    const activeNodeViews = resolveActiveNodeViews({
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+      ],
+      localNodeId: 'node-2',
+      localNodeResponsive: true,
+      nowMs: 1000,
+    });
+
+    t.same(
+      activeNodeViews.projectedServingNodeIds,
+      ['node-1', 'node-2'],
+      'a responsive local node should not disappear from local projection just because replicated self rows are delayed',
     );
   });
 
@@ -497,6 +737,114 @@ test('active-node projection retains the latest published membership when a newe
       }),
       ['node-1', 'node-2', 'node-3'],
       'strict mode should keep the latest published active-node set while a newer publication remains open',
+    );
+  });
+
+test('active-node projection keeps durable published membership from the latest ack-pending publication when published history is unavailable',
+  async (t) => {
+    const activeNodeViews = resolveActiveNodeViews({
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+        {
+          node_id: 'node-3',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {
+          service_id: 'svc-1',
+          node_id: 'node-1',
+          status: 'active',
+        },
+        {
+          service_id: 'svc-2',
+          node_id: 'node-2',
+          status: 'active',
+        },
+        {
+          service_id: 'svc-3',
+          node_id: 'node-3',
+          status: 'active',
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+        {
+          endpoint_id: 'node-3-ws',
+          node_id: 'node-3',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-3:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+        {
+          nodeId: 'node-3',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+          },
+        },
+      ],
+      latestPublicationRow: {
+        publication_epoch: 8,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2'],
+      },
+      nowMs: 1000,
+    });
+
+    t.same(
+      activeNodeViews.authoritativeActiveNodeIds,
+      ['node-1', 'node-2'],
+      'projection should retain the durable published membership even when only the latest ack-pending row is visible',
+    );
+    t.same(
+      activeNodeViews.projectedActiveNodeIds,
+      ['node-1', 'node-2', 'node-3'],
+      'projection should still surface the wider local serving projection separately',
+    );
+    t.equal(
+      activeNodeViews.publishedMembershipAvailable,
+      true,
+      'projection should continue advertising published membership availability from the durable published set',
     );
   });
 
@@ -983,5 +1331,98 @@ test('active-node projection prefers the durable published active-node set when 
       activeNodeIds,
       ['node-1', 'node-3'],
       'projection should prefer the durable published active-node set over repaired cache observation once the epoch is closed',
+    );
+  });
+
+test('active-node projection builds a canonical membership publication snapshot from publication rows',
+  async (t) => {
+    const snapshot = buildMembershipPublicationActiveSnapshot({
+      publication_epoch: 19,
+      status: 'PUBLISHED',
+      source_topology_epoch: 7,
+      source_snapshot_version: 23,
+      published_active_node_ids: ['node-a'],
+      required_ack_node_ids: ['node-a', 'node-b'],
+      acknowledged_node_ids: ['node-a'],
+      priority_partition_summary: {
+        satisfied: false,
+        missingPartitionIds: ['sql_transactions-p1'],
+      },
+      recovery_active_node_ids: ['node-a', 'node-b'],
+      recovery_active_node_source: 'recovery_eligible_projection',
+      membership_lifecycle_summary: {
+        projectionDiagnostics: {
+          recoveryEligibleIncludedNodeIds: ['node-b'],
+        },
+      },
+    });
+
+    t.match(snapshot, {
+      publicationEpoch: 19,
+      status: 'PUBLISHED',
+      publicationStatus: 'PUBLISHED',
+      sourceTopologyEpoch: 7,
+      sourceSnapshotVersion: 23,
+      publishedActiveNodeIdsPresent: true,
+      publishedActiveNodeIds: ['node-a'],
+      requiredAckNodeIds: ['node-a', 'node-b'],
+      acknowledgedNodeIds: ['node-a'],
+      recoveryActiveNodeIds: ['node-a', 'node-b'],
+      recoveryActiveNodeSource: 'recovery_eligible_projection',
+      missingPublishedRecoveryActiveNodeIds: ['node-b'],
+    });
+    t.same(
+      snapshot?.projectionDiagnostics,
+      {
+        recoveryEligibleIncludedNodeIds: ['node-b'],
+      },
+      'canonical publication snapshots should preserve projection diagnostics once at the owner boundary',
+    );
+  });
+
+test('active-node projection preserves explicit published-membership presence even when the node array is absent',
+  async (t) => {
+    const snapshot = buildMembershipPublicationActiveSnapshot({
+      publicationEpoch: 11,
+      status: 'OPEN',
+      publishedActiveNodeIdsPresent: true,
+      membershipLifecycleSummary: {
+        recoveryActiveNodeIds: ['node-a'],
+        recoveryActiveNodeSource: 'locally_eligible_projection',
+      },
+    });
+
+    t.equal(snapshot?.publishedActiveNodeIdsPresent, true);
+    t.same(snapshot?.publishedActiveNodeIds, []);
+    t.same(snapshot?.recoveryActiveNodeIds, ['node-a']);
+    t.equal(
+      snapshot?.recoveryActiveNodeSource,
+      'locally_eligible_projection',
+    );
+  });
+
+test('resolvePublishedActiveNodeIds only trusts durable published membership rows',
+  async (t) => {
+    const publishedActiveNodeIds = resolvePublishedActiveNodeIds({
+      latestPublicationRow: {
+        publication_epoch: 12,
+        status: 'ACK_PENDING',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1'],
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: 11,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2'],
+        required_ack_node_ids: ['node-1', 'node-2'],
+        acknowledged_node_ids: ['node-1', 'node-2'],
+      },
+    });
+
+    t.same(
+      publishedActiveNodeIds,
+      ['node-1', 'node-2'],
+      'published membership should fall back to the last durable published epoch instead of an in-flight row',
     );
   });

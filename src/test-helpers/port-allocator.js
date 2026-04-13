@@ -48,6 +48,7 @@ const PORT_ALLOCATOR_LOCK_DIR = path.join(
 const PORT_ALLOCATOR_LOCK_WAIT_MS = 10;
 const PORT_ALLOCATOR_LOCK_ATTEMPTS = 200;
 const lockWaitArray = new Int32Array(new SharedArrayBuffer(4));
+const PROCESS_SCOPED_TEST_FILE_ID_SEPARATOR = ':pid:';
 
 /**
  * Per-file port counters.
@@ -78,6 +79,22 @@ function hashString(str) {
 function getBasePort(testFileId) {
   const rangeIndex = hashString(testFileId) % TOTAL_RANGES;
   return PORT_RANGE_START + (rangeIndex * PORTS_PER_TEST_FILE);
+}
+
+/**
+ * Scope allocator ownership to the current process so sequential test
+ * processes do not immediately recycle the same deterministic range while the
+ * kernel may still reject recent listener ports.
+ *
+ * @param {string} testFileId
+ * @returns {string}
+ */
+function getProcessScopedTestFileId(testFileId) {
+  const normalizedTestFileId =
+    typeof testFileId === 'string' && testFileId.length > 0 ?
+      testFileId :
+      DEFAULT_TEST_FILE_ID;
+  return `${normalizedTestFileId}${PROCESS_SCOPED_TEST_FILE_ID_SEPARATOR}${process.pid}`;
 }
 
 /**
@@ -275,8 +292,9 @@ function reservePort(requestedPort, testFileId) {
  * @returns {number} A unique port number
  */
 export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
-  const basePort = getBasePort(testFileId);
-  const currentOffset = filePortOffsets.get(testFileId) || 0;
+  const processScopedTestFileId = getProcessScopedTestFileId(testFileId);
+  const basePort = getBasePort(processScopedTestFileId);
+  const currentOffset = filePortOffsets.get(processScopedTestFileId) || 0;
 
   if (currentOffset >= PORTS_PER_TEST_FILE) {
     throw new Error(
@@ -285,8 +303,8 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
     );
   }
 
-  filePortOffsets.set(testFileId, currentOffset + 1);
-  return reservePort(basePort + currentOffset, testFileId);
+  filePortOffsets.set(processScopedTestFileId, currentOffset + 1);
+  return reservePort(basePort + currentOffset, processScopedTestFileId);
 }
 
 /**
@@ -296,7 +314,7 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
  * @param {string} [testFileId] - Test file identifier to reset
  */
 export function resetTestPorts(testFileId = DEFAULT_TEST_FILE_ID) {
-  filePortOffsets.set(testFileId, 0);
+  filePortOffsets.set(getProcessScopedTestFileId(testFileId), 0);
 }
 
 /**

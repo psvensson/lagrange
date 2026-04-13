@@ -958,16 +958,17 @@ test('ControlPlaneSystemTableGateway submitMutation centralizes write ingress',
       },
     });
 
-    await gateway.submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.SERVICES,
-      whereClause: {service_id: 'svc-1'},
-      data: {status: 'active'},
-    }, {
-      workClass: 'background',
-      allowPressureDefer: true,
-      coalescingKey: 'services:svc-1',
-    });
+  await gateway.submitMutation({
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+    tableName: TABLES.SERVICES,
+    whereClause: {service_id: 'svc-1'},
+    data: {status: 'active'},
+  }, {
+    allowPendingVisibility: true,
+    workClass: 'background',
+    allowPressureDefer: true,
+    coalescingKey: 'services:svc-1',
+  });
 
     t.equal(updateCalls.length, 1, 'central mutation ingress should delegate once');
     t.same(
@@ -979,6 +980,45 @@ test('ControlPlaneSystemTableGateway submitMutation centralizes write ingress',
       updateCalls[0].options.coalescingKey,
       'services:svc-1',
       'central mutation ingress should preserve gateway write options',
+    );
+    t.equal(
+      updateCalls[0].options.allowPendingVisibility,
+      true,
+      'central mutation ingress should preserve pending-visibility semantics',
+    );
+  });
+
+test('ControlPlaneSystemTableGateway submitMutation surfaces pending visibility outcomes',
+  async (t) => {
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-gateway',
+      cdcIntegrationService: {
+        async updateSystemTableRow() {
+          return {
+            success: true,
+            visibilityState: 'pending_visibility',
+            authoritativeVisibilityConfirmed: true,
+          };
+        },
+      },
+    });
+
+    const result = await gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {service_id: 'svc-1'},
+      data: {status: 'active'},
+    });
+
+    t.equal(
+      result.outcome,
+      CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+      'gateway should surface committed-but-not-yet-visible mutation outcomes explicitly',
+    );
+    t.equal(
+      result.authoritativeVisibilityConfirmed,
+      true,
+      'gateway should preserve authoritative visibility confirmation details',
     );
   });
 

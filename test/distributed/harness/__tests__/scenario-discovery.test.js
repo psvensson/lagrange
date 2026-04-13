@@ -17,6 +17,10 @@ describe('scenario-discovery', () => {
   beforeEach(async () => {
     tempDir = join(tmpdir(), `scenario-disc-test-${randomUUID()}`);
     await mkdir(tempDir, {recursive: true});
+    await writeFile(
+      join(tempDir, 'package.json'),
+      JSON.stringify({type: 'module'}),
+    );
   });
 
   afterEach(async () => {
@@ -56,9 +60,9 @@ describe('scenario-discovery', () => {
     });
 
     it('returns results sorted by name', async () => {
-      await writeFile(join(tempDir, 'zebra.js'), '');
-      await writeFile(join(tempDir, 'alpha.js'), '');
-      await writeFile(join(tempDir, 'middle.js'), '');
+      await writeFile(join(tempDir, 'zebra.js'), 'export function run() {}');
+      await writeFile(join(tempDir, 'alpha.js'), 'export function run() {}');
+      await writeFile(join(tempDir, 'middle.js'), 'export function run() {}');
 
       const scenarios = await discoverScenarios(tempDir);
 
@@ -68,7 +72,10 @@ describe('scenario-discovery', () => {
     });
 
     it('includes full path in each scenario entry', async () => {
-      await writeFile(join(tempDir, 'test-scenario.js'), '');
+      await writeFile(
+        join(tempDir, 'test-scenario.js'),
+        'export function run() {}',
+      );
 
       const scenarios = await discoverScenarios(tempDir);
 
@@ -80,11 +87,24 @@ describe('scenario-discovery', () => {
     });
 
     it('strips .js extension from scenario name', async () => {
-      await writeFile(join(tempDir, 'node-failure-rebalance.js'), '');
+      await writeFile(
+        join(tempDir, 'node-failure-rebalance.js'),
+        'export function run() {}',
+      );
 
       const scenarios = await discoverScenarios(tempDir);
 
       assert.equal(scenarios[0].name, 'node-failure-rebalance');
+    });
+
+    it('ignores JS modules that do not export run', async () => {
+      await writeFile(join(tempDir, 'helper.js'), 'export const value = 1;');
+      await writeFile(join(tempDir, 'scenario.js'), 'export function run() {}');
+
+      const scenarios = await discoverScenarios(tempDir);
+
+      assert.equal(scenarios.length, 1);
+      assert.equal(scenarios[0].name, 'scenario');
     });
   });
 
@@ -134,10 +154,10 @@ describe('scenario-discovery', () => {
     /**
      * **Validates: Requirements 9.1**
      *
-     * For any directory containing N JavaScript files,
-     * discoverScenarios SHALL discover exactly N scenarios.
-     */
-    it('discovers exactly N scenarios for N JS files', async () => {
+      * For any directory containing N runnable JavaScript files,
+      * discoverScenarios SHALL discover exactly N scenarios.
+      */
+    it('discovers exactly N scenarios for N runnable JS files', async () => {
       await fc.assert(
         fc.asyncProperty(
           fc.integer({min: 0, max: 8}),

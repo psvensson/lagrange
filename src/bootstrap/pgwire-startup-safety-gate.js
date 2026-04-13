@@ -20,6 +20,20 @@ import {
   PGWIRE_SAFETY_GATE_SUBSYSTEM,
 } from './pgwire-startup-safety-gate-constants.js';
 
+const CONTROL_PLANE_READY_REASON = Object.freeze({
+  READY: 'ready',
+});
+const CONTROL_PLANE_READY_STATE = Object.freeze({
+  READY: 'ready',
+  BLOCKED: 'blocked',
+});
+const CONTROL_PLANE_PREREQUISITE = Object.freeze({
+  NONE: 'none',
+  LIFECYCLE_MANAGER: 'lifecycle_manager',
+  SYSTEM_TABLE_CACHE: 'system_table_cache',
+  HEARTBEAT_SERVICE: 'heartbeat_service',
+});
+
 class PgWireStartupSafetyGate {
   /**
    * @param {Object} options
@@ -46,31 +60,15 @@ class PgWireStartupSafetyGate {
    * Check whether control-plane prerequisites are met for PG wire
    * runtime startup.
    *
-   * @return {Object} Result with `ready` boolean and `reason` string.
+   * @return {Object} Result with `ready`, `state`, `reason`, and
+   *   `blockingDependency`.
    */
   checkControlPlaneReady() {
-    if (!this.serviceLifecycleManager) {
-      return {
-        ready: false,
-        reason: PGWIRE_SAFETY_GATE_ERROR_MSG.LIFECYCLE_MANAGER_MISSING,
-      };
-    }
-
-    if (!this.systemTableCache) {
-      return {
-        ready: false,
-        reason: PGWIRE_SAFETY_GATE_ERROR_MSG.SYSTEM_CACHE_MISSING,
-      };
-    }
-
-    if (!this.heartbeatService) {
-      return {
-        ready: false,
-        reason: PGWIRE_SAFETY_GATE_ERROR_MSG.CONTROL_PLANE_NOT_READY,
-      };
-    }
-
-    return {ready: true, reason: null};
+    const readinessEvidence = this.collectControlPlaneReadinessEvidence();
+    const decision = this.resolveControlPlaneReadinessDecision(
+      readinessEvidence,
+    );
+    return this.buildControlPlaneReadyResult(decision);
   }
 
   /**
@@ -115,6 +113,53 @@ class PgWireStartupSafetyGate {
       );
       return null;
     }
+  }
+
+  collectControlPlaneReadinessEvidence() {
+    return [
+      {
+        dependency: CONTROL_PLANE_PREREQUISITE.LIFECYCLE_MANAGER,
+        available: Boolean(this.serviceLifecycleManager),
+        blockedReason: PGWIRE_SAFETY_GATE_ERROR_MSG.LIFECYCLE_MANAGER_MISSING,
+      },
+      {
+        dependency: CONTROL_PLANE_PREREQUISITE.SYSTEM_TABLE_CACHE,
+        available: Boolean(this.systemTableCache),
+        blockedReason: PGWIRE_SAFETY_GATE_ERROR_MSG.SYSTEM_CACHE_MISSING,
+      },
+      {
+        dependency: CONTROL_PLANE_PREREQUISITE.HEARTBEAT_SERVICE,
+        available: Boolean(this.heartbeatService),
+        blockedReason: PGWIRE_SAFETY_GATE_ERROR_MSG.CONTROL_PLANE_NOT_READY,
+      },
+    ];
+  }
+
+  resolveControlPlaneReadinessDecision(readinessEvidence = []) {
+    const blockingEvidence = readinessEvidence.find(
+      (entry) => entry.available !== true,
+    );
+    if (!blockingEvidence) {
+      return {
+        state: CONTROL_PLANE_READY_STATE.READY,
+        reason: CONTROL_PLANE_READY_REASON.READY,
+        blockingDependency: CONTROL_PLANE_PREREQUISITE.NONE,
+      };
+    }
+    return {
+      state: CONTROL_PLANE_READY_STATE.BLOCKED,
+      reason: blockingEvidence.blockedReason,
+      blockingDependency: blockingEvidence.dependency,
+    };
+  }
+
+  buildControlPlaneReadyResult(decision) {
+    return {
+      ready: decision.state === CONTROL_PLANE_READY_STATE.READY,
+      state: decision.state,
+      reason: decision.reason,
+      blockingDependency: decision.blockingDependency,
+    };
   }
 }
 

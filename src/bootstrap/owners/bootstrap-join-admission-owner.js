@@ -86,6 +86,14 @@ class BootstrapJoinAdmissionOwner {
     return this.delegates.getActiveMoveReplicaAssignmentReservations?.() || [];
   }
 
+  async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
+    return this.delegates.getBlockingMoveReplicaBootstrapAdmissions?.(now) || [];
+  }
+
+  async getMoveReplicaBootstrapExclusionReservations(now = Date.now()) {
+    return this.delegates.getMoveReplicaBootstrapExclusionReservations?.(now) || [];
+  }
+
   async reserveMoveReplicaAssignment(targetNodeId, assignment) {
     return this.delegates.reserveMoveReplicaAssignment?.(
       targetNodeId,
@@ -323,8 +331,14 @@ class BootstrapJoinAdmissionOwner {
       await this.expireMoveReplicaAssignmentReservations();
       const activeReservations =
         await this.getActiveMoveReplicaAssignmentReservations();
+      const exclusionReservations =
+        await this.getMoveReplicaBootstrapExclusionReservations();
       const excludedReplicaIds = new Set(
-        activeReservations.map((reservation) => reservation.replicaId),
+        [...activeReservations, ...exclusionReservations]
+          .map((reservation) => reservation?.replicaId)
+          .filter((replicaId) =>
+            typeof replicaId === TYPEOF.STRING && replicaId.length > NUM.ZERO,
+          ),
       );
       const assignment = this.determineMessageGroupAssignment(newNodeId, {
         excludedReplicaIds,
@@ -378,26 +392,6 @@ class BootstrapJoinAdmissionOwner {
         (candidate) => candidate.group_id === assignment.groupId,
       );
       const replicas = group?.replicas || [];
-      return {
-        ...assignment,
-        existingPeerIds: replicas.map((replica) => replica.replica_id),
-        replicaAddresses: replicas.map((replica) => replica.address),
-        peerAddresses: replicas.map((replica) =>
-          `${replica.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-          `${ADDRESS.SEPARATOR}${replica.replica_id}`,
-        ),
-        replicaNodeMap: Object.fromEntries(
-          replicas.map((replica) => [replica.replica_id, replica.node_id]),
-        ),
-      };
-    }
-
-    const fallbackGroup = messageGroups.find((group) =>
-      Array.isArray(group.replicas) && group.replicas.length > NUM.ZERO,
-    ) || messageGroups[NUM.ZERO];
-
-    if (fallbackGroup && Array.isArray(fallbackGroup.replicas)) {
-      const replicas = fallbackGroup.replicas;
       return {
         ...assignment,
         existingPeerIds: replicas.map((replica) => replica.replica_id),

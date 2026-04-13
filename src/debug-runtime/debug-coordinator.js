@@ -283,29 +283,27 @@ class DebugCoordinator {
  * @return {{applied: boolean, reason: string}}
  */
 function decideMonotonicTransition(previous, next) {
-  if (!previous) {
-    return {applied: true, reason: 'initial'};
-  }
+  const transitionReason = !previous ?
+    'initial' :
+    next.stageId > previous.stageId ?
+      'advance_stage' :
+      next.stageId < previous.stageId ?
+        'stale_stage' :
+        next.updatedAt < previous.updatedAt ?
+          'stale_timestamp' :
+          next.endpoint === previous.endpoint &&
+            next.nodeId === previous.nodeId &&
+            next.updatedAt === previous.updatedAt ?
+            'duplicate' :
+            'refresh_stage';
 
-  if (next.stageId > previous.stageId) {
-    return {applied: true, reason: 'advance_stage'};
-  }
-
-  if (next.stageId < previous.stageId) {
-    return {applied: false, reason: 'stale_stage'};
-  }
-
-  if (next.updatedAt < previous.updatedAt) {
-    return {applied: false, reason: 'stale_timestamp'};
-  }
-
-  if (next.endpoint === previous.endpoint &&
-    next.nodeId === previous.nodeId &&
-    next.updatedAt === previous.updatedAt) {
-    return {applied: false, reason: 'duplicate'};
-  }
-
-  return {applied: true, reason: 'refresh_stage'};
+  return {
+    applied:
+      transitionReason === 'initial' ||
+      transitionReason === 'advance_stage' ||
+      transitionReason === 'refresh_stage',
+    reason: transitionReason,
+  };
 }
 
 /**

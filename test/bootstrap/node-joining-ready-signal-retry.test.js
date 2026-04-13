@@ -44,6 +44,11 @@ test('NodeJoiningService retries ready heartbeat before failing join readiness',
       },
     });
     service.cdcSubscriptionsActive = true;
+    service.messageRouter = {
+      getQueryDataPlaneTransportReadiness() {
+        return {ready: true, state: 'ready'};
+      },
+    };
 
     service.heartbeatService = {
       sendHeartbeat: async () => {

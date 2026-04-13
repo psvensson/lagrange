@@ -707,6 +707,59 @@ describe('ReplicaWorkerManager', () => {
         {type: 'append', term: 1, data: []},
       );
     });
+
+    it('should not post parentPort responses back into the source worker pool', async () => {
+      await manager.createMessageGroupReplica({
+        groupId: 'group-1',
+        replicaId: 'replica-1',
+      });
+
+      const postMessage = mock.fn();
+      manager.replicaPools.set('source-1', {
+        threads: [{postMessage}],
+      });
+      mockPool.run.mock.mockImplementationOnce(async () => ({
+        acknowledged: true,
+        leaderAddress: 'node-1/message-group/replica-1',
+      }));
+
+      await manager.routeWorkerMessage({
+        type: 'WORKER_SEND',
+        sourceAddress: 'node-1/message-group/source-1',
+        targetAddress: 'node-1/message-group/replica-1',
+        payload: {type: 'append', term: 1, data: []},
+        messageId: 'msg-2',
+        correlationId: 'corr-2',
+      });
+
+      assert.strictEqual(postMessage.mock.calls.length, 0);
+    });
+
+    it('should swallow external worker routing errors without posting source responses', async () => {
+      const postMessage = mock.fn();
+      manager.replicaPools.set('source-1', {
+        threads: [{postMessage}],
+      });
+
+      mockMessageRouter.deliver.mock.mockImplementationOnce(async () => {
+        const error = new Error('Connection to node node-2 closed');
+        error.code = 'ROUTER_CONNECTION_CLOSED';
+        error.deferRetry = true;
+        error.retryAfterMs = 200;
+        throw error;
+      });
+
+      await manager.routeWorkerMessage({
+        type: 'WORKER_SEND',
+        sourceAddress: 'node-1/message-group/source-1',
+        targetAddress: 'node-2/message-group/replica-9',
+        payload: {type: 'append', term: 1, data: []},
+        messageId: 'msg-3',
+        correlationId: 'corr-3',
+      });
+
+      assert.strictEqual(postMessage.mock.calls.length, 0);
+    });
   });
 
   describe('getHealthStatus', () => {

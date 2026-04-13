@@ -1516,6 +1516,60 @@ test('wait-reason metrics capture retryable control-plane pressure', async () =>
   }
 });
 
+test('timeout-shaped node failures back off reprobes using query timeout', async () => {
+  let timedOutNodeCalls = ZERO;
+  let healthyNodeCalls = ZERO;
+  const nodes = [
+    {
+      id: 'timed-out-node',
+      async queryWithTimeout(_sql, _params, options = {}) {
+        timedOutNodeCalls++;
+        const timeoutMs = Number(options.timeoutMs || 75);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const error = new Error(
+          'Admin API query timed out for node timed-out-node on lane load ' +
+            `after ${timeoutMs}ms`,
+        );
+        error.code = 'query_timeout';
+        throw error;
+      },
+    },
+    {
+      id: 'healthy-node',
+      async query(_sql) {
+        healthyNodeCalls++;
+        return {rows: []};
+      },
+    },
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 200,
+    duration: 180,
+    admissionBackoffMs: 5,
+    queryTimeoutMs: 80,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(
+      healthyNodeCalls > ZERO,
+      'expected healthy node to continue absorbing load',
+    );
+    assert.ok(
+      timedOutNodeCalls < 6,
+      'expected timeout-shaped node failures to suppress reprobe storms; got ' +
+        `${timedOutNodeCalls} timed-out-node attempts`,
+    );
+    assert.ok(
+      Number(metrics?.waitReasons?.timeoutWaits || ZERO) > ZERO,
+      'expected timeout wait reasons to be recorded',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('queue-delay metrics are emitted when dispatch pacing falls behind', async () => {
   const nodes = [{
     id: 'slow-node',
@@ -2153,6 +2207,46 @@ test('getMetrics returns snapshot with expected shape', async () => {
     assert.strictEqual(typeof metrics.latency.p95, 'number');
     assert.strictEqual(typeof metrics.latency.p99, 'number');
     assert.strictEqual(typeof metrics.opsPerSec, 'number');
+  } finally {
+    run.cancel();
+  }
+});
+
+test('tracks acknowledged writes only when explicitly enabled', async () => {
+  const nodes = [createMockNode('n1')];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 50,
+    duration: 100,
+    operations: ['INSERT', 'SELECT'],
+    trackAcknowledgedWrites: true,
+  });
+  const run = gen.start();
+  try {
+    await run.waitComplete();
+    const acknowledgedWrites = run.getAcknowledgedWrites();
+    assert.ok(acknowledgedWrites, 'acknowledged writes should be exposed');
+    assert.strictEqual(acknowledgedWrites.tableName, 'logs');
+    assert.strictEqual(acknowledgedWrites.idColumn, 'log_id');
+    assert.strictEqual(acknowledgedWrites.ids.length, 3);
+    acknowledgedWrites.ids.forEach((id) => {
+      assert.match(id, /^load-/);
+    });
+  } finally {
+    run.cancel();
+  }
+});
+
+test('does not retain acknowledged writes unless tracking is enabled', async () => {
+  const nodes = [createMockNode('n1')];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 50,
+    duration: 100,
+    operations: ['INSERT', 'SELECT'],
+  });
+  const run = gen.start();
+  try {
+    await run.waitComplete();
+    assert.strictEqual(run.getAcknowledgedWrites(), null);
   } finally {
     run.cancel();
   }

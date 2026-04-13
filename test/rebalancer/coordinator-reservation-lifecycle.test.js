@@ -215,6 +215,14 @@ function createCoordinatorWithStorage(options = {}) {
     nodeId,
     systemTableCache: cache,
     cdcIntegrationService: createMockCdcService(),
+    controlPlaneSystemTableGateway: {
+      readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      readRows: async (_tableName, sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+      executeQuery: async (sql, params = [], queryOptions = {}) =>
+        sqlEngine.executeQuery(sql, params, queryOptions),
+    },
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
@@ -228,6 +236,16 @@ function createCoordinatorWithStorage(options = {}) {
       options.storageAdmissionService || createMockAdmissionService(),
   });
   coordinator.initialize();
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
   return {coordinator, sqlEngine, accounting};
 }
 

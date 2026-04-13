@@ -7,7 +7,7 @@
 
 import {LoggingService} from '../../logging/logging-service.js';
 import {ConfigurationManager} from '../../config/configuration-manager.js';
-import {TABLES, METRICS_LOG_TAG} from '../../constants/index.js';
+import {METRICS_LOG_TAG, NUM, TABLES, TYPEOF} from '../../constants/index.js';
 import {
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -20,27 +20,36 @@ import {
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
+const RESULT_ESTIMATE = Object.freeze({
+  UTF16_BYTES_PER_CHAR: NUM.TWO,
+  FALLBACK_ROW_BYTES: NUM.HUNDRED,
+});
+
+const REPLICA_STATUS = Object.freeze({
+  ACTIVE: 'active',
+});
+
 function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= 0 ?
+  return Number.isFinite(value) && value >= NUM.ZERO ?
     Math.floor(value) :
     null;
 }
 
 function normalizeFailureString(value) {
-  return typeof value === 'string' && value.length > 0 ?
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
     value :
     null;
 }
 
 function resolveFailureBackpressureState(diagnostics = {}) {
-  if (typeof diagnostics?.backpressured === 'boolean') {
+  if (typeof diagnostics?.backpressured === TYPEOF.BOOLEAN) {
     return diagnostics.backpressured;
   }
   if (diagnostics?.deferRetry === true) {
     return true;
   }
   return Number.isFinite(diagnostics?.retryAfterMs) &&
-    diagnostics.retryAfterMs > 0;
+    diagnostics.retryAfterMs > NUM.ZERO;
 }
 
 /**
@@ -56,8 +65,8 @@ class PartitionQueryMetrics {
     this.startTime = null;
     this.endTime = null;
     this.latencyMs = null;
-    this.rowCount = 0;
-    this.bytesRead = 0;
+    this.rowCount = NUM.ZERO;
+    this.bytesRead = NUM.ZERO;
     this.status = QUERY_STATUS.PENDING; // pending, running, completed, failed, timeout
     this.error = null;
     this.isSpeculative = false;
@@ -83,7 +92,7 @@ class PartitionQueryMetrics {
    * @param {number} rowCount - Number of rows returned.
    * @param {number} bytesRead - Estimated bytes read.
    */
-  complete(rowCount, bytesRead = 0) {
+  complete(rowCount, bytesRead = NUM.ZERO) {
     this.endTime = Date.now();
     this.latencyMs = this.endTime - this.startTime;
     this.rowCount = rowCount;
@@ -137,10 +146,10 @@ class QueryExecutionMetrics {
     this.endTime = null;
     this.totalLatencyMs = null;
     this.partitionMetrics = new Map();
-    this.totalRows = 0;
-    this.totalBytes = 0;
+    this.totalRows = NUM.ZERO;
+    this.totalBytes = NUM.ZERO;
     this.stragglers = [];
-    this.speculativeExecutions = 0;
+    this.speculativeExecutions = NUM.ZERO;
   }
 
   /**
@@ -165,11 +174,11 @@ class QueryExecutionMetrics {
       .map((m) => m.latencyMs)
       .sort((a, b) => a - b);
 
-    if (latencies.length === 0) return 0;
+    if (latencies.length === NUM.ZERO) return NUM.ZERO;
 
-    const mid = Math.floor(latencies.length / 2);
-    return latencies.length % 2 === 0 ?
-      (latencies[mid - 1] + latencies[mid]) / 2 :
+    const mid = Math.floor(latencies.length / NUM.TWO);
+    return latencies.length % NUM.TWO === NUM.ZERO ?
+      (latencies[mid - NUM.ONE] + latencies[mid]) / NUM.TWO :
       latencies[mid];
   }
 
@@ -229,8 +238,8 @@ class ParallelQueryCoordinator {
     }
 
     // Track active queries for resource management
-    this.activeConnections = 0;
-    this.queryCounter = 0;
+    this.activeConnections = NUM.ZERO;
+    this.queryCounter = NUM.ZERO;
   }
 
   /**
@@ -277,18 +286,18 @@ class ParallelQueryCoordinator {
     if (!this.systemCache) {
       return null;
     }
-    if (typeof this.systemCache.get === 'function') {
+    if (typeof this.systemCache.get === TYPEOF.FUNCTION) {
       return this.systemCache.get(TABLES.PARTITIONS, partitionId);
     }
-    if (typeof this.systemCache.filter === 'function') {
+    if (typeof this.systemCache.filter === TYPEOF.FUNCTION) {
       const matches = this.systemCache.filter(
         TABLES.PARTITIONS,
         (partition) =>
           partition.partition_id === partitionId,
       );
-      return matches[0] || null;
+      return matches[NUM.ZERO] || null;
     }
-    if (typeof this.systemCache.getAll === 'function') {
+    if (typeof this.systemCache.getAll === TYPEOF.FUNCTION) {
       const partitions =
         this.systemCache.getAll(TABLES.PARTITIONS) || [];
       return partitions.find((partition) =>
@@ -358,8 +367,9 @@ class ParallelQueryCoordinator {
         const latencies = formatted.partitionLatencies
           .map((p) => p.latencyMs)
           .filter((l) => l !== null && l !== undefined);
-        const maxPartitionLatencyMs = latencies.length > 0 ?
-          Math.max(...latencies) : 0;
+        const maxPartitionLatencyMs = latencies.length > NUM.ZERO ?
+          Math.max(...latencies) :
+          NUM.ZERO;
 
         this.logger.info(METRICS_LOG_TAG.FANOUT_COMPLETE, {
           queryId: formatted.queryId,
@@ -420,7 +430,7 @@ class ParallelQueryCoordinator {
    * @private
    */
   buildPartitionChunks(partitionIds) {
-    const chunkSize = Math.max(this.maxParallelPartitions, 1);
+    const chunkSize = Math.max(this.maxParallelPartitions, NUM.ONE);
     const chunks = [];
     for (let index = 0; index < partitionIds.length; index += chunkSize) {
       chunks.push(partitionIds.slice(index, index + chunkSize));
@@ -502,7 +512,8 @@ class ParallelQueryCoordinator {
       });
 
       // Execute with straggler detection if enabled
-      if (this.speculativeExecutionEnabled && partitionIds.length > 1) {
+      if (this.speculativeExecutionEnabled &&
+        partitionIds.length > NUM.ONE) {
         const result = await this.executeWithSpeculativeExecution(
           executionPromises,
           partitionIds,
@@ -582,7 +593,8 @@ class ParallelQueryCoordinator {
     // Start a timer to check for stragglers
     const stragglerCheckInterval = setInterval(() => {
       const medianLatency = metrics.getMedianLatency();
-      if (medianLatency > 0 && pendingPartitions.size > 0) {
+      if (medianLatency > NUM.ZERO &&
+        pendingPartitions.size > NUM.ZERO) {
         const stragglerThreshold = medianLatency * this.stragglerThresholdMultiplier;
 
         for (const partitionId of pendingPartitions) {
@@ -654,11 +666,11 @@ class ParallelQueryCoordinator {
     pendingPartitions,
   ) {
     const replicas = this.getAlternativeReplicas(partitionId);
-    if (replicas.length === 0) return;
+    if (replicas.length === NUM.ZERO) return;
 
     // Select a different replica
     const alternativeReplica = replicas.find((r) =>
-      r.status === 'active' || r.status === undefined,
+      r.status === REPLICA_STATUS.ACTIVE || r.status === undefined,
     );
 
     if (!alternativeReplica) return;
@@ -680,7 +692,7 @@ class ParallelQueryCoordinator {
       sql,
       params,
     ).then((result) => {
-      speculativeMetrics.complete(result.rows?.length || 0);
+      speculativeMetrics.complete(result.rows?.length || NUM.ZERO);
       if (!results.has(partitionId)) {
         results.set(partitionId, result);
         pendingPartitions.delete(partitionId);
@@ -692,6 +704,89 @@ class ParallelQueryCoordinator {
     });
 
     speculativePromises.set(partitionId, {promise: speculativePromise});
+  }
+
+  /**
+   * Normalize one partition-execution failure snapshot.
+   * @param {string} partitionId - Partition ID.
+   * @param {PartitionQueryMetrics} partitionMetrics - Partition metrics.
+   * @param {Object} failure - Failure-like object or error.
+   * @param {string} fallbackErrorMessage - Fallback error text.
+   * @return {Object} Normalized failure snapshot.
+   * @private
+   */
+  normalizePartitionExecutionFailureSnapshot(
+    partitionId,
+    partitionMetrics,
+    failure,
+    fallbackErrorMessage,
+  ) {
+    return {
+      partitionId,
+      status: partitionMetrics.status,
+      error: normalizeFailureString(failure?.error) ||
+        normalizeFailureString(failure?.message) ||
+        fallbackErrorMessage,
+      errorCode: normalizeFailureString(
+        failure?.errorCode || failure?.code,
+      ),
+      retryAfterMs: normalizeRetryAfterMs(failure?.retryAfterMs),
+      deferRetry: failure?.deferRetry === true,
+      participantNodeId:
+        normalizeFailureString(failure?.participantNodeId),
+      participantAddress:
+        normalizeFailureString(failure?.participantAddress),
+      backpressured: resolveFailureBackpressureState(failure),
+      failedTable: normalizeFailureString(failure?.failedTable),
+      durationMs: partitionMetrics.latencyMs,
+      rows: failure?.rows || [],
+    };
+  }
+
+  /**
+   * Build the canonical partition-execution failure outcome.
+   * @param {Object} snapshot - Normalized failure snapshot.
+   * @return {Object} Failure result.
+   * @private
+   */
+  buildPartitionExecutionFailureOutcome(snapshot) {
+    return {
+      partitionId: snapshot.partitionId,
+      success: false,
+      status: snapshot.status,
+      error: snapshot.error,
+      errorCode: snapshot.errorCode,
+      retryAfterMs: snapshot.retryAfterMs,
+      deferRetry: snapshot.deferRetry,
+      participantNodeId: snapshot.participantNodeId,
+      participantAddress: snapshot.participantAddress,
+      backpressured: snapshot.backpressured,
+      failedTable: snapshot.failedTable,
+      durationMs: snapshot.durationMs,
+      rows: snapshot.rows,
+    };
+  }
+
+  /**
+   * Build the canonical partition-execution success outcome.
+   * @param {string} partitionId - Partition ID.
+   * @param {PartitionQueryMetrics} partitionMetrics - Partition metrics.
+   * @param {Object} result - Query result.
+   * @return {Object} Success result.
+   * @private
+   */
+  buildPartitionExecutionSuccessOutcome(
+    partitionId,
+    partitionMetrics,
+    result,
+  ) {
+    return {
+      partitionId,
+      success: true,
+      status: partitionMetrics.status,
+      rows: result.rows || [],
+      changes: result.changes,
+    };
   }
 
   /**
@@ -719,21 +814,14 @@ class ParallelQueryCoordinator {
     if (!this.partitionQueryExecutor && !partition) {
       partitionMetrics.fail(new Error(QUERY_ERROR_MSG.PARTITION_NOT_FOUND));
       metrics.addPartitionMetrics(partitionMetrics);
-      return {
-        partitionId,
-        success: false,
-        status: partitionMetrics.status,
-        error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND,
-        errorCode: null,
-        retryAfterMs: null,
-        deferRetry: false,
-        participantNodeId: null,
-        participantAddress: null,
-        backpressured: false,
-        failedTable: null,
-        durationMs: partitionMetrics.latencyMs,
-        rows: [],
-      };
+      return this.buildPartitionExecutionFailureOutcome(
+        this.normalizePartitionExecutionFailureSnapshot(
+          partitionId,
+          partitionMetrics,
+          {error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND},
+          QUERY_ERROR_MSG.PARTITION_NOT_FOUND,
+        ),
+      );
     }
 
     try {
@@ -750,57 +838,37 @@ class ParallelQueryCoordinator {
           result,
         );
         metrics.addPartitionMetrics(partitionMetrics);
-        return {
-          partitionId,
-          success: false,
-          status: partitionMetrics.status,
-          error: result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-          errorCode: normalizeFailureString(result?.errorCode),
-          retryAfterMs: normalizeRetryAfterMs(result?.retryAfterMs),
-          deferRetry: result?.deferRetry === true,
-          participantNodeId:
-            normalizeFailureString(result?.participantNodeId),
-          participantAddress:
-            normalizeFailureString(result?.participantAddress),
-          backpressured: resolveFailureBackpressureState(result),
-          failedTable: normalizeFailureString(result?.failedTable),
-          durationMs: partitionMetrics.latencyMs,
-          rows: result.rows || [],
-        };
+        return this.buildPartitionExecutionFailureOutcome(
+          this.normalizePartitionExecutionFailureSnapshot(
+            partitionId,
+            partitionMetrics,
+            result,
+            QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
+          ),
+        );
       }
-      const rowCount = result.rows?.length || 0;
+      const rowCount = result.rows?.length || NUM.ZERO;
       const bytesRead = this.estimateResultBytes(result.rows);
       partitionMetrics.complete(rowCount, bytesRead);
       metrics.addPartitionMetrics(partitionMetrics);
 
-      return {
+      return this.buildPartitionExecutionSuccessOutcome(
         partitionId,
-        success: true,
-        status: partitionMetrics.status,
-        rows: result.rows || [],
-        changes: result.changes,
-      };
+        partitionMetrics,
+        result,
+      );
     } catch (error) {
       partitionMetrics.fail(error, error);
       metrics.addPartitionMetrics(partitionMetrics);
 
-      return {
-        partitionId,
-        success: false,
-        status: partitionMetrics.status,
-        error: error.message,
-        errorCode: normalizeFailureString(error?.code || error?.errorCode),
-        retryAfterMs: normalizeRetryAfterMs(error?.retryAfterMs),
-        deferRetry: error?.deferRetry === true,
-        participantNodeId:
-          normalizeFailureString(error?.participantNodeId),
-        participantAddress:
-          normalizeFailureString(error?.participantAddress),
-        backpressured: resolveFailureBackpressureState(error),
-        failedTable: normalizeFailureString(error?.failedTable),
-        durationMs: partitionMetrics.latencyMs,
-        rows: [],
-      };
+      return this.buildPartitionExecutionFailureOutcome(
+        this.normalizePartitionExecutionFailureSnapshot(
+          partitionId,
+          partitionMetrics,
+          error,
+          error.message,
+        ),
+      );
     }
   }
 
@@ -816,7 +884,7 @@ class ParallelQueryCoordinator {
     if (this.partitionQueryExecutor) {
       return this.partitionQueryExecutor(sql, partitionId, params, options);
     }
-    if (typeof service.executeQuery === 'function') {
+    if (typeof service.executeQuery === TYPEOF.FUNCTION) {
       return service.executeQuery(sql, params);
     }
     throw new Error(QUERY_ERROR_MSG.SERVICE_EXECUTE_UNSUPPORTED);
@@ -829,7 +897,7 @@ class ParallelQueryCoordinator {
    * @private
    */
   resolveTimeoutMs(timeoutMs) {
-    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    if (Number.isFinite(timeoutMs) && timeoutMs > NUM.ZERO) {
       return Math.floor(timeoutMs);
     }
     return this.queryTimeoutMs;
@@ -843,7 +911,7 @@ class ParallelQueryCoordinator {
    */
   createCancellationPromise(cancellationToken) {
     if (!cancellationToken ||
-      typeof cancellationToken.onCancel !== 'function') {
+      typeof cancellationToken.onCancel !== TYPEOF.FUNCTION) {
       return null;
     }
 
@@ -852,9 +920,9 @@ class ParallelQueryCoordinator {
         reject(new Error(reason || QUERY_CANCELLED_ERROR));
       };
       cancellationToken.onCancel(rejectWithReason);
-      if (typeof cancellationToken.isCancelled === 'function' &&
+      if (typeof cancellationToken.isCancelled === TYPEOF.FUNCTION &&
         cancellationToken.isCancelled()) {
-        const reason = typeof cancellationToken.getReason === 'function' ?
+        const reason = typeof cancellationToken.getReason === TYPEOF.FUNCTION ?
           cancellationToken.getReason() :
           null;
         rejectWithReason(reason);
@@ -869,12 +937,12 @@ class ParallelQueryCoordinator {
    * @private
    */
   estimateResultBytes(rows) {
-    if (!rows || rows.length === 0) return 0;
+    if (!rows || rows.length === NUM.ZERO) return NUM.ZERO;
     // Rough estimate: JSON stringify length * 2 for UTF-16
     try {
-      return JSON.stringify(rows).length * 2;
+      return JSON.stringify(rows).length * RESULT_ESTIMATE.UTF16_BYTES_PER_CHAR;
     } catch (_estimateErr) {
-      return rows.length * 100; // Fallback estimate
+      return rows.length * RESULT_ESTIMATE.FALLBACK_ROW_BYTES;
     }
   }
 
@@ -903,7 +971,7 @@ class ParallelQueryCoordinator {
    */
   detectAndLogStragglers(metrics) {
     const medianLatency = metrics.getMedianLatency();
-    if (medianLatency === 0) return;
+    if (medianLatency === NUM.ZERO) return;
 
     const stragglerThreshold = medianLatency * this.stragglerThresholdMultiplier;
 
@@ -959,7 +1027,9 @@ class ParallelQueryCoordinator {
       speculativeExecutions: metrics.speculativeExecutions,
       participantFailures,
       firstFailedParticipant:
-        participantFailures.length > 0 ? participantFailures[0] : null,
+        participantFailures.length > NUM.ZERO ?
+          participantFailures[NUM.ZERO] :
+          null,
       partitionLatencies: Array.from(metrics.partitionMetrics.values()).map((m) => ({
         partitionId: m.partitionId,
         latencyMs: m.latencyMs,

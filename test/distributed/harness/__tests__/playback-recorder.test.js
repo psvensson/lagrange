@@ -621,6 +621,122 @@ test('PlaybackRecorder defers topology capture until admin readiness is observed
     }
   });
 
+test('PlaybackRecorder does not emit query-node-unavailable before the first ' +
+  'successful topology snapshot', async () => {
+  const outputDir = await mkdtemp(
+    join(tmpdir(), 'playback-recorder-topology-warmup-'),
+  );
+
+  let reachabilityCallCount = 0;
+  let queryCallCount = 0;
+  const node = {
+    id: 'node-1',
+    containerId: 'container-1',
+    _dockerProvider: {
+      async getContainerStats() {
+        return {
+          cpuPercent: 5,
+          memoryUsageBytes: 1024,
+          memoryLimitBytes: 4096,
+          rxBytes: 1,
+          txBytes: 2,
+        };
+      },
+    },
+    async getReachabilityDiagnostics() {
+      reachabilityCallCount += 1;
+      if (reachabilityCallCount === 1) {
+        return {
+          nodeId: 'node-1',
+          reachable: false,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          adminHealth: {
+            attempted: true,
+            ok: true,
+            statusCode: 200,
+          },
+        };
+      }
+      return {
+        nodeId: 'node-1',
+        reachable: false,
+        adminReady: false,
+        reachableBy: 'bootstrap_health',
+        adminHealth: {
+          attempted: true,
+          ok: false,
+          statusCode: -1,
+          error: 'http_status_-1',
+        },
+        adminWs: {
+          attempted: true,
+          ok: false,
+          error: 'connect ECONNREFUSED',
+        },
+        sqlProbe: {
+          attempted: false,
+          ok: false,
+          query: 'SELECT node_id FROM nodes LIMIT 1',
+        },
+        lastError: 'connect ECONNREFUSED',
+      };
+    },
+    async queryWithTimeout(sql) {
+      queryCallCount++;
+      if (sql.includes('FROM nodes')) {
+        throw new Error('query should not run before a successful snapshot');
+      }
+      return {rows: []};
+    },
+  };
+
+  const cluster = {
+    getNodes() {
+      return [node];
+    },
+  };
+  const scheduler = createManualIntervalScheduler();
+
+  const recorder = new PlaybackRecorder({
+    outputDir,
+    topologyPollIntervalMs: 5,
+    resourcePollIntervalMs: 60000,
+    setIntervalFn: scheduler.setInterval,
+    clearIntervalFn: scheduler.clearInterval,
+  });
+
+  try {
+    await recorder.start({
+      scenarioName: 'topology-warmup',
+      cluster,
+      skipInitialCapture: true,
+    });
+
+    await scheduler.tick(recorder._topologyPollTimer);
+    await scheduler.tick(recorder._topologyPollTimer);
+
+    const manifest = await recorder.stop({
+      reason: 'warmup-finished',
+    });
+    const warningCodes = (manifest.warnings || [])
+      .map((warning) => warning.code);
+
+    assert.equal(
+      queryCallCount,
+      0,
+      'topology capture should not query until a snapshot node is available',
+    );
+    assert.equal(
+      warningCodes.includes('query-node-unavailable'),
+      false,
+      'startup warm-up should not be treated as a playback cleanliness warning',
+    );
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+  }
+});
+
 test('PlaybackRecorder does not overlap topology polls while a capture is in flight',
   async () => {
     const outputDir = await mkdtemp(

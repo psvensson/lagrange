@@ -713,7 +713,7 @@ test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA
     );
   });
 
-test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOVE_REPLICA reservation is still open',
+test('BootstrapAPI excludes an expired non-terminal MOVE_REPLICA reservation from subsequent bootstrap assignment reuse',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440332',
@@ -734,18 +734,19 @@ test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOV
     });
     t.equal(
       secondBootstrap.statusCode,
-      503,
-      'bootstrap should still defer while the original MOVE_REPLICA handoff remains non-terminal after lease expiry',
+      200,
+      'bootstrap should keep progressing while the original MOVE_REPLICA handoff remains non-terminal after lease expiry',
     );
     t.equal(
-      secondBootstrap.json().code,
-      'BOOTSTRAP_NOT_READY',
-      'deferred bootstrap should use the canonical not-ready code',
+      secondBootstrap.json().messageGroupAssignment?.strategy,
+      'MOVE_REPLICA',
+      'bootstrap should still use MOVE_REPLICA when another legal seed replica remains',
     );
     t.ok(
-      (secondBootstrap.json().reasons || [])
-        .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
-      'deferred bootstrap should surface the open handoff stabilization reason',
+      secondBootstrap.json().messageGroupAssignment?.replicaToMove &&
+        secondBootstrap.json().messageGroupAssignment.replicaToMove !==
+          fixture.assignment.replicaToMove,
+      'bootstrap should exclude the in-flight replica from reuse after lease expiry',
     );
   });
 
@@ -1522,8 +1523,14 @@ test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable r
     });
     t.equal(
       competingBootstrap.statusCode,
-      503,
-      'bootstrap should still defer competing joins while the in-memory reservation is open',
+      200,
+      'bootstrap should keep progressing while the in-memory reservation is open',
+    );
+    t.ok(
+      competingBootstrap.json().messageGroupAssignment?.replicaToMove &&
+        competingBootstrap.json().messageGroupAssignment.replicaToMove !==
+          assignment.replicaToMove,
+      'competing bootstrap should exclude the in-memory reserved replica from reuse',
     );
 
     const registerResponse = await api.getFastify().inject({
@@ -1569,8 +1576,14 @@ test('BootstrapAPI bootstrap admission reuses cached MOVE_REPLICA summary withou
 
     t.equal(
       competingBootstrap.statusCode,
-      503,
-      'competing bootstrap should still be deferred while the reservation is open',
+      200,
+      'competing bootstrap should keep progressing while the reservation is open',
+    );
+    t.ok(
+      competingBootstrap.json().messageGroupAssignment?.replicaToMove &&
+        competingBootstrap.json().messageGroupAssignment.replicaToMove !==
+          fixture.assignment.replicaToMove,
+      'bootstrap admission should exclude the cached in-memory reserved replica from reuse',
     );
     t.equal(
       reservationSelectCount,

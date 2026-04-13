@@ -317,30 +317,28 @@ class LoggingService {
   shouldEmitMetricsMessage(message, context = {}) {
     const nowMs = Date.now();
     const detailedWindowActive = this.isMetricsDetailedWindowActive(nowMs);
-
-    if (this.isDetailedMetricsContext(context) && !detailedWindowActive) {
-      return {
-        shouldEmit: false,
-        suppressReason: LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW,
-      };
-    }
-
     const resolutionMs = Math.max(0, this.metricsDefaultResolutionMs);
-    if (!detailedWindowActive && resolutionMs > 0) {
-      const lastEmissionMs = this.metricsLastEmissionByTag.get(message);
-      if (Number.isFinite(lastEmissionMs) &&
-        (nowMs - lastEmissionMs) < resolutionMs) {
-        return {
-          shouldEmit: false,
-          suppressReason: LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION,
-        };
-      }
-    }
+    const lastEmissionMs = !detailedWindowActive && resolutionMs > 0 ?
+      this.metricsLastEmissionByTag.get(message) :
+      undefined;
+    const suppressReason =
+      this.isDetailedMetricsContext(context) && !detailedWindowActive ?
+        LOGGING_METRICS_SUPPRESS_REASON.DETAILED_WINDOW :
+        !detailedWindowActive &&
+          resolutionMs > 0 &&
+          Number.isFinite(lastEmissionMs) &&
+          (nowMs - lastEmissionMs) < resolutionMs ?
+          LOGGING_METRICS_SUPPRESS_REASON.RESOLUTION :
+          LOGGING_METRICS_SUPPRESS_REASON.NONE;
+    const shouldEmit =
+      suppressReason === LOGGING_METRICS_SUPPRESS_REASON.NONE;
 
-    this.setMetricsTagLastEmission(message, nowMs);
+    if (shouldEmit) {
+      this.setMetricsTagLastEmission(message, nowMs);
+    }
     return {
-      shouldEmit: true,
-      suppressReason: LOGGING_METRICS_SUPPRESS_REASON.NONE,
+      shouldEmit,
+      suppressReason,
     };
   }
 

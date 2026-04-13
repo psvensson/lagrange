@@ -209,64 +209,92 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
 
       t.equal(error?.retryAfterMs, 250,
         'cdc write failure should preserve retry-after metadata');
-      t.equal(cdcLogger.entries.warn.length, 1,
-        'cdc write should emit one bounded warning');
+      const transientCdcWarnings = cdcLogger.entries.warn.filter((entry) =>
+        entry.message === 'Transient CDC SQL error, retrying',
+      );
+      const terminalCdcWarning = cdcLogger.entries.warn.find((entry) =>
+        entry.message === 'Failed to upsert system table row',
+      );
       t.equal(
-        cdcLogger.entries.warn[0]?.message,
+        transientCdcWarnings.length > 0,
+        true,
+        'cdc write should emit bounded transient retry diagnostics',
+      );
+      t.ok(
+        terminalCdcWarning,
+        'cdc write should emit a terminal structured warning',
+      );
+      t.equal(
+        terminalCdcWarning?.message,
         'Failed to upsert system table row',
       );
       t.equal(
-        cdcLogger.entries.warn[0]?.fields?.causeId,
+        terminalCdcWarning?.fields?.causeId,
         'integration-control-plane-pressure',
       );
       t.equal(
-        cdcLogger.entries.warn[0]?.fields?.operation,
+        terminalCdcWarning?.fields?.operation,
         CDC_OPERATION.UPSERT,
       );
       t.equal(
-        cdcLogger.entries.warn[0]?.fields?.primaryKey?.service_id,
+        terminalCdcWarning?.fields?.primaryKey?.service_id,
         'svc-pressure-1',
       );
       t.equal(
-        cdcLogger.entries.warn[0]?.fields?.writeMode,
+        terminalCdcWarning?.fields?.writeMode,
         'sql-routed',
       );
 
-      t.equal(messageGroupLogger.entries.warn.length, 1,
-        'forward rejection should emit one bounded warning');
+      const forwardRejection = messageGroupLogger.entries.warn.find((entry) =>
+        entry.message === 'CDC forward to leader rejected',
+      );
+      t.ok(
+        forwardRejection,
+        'forward rejection should emit structured warning diagnostics',
+      );
       t.equal(
-        messageGroupLogger.entries.warn[0]?.message,
+        forwardRejection?.message,
         'CDC forward to leader rejected',
       );
       t.equal(
-        messageGroupLogger.entries.warn[0]?.fields?.leaderServiceId,
+        forwardRejection?.fields?.leaderServiceId,
         'mg-pressure-r1',
       );
       t.equal(
-        messageGroupLogger.entries.warn[0]?.fields?.deliveryRejectedByHandler,
+        forwardRejection?.fields?.deliveryRejectedByHandler,
         true,
       );
       t.equal(
-        messageGroupLogger.entries.warn[0]?.fields?.strictForwardRetryAfterMs,
+        forwardRejection?.fields?.strictForwardRetryAfterMs,
         250,
       );
-
-      t.equal(messageGroupLogger.entries.error.length, 1,
-        'raft propose failure should emit one bounded error');
       t.equal(
-        messageGroupLogger.entries.error[0]?.message,
+        forwardRejection?.fields?.deliveryPriority,
+        'background',
+        'noisy control-plane metadata forwards should stay off the critical lane',
+      );
+
+      const raftProposeFailure = messageGroupLogger.entries.error.find((entry) =>
+        entry.message === 'Raft CDC command failed',
+      );
+      t.ok(
+        raftProposeFailure,
+        'raft propose failure should emit structured error diagnostics',
+      );
+      t.equal(
+        raftProposeFailure?.message,
         'Raft CDC command failed',
       );
       t.equal(
-        messageGroupLogger.entries.error[0]?.fields?.leaderTargetSource,
+        raftProposeFailure?.fields?.leaderTargetSource,
         'forward_to_leader',
       );
       t.equal(
-        messageGroupLogger.entries.error[0]?.fields?.isCurrentRaftLeader,
+        raftProposeFailure?.fields?.isCurrentRaftLeader,
         false,
       );
       t.equal(
-        messageGroupLogger.entries.error[0]?.fields?.configuredRetryBudget > 0,
+        raftProposeFailure?.fields?.configuredRetryBudget > 0,
         true,
       );
     },

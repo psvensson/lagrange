@@ -1,3 +1,8 @@
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from './constants.js';
+
 const ZERO = 0;
 const DEFAULT_LOG_TABLE_NAME = 'logs';
 
@@ -18,6 +23,32 @@ function normalizeNonEmptyString(value, fallback) {
 
 function normalizeNonEmptyArray(value, fallback) {
   return Array.isArray(value) && value.length > ZERO ? value : fallback;
+}
+
+function normalizeObject(value) {
+  return value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) ?
+    value :
+    null;
+}
+
+function resolveScenarioOptions(options = {}, cluster = null, scenarioKey = '') {
+  const normalizedOptions = normalizeObject(options) || {};
+  if (typeof scenarioKey !== 'string' || scenarioKey.length <= ZERO) {
+    return normalizedOptions;
+  }
+
+  const scenarios = normalizeObject(cluster?._config?.scenarios);
+  const clusterOverrides = normalizeObject(scenarios?.[scenarioKey]);
+  if (!clusterOverrides) {
+    return normalizedOptions;
+  }
+
+  return {
+    ...clusterOverrides,
+    ...normalizedOptions,
+  };
 }
 
 function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
@@ -48,7 +79,10 @@ function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
     distributionPollIntervalMs:
       normalizeFiniteNumber(options.distributionPollIntervalMs, 250),
     postDistributionSoakMs:
-      normalizeFiniteNumber(options.postDistributionSoakMs, 3000),
+      normalizeFiniteNumber(
+        options.postDistributionSoakMs,
+        SCENARIO_TIMING_DEFAULTS.shortSoakMs,
+      ),
     minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.75),
   });
 }
@@ -59,7 +93,10 @@ function resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig(
   const base = resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options);
   return Object.freeze({
     ...base,
-    preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 5000),
+    preRestartDelayMs: normalizeFiniteNumber(
+      options.preRestartDelayMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
     convergenceTimeoutMs:
       normalizeFiniteNumber(options.convergenceTimeoutMs, 180000),
     transactionReplayTimeoutMs:
@@ -135,7 +172,10 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
-    preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 15000),
+    preRestartDelayMs: normalizeFiniteNumber(
+      options.preRestartDelayMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
     preRestartActiveTimeoutMs:
       normalizeFiniteNumber(options.preRestartActiveTimeoutMs, 180000),
     restartReadinessTimeoutMs:
@@ -143,7 +183,10 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
     postRestartActiveTimeoutMs:
       normalizeFiniteNumber(options.postRestartActiveTimeoutMs, 240000),
     postRestartQuietWindowMs:
-      normalizeFiniteNumber(options.postRestartQuietWindowMs, 30000),
+      normalizeFiniteNumber(
+        options.postRestartQuietWindowMs,
+        CONVERGENCE_DEFAULTS.quietWindowMs,
+      ),
     convergenceTimeoutMs:
       normalizeFiniteNumber(options.convergenceTimeoutMs, 240000),
     consistencyTimeoutMs:
@@ -156,7 +199,10 @@ function resolvePartitionKillHealUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
-    preFaultDelayMs: normalizeFiniteNumber(options.preFaultDelayMs, 5000),
+    preFaultDelayMs: normalizeFiniteNumber(
+      options.preFaultDelayMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
     partitionHoldMs: normalizeFiniteNumber(options.partitionHoldMs, 5000),
     postKillDelayMs: normalizeFiniteNumber(options.postKillDelayMs, 1000),
     convergenceTimeoutMs:
@@ -169,7 +215,10 @@ function resolveDiskFullUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
-    preFaultDelayMs: normalizeFiniteNumber(options.preFaultDelayMs, 5000),
+    preFaultDelayMs: normalizeFiniteNumber(
+      options.preFaultDelayMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
     faultHoldMs: normalizeFiniteNumber(options.faultHoldMs, 5000),
     postReleaseDelayMs: normalizeFiniteNumber(options.postReleaseDelayMs, 1000),
     diskFillSizeMb: normalizeFiniteNumber(options.diskFillSizeMb, 256),
@@ -187,7 +236,10 @@ function resolveSlowFollowerUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
-    preFaultDelayMs: normalizeFiniteNumber(options.preFaultDelayMs, 5000),
+    preFaultDelayMs: normalizeFiniteNumber(
+      options.preFaultDelayMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
     faultHoldMs: normalizeFiniteNumber(options.faultHoldMs, 5000),
     postHealDelayMs: normalizeFiniteNumber(options.postHealDelayMs, 1000),
     latencyMs: normalizeFiniteNumber(options.latencyMs, 200),
@@ -238,6 +290,7 @@ export {
   resolveDiskFullUnderLoadScenarioConfig,
   resolvePartitionKillHealUnderLoadScenarioConfig,
   resolvePartitionGrowthAndSpreadScenarioConfig,
+  resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
   resolveSlowFollowerUnderLoadScenarioConfig,
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,

@@ -1,7 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -9,6 +11,7 @@ import {
 } from '../../src/constants/index.js';
 import {
   cleanupTestEnvironment,
+  gracefulShutdown,
   getUniquePort,
   initializeTestEnvironment,
   waitFor,
@@ -60,22 +63,18 @@ function getTableRoutingState(systemTableCache) {
 
 test('Create table provisions routable partition replica', {timeout: TEST_TIMEOUT_MS},
   async (t) => {
-    t.beforeEach(() => {
-      initializeTestEnvironment({
-        rebalancer: {
-          periodicCheckIntervalMs: 600000,
-          periodicCheckJitterMs: 100,
-          stabilizationPeriodMs: 10000,
-        },
-      });
-    });
-
-    t.afterEach(async () => {
-      await cleanupTestEnvironment();
+    initializeTestEnvironment({
+      rebalancer: {
+        periodicCheckIntervalMs: 600000,
+        periodicCheckJitterMs: 100,
+        stabilizationPeriodMs: 10000,
+      },
     });
 
     const seedNodeId = '550e8400-e29b-41d4-a716-446655449901';
     const seedWsPort = getUniquePort();
+    const config = ConfigurationManager.getInstance();
+    config.setByPath('partition.defaultReplicaCount', 1);
     const bootstrapService = new BootstrapService({
       nodeId: seedNodeId,
       nodeAddress: `ws://localhost:${seedWsPort}`,
@@ -88,8 +87,10 @@ test('Create table provisions routable partition replica', {timeout: TEST_TIMEOU
       },
     });
 
+    let bootstrapResult = null;
+    let seedApi = null;
     try {
-      const bootstrapResult = await bootstrapService.bootstrap();
+      bootstrapResult = await bootstrapService.bootstrap();
       t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
@@ -100,6 +101,19 @@ test('Create table provisions routable partition replica', {timeout: TEST_TIMEOU
         nodeId: seedNodeId,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
       });
+      seedApi = new BootstrapAPI({
+        seedNodeId,
+        seedNodeAddress: `ws://localhost:${seedWsPort}`,
+        seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+        messageGroupServices: bootstrapResult.messageGroupServices,
+        partitionServices: bootstrapResult.partitionServices,
+        systemTableCache,
+        messageRouter: bootstrapResult.messageRouter,
+        epochManager: bootstrapResult.epochManager,
+        bootstrapService,
+      });
+      await seedApi.initialize(0, {listen: false});
+      seedApi.setSqlQueryEngine(sqlQueryEngine);
 
       const createResult = await sqlQueryEngine.executeQuery(CREATE_TABLE_SQL);
       t.equal(createResult.success, true, 'create table should succeed');
@@ -131,6 +145,7 @@ test('Create table provisions routable partition replica', {timeout: TEST_TIMEOU
         t.equal(selectRows[0].payload, 'payload-1', 'selected row payload should match');
       }
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+      await cleanupTestEnvironment();
     }
   });

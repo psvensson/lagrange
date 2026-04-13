@@ -13,6 +13,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  ManagedSplitTopologyAdapter,
+} from '../../src/partition/managed-split-topology-adapter.js';
+import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
@@ -207,6 +210,10 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
   const workflow = engine.managedSplitWorkflow;
 
   t.ok(workflow, 'ManagedSplitWorkflow must be created');
+  t.ok(
+    workflow.topologyAdapter instanceof ManagedSplitTopologyAdapter,
+    'ManagedSplitWorkflow must receive one canonical topology adapter',
+  );
   t.equal(
     typeof workflow.buildManagedSplitPlan,
     'function',

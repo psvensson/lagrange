@@ -56,7 +56,7 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
           rows: [{table_id: 'tbl-benchmark-events-1'}],
         };
       }
-      if (sql.includes('SELECT partition_id FROM partitions WHERE table_id')) {
+      if (sql.includes('FROM partitions WHERE table_id')) {
         return {
           rows: [{partition_id: 'tbl-benchmark-events-1-p1'}],
         };
@@ -99,5 +99,141 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
       sql.includes('UPDATE tables SET table_policies') &&
       sql.includes('WHERE table_id')),
     'policy preparation must still issue the canonical table_id update',
+  );
+});
+
+test('table-distribution-helpers repairs table policy visibility from ' +
+  'authoritative control snapshot before failing', async () => {
+  let repairCount = 0;
+  const expectedPolicies = {
+    splitStorageThreshold: 1024,
+  };
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        return {rows: []};
+      }
+      if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-repair-policy'}],
+        };
+      }
+      if (sql.includes('FROM partitions WHERE table_id')) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-repair-policy-p1'}],
+        };
+      }
+      if (sql.includes('UPDATE tables SET table_policies')) {
+        return {changes: 1};
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              repairCount > 0 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_id')) {
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              repairCount > 0 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    tablePolicies: expectedPolicies,
+  });
+
+  assert.equal(repairCount, 1);
+  assert.equal(preparation.tablePoliciesVisibilityRepairApplied, true);
+  assert.equal(preparation.tablePoliciesApplyWarning, undefined);
+});
+
+test('table-distribution-helpers preserves deferred policy visibility ' +
+  'without forced repair', async () => {
+  let repairCount = 0;
+  let policyLookupCount = 0;
+  const expectedPolicies = {
+    splitStorageThreshold: 2048,
+  };
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        return {rows: []};
+      }
+      if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-deferred-policy'}],
+        };
+      }
+      if (sql.includes('FROM partitions WHERE table_id')) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-deferred-policy-p1'}],
+        };
+      }
+      if (sql.includes('UPDATE tables SET table_policies')) {
+        return {
+          changes: 1,
+          visibilityState: 'deferred_by_pressure',
+          retryAfterMs: 7,
+        };
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
+        policyLookupCount += 1;
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              policyLookupCount >= 2 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_id')) {
+        policyLookupCount += 1;
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              policyLookupCount >= 2 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    tablePolicies: expectedPolicies,
+  });
+
+  assert.equal(repairCount, 0);
+  assert.equal(preparation.tablePoliciesApplyWarning, undefined);
+  assert.equal(
+    preparation.tablePoliciesApplyVisibilityState,
+    'deferred_by_pressure',
+  );
+  assert.equal(
+    preparation.tablePoliciesApplyVisibilityRetryAfterMs,
+    7,
   );
 });

@@ -31,10 +31,89 @@ import {
 } from './message-group-target-resolver.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+const MESSAGE_GROUP_FORWARDING_OWNER_LITERAL = Object.freeze({
+  AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED: "Authoritative message-group forward topology repair failed",
+  BACKGROUND: "background",
+  CDC_FORWARD_TO_LEADER_REJECTED: "CDC forward to leader rejected",
+  CLOSED: "closed",
+  CONNECTION_TO_NODE: "Connection to node",
+  CRITICAL: "critical",
+  EAI_AGAIN: "EAI_AGAIN",
+  ECONNREFUSED: "ECONNREFUSED",
+  ENOTFOUND: "ENOTFOUND",
+  FORWARD_SLASH: "/",
+  IS_SATURATED: "is saturated",
+  MESSAGE_DASH_GROUP_DASH_SERVICE: "message-group-service",
+  METADATA_INGRESS: "metadata_ingress",
+  NO_CONNECTION_TO_NODE: "No connection to node",
+  NO_HANDLER_REGISTERED_FOR_ADDRESS: "No handler registered for address",
+  OUTBOUND_QUEUE_BACKPRESSURED: "OUTBOUND_QUEUE_BACKPRESSURED",
+  OUTBOUND_QUEUE_FOR_NODE: "Outbound queue for node",
+  REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS: "Repaired message-group forward topology from authoritative rows",
+  ZERO: 0,
+});
+
 
 const STRICT_CDC_FORWARD_SYSTEM_TABLES = new Set(
   Object.values(SYSTEM_TABLE_NAME),
 );
+const BACKGROUND_CDC_FORWARD_SYSTEM_TABLES = new Set([
+  SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+  SYSTEM_TABLE_NAME.NODES,
+  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+  SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
+]);
+
+const FORWARD_TOPOLOGY_REPAIR_OUTCOME = Object.freeze({
+  FAILED: 'failed',
+  REPAIRED: 'repaired',
+  UNCHANGED: 'unchanged',
+});
+
+const MESSAGE_GROUP_FORWARDING_REASON = Object.freeze({
+  INGRESS_NOT_INITIALIZED: 'message-group ingress not initialized',
+});
+
+function extractCDCForwardPayloadRows(payload = null) {
+  const events = Array.isArray(payload?.events) ?
+    payload.events :
+    [payload];
+  return events
+    .map((event) => event?.data && typeof event.data === TYPEOF.OBJECT ?
+      event.data :
+      null)
+    .filter(Boolean);
+}
+
+function isCriticalPartitionServiceRow(row = null) {
+  const serviceType = String(
+    row?.[COLUMN.SERVICE_TYPE] ??
+    row?.service_type ??
+    row?.serviceType ??
+    '',
+  ).toLowerCase();
+  return serviceType === SERVICE_TYPE.PARTITION;
+}
+
+function resolveCDCForwardDeliveryPriority(
+  tableName,
+  payload = null,
+  replayOnly = false,
+) {
+  if (replayOnly === true) {
+    return MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND;
+  }
+  if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+    const payloadRows = extractCDCForwardPayloadRows(payload);
+    return payloadRows.some((row) => isCriticalPartitionServiceRow(row)) ?
+      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CRITICAL :
+      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND;
+  }
+  return typeof tableName === TYPEOF.STRING &&
+    BACKGROUND_CDC_FORWARD_SYSTEM_TABLES.has(tableName) ?
+    MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND :
+    MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CRITICAL;
+}
 
 class MessageGroupForwardingOwner {
   constructor(options = {}) {
@@ -87,7 +166,7 @@ class MessageGroupForwardingOwner {
     if (typeof candidate !== TYPEOF.STRING || candidate.length === NUM.ZERO) {
       return null;
     }
-    if (!candidate.includes('/')) {
+    if (!candidate.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.FORWARD_SLASH)) {
       return candidate;
     }
     try {
@@ -319,10 +398,43 @@ class MessageGroupForwardingOwner {
     return service.resolveCanonicalLeaderNodeIdFromCache() === service.nodeId;
   }
 
+  buildIngressReadinessResult(
+    ready,
+    reason = null,
+    retryAfterMs = undefined,
+    extra = {},
+  ) {
+    const result = {
+      ready,
+      ...extra,
+    };
+    if (reason !== null) {
+      result.reason = reason;
+    }
+    if (Number.isFinite(retryAfterMs)) {
+      result.retryAfterMs = retryAfterMs;
+    }
+    return result;
+  }
+
+  buildMetadataForwardSelectionResult(selection, extra = {}) {
+    return {
+      ...selection,
+      ...extra,
+    };
+  }
+
+  buildForwardTopologyRepairOutcome(repaired, outcome) {
+    return {
+      repaired,
+      outcome,
+    };
+  }
+
   canAcceptCDCEvent(cdcEvent = {}) {
     const service = this.service;
     if (service.isCurrentRaftLeader()) {
-      return {ready: true};
+      return this.buildIngressReadinessResult(true);
     }
 
     const selection = service.resolveCDCForwardSelection({
@@ -330,17 +442,20 @@ class MessageGroupForwardingOwner {
       operation: cdcEvent?.operation || null,
     });
     if (!selection.strictForwarding) {
-      return {ready: true};
+      return this.buildIngressReadinessResult(true);
     }
     if (this.shouldUseCanonicalLocalIngressForStrictCDC(selection)) {
-      return {
-        ready: true,
-        localIngress: true,
-        retryAfterMs: selection.strictForwardRetryAfterMs,
-      };
+      return this.buildIngressReadinessResult(
+        true,
+        null,
+        selection.strictForwardRetryAfterMs,
+        {
+          localIngress: true,
+        },
+      );
     }
     if (selection.targets.length > NUM.ZERO) {
-      return {ready: true};
+      return this.buildIngressReadinessResult(true);
     }
 
     void service.maybeRepairAuthoritativeForwardTopology({
@@ -349,25 +464,23 @@ class MessageGroupForwardingOwner {
       operation: cdcEvent?.operation || null,
     });
 
-    return {
-      ready: false,
-      reason: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-      retryAfterMs: selection.strictForwardRetryAfterMs,
-    };
+    return this.buildIngressReadinessResult(
+      false,
+      MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      selection.strictForwardRetryAfterMs,
+    );
   }
 
   getMetadataIngressReadiness(options = {}) {
     const service = this.service;
     if (service.initialized !== true) {
-      return {
-        ready: false,
-        reason: 'message-group ingress not initialized',
-        retryAfterMs: service.resolveStrictCdcForwardRetryAfterMs(),
-      };
-    }
-
-    if (service.isCurrentRaftLeader()) {
-      return {ready: true};
+      return this.buildIngressReadinessResult(
+        false,
+        MESSAGE_GROUP_FORWARDING_REASON.INGRESS_NOT_INITIALIZED,
+        service.resolveStrictCdcForwardRetryAfterMs(),
+      );
+    } else if (service.isCurrentRaftLeader()) {
+      return this.buildIngressReadinessResult(true);
     }
 
     const requiredTables = [...new Set(
@@ -378,35 +491,36 @@ class MessageGroupForwardingOwner {
         ),
     )];
     if (requiredTables.length === NUM.ZERO) {
-      return {
-        ready: false,
-        reason: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-        retryAfterMs: service.resolveStrictCdcForwardRetryAfterMs(),
-      };
+      return this.buildIngressReadinessResult(
+        false,
+        MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+        service.resolveStrictCdcForwardRetryAfterMs(),
+      );
     }
 
     let retryAfterMs = NUM.ZERO;
     for (const tableName of requiredTables) {
       const readiness = service.canAcceptCDCEvent({tableName});
       if (readiness.ready !== true) {
-        return {
-          ready: false,
-          reason: readiness.reason ||
+        return this.buildIngressReadinessResult(
+          false,
+          readiness.reason ||
             MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-          retryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+          Number.isFinite(readiness.retryAfterMs) ?
             readiness.retryAfterMs :
             service.resolveStrictCdcForwardRetryAfterMs(),
-        };
+        );
       }
       if (Number.isFinite(readiness.retryAfterMs)) {
         retryAfterMs = Math.max(retryAfterMs, readiness.retryAfterMs);
       }
     }
 
-    if (retryAfterMs > NUM.ZERO) {
-      return {ready: true, retryAfterMs};
-    }
-    return {ready: true};
+    return this.buildIngressReadinessResult(
+      true,
+      null,
+      retryAfterMs > NUM.ZERO ? retryAfterMs : undefined,
+    );
   }
 
   async resolveMetadataIngressForwardSelection(options = {}) {
@@ -422,28 +536,28 @@ class MessageGroupForwardingOwner {
       STRICT_CDC_FORWARD_SYSTEM_TABLES.has(candidate),
     ) || requiredTables[NUM.ZERO] || null;
     if (!tableName) {
-      return {
+      return this.buildMetadataForwardSelectionResult({
         strictForwarding: false,
         strictForwardRetryAfterMs: NUM.ZERO,
         targets: [],
         suppressedCount: NUM.ZERO,
-      };
+      });
     }
 
     let selection = service.resolveCDCForwardSelection({
       tableName,
-      operation: 'metadata_ingress',
+      operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
     });
     if (selection.strictForwarding === true &&
         selection.targets.length === NUM.ZERO) {
       await service.maybeRepairAuthoritativeForwardTopology({
         errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
         tableName,
-        operation: 'metadata_ingress',
+        operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
       });
       selection = service.resolveCDCForwardSelection({
         tableName,
-        operation: 'metadata_ingress',
+        operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
       });
     }
     if (selection.strictForwarding === true &&
@@ -453,13 +567,15 @@ class MessageGroupForwardingOwner {
         operation: 'metadata_ingress',
       });
       if (readiness?.ready === true && readiness?.localIngress === true) {
-        return {
-          ...selection,
-          localIngress: true,
-          strictForwardRetryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
-            readiness.retryAfterMs :
-            selection.strictForwardRetryAfterMs,
-        };
+        return this.buildMetadataForwardSelectionResult(
+          selection,
+          {
+            localIngress: true,
+            strictForwardRetryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+              readiness.retryAfterMs :
+              selection.strictForwardRetryAfterMs,
+          },
+        );
       }
     }
     return selection;
@@ -819,7 +935,10 @@ class MessageGroupForwardingOwner {
         if (repairResult.repaired === true) {
           this.lastForwardTopologyRepairCooldownMs =
             service.forwardTopologyRepairCooldownMs;
-        } else if (repairResult.outcome === 'unchanged') {
+        } else if (
+          repairResult.outcome ===
+            FORWARD_TOPOLOGY_REPAIR_OUTCOME.UNCHANGED
+        ) {
           this.lastForwardTopologyRepairCooldownMs =
             service.forwardTopologyRepairNoChangeCooldownMs;
         } else {
@@ -831,7 +950,7 @@ class MessageGroupForwardingOwner {
         this.lastForwardTopologyRepairCooldownMs =
           service.forwardTopologyRepairFailureCooldownMs;
         service.logger.warn(
-          'Authoritative message-group forward topology repair failed',
+          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED,
           {
             groupId: service.groupId,
             replicaId: service.replicaId,
@@ -854,10 +973,10 @@ class MessageGroupForwardingOwner {
     const service = this.service;
     const gateway = service.getControlPlaneSystemTableGateway();
     if (!gateway || typeof gateway.executeRead !== TYPEOF.FUNCTION) {
-      return {
-        repaired: false,
-        outcome: 'failed',
-      };
+      return this.buildForwardTopologyRepairOutcome(
+        false,
+        FORWARD_TOPOLOGY_REPAIR_OUTCOME.FAILED,
+      );
     }
     const sessionId =
       `message-group-forward-topology:${service.groupId}:${service.now()}`;
@@ -875,7 +994,7 @@ class MessageGroupForwardingOwner {
           sql: `SELECT * FROM ${TABLES.MESSAGE_GROUPS} WHERE ${COLUMN.GROUP_ID} = ?`,
           params: [service.groupId],
           strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-          owner: 'message-group-service',
+          owner: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.MESSAGE_DASH_GROUP_DASH_SERVICE,
         },
         readOptions,
       ),
@@ -886,7 +1005,7 @@ class MessageGroupForwardingOwner {
             `AND ${COLUMN.SERVICE_TYPE} = ?`,
           params: [service.groupId, SERVICE_TYPE.MESSAGE_GROUP],
           strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-          owner: 'message-group-service',
+          owner: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.MESSAGE_DASH_GROUP_DASH_SERVICE,
         },
         readOptions,
       ),
@@ -939,7 +1058,7 @@ class MessageGroupForwardingOwner {
 
     if (repairedRowCount > NUM.ZERO) {
       service.logger.warn(
-        'Repaired message-group forward topology from authoritative rows',
+        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS,
         {
           groupId: service.groupId,
           replicaId: service.replicaId,
@@ -951,16 +1070,16 @@ class MessageGroupForwardingOwner {
           repairedNodeRowCount: nodeRows.length,
         },
       );
-      return {
-        repaired: true,
-        outcome: 'repaired',
-      };
+      return this.buildForwardTopologyRepairOutcome(
+        true,
+        FORWARD_TOPOLOGY_REPAIR_OUTCOME.REPAIRED,
+      );
     }
 
-    return {
-      repaired: false,
-      outcome: 'unchanged',
-    };
+    return this.buildForwardTopologyRepairOutcome(
+      false,
+      FORWARD_TOPOLOGY_REPAIR_OUTCOME.UNCHANGED,
+    );
   }
 
   async applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
@@ -1031,13 +1150,13 @@ class MessageGroupForwardingOwner {
     return this.service.shouldRepairForwardTopology(errorMessage) ||
       this.service.isForwardTargetBackpressured(deliveryResult, errorMessage) ||
       errorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
-      errorMessage.includes('ENOTFOUND') ||
-      errorMessage.includes('EAI_AGAIN') ||
-      errorMessage.includes('ECONNREFUSED') ||
-      errorMessage.includes('No connection to node') ||
-      (errorMessage.includes('Connection to node') &&
-        errorMessage.includes('closed')) ||
-      errorMessage.includes('No handler registered for address');
+      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND) ||
+      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.EAI_AGAIN) ||
+      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ECONNREFUSED) ||
+      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_CONNECTION_TO_NODE) ||
+      (errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CONNECTION_TO_NODE) &&
+        errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CLOSED)) ||
+      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS);
   }
 
   isForwardTargetBackpressured(deliveryResult, errorMessage) {
@@ -1045,11 +1164,11 @@ class MessageGroupForwardingOwner {
       typeof errorMessage === TYPEOF.STRING ?
         errorMessage :
         '';
-    if (deliveryResult?.errorCode === 'OUTBOUND_QUEUE_BACKPRESSURED') {
+    if (deliveryResult?.errorCode === MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.OUTBOUND_QUEUE_BACKPRESSURED) {
       return true;
     }
-    return normalizedErrorMessage.includes('Outbound queue for node') &&
-      normalizedErrorMessage.includes('is saturated');
+    return normalizedErrorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.OUTBOUND_QUEUE_FOR_NODE) &&
+      normalizedErrorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.IS_SATURATED);
   }
 
   async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
@@ -1122,10 +1241,10 @@ class MessageGroupForwardingOwner {
         replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
     };
     return service.forwardCDCPayloadToLeader(payload, {
-      tableName: normalizedEvents[0].tableName,
+      tableName: normalizedEvents[MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ZERO].tableName,
       operation: `batch:${normalizedEvents.length}`,
       relayDepth,
-      causeId: normalizeCauseId(normalizedEvents[0].causeId),
+      causeId: normalizeCauseId(normalizedEvents[MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ZERO].causeId),
       replayOnly:
         replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
     });
@@ -1137,6 +1256,11 @@ class MessageGroupForwardingOwner {
     const operation = logContext.operation || null;
     const replayOnly = logContext.replayOnly === true ||
       payload?.replayOnly === true;
+    const deliveryPriority = resolveCDCForwardDeliveryPriority(
+      tableName,
+      payload,
+      replayOnly,
+    );
     const relayDepth = Number.isInteger(logContext.relayDepth) ?
       logContext.relayDepth :
       NUM.ZERO;
@@ -1194,7 +1318,7 @@ class MessageGroupForwardingOwner {
         const deliveryResult = await service.transport.deliver(
           leaderAddress,
           payload,
-          {deliveryPriority: replayOnly ? 'background' : 'critical'},
+          {deliveryPriority},
         );
         const deliveryAcked = deliveryResult?.acknowledged === true;
         const deliverySucceeded = deliveryResult?.success !== false;
@@ -1224,7 +1348,7 @@ class MessageGroupForwardingOwner {
               errorMessage: deliveryErrorMessage,
             });
           }
-          service.logger.warn('CDC forward to leader rejected', {
+          service.logger.warn(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CDC_FORWARD_TO_LEADER_REJECTED, {
             groupId: service.groupId,
             replicaId: service.replicaId,
             leaderId: target.serviceId,
@@ -1240,7 +1364,7 @@ class MessageGroupForwardingOwner {
             success: deliverySucceeded,
             noHandler: deliveryResult?.noHandler === true,
             replayIsolationEngaged: replayOnly,
-            deliveryPriority: replayOnly ? 'background' : 'critical',
+            deliveryPriority,
             strictForwarding,
             strictForwardRetryAfterMs,
             error: deliveryErrorMessage,

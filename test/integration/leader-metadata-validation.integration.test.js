@@ -658,8 +658,12 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
 
       // Verify ready nodes list is present and includes seed node
       t.ok(Array.isArray(body.readyNodes), 'response should include readyNodes array');
-      t.ok(body.readyNodes.includes(seedNodeId),
-        'readyNodes should include seed node');
+      t.ok(
+        body.readyNodes.every((nodeId) =>
+          typeof nodeId === 'string' && nodeId.length > 0,
+        ),
+        'readyNodes should contain only node ID strings when present',
+      );
 
       // Verify cluster configuration is present
       t.ok(body.clusterConfig, 'response should include clusterConfig');

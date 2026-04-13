@@ -169,11 +169,24 @@ function createRealisticCDCService(sourceCache, targetCaches = [], options = {})
         propagationTimers.push(timer);
       }
 
-      return {success: true, operation: 'INSERT', tableName, data};
+      return {
+        success: true,
+        operation: 'INSERT',
+        tableName,
+        data,
+        affectedRows: 1,
+        partitionResult: {affectedRows: 1},
+      };
     },
 
     async updateSystemTableRow(tableName, whereClause, data) {
-      const merged = {...whereClause, ...data};
+      const merged = {
+        ...whereClause,
+        ...data,
+        updated_at: Number.isFinite(Number(data?.updated_at)) ?
+          Number(data.updated_at) :
+          Date.now(),
+      };
       sourceCache.applySystemTableChange(tableName, CDC_OPERATIONS.UPDATE, merged);
 
       for (const targetCache of targetCaches) {
@@ -183,7 +196,14 @@ function createRealisticCDCService(sourceCache, targetCaches = [], options = {})
         propagationTimers.push(timer);
       }
 
-      return {success: true, operation: 'UPDATE', tableName, data: merged};
+      return {
+        success: true,
+        operation: 'UPDATE',
+        tableName,
+        data: merged,
+        affectedRows: 1,
+        partitionResult: {affectedRows: 1},
+      };
     },
 
     async upsertSystemTableRow(tableName, data) {
@@ -196,7 +216,14 @@ function createRealisticCDCService(sourceCache, targetCaches = [], options = {})
         propagationTimers.push(timer);
       }
 
-      return {success: true, operation: 'UPSERT', tableName, data};
+      return {
+        success: true,
+        operation: 'UPSERT',
+        tableName,
+        data,
+        affectedRows: 1,
+        partitionResult: {affectedRows: 1},
+      };
     },
 
     async deleteSystemTableRow(tableName, whereClause) {
@@ -209,7 +236,13 @@ function createRealisticCDCService(sourceCache, targetCaches = [], options = {})
         propagationTimers.push(timer);
       }
 
-      return {success: true, operation: 'DELETE', tableName};
+      return {
+        success: true,
+        operation: 'DELETE',
+        tableName,
+        affectedRows: 1,
+        partitionResult: {affectedRows: 1},
+      };
     },
 
     /**
@@ -394,6 +427,119 @@ function createCacheSqlQueryEngine(cache) {
         return {success: true, rows};
       }
       return {success: true, rows: []};
+    },
+  };
+}
+
+function createCacheControlPlaneGateway(cache, mutationService = null) {
+  return {
+    async readRows(tableName, sql, params = []) {
+      const normalizedTable = String(tableName || '').toLowerCase();
+      const normalizedSql = String(sql || '').toLowerCase();
+
+      if (normalizedTable === SYSTEM_TABLE_NAME.NODES ||
+          normalizedSql.includes('from nodes')) {
+        let rows = cache.getAll(SYSTEM_TABLE_NAME.NODES) || [];
+        const [nodeId] = Array.isArray(params) ? params : [];
+        if (typeof nodeId === 'string' &&
+            nodeId.length > 0 &&
+            normalizedSql.includes('where node_id = ?')) {
+          rows = rows.filter((row) => row.node_id === nodeId);
+        }
+        return {success: true, rows};
+      }
+
+      if (normalizedTable === SYSTEM_TABLE_NAME.SERVICES ||
+          normalizedSql.includes('from services')) {
+        let rows = cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+        const [nodeId, serviceType] = Array.isArray(params) ? params : [];
+        if (typeof nodeId === 'string' && nodeId.length > 0) {
+          rows = rows.filter((row) => row.node_id === nodeId);
+        }
+        if (typeof serviceType === 'string' && serviceType.length > 0) {
+          rows = rows.filter((row) => row.service_type === serviceType);
+        }
+        return {success: true, rows};
+      }
+
+      if (normalizedTable === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+          normalizedSql.includes('from replica_operations')) {
+        return {
+          success: true,
+          rows: cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) || [],
+        };
+      }
+
+      return {success: true, rows: []};
+    },
+
+    async submitMutation(request) {
+      const operation = String(request?.operation || '').toLowerCase();
+      const tableName = request?.tableName;
+      const whereClause = request?.whereClause || {};
+      const data = request?.data || {};
+      const row = request?.row || data;
+
+      if (operation === 'insert') {
+        if (mutationService &&
+            typeof mutationService.insertSystemTableRow === 'function') {
+          return mutationService.insertSystemTableRow(tableName, row);
+        }
+        cache.applySystemTableChange(tableName, CDC_OPERATIONS.INSERT, row);
+        return {
+          success: true,
+          affectedRows: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      }
+
+      if (operation === 'update') {
+        if (mutationService &&
+            typeof mutationService.updateSystemTableRow === 'function') {
+          return mutationService.updateSystemTableRow(tableName, whereClause, data);
+        }
+        cache.applySystemTableChange(tableName, CDC_OPERATIONS.UPDATE, {
+          ...whereClause,
+          ...data,
+        });
+        return {
+          success: true,
+          affectedRows: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      }
+
+      if (operation === 'upsert') {
+        if (mutationService &&
+            typeof mutationService.upsertSystemTableRow === 'function') {
+          return mutationService.upsertSystemTableRow(tableName, row);
+        }
+        cache.applySystemTableChange(tableName, CDC_OPERATIONS.UPSERT, row);
+        return {
+          success: true,
+          affectedRows: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      }
+
+      if (operation === 'delete') {
+        if (mutationService &&
+            typeof mutationService.deleteSystemTableRow === 'function') {
+          return mutationService.deleteSystemTableRow(tableName, whereClause);
+        }
+        cache.applySystemTableChange(tableName, CDC_OPERATIONS.DELETE, whereClause);
+        return {
+          success: true,
+          affectedRows: 1,
+          partitionResult: {affectedRows: 1},
+        };
+      }
+
+      return {
+        success: false,
+        affectedRows: 0,
+        partitionResult: {affectedRows: 0},
+      };
     },
   };
 }
@@ -845,11 +991,12 @@ test('Membership Consistency Integration Tests', async (t) => {
     const leaderCache = new SystemTableCache();
     const followerCache = new SystemTableCache();
     const now = Date.now();
+    const sweepNow = now + 100;
 
-    // Add node with lease about to expire
+    // Add node with an already-expired lease so the sweep is deterministic.
     const nodeId = 'expiring-node';
     const nodeData = createNodeEntry(nodeId, {
-      ready_lease_expires_at: now + 30, // Expires very soon
+      ready_lease_expires_at: now - 1,
     });
     leaderCache.applySystemTableChange(
       SYSTEM_TABLE_NAME.NODES, CDC_OPERATIONS.INSERT, nodeData,
@@ -866,59 +1013,40 @@ test('Membership Consistency Integration Tests', async (t) => {
 
     try {
       const messageGroup = new MockMessageGroupService({isLeader: true});
-      const messageRouter = createMockMessageRouter();
-      const mockCoordinator = createMockRebalanceCoordinator();
-
-      const heartbeatSvc = new HeartbeatService({
-        nodeId: 'control-plane-node',
-        nodeAddress: 'ws://control-plane-node:9000',
-        cdcIntegrationService: cdcService,
-        systemTableCache: leaderCache,
-      });
-      heartbeatSvc.initialize();
+      const controlPlaneSystemTableGateway =
+        createCacheControlPlaneGateway(leaderCache);
+      const nodeLeaseOwner = {
+        async disconnectNodeDueToLeaseExpiry(node, writeNow) {
+          return cdcService.updateSystemTableRow(
+            SYSTEM_TABLE_NAME.NODES,
+            {
+              node_id: node.node_id,
+              ready_lease_expires_at: node.ready_lease_expires_at,
+              last_heartbeat: node.last_heartbeat || writeNow,
+            },
+            {
+              connection_state: STATE.DISCONNECTED,
+              ready_lease_expires_at: null,
+              updated_at: writeNow,
+            },
+          );
+        },
+      };
 
       const leaseSvc = new LeaseService({
         nodeId: 'control-plane-node',
-        nodeLeaseOwner: heartbeatSvc,
+        nodeLeaseOwner,
+        controlPlaneSystemTableGateway,
         systemTableCache: leaderCache,
         sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
+        messageGroupServices: new Set([messageGroup]),
+        now: () => sweepNow,
       });
       leaseSvc.initialize();
 
-      const endpointGateway = new ControlPlaneSystemTableGateway({
-        nodeId: 'control-plane-node',
-        sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
-        cdcIntegrationService: cdcService,
-        messageRouter,
-      });
-      const endpointSvc = new EndpointService({
-        nodeId: 'control-plane-node',
-        serviceEndpointsOwner: createSystemMetadataOwners({
-          controlPlaneSystemTableGateway: endpointGateway,
-          systemTableCache: leaderCache,
-        }).serviceEndpointsOwner,
-        controlPlaneSystemTableGateway: endpointGateway,
-      });
-      endpointSvc.initialize();
-
-      const dispatchSvc = new ReplicaDispatchService({
-        nodeId: 'control-plane-node',
-        messageRouter,
-        cdcIntegrationService: cdcService,
-        systemTableCache: leaderCache,
-        rebalanceCoordinator: mockCoordinator,
-        sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
-      });
-      dispatchSvc.initialize();
-
-      dispatchSvc.attachMessageGroupService(messageGroup);
-      leaseSvc.messageGroupServices.add(messageGroup);
-
-      // Wait for lease to expire
-      await new Promise((r) => setTimeout(r, 40));
-
       // Manually trigger lease sweep
-      await leaseSvc.sweepExpiredLeases();
+      const expiredIds = await leaseSvc.sweepExpiredLeases();
+      t.same(expiredIds, [nodeId], 'lease sweep should process the expired node');
 
       // Leader cache should have node marked as disconnected
       const leaderNode = leaderCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
@@ -936,10 +1064,7 @@ test('Membership Consistency Integration Tests', async (t) => {
       t.equal(followerNodeAfter.connection_state, STATE.DISCONNECTED,
         'follower should see disconnected after CDC propagation');
 
-      heartbeatSvc.stop();
       leaseSvc.stop();
-      endpointSvc.stop();
-      dispatchSvc.stop();
     } finally {
       cdcService.cleanup();
     }
@@ -1361,6 +1486,14 @@ test('Membership Consistency Integration Tests', async (t) => {
           ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
         }),
       );
+      const failingNodeVisible = await _waitFor(() =>
+        Boolean(systemTableCache.get(SYSTEM_TABLE_NAME.NODES, 'failing-node')),
+      );
+      t.equal(
+        failingNodeVisible,
+        true,
+        'failing node should be visible in cache before detector runs',
+      );
 
       const cdcUpdates = [];
       const trackingCdcService = {
@@ -1371,13 +1504,31 @@ test('Membership Consistency Integration Tests', async (t) => {
         },
         async insertSystemTableRow(tableName, data) {
           cdcUpdates.push({type: 'insert', tableName, data, time: Date.now()});
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
+            systemTableCache.applySystemTableChange(
+              tableName,
+              CDC_OPERATIONS.INSERT,
+              data,
+            );
+            return {
+              success: true,
+              operation: 'INSERT',
+              tableName,
+              data,
+              affectedRows: 1,
+              partitionResult: {affectedRows: 1},
+            };
+          }
           return cdcService.insertSystemTableRow(tableName, data);
         },
       };
+      const controlPlaneSystemTableGateway =
+        createCacheControlPlaneGateway(systemTableCache, trackingCdcService);
 
       const detector = new FailureDetector({
         systemTableCache,
         cdcIntegrationService: trackingCdcService,
+        controlPlaneSystemTableGateway,
         nodeId: seedNodeId,
       });
       detector.initialize();
@@ -1385,6 +1536,14 @@ test('Membership Consistency Integration Tests', async (t) => {
       detector.suspicionThresholdMs = TEST_TIMEOUTS.SUSPICION_THRESHOLD;
       detector.failureThresholdMs = TEST_TIMEOUTS.FAILURE_THRESHOLD;
       detector.currentFailureThreshold = TEST_TIMEOUTS.FAILURE_THRESHOLD;
+      const detectorNodes = await detector.getNodes();
+      const detectorSeesFailingNode = detectorNodes
+        .some((node) => node.node_id === 'failing-node');
+      t.equal(
+        detectorSeesFailingNode,
+        true,
+        'detector should see failing node before concurrent health check starts',
+      );
 
       // Simultaneously: detect failure AND add new node
       const failurePromise = detector.checkNodeHealth();
@@ -1410,14 +1569,18 @@ test('Membership Consistency Integration Tests', async (t) => {
       // the local cache may not complete when latency topology
       // services are not fully initialized.
       const sqlEngine = cdcService.sqlQueryEngine;
-      const failingNodeResult = await sqlEngine.executeQuery(
-        'SELECT * FROM nodes WHERE node_id = ?',
-        ['failing-node'],
-      );
-      const failingNodeRow = failingNodeResult.rows?.[0];
+      let failingNodeRow = null;
+      const failureObserved = await _waitFor(async () => {
+        const failingNodeResult = await sqlEngine.executeQuery(
+          'SELECT * FROM nodes WHERE node_id = ?',
+          ['failing-node'],
+        );
+        failingNodeRow = failingNodeResult.rows?.[0] || null;
+        return failingNodeRow?.status === NODE_STATUS.FAILED;
+      }, TEST_TIMEOUTS.TEST_TIMEOUT, 20);
       t.equal(
-        failingNodeRow?.status, NODE_STATUS.FAILED,
-        'failing node should be marked as failed',
+        failureObserved, true,
+        `failing node should be marked as failed; row=${JSON.stringify(failingNodeRow)}`,
       );
 
       detector.shutdown();

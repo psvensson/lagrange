@@ -206,6 +206,7 @@ function createMockDispatchService(options = {}) {
   };
 
   const mockCoordinator = {
+    isOperationLocallyOwned: () => true,
     claimDispatchTransition: async (opId) => {
       tracking.claimCalled = true;
       tracking.claimOperationId = opId;

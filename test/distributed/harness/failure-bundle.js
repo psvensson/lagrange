@@ -3,6 +3,14 @@ import {join, relative, resolve} from 'node:path';
 import {ENTRYPOINT_LOG_MSG} from '../../../src/constants/entrypoint.js';
 import {classifyActiveGateClosureWitness} from './active-gate-closure-classification.js';
 import {
+  ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE,
+  ACTIVE_GATE_READINESS_DELAY_CAUSE_REACHABILITY_TIMEOUT,
+  ACTIVE_GATE_READINESS_DELAY_CAUSE_SNAPSHOT_TIMEOUT,
+  ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_RECOVERABLE,
+  ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_TERMINAL,
+  STARTUP_READINESS_MODE_STARTUP,
+} from './startup-readiness-evidence.js';
+import {
   PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
@@ -31,6 +39,7 @@ const LOG_TAIL_LINE_COUNT = 20;
 const MARKDOWN_SECTION_BREAK = '\n\n';
 const UNKNOWN_VALUE = 'unknown';
 const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
+const READINESS_FAILURE_CLASS_NO_PROGRESS = 'no_progress_terminal';
 const NODE_DIAGNOSTICS_TRACE_LIMIT = 5;
 const NODE_ID_ERROR_PATTERN = /\bnode=([a-z0-9._:-]+)\b/gi;
 const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
@@ -241,6 +250,239 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizeActiveGateReadinessDelay(rawDelay = null) {
+  if (!isRecord(rawDelay)) {
+    return null;
+  }
+  const normalized = {
+    timedOut: rawDelay.timedOut === true,
+    cause: typeof rawDelay.cause === 'string' ? rawDelay.cause.trim() : null,
+    source: typeof rawDelay.source === 'string' ? rawDelay.source.trim() : null,
+    recoverability: typeof rawDelay.recoverability === 'string' ?
+      rawDelay.recoverability.trim() :
+      null,
+    error: typeof rawDelay.error === 'string' ? rawDelay.error.trim() : null,
+  };
+  if (
+    normalized.timedOut === false &&
+    normalized.cause === null &&
+    normalized.source === null &&
+    normalized.recoverability === null &&
+    normalized.error === null
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function appendActiveGateReadinessDelaySignals(signals = [], delay = null) {
+  if (!Array.isArray(signals)) {
+    return [];
+  }
+  const normalized = normalizeActiveGateReadinessDelay(delay);
+  if (!normalized) {
+    return signals;
+  }
+  signals.push(
+    'activeGateReadinessDelay=' +
+      (normalized.timedOut === true ? 'timeout' : 'none'),
+  );
+  if (normalized.cause && normalized.cause !== ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE) {
+    signals.push('activeGateReadinessCause=' + normalized.cause);
+  }
+  if (normalized.recoverability) {
+    signals.push('activeGateReadinessRecoverability=' + normalized.recoverability);
+  }
+  if (normalized.source) {
+    signals.push('activeGateReadinessDelaySource=' + normalized.source);
+  }
+  return signals;
+}
+
+function appendReadinessFailureSignals(signals = [], readinessFailure = null) {
+  const normalized = normalizeReadinessFailure(readinessFailure);
+  if (!normalized) {
+    return signals;
+  }
+  if (normalized.classCode) {
+    signals.push('activeGateReadinessClass=' + normalized.classCode);
+  }
+  if (normalized.recoverability) {
+    signals.push('activeGateReadinessRecoverability=' + normalized.recoverability);
+  }
+  if (normalized.mode) {
+    signals.push('activeGateReadinessMode=' + normalized.mode);
+  }
+  if (Number.isInteger(normalized.progressSignal?.attemptsSinceProgress)) {
+    signals.push(
+      'activeGateReadinessProgressAttemptsSince=' +
+        String(normalized.progressSignal.attemptsSinceProgress),
+    );
+  }
+  if (Number.isInteger(normalized.progressSignal?.maxAttempts)) {
+    signals.push(
+      'activeGateReadinessProgressMaxAttempts=' +
+        String(normalized.progressSignal.maxAttempts),
+    );
+  }
+  if (normalized.terminalReason) {
+    signals.push('activeGateReadinessTerminalReason=' + normalized.terminalReason);
+  }
+  return signals;
+}
+
+function normalizeReadinessFailure(rawReadinessFailure = null) {
+  if (!isRecord(rawReadinessFailure)) {
+    return null;
+  }
+  const progressSignal = isRecord(rawReadinessFailure.progressSignal) ?
+    rawReadinessFailure.progressSignal :
+    null;
+  const normalized = {
+    mode: typeof rawReadinessFailure.mode === 'string' &&
+      rawReadinessFailure.mode.length > ZERO ?
+      rawReadinessFailure.mode :
+      null,
+    classCode: typeof rawReadinessFailure.classCode === 'string' &&
+      rawReadinessFailure.classCode.length > ZERO ?
+      rawReadinessFailure.classCode :
+      null,
+    recoverability: typeof rawReadinessFailure.recoverability === 'string' &&
+      rawReadinessFailure.recoverability.length > ZERO ?
+      rawReadinessFailure.recoverability :
+      null,
+    progressSignal: isRecord(progressSignal) ? {
+      attemptsSinceProgress: Number.isInteger(progressSignal.attemptsSinceProgress) ?
+        Math.max(ZERO, progressSignal.attemptsSinceProgress) :
+        null,
+      maxAttempts: Number.isInteger(progressSignal.maxAttempts) &&
+        progressSignal.maxAttempts > ZERO ?
+        Math.max(ZERO, progressSignal.maxAttempts) :
+        null,
+      stalled: progressSignal.stalled === true,
+    } : null,
+    terminalReason: typeof rawReadinessFailure.terminalReason === 'string' &&
+      rawReadinessFailure.terminalReason.length > ZERO ?
+      rawReadinessFailure.terminalReason :
+      null,
+    source: typeof rawReadinessFailure.source === 'string' &&
+      rawReadinessFailure.source.length > ZERO ?
+      rawReadinessFailure.source :
+      null,
+    cause: typeof rawReadinessFailure.cause === 'string' &&
+      rawReadinessFailure.cause.length > ZERO ?
+      rawReadinessFailure.cause :
+      null,
+    error: typeof rawReadinessFailure.error === 'string' &&
+      rawReadinessFailure.error.length > ZERO ?
+      rawReadinessFailure.error :
+      null,
+  };
+  if (
+    normalized.classCode === null &&
+    normalized.recoverability === null &&
+    normalized.terminalReason === null &&
+    normalized.source === null &&
+    normalized.cause === null &&
+    normalized.error === null
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function resolveReadinessFailure(controlPlane = {}) {
+  const activeGateNoProgress = controlPlane?.activeGateNoProgress &&
+    typeof controlPlane.activeGateNoProgress === 'object' ?
+    controlPlane.activeGateNoProgress :
+    null;
+  const explicit = normalizeReadinessFailure(
+    activeGateNoProgress?.readinessFailure || null,
+  );
+  if (explicit) {
+    return explicit;
+  }
+  const readinessDelay = normalizeActiveGateReadinessDelay(
+    activeGateNoProgress?.readinessDelay ||
+      controlPlane?.activeGateProgress?.readinessDelay ||
+      controlPlane?.activeGateBestProgress?.readinessDelay ||
+      activeGateNoProgress?.currentProgress?.readinessDelay ||
+      null,
+  );
+  if (!isRecord(activeGateNoProgress) &&
+      !readinessDelay) {
+    return null;
+  }
+  const attemptsSinceProgress = Number.isInteger(
+    activeGateNoProgress?.attemptsSinceProgress,
+  ) ? Math.max(ZERO, activeGateNoProgress.attemptsSinceProgress) : null;
+  const maxAttempts = Number.isInteger(activeGateNoProgress?.maxAttempts) &&
+    activeGateNoProgress.maxAttempts > ZERO ?
+    Math.max(ZERO, activeGateNoProgress.maxAttempts) :
+    null;
+  const stalled = activeGateNoProgress?.stalled === true;
+  const reasonCode = activeGateNoProgress?.reasonCode;
+  const classCode = readinessDelay &&
+    readinessDelay.timedOut === true &&
+    readinessDelay.cause !== ACTIVE_GATE_READINESS_DELAY_CAUSE_NONE ?
+    readinessDelay.cause :
+    (stalled || reasonCode === NO_PROGRESS_REASON_CODE ?
+      READINESS_FAILURE_CLASS_NO_PROGRESS :
+      null);
+  return normalizeReadinessFailure({
+    mode: activeGateNoProgress?.mode || null,
+    classCode,
+    recoverability: readinessDelay?.recoverability || null,
+    progressSignal: {
+      attemptsSinceProgress,
+      maxAttempts,
+      stalled,
+    },
+    terminalReason: typeof reasonCode === 'string' &&
+      reasonCode.length > ZERO ?
+      reasonCode :
+      null,
+    source: readinessDelay?.source || null,
+    cause: readinessDelay?.cause || null,
+    error: readinessDelay?.error || null,
+  });
+}
+
+function resolveReadinessFailureGuidance(readinessFailure = null) {
+  if (!isRecord(readinessFailure) ||
+      readinessFailure.classCode === null) {
+    return {
+      failureAction: null,
+      operatorRecommendation: null,
+    };
+  }
+  if (readinessFailure.classCode === ACTIVE_GATE_READINESS_DELAY_CAUSE_SNAPSHOT_TIMEOUT ||
+      readinessFailure.classCode ===
+        ACTIVE_GATE_READINESS_DELAY_CAUSE_REACHABILITY_TIMEOUT) {
+    if (readinessFailure.recoverability ===
+      ACTIVE_GATE_READINESS_DELAY_RECOVERABILITY_RECOVERABLE) {
+      return {
+        failureAction: 'Probe delay is recoverable in this path; allow bounded retry.',
+        operatorRecommendation: 'Re-run with reduced startup concurrency and watch snapshot probe latencies.',
+      };
+    }
+    return {
+      failureAction: 'Snapshot/reachability timeout is blocking convergence.',
+      operatorRecommendation: 'Inspect snapshot query latency, admin readiness, and host/network stability before rerun.',
+    };
+  }
+  if (readinessFailure.classCode === READINESS_FAILURE_CLASS_NO_PROGRESS) {
+    return {
+      failureAction: 'Convergence has stopped progressing within configured guarantees.',
+      operatorRecommendation: 'Inspect publication convergence blockers and topology readiness evidence before retry.',
+    };
+  }
+  return {
+    failureAction: 'Readiness convergence issue requires triage.',
+    operatorRecommendation: 'Collect active-gate diagnostics and follow triage priorities before rerun.',
+  };
+}
+
 function normalizeNonNegativeCount(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) {
@@ -368,6 +610,9 @@ function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
   }
   if (snapshot?.planner?.ready === true) {
     return PRIORITY_RECOVERY_SEMANTIC_STATE.CONVERGED;
+  }
+  if (snapshot?.spreadCompletion?.satisfied === true) {
+    return PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
   }
   if (Number(snapshot?.coordinator?.operationCount) > ZERO ||
       (typeof snapshot?.operationId === 'string' &&
@@ -1559,6 +1804,10 @@ function buildPlaybackControlPlaneFallback(events) {
     typeof selectedActiveGateDetails.activeGateBestProgress === 'object' ?
     cloneJsonValue(selectedActiveGateDetails.activeGateBestProgress) :
     null;
+  const activeGateAdmissionState =
+    isRecord(selectedActiveGateDetails.activeGateAdmissionState) ?
+      cloneJsonValue(selectedActiveGateDetails.activeGateAdmissionState) :
+      null;
   const activeGateNoProgress = selectedActiveGateDetails.activeGateNoProgress &&
     typeof selectedActiveGateDetails.activeGateNoProgress === 'object' ?
     cloneJsonValue(selectedActiveGateDetails.activeGateNoProgress) :
@@ -1612,6 +1861,7 @@ function buildPlaybackControlPlaneFallback(events) {
     activeGateSnapshotCoverage: snapshotCoverage,
     activeGateProgress,
     activeGateBestProgress,
+    activeGateAdmissionState,
     activeGateNoProgress,
     activeGateBlockerHistory,
     priorityRecoveryDecisionSnapshots,
@@ -2811,9 +3061,27 @@ function buildPublicationConvergenceSummary(controlPlane) {
   const priorityRecoveryInvariants = normalizePriorityRecoveryInvariants(
     controlPlane?.priorityRecoveryInvariants,
   );
+  const hasActiveGatePublicationEvidence =
+    (
+      controlPlane?.publicationConvergenceGate &&
+      typeof controlPlane.publicationConvergenceGate === 'object'
+    ) ||
+    (
+      controlPlane?.activeGateProgress &&
+      typeof controlPlane.activeGateProgress === 'object'
+    ) ||
+    (
+      controlPlane?.activeGateBestProgress &&
+      typeof controlPlane.activeGateBestProgress === 'object'
+    ) ||
+    (
+      controlPlane?.activeGateNoProgress &&
+      typeof controlPlane.activeGateNoProgress === 'object'
+    );
   if (!publicationConvergence &&
       !priorityRecoveryDecisionSnapshotSummary &&
-      !priorityRecoveryInvariants) {
+      !priorityRecoveryInvariants &&
+      !hasActiveGatePublicationEvidence) {
     return null;
   }
   const pendingAckNodeIds = Array.isArray(publicationConvergence?.pendingAckNodeIds) ?
@@ -2846,6 +3114,20 @@ function buildPublicationConvergenceSummary(controlPlane) {
       .map((reason) => String(reason || '').trim())
       .filter((reason) => reason.length > ZERO) :
     [];
+  const recoveryProtocolState =
+    typeof publicationConvergence?.recoveryProtocolState === 'string' ?
+      publicationConvergence.recoveryProtocolState :
+      (typeof publicationConvergence?.membershipLifecycleSummary
+        ?.recoveryProtocolState === 'string' ?
+        publicationConvergence.membershipLifecycleSummary
+          .recoveryProtocolState :
+        null);
+  const priorityRecoveryReasonCodes = normalizeDistinctStringArray(
+    Array.isArray(publicationConvergence?.priorityRecoveryReasonCodes) ?
+      publicationConvergence.priorityRecoveryReasonCodes :
+      publicationConvergence?.membershipLifecycleSummary
+        ?.recoveryProtocolReasonCodes,
+  );
   const priorityPartitionSummary = publicationConvergence?.priorityPartitionSummary &&
     typeof publicationConvergence.priorityPartitionSummary === 'object' ?
     publicationConvergence.priorityPartitionSummary :
@@ -2855,9 +3137,16 @@ function buildPublicationConvergenceSummary(controlPlane) {
       null);
   const prioritySpreadPending = gateReasons.includes(
     'priority_control_plane_spread_pending',
-  ) || (
+  ) || priorityRecoveryReasonCodes.includes(
+    'priority_partitions_not_spread',
+  ) || recoveryProtocolState === 'priority_spread_pending' || (
     priorityPartitionSummary &&
     priorityPartitionSummary.satisfied === false
+  );
+  const publicationPending = priorityRecoveryReasonCodes.includes(
+    'publication_epoch_pending',
+  ) || (
+    recoveryProtocolState === 'publication_pending'
   );
   const membershipProjectionDiagnostics =
     publicationConvergence?.membershipLifecycleSummary?.projectionDiagnostics &&
@@ -2919,6 +3208,13 @@ function buildPublicationConvergenceSummary(controlPlane) {
       typeof controlPlane.activeGateNoProgress === 'object' ?
       controlPlane.activeGateNoProgress :
       null;
+  const activeGateReadinessDelay = normalizeActiveGateReadinessDelay(
+    activeGateNoProgress?.readinessDelay ||
+      activeGateProgress?.readinessDelay ||
+      activeGateBestProgress?.readinessDelay ||
+      activeGateNoProgress?.currentProgress?.readinessDelay ||
+      null,
+  );
   const activeGateBlockerHistory =
     Array.isArray(controlPlane?.activeGateBlockerHistory) ?
       controlPlane.activeGateBlockerHistory :
@@ -2976,6 +3272,8 @@ function buildPublicationConvergenceSummary(controlPlane) {
       missingPublishedCount: Array.isArray(
         publicationConvergenceGate?.missingPublishedNodeIds,
       ) ? publicationConvergenceGate.missingPublishedNodeIds.length : ZERO,
+      recoveryProtocolState,
+      priorityRecoveryReasonCodes,
       gateReasons,
       prioritySpreadSatisfied:
         priorityPartitionSummary?.satisfied === true ?
@@ -2986,6 +3284,7 @@ function buildPublicationConvergenceSummary(controlPlane) {
     progressSnapshot: closureProgressSnapshot,
     publicationConvergence,
     publicationConvergenceGate,
+    readinessMode: activeGateNoProgress?.mode || null,
   });
   return {
     publicationEpoch: publicationConvergence?.publicationEpoch ?? null,
@@ -3000,11 +3299,15 @@ function buildPublicationConvergenceSummary(controlPlane) {
     ) ? publicationConvergence.publishedActiveNodeIds : [],
     publishedAt: publicationConvergence?.publishedAt || null,
     updatedAt: publicationConvergence?.updatedAt || null,
+    recoveryProtocolState,
+    priorityRecoveryReasonCodes,
+    publicationPending,
     prioritySpreadPending,
     publicationConvergenceGateReasons: gateReasons,
     activeGateProgress,
     activeGateBestProgress,
     activeGateNoProgress,
+    activeGateReadinessDelay,
     activeGateBlockerHistory,
     closureRecordId: activeGateProgress?.closureRecordId ||
       activeGateBestProgress?.closureRecordId ||
@@ -3202,6 +3505,7 @@ function buildFailureClassification({
   const dominantReason = String(failure?.dominantReason || '').trim();
   const rootCauseClass = String(failure?.rootCauseClass || '').trim();
   const publicationConvergence = buildPublicationConvergenceSummary(controlPlane);
+  const readinessFailure = resolveReadinessFailure(controlPlane);
   const startupRecovery =
     controlPlane?.startupRecovery &&
       typeof controlPlane.startupRecovery === 'object' ?
@@ -3211,15 +3515,30 @@ function buildFailureClassification({
     .map((artifact) => artifact?.latestStartupDecision || null)
     .filter(Boolean)
     .slice(-1)[ZERO] || null;
+  const hasStartupReadinessBlocker =
+    readinessFailure?.mode === STARTUP_READINESS_MODE_STARTUP;
 
   if (publicationConvergence &&
       (publicationConvergence.pendingAckCount > ZERO ||
         publicationConvergence.blockedNodeCount > ZERO ||
-        publicationConvergence.prioritySpreadPending === true)) {
+        publicationConvergence.prioritySpreadPending === true ||
+        hasStartupReadinessBlocker)) {
+    appendActiveGateReadinessDelaySignals(
+      signals,
+      publicationConvergence.activeGateReadinessDelay,
+    );
+    appendReadinessFailureSignals(signals, readinessFailure);
     signals.push(
       'pendingAckCount=' + publicationConvergence.pendingAckCount,
       'blockedNodeCount=' + publicationConvergence.blockedNodeCount,
     );
+    if (typeof publicationConvergence.recoveryProtocolState === 'string' &&
+        publicationConvergence.recoveryProtocolState.length > ZERO) {
+      signals.push(
+        'recoveryProtocolState=' +
+        publicationConvergence.recoveryProtocolState,
+      );
+    }
     if (publicationConvergence.prioritySpreadPending === true) {
       signals.push('prioritySpreadPending=true');
     }
@@ -3377,6 +3696,10 @@ function buildScenarioFailureBundle({
     entry,
     logs?.firstFaultTimeline || null,
   );
+  const readinessFailure = resolveReadinessFailure(controlPlane);
+  const readinessFailureGuidance = resolveReadinessFailureGuidance(
+    readinessFailure,
+  );
   const failure = buildFailureArtifact({
     entry,
     readiness,
@@ -3421,6 +3744,10 @@ function buildScenarioFailureBundle({
       rootCauseClass: failure?.rootCauseClass || null,
       dominantReason: failure?.dominantReason || null,
       failureClassification,
+      readinessFailure,
+      failureAction: readinessFailureGuidance.failureAction,
+      operatorRecommendation:
+        readinessFailureGuidance.operatorRecommendation,
       publicationConvergence,
       bottleneckEstimate: entry?.bottleneckEstimate || null,
     },
@@ -3574,6 +3901,11 @@ function buildRoutingDiagnosticsSummary(nodeDiagnostics) {
 }
 
 function buildScenarioTriageSummary(bundleJson, links = {}) {
+  const readinessFailure =
+    bundleJson?.summary?.readinessFailure &&
+      typeof bundleJson.summary.readinessFailure === 'object' ?
+      bundleJson.summary.readinessFailure :
+      null;
   return {
     schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -3585,6 +3917,13 @@ function buildScenarioTriageSummary(bundleJson, links = {}) {
       dominantReason: bundleJson?.summary?.dominantReason || null,
       failureClass:
         bundleJson?.summary?.failureClassification?.failureClass || null,
+      failureClassSignals: Array.isArray(
+        bundleJson?.summary?.failureClassification?.signals,
+      ) ? bundleJson.summary.failureClassification.signals : [],
+      readinessFailure,
+      failureAction: bundleJson?.summary?.failureAction || null,
+      operatorRecommendation:
+        bundleJson?.summary?.operatorRecommendation || null,
       bottleneckKind: bundleJson?.summary?.bottleneckEstimate?.kind || null,
       affectedNodeIds:
         normalizeDistinctStringArray(bundleJson?.topFailures?.affectedNodeIds),
@@ -3639,6 +3978,15 @@ function renderScenarioTriageSummaryMarkdown(summary) {
     `- Root Cause Class: ${summary?.summary?.rootCauseClass || UNKNOWN_VALUE}`,
     `- Dominant Reason: ${summary?.summary?.dominantReason || UNKNOWN_VALUE}`,
     `- Failure Class: ${summary?.summary?.failureClass || UNKNOWN_VALUE}`,
+    `- Readiness Failure: ${formatReadinessFailure(summary?.summary?.readinessFailure)}`,
+    `- Failure Class Signals: ${(
+      Array.isArray(summary?.summary?.failureClassSignals) &&
+      summary.summary.failureClassSignals.length > ZERO
+    ) ? summary.summary.failureClassSignals.join('|') : UNKNOWN_VALUE}`,
+    `- Failure Action: ${summary?.summary?.failureAction || UNKNOWN_VALUE}`,
+    `- Operator Recommendation: ${
+      summary?.summary?.operatorRecommendation || UNKNOWN_VALUE
+    }`,
     `- Bottleneck: ${summary?.summary?.bottleneckKind || UNKNOWN_VALUE}`,
     '',
     '## Artifact Paths',
@@ -3907,6 +4255,55 @@ function formatActiveGateProgress(progress) {
   ].join(', ');
 }
 
+function formatActiveGateReadinessDelay(readinessDelay) {
+  const normalized = normalizeActiveGateReadinessDelay(readinessDelay);
+  if (!normalized) {
+    return UNKNOWN_VALUE;
+  }
+  const parts = [
+    'timedOut=' + String(normalized.timedOut === true),
+  ];
+  if (normalized.cause) {
+    parts.push('cause=' + normalized.cause);
+  }
+  if (normalized.recoverability) {
+    parts.push('recoverability=' + normalized.recoverability);
+  }
+  if (normalized.source) {
+    parts.push('source=' + normalized.source);
+  }
+  return parts.join(', ');
+}
+
+function formatReadinessFailure(readinessFailure) {
+  const normalized = normalizeReadinessFailure(readinessFailure);
+  if (!normalized) {
+    return UNKNOWN_VALUE;
+  }
+  const parts = [
+    'class=' + String(normalized.classCode || UNKNOWN_VALUE),
+    'mode=' + String(normalized.mode || UNKNOWN_VALUE),
+    'recoverability=' + String(normalized.recoverability || UNKNOWN_VALUE),
+  ];
+  if (normalized.source) {
+    parts.push('source=' + normalized.source);
+  }
+  if (normalized.cause) {
+    parts.push('cause=' + normalized.cause);
+  }
+  if (normalized.terminalReason) {
+    parts.push('terminalReason=' + normalized.terminalReason);
+  }
+  if (Number.isInteger(normalized.progressSignal?.attemptsSinceProgress)) {
+    const attempts = String(normalized.progressSignal.attemptsSinceProgress);
+    const maxAttempts = Number.isInteger(normalized.progressSignal?.maxAttempts) ?
+      String(normalized.progressSignal.maxAttempts) :
+      UNKNOWN_VALUE;
+    parts.push('attemptsSinceProgress=' + attempts + '/' + maxAttempts);
+  }
+  return parts.join(', ');
+}
+
 function formatReadinessDimensions(readiness) {
   const dimensions = readiness?.dimensions &&
     typeof readiness.dimensions === 'object' ?
@@ -4170,6 +4567,8 @@ function renderScenarioFailureBundleMarkdown(bundle) {
       `- Dominant Reason: ${bundle.summary.dominantReason || UNKNOWN_VALUE}`,
       '- Failure Class: ' +
         String(bundle.summary.failureClassification?.failureClass || UNKNOWN_VALUE),
+      '- Readiness Failure: ' +
+        formatReadinessFailure(bundle.summary.readinessFailure),
       `- Bottleneck: ${bundle.summary.bottleneckEstimate?.kind || UNKNOWN_VALUE}`,
       `- Report: ${bundle.reportPath || UNKNOWN_VALUE}`,
     ].join('\n'),
@@ -4290,6 +4689,10 @@ function renderScenarioFailureBundleMarkdown(bundle) {
               }).join(', ') :
               UNKNOWN_VALUE
           ),
+        '- Active Gate Readiness Delay: ' +
+          formatActiveGateReadinessDelay(
+            bundle.publicationConvergence.activeGateReadinessDelay,
+          ),
       ].join('\n'),
     );
   }
@@ -4354,6 +4757,20 @@ function renderScenarioFailureBundleMarkdown(bundle) {
             bundle.diagnostics.noProgress.lastMeaningfulChange?.message ||
             UNKNOWN_VALUE,
           ),
+        '- Readiness Failure: ' +
+          formatReadinessFailure(bundle.diagnostics.noProgress.readinessFailure),
+      ].join('\n'),
+    );
+  }
+
+  if (bundle?.summary?.failureAction || bundle?.summary?.operatorRecommendation) {
+    sections.push(
+      '## Readiness Guidance\n' +
+      [
+        '- Failure Action: ' +
+          String(bundle.summary.failureAction || UNKNOWN_VALUE),
+        '- Operator Recommendation: ' +
+          String(bundle.summary.operatorRecommendation || UNKNOWN_VALUE),
       ].join('\n'),
     );
   }
@@ -4713,6 +5130,24 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   if (isRecord(bundleJson.summary?.failureClassification)) {
     diagnostics.failureClassification = bundleJson.summary.failureClassification;
     entry.failureClassification = bundleJson.summary.failureClassification;
+  }
+
+  if (isRecord(bundleJson.summary?.readinessFailure)) {
+    diagnostics.readinessFailure = bundleJson.summary.readinessFailure;
+    entry.readinessFailure = bundleJson.summary.readinessFailure;
+  }
+
+  if (typeof bundleJson.summary?.failureAction === 'string' &&
+      bundleJson.summary.failureAction.length > ZERO) {
+    diagnostics.failureAction = bundleJson.summary.failureAction;
+    entry.failureAction = bundleJson.summary.failureAction;
+  }
+
+  if (typeof bundleJson.summary?.operatorRecommendation === 'string' &&
+      bundleJson.summary.operatorRecommendation.length > ZERO) {
+    diagnostics.operatorRecommendation =
+      bundleJson.summary.operatorRecommendation;
+    entry.operatorRecommendation = bundleJson.summary.operatorRecommendation;
   }
 
   if (isRecord(bundleJson.publicationConvergence)) {

@@ -32,6 +32,7 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   createMockControlPlaneReadinessService,
+  createMockControlPlaneSystemTableGateway,
 } from './test-helpers.js';
 
 const TEST_NODE_ID = 'convergence-node';
@@ -243,6 +244,8 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     sqlQueryEngine: sqlEngine,
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway(sqlEngine),
     storageAdmissionService: {
       checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
       checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
@@ -725,10 +728,15 @@ test('Owner-path convergence: all progression entry points ' +
           0,
           'shared owner key should prevent overlapping FAILED transitions',
         );
-        t.same(
-          beginCalls,
-          [`${operationId}:${WORKFLOW_STEP.FAILED}`],
+        t.equal(
+          beginCalls.length,
+          1,
           'FAILED transition should begin exactly one transaction session',
+        );
+        t.match(
+          beginCalls[0],
+          new RegExp(`^${operationId}:${WORKFLOW_STEP.FAILED}`),
+          'FAILED transition should use the shared FAILED session key',
         );
         t.same(
           recordedOwnerKeys,

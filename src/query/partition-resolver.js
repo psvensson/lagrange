@@ -5,7 +5,7 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {TABLES} from '../constants/index.js';
+import {NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {
   QUERY_AST_NODE,
   QUERY_DEFAULT_VALUE,
@@ -20,6 +20,11 @@ const KEY_CONDITION_TYPE = Object.freeze({
   EQUALS: 'equals',
   RANGE: 'range',
   IN: 'in',
+});
+
+const UNARY_OPERATOR = Object.freeze({
+  PLUS: '+',
+  MINUS: '-',
 });
 
 /**
@@ -71,7 +76,7 @@ class PartitionResolver {
    * @return {Array} Array of partition IDs to query.
    */
   resolvePartitions(tableName, whereClause, partitions, options = {}) {
-    if (!partitions || partitions.length === 0) {
+    if (!partitions || partitions.length === NUM.ZERO) {
       this.logger.warn(QUERY_LOG_MSG.NO_PARTITIONS_FOR_TABLE, {tableName});
       return [];
     }
@@ -96,7 +101,8 @@ class PartitionResolver {
       return compositeResolution.partitionIds;
     }
 
-    const primaryKey = primaryKeyColumns[0] || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
+    const primaryKey =
+      primaryKeyColumns[NUM.ZERO] || QUERY_DEFAULT_VALUE.PRIMARY_KEY;
 
     // Extract key conditions from WHERE clause
     const keyConditions = this.extractKeyConditions(
@@ -155,15 +161,17 @@ class PartitionResolver {
    * @private
    */
   resolvePrimaryKeyColumns(tableInfo, options) {
-    if (Array.isArray(options.keyColumns) && options.keyColumns.length > 0) {
+    if (Array.isArray(options.keyColumns) &&
+      options.keyColumns.length > NUM.ZERO) {
       return options.keyColumns;
     }
 
     const primaryKey = tableInfo?.primaryKey || tableInfo?.primary_key;
-    if (Array.isArray(primaryKey) && primaryKey.length > 0) {
+    if (Array.isArray(primaryKey) && primaryKey.length > NUM.ZERO) {
       return primaryKey;
     }
-    if (typeof primaryKey === 'string' && primaryKey.length > 0) {
+    if (typeof primaryKey === TYPEOF.STRING &&
+      primaryKey.length > NUM.ZERO) {
       return [primaryKey];
     }
     return [QUERY_DEFAULT_VALUE.PRIMARY_KEY];
@@ -183,7 +191,7 @@ class PartitionResolver {
     return {
       params,
       tableAliases,
-      parameterState: {nextIndex: 0},
+      parameterState: {nextIndex: NUM.ZERO},
     };
   }
 
@@ -219,7 +227,7 @@ class PartitionResolver {
           predicateShape: PREDICATE_SHAPE.SCATTER,
         };
       }
-      values.push(keyConditions.values[0]);
+      values.push(keyConditions.values[NUM.ZERO]);
     }
 
     const serializedCompositeKey = JSON.stringify(values);
@@ -252,13 +260,13 @@ class PartitionResolver {
     }
 
     try {
-      if (typeof this.systemCache.get === 'function') {
+      if (typeof this.systemCache.get === TYPEOF.FUNCTION) {
         const byPrimaryKey = this.systemCache.get(TABLES.TABLES, tableName);
         if (byPrimaryKey) {
           return byPrimaryKey;
         }
       }
-      if (typeof this.systemCache.find === 'function') {
+      if (typeof this.systemCache.find === TYPEOF.FUNCTION) {
         const found = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
@@ -266,7 +274,7 @@ class PartitionResolver {
           return found;
         }
       }
-      if (typeof this.systemCache.getAll === 'function') {
+      if (typeof this.systemCache.getAll === TYPEOF.FUNCTION) {
         const tables = this.systemCache.getAll(TABLES.TABLES) || [];
         return tables.find((table) =>
           table.table_name === tableName ||
@@ -506,7 +514,7 @@ class PartitionResolver {
       )
       .filter((v) => v !== undefined);
 
-    return conditions.values.length > 0;
+    return conditions.values.length > NUM.ZERO;
   }
 
   /**
@@ -577,24 +585,27 @@ class PartitionResolver {
     }
 
     if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      if (typeof expr.index === 'number' &&
-        expr.index >= 0 &&
+      if (typeof expr.index === TYPEOF.NUMBER &&
+        expr.index >= NUM.ZERO &&
         expr.index < resolutionContext.params.length) {
         return resolutionContext.params[expr.index];
       }
 
       const fallbackIndex = resolutionContext.parameterState.nextIndex;
-      resolutionContext.parameterState.nextIndex += 1;
+      resolutionContext.parameterState.nextIndex += NUM.ONE;
       return resolutionContext.params[fallbackIndex];
     }
 
     if (expr.type === QUERY_AST_NODE.UNARY &&
-      (expr.operator === '+' || expr.operator === '-')) {
+      (expr.operator === UNARY_OPERATOR.PLUS ||
+        expr.operator === UNARY_OPERATOR.MINUS)) {
       const operand = this.extractLiteralValue(expr.operand, resolutionContext);
       if (operand === undefined) {
         return undefined;
       }
-      return expr.operator === '-' ? -Number(operand) : Number(operand);
+      return expr.operator === UNARY_OPERATOR.MINUS ?
+        -Number(operand) :
+        Number(operand);
     }
 
     return undefined;
@@ -736,15 +747,15 @@ class PartitionResolver {
    * @private
    */
   compareValues(a, b) {
-    if (a === b) return 0;
-    if (a === null) return -1;
-    if (b === null) return 1;
+    if (a === b) return NUM.ZERO;
+    if (a === null) return NUM.NEGATIVE_ONE;
+    if (b === null) return NUM.ONE;
 
-    if (typeof a === 'string' && typeof b === 'string') {
+    if (typeof a === TYPEOF.STRING && typeof b === TYPEOF.STRING) {
       return a.localeCompare(b);
     }
 
-    if (typeof a === 'number' && typeof b === 'number') {
+    if (typeof a === TYPEOF.NUMBER && typeof b === TYPEOF.NUMBER) {
       return a - b;
     }
 
@@ -760,7 +771,7 @@ class PartitionResolver {
    * @return {string|null} Partition ID or null.
    */
   resolvePartitionForKey(tableName, keyValue, partitions) {
-    if (!partitions || partitions.length === 0) {
+    if (!partitions || partitions.length === NUM.ZERO) {
       return null;
     }
 
@@ -781,7 +792,7 @@ class PartitionResolver {
    * @return {Array} All partition IDs.
    */
   getAllPartitions(tableName, partitions) {
-    if (!partitions || partitions.length === 0) {
+    if (!partitions || partitions.length === NUM.ZERO) {
       return [];
     }
     return partitions.map((p) => p.partition_id || p.partitionId);

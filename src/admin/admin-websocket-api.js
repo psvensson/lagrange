@@ -151,6 +151,18 @@ const LOAD_LANE_SOFT_ADMISSION_REASON_CODES =
     'schema_partition_unavailable',
     'leadership_unstable',
   ]);
+const LOAD_LANE_QUERY_ADMISSION_STATE = Object.freeze({
+  ADMITTED: 'admitted',
+  BLOCKED: 'blocked',
+  SNAPSHOT_UNAVAILABLE: 'snapshot_unavailable',
+});
+const LOAD_LANE_TABLE_ADMISSION_STATE = Object.freeze({
+  BENCHMARK_BLOCKED: 'benchmark_blocked',
+  DISCOVERY_MISSING: 'local_benchmark_discovery_missing',
+  READINESS_BLOCKED: 'readiness_blocked',
+  READY: 'ready',
+  SOFT_BLOCKER_ADMITTED: 'soft_blocker_admitted',
+});
 const LOAD_LANE_VOTER_READY_REPLICA_ROLES =
   new Set([
     'leader',
@@ -168,6 +180,48 @@ const ADMIN_CACHE_OBSERVATION_TABLES =
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
+
+function buildLoadLaneQueryAdmissionSnapshot(readiness) {
+  const hasDimensions = Boolean(
+    readiness &&
+    typeof readiness === TYPEOF.OBJECT &&
+    readiness.dimensions &&
+    typeof readiness.dimensions === TYPEOF.OBJECT,
+  );
+  const reasonCodes = Array.isArray(readiness?.reasons) ?
+    readiness.reasons
+      .map((reason) => String(reason?.code || EMPTY_STRING).trim())
+      .filter((code) => code.length > NUM.ZERO) :
+    [];
+  return Object.freeze({
+    serveEligible: hasDimensions &&
+      readiness.dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+      ] === true,
+    reasonCodes,
+    hasDimensions,
+  });
+}
+
+function resolveLoadLaneQueryAdmissionState(snapshot) {
+  if (!snapshot.hasDimensions) {
+    return LOAD_LANE_QUERY_ADMISSION_STATE.SNAPSHOT_UNAVAILABLE;
+  }
+  return snapshot.serveEligible ?
+    LOAD_LANE_QUERY_ADMISSION_STATE.ADMITTED :
+    LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED;
+}
+
+function buildLoadLaneQueryAdmissionResult(snapshot, state) {
+  return Object.freeze({
+    state,
+    serveEligible: snapshot.serveEligible,
+    reasonCodes:
+      state === LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED ?
+        snapshot.reasonCodes :
+        [],
+  });
+}
 
 /**
  * Resolve control-plane readiness service from one SQL engine bundle.
@@ -1275,31 +1329,25 @@ class AdminWebSocketAPI {
     if (!this.isLoadLaneExecution(executionContext)) {
       return;
     }
-    const readiness = await this.resolveLoadLaneReadinessSnapshot();
-    if (!readiness ||
-        typeof readiness !== TYPEOF.OBJECT ||
-        !readiness.dimensions ||
-        typeof readiness.dimensions !== TYPEOF.OBJECT) {
+    const snapshot = buildLoadLaneQueryAdmissionSnapshot(
+      await this.resolveLoadLaneReadinessSnapshot(),
+    );
+    const admission = buildLoadLaneQueryAdmissionResult(
+      snapshot,
+      resolveLoadLaneQueryAdmissionState(snapshot),
+    );
+    if (admission.state !== LOAD_LANE_QUERY_ADMISSION_STATE.BLOCKED) {
       return;
     }
-    const serveEligible = readiness.dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
-    ] === true;
-    if (serveEligible) {
-      return;
-    }
-    const reasonCodes = Array.isArray(readiness.reasons) ?
-      readiness.reasons
-        .map((reason) => String(reason?.code || '').trim())
-        .filter((code) => code.length > NUM.ZERO) :
-      [];
     throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
       'serve not ready: load lane admission denied on node ' +
         this.nodeId +
-        ' (serveEligible=' + String(serveEligible) +
+        ' (serveEligible=' + String(admission.serveEligible) +
         ', reasons=' +
-        (reasonCodes.length > NUM.ZERO ? reasonCodes.join(',') : 'none') +
+        (admission.reasonCodes.length > NUM.ZERO ?
+          admission.reasonCodes.join(',') :
+          'none') +
         ')',
     );
   }
@@ -1430,6 +1478,101 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Build one canonical load-lane table-admission result.
+   * @param {string} tableName
+   * @param {string} state
+   * @param {Array<string>} reasonCodes
+   * @return {Object}
+   * @private
+   */
+  buildLoadLaneTableAdmissionResult(tableName, state, reasonCodes) {
+    return {
+      ready:
+        state === LOAD_LANE_TABLE_ADMISSION_STATE.READY ||
+        state === LOAD_LANE_TABLE_ADMISSION_STATE.SOFT_BLOCKER_ADMITTED,
+      tableName,
+      state,
+      reasonCodes,
+    };
+  }
+
+  /**
+   * Resolve one replica-scoped load-lane table-admission result from one
+   * replica readiness snapshot.
+   * @param {Object} replica
+   * @param {string} tableName
+   * @return {Object}
+   * @private
+   */
+  resolveLoadLaneReplicaAdmissionResult(replica, tableName) {
+    const benchmarkAdmission = replica?.benchmarkAdmission &&
+      typeof replica.benchmarkAdmission === TYPEOF.OBJECT ?
+      replica.benchmarkAdmission :
+      null;
+    if (benchmarkAdmission) {
+      const benchmarkAdmissionReady =
+        String(benchmarkAdmission.state || EMPTY_STRING)
+          .toLowerCase() === LOAD_LANE_TABLE_ADMISSION_STATE.READY;
+      const reasonCodes = benchmarkAdmissionReady ?
+        [] :
+        this.normalizeLoadLaneAdmissionReasonCodes(
+          benchmarkAdmission.reasons,
+          'benchmark_admission_blocked',
+        );
+      const softBlockerAdmitted =
+        !benchmarkAdmissionReady &&
+        this.shouldAdmitLoadLaneSoftBenchmarkBlockers(
+          benchmarkAdmission,
+          reasonCodes,
+        );
+      return this.buildLoadLaneTableAdmissionResult(
+        tableName,
+        benchmarkAdmissionReady && reasonCodes.length === NUM.ZERO ?
+          LOAD_LANE_TABLE_ADMISSION_STATE.READY :
+          softBlockerAdmitted ?
+            LOAD_LANE_TABLE_ADMISSION_STATE.SOFT_BLOCKER_ADMITTED :
+            LOAD_LANE_TABLE_ADMISSION_STATE.BENCHMARK_BLOCKED,
+        softBlockerAdmitted ? [] : reasonCodes,
+      );
+    }
+
+    const readiness = replica?.readiness &&
+      typeof replica.readiness === TYPEOF.OBJECT ?
+      replica.readiness :
+      null;
+    if (readiness) {
+      const benchmarkReady = readiness.benchmarkReady === true;
+      const reasonCodes = benchmarkReady ?
+        [] :
+        this.normalizeLoadLaneAdmissionReasonCodes(
+          readiness.reasons,
+          'benchmark_readiness_blocked',
+        );
+      const softBlockerAdmitted =
+        !benchmarkReady &&
+        this.shouldAdmitLoadLaneSoftReadinessBlockers(
+          readiness,
+          reasonCodes,
+        );
+      return this.buildLoadLaneTableAdmissionResult(
+        tableName,
+        benchmarkReady && reasonCodes.length === NUM.ZERO ?
+          LOAD_LANE_TABLE_ADMISSION_STATE.READY :
+          softBlockerAdmitted ?
+            LOAD_LANE_TABLE_ADMISSION_STATE.SOFT_BLOCKER_ADMITTED :
+            LOAD_LANE_TABLE_ADMISSION_STATE.READINESS_BLOCKED,
+        softBlockerAdmitted ? [] : reasonCodes,
+      );
+    }
+
+    return this.buildLoadLaneTableAdmissionResult(
+      tableName,
+      LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
+      [LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING],
+    );
+  }
+
+  /**
    * Resolve local benchmark admission for one routed load-lane table.
    * @param {string} tableName
    * @return {Object|null}
@@ -1461,11 +1604,11 @@ class AdminWebSocketAPI {
       snapshot.services :
       ADMIN_CACHE_DUMP.EMPTY;
 
-    let resolvedState = {
-      ready: false,
-      tableName: normalizedTableName,
-      reasonCodes: ['local_benchmark_discovery_missing'],
-    };
+    let resolvedState = this.buildLoadLaneTableAdmissionResult(
+      normalizedTableName,
+      LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING,
+      [LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING],
+    );
 
     for (const service of services) {
       const replicas = Array.isArray(service?.replicas) ?
@@ -1475,66 +1618,15 @@ class AdminWebSocketAPI {
         if (String(replica?.nodeId || EMPTY_STRING) !== this.nodeId) {
           continue;
         }
-        const benchmarkAdmission = replica?.benchmarkAdmission &&
-          typeof replica.benchmarkAdmission === TYPEOF.OBJECT ?
-          replica.benchmarkAdmission :
-          null;
-        if (benchmarkAdmission) {
-          const benchmarkAdmissionReady =
-            String(benchmarkAdmission.state || EMPTY_STRING)
-              .toLowerCase() === 'ready';
-          const reasonCodes = benchmarkAdmissionReady ?
-            [] :
-            this.normalizeLoadLaneAdmissionReasonCodes(
-              benchmarkAdmission.reasons,
-              'benchmark_admission_blocked',
-            );
-          const softBlockerAdmitted =
-            !benchmarkAdmissionReady &&
-            this.shouldAdmitLoadLaneSoftBenchmarkBlockers(
-              benchmarkAdmission,
-              reasonCodes,
-            );
-          resolvedState = {
-            ready:
-              (benchmarkAdmissionReady && reasonCodes.length === NUM.ZERO) ||
-              softBlockerAdmitted,
-            tableName: normalizedTableName,
-            reasonCodes: softBlockerAdmitted ? [] : reasonCodes,
-          };
-          break;
-        }
-        const readiness = replica?.readiness &&
-          typeof replica.readiness === TYPEOF.OBJECT ?
-          replica.readiness :
-          null;
-        if (readiness) {
-          const benchmarkReady = readiness.benchmarkReady === true;
-          const reasonCodes = benchmarkReady ?
-            [] :
-            this.normalizeLoadLaneAdmissionReasonCodes(
-              readiness.reasons,
-              'benchmark_readiness_blocked',
-            );
-          const softBlockerAdmitted =
-            !benchmarkReady &&
-            this.shouldAdmitLoadLaneSoftReadinessBlockers(
-              readiness,
-              reasonCodes,
-            );
-          resolvedState = {
-            ready:
-              (benchmarkReady && reasonCodes.length === NUM.ZERO) ||
-              softBlockerAdmitted,
-            tableName: normalizedTableName,
-            reasonCodes: softBlockerAdmitted ? [] : reasonCodes,
-          };
-          break;
-        }
+        resolvedState = this.resolveLoadLaneReplicaAdmissionResult(
+          replica,
+          normalizedTableName,
+        );
+        break;
       }
       if (resolvedState.ready === true ||
-          resolvedState.reasonCodes[NUM.ZERO] !==
-            'local_benchmark_discovery_missing') {
+          resolvedState.state !==
+            LOAD_LANE_TABLE_ADMISSION_STATE.DISCOVERY_MISSING) {
         break;
       }
     }

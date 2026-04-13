@@ -26,11 +26,6 @@ import {
   SERVICE_LIFECYCLE_STATE,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
-import {
-  getBootstrapMessageGroupService as selectBootstrapMessageGroupService,
-  resolveOperationalMessageGroupSelection,
-  resolveOperationalMessageGroupSelectionAsync,
-} from '../shared/message-group-selection.js';
 
 /**
  * Format missing-replica assertion message for bootstrap lifecycle.
@@ -339,10 +334,7 @@ class SeedMessageGroupsPhase {
    */
   resolveOperationalMessageGroupSelection(options = {}) {
     const d = this.delegates;
-    return resolveOperationalMessageGroupSelection(
-      d.getMessageGroupServices(),
-      options,
-    );
+    return d.resolveOperationalMessageGroupSelection(options);
   }
 
   /**
@@ -354,10 +346,7 @@ class SeedMessageGroupsPhase {
    */
   async resolveOperationalMessageGroupSelectionAsync(options = {}) {
     const d = this.delegates;
-    return resolveOperationalMessageGroupSelectionAsync(
-      d.getMessageGroupServices(),
-      options,
-    );
+    return d.resolveOperationalMessageGroupSelectionAsync(options);
   }
 
   /**
@@ -367,9 +356,7 @@ class SeedMessageGroupsPhase {
    */
   getBootstrapMessageGroupService() {
     const d = this.delegates;
-    return selectBootstrapMessageGroupService(
-      d.getMessageGroupServices(),
-    );
+    return d.getBootstrapMessageGroupService();
   }
 }
 

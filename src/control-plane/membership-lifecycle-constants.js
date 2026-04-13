@@ -18,6 +18,25 @@ const MEMBERSHIP_MEMBER_STATE = Object.freeze({
   RETIRED: 'retired',
 });
 
+const NODE_PARTICIPATION_STATE = Object.freeze({
+  INACTIVE: 'inactive',
+  JOINING: 'joining',
+  CATCHING_UP: 'catching_up',
+  OBSERVED_PENDING_PUBLISH: 'observed_pending_publish',
+  RECOVERY_PENDING_PUBLISH: 'recovery_pending_publish',
+  PUBLISHED_ACTIVE: 'published_active',
+  SUSPECTED: 'suspected',
+  DRAINING: 'draining',
+  RETIRED: 'retired',
+});
+
+const RECOVERY_PROTOCOL_STATE = Object.freeze({
+  UNPUBLISHED_OBSERVATION: 'unpublished_observation',
+  PUBLICATION_PENDING: 'publication_pending',
+  PRIORITY_SPREAD_PENDING: 'priority_spread_pending',
+  STEADY_PUBLISHED: 'steady_published',
+});
+
 const MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS = Object.freeze({
   [MEMBERSHIP_LIFECYCLE_STATE.ABSENT]: Object.freeze([
     MEMBERSHIP_LIFECYCLE_STATE.ADMITTED,
@@ -79,6 +98,20 @@ function normalizeMembershipMemberState(value) {
     null;
 }
 
+function normalizeNodeParticipationState(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return Object.values(NODE_PARTICIPATION_STATE).includes(normalized) ?
+    normalized :
+    null;
+}
+
+function normalizeRecoveryProtocolState(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return Object.values(RECOVERY_PROTOCOL_STATE).includes(normalized) ?
+    normalized :
+    null;
+}
+
 function normalizeNodeIdList(values = []) {
   return normalizeStringList(values);
 }
@@ -102,6 +135,67 @@ function normalizeStringMap(values = {}) {
       if (normalizedValue) {
         accumulator[key] = normalizedValue;
       }
+      return accumulator;
+    }, {});
+}
+
+function normalizeParticipationByNodeId(values = {}) {
+  if (!values || typeof values !== 'object') {
+    return {};
+  }
+  return Object.keys(values)
+    .sort()
+    .reduce((accumulator, nodeId) => {
+      const participation = values[nodeId];
+      const state = normalizeNodeParticipationState(
+        participation?.state || participation,
+      );
+      if (!state) {
+        return accumulator;
+      }
+      const memberState = normalizeMembershipMemberState(
+        participation?.memberState,
+      );
+      const reasons = normalizeStringList(participation?.reasons);
+      accumulator[nodeId] = Object.freeze({
+        nodeId,
+        state,
+        memberState,
+        durable: participation?.durable === true,
+        publishedActive: participation?.publishedActive === true,
+        recoveryActive: participation?.recoveryActive === true,
+        projectedServing: participation?.projectedServing === true,
+        locallyEligible: participation?.locallyEligible === true,
+        suspectedOrTransitioning:
+          participation?.suspectedOrTransitioning === true,
+        recoverySource:
+          typeof participation?.recoverySource === 'string' &&
+            participation.recoverySource.trim().length > 0 ?
+            participation.recoverySource.trim() :
+            null,
+        recoveryEpoch:
+          typeof participation?.recoveryEpoch === 'string' &&
+            participation.recoveryEpoch.trim().length > 0 ?
+            participation.recoveryEpoch.trim() :
+            null,
+        reasons: Object.freeze(reasons),
+      });
+      return accumulator;
+    }, {});
+}
+
+function normalizeParticipationStateCounts(values = {}) {
+  if (!values || typeof values !== 'object') {
+    return {};
+  }
+  return Object.keys(values)
+    .reduce((accumulator, state) => {
+      const normalizedState = normalizeNodeParticipationState(state);
+      const count = Number(values[state]);
+      if (!normalizedState || !Number.isFinite(count) || count <= 0) {
+        return accumulator;
+      }
+      accumulator[normalizedState] = Math.trunc(count);
       return accumulator;
     }, {});
 }
@@ -149,6 +243,25 @@ function buildMembershipLifecycleSummary(options = {}) {
     options.locallyEligibleNodeIds?.length ?
       options.locallyEligibleNodeIds :
       projectedServingNodeIds,
+  );
+  const recoveryActiveNodeIds = normalizeNodeIdList(
+    options.recoveryActiveNodeIds?.length ?
+      options.recoveryActiveNodeIds :
+      locallyEligibleNodeIds.length > 0 ?
+        locallyEligibleNodeIds :
+        projectedServingNodeIds,
+  );
+  const recoveryActiveNodeSource =
+    typeof options.recoveryActiveNodeSource === 'string' &&
+      options.recoveryActiveNodeSource.trim().length > 0 ?
+      options.recoveryActiveNodeSource.trim() :
+      null;
+  const missingPublishedRecoveryActiveNodeIds = normalizeNodeIdList(
+    options.missingPublishedRecoveryActiveNodeIds?.length ?
+      options.missingPublishedRecoveryActiveNodeIds :
+      recoveryActiveNodeIds.filter((nodeId) =>
+        !publishedActiveNodeIds.includes(nodeId),
+      ),
   );
   const suspectedOrTransitioningNodeIds = normalizeNodeIdList(
     options.suspectedOrTransitioningNodeIds,
@@ -221,16 +334,31 @@ function buildMembershipLifecycleSummary(options = {}) {
         recoveryEligibleIncludedNodeIds: Object.freeze(normalizeNodeIdList(
           options.projectionDiagnostics.recoveryEligibleIncludedNodeIds,
         )),
+        livenessFallbackIncludedNodeIds: Object.freeze(normalizeNodeIdList(
+          options.projectionDiagnostics.livenessFallbackIncludedNodeIds,
+        )),
         readinessExcludedNodeIds: Object.freeze(normalizeNodeIdList(
           options.projectionDiagnostics.readinessExcludedNodeIds,
         )),
         clusterMemberUnhealthyExcludedNodeIds:
           Object.freeze(normalizeNodeIdList(
-            options.projectionDiagnostics
+          options.projectionDiagnostics
               .clusterMemberUnhealthyExcludedNodeIds,
           )),
       }) :
       null;
+  const participationByNodeId = Object.freeze(
+    normalizeParticipationByNodeId(options.participationByNodeId),
+  );
+  const participationStateCounts = Object.freeze(
+    normalizeParticipationStateCounts(options.participationStateCounts),
+  );
+  const recoveryProtocolState = normalizeRecoveryProtocolState(
+    options.recoveryProtocolState,
+  );
+  const recoveryProtocolReasonCodes = Object.freeze(
+    normalizeStringList(options.recoveryProtocolReasonCodes),
+  );
 
   return Object.freeze({
     lifecycleState,
@@ -238,11 +366,18 @@ function buildMembershipLifecycleSummary(options = {}) {
     publishedActiveNodeIds,
     projectedServingNodeIds,
     locallyEligibleNodeIds,
+    recoveryActiveNodeIds,
+    recoveryActiveNodeSource,
+    missingPublishedRecoveryActiveNodeIds,
     suspectedOrTransitioningNodeIds,
     memberStatesByNodeId: Object.freeze({...memberStatesByNodeId}),
     recoveryEpochByNodeId: Object.freeze({...recoveryEpochByNodeId}),
     membershipFreeze,
     projectionDiagnostics,
+    participationByNodeId,
+    participationStateCounts,
+    recoveryProtocolState,
+    recoveryProtocolReasonCodes,
   });
 }
 
@@ -251,9 +386,13 @@ export {
   MEMBERSHIP_MEMBER_STATE,
   MEMBERSHIP_LIFECYCLE_STATE,
   MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS,
+  NODE_PARTICIPATION_STATE,
+  RECOVERY_PROTOCOL_STATE,
   buildMembershipLifecycleSummary,
   isValidMembershipLifecycleTransition,
   normalizeMembershipLifecycleEpochBoundary,
   normalizeMembershipMemberState,
   normalizeMembershipLifecycleState,
+  normalizeNodeParticipationState,
+  normalizeRecoveryProtocolState,
 };

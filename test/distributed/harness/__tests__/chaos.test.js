@@ -157,7 +157,8 @@ test('unpauseNode delegates to dockerProvider.unpauseContainer', async () => {
   assert.strictEqual(provider.calls[0].args[0], 'container-aaa');
 });
 
-test('restartNode republishes main-network alias after restart', async () => {
+test('restartNode preserves main-network alias when it already exists',
+  async () => {
   const provider = createMockProvider();
   const nodes = createMockNodes();
   const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
@@ -168,23 +169,12 @@ test('restartNode republishes main-network alias after restart', async () => {
   assert.strictEqual(provider.calls[0].args[0], 'container-bbb');
   assert.strictEqual(provider.calls[1].method, 'inspectContainer');
   assert.strictEqual(provider.calls[1].args[0], 'container-bbb');
-  assert.strictEqual(provider.calls[2].method, 'disconnectFromNetwork');
-  assert.deepStrictEqual(provider.calls[2].args, [
-    MAIN_NETWORK_ID,
-    'container-bbb',
-  ]);
-  assert.strictEqual(provider.calls[3].method, 'connectToNetwork');
-  assert.deepStrictEqual(provider.calls[3].args, [
-    MAIN_NETWORK_ID,
-    'container-bbb',
-    ['ddb-test-reuse-3-2'],
-  ]);
-  assert.strictEqual(provider.calls[4].method, 'inspectContainer');
-  assert.strictEqual(provider.calls[4].args[0], 'container-bbb');
   assert.strictEqual(nodes.get('node-2').ip, '172.18.0.2');
+  assert.strictEqual(provider.calls.length, 2);
 });
 
-test('startNode republishes main-network alias after start', async () => {
+test('startNode preserves main-network alias when it already exists',
+  async () => {
   const provider = createMockProvider();
   const nodes = createMockNodes();
   const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
@@ -195,20 +185,8 @@ test('startNode republishes main-network alias after start', async () => {
   assert.strictEqual(provider.calls[0].args[0], 'container-bbb');
   assert.strictEqual(provider.calls[1].method, 'inspectContainer');
   assert.strictEqual(provider.calls[1].args[0], 'container-bbb');
-  assert.strictEqual(provider.calls[2].method, 'disconnectFromNetwork');
-  assert.deepStrictEqual(provider.calls[2].args, [
-    MAIN_NETWORK_ID,
-    'container-bbb',
-  ]);
-  assert.strictEqual(provider.calls[3].method, 'connectToNetwork');
-  assert.deepStrictEqual(provider.calls[3].args, [
-    MAIN_NETWORK_ID,
-    'container-bbb',
-    ['ddb-test-reuse-3-2'],
-  ]);
-  assert.strictEqual(provider.calls[4].method, 'inspectContainer');
-  assert.strictEqual(provider.calls[4].args[0], 'container-bbb');
   assert.strictEqual(nodes.get('node-2').ip, '172.18.0.2');
+  assert.strictEqual(provider.calls.length, 2);
 });
 
 test('restartNode reconnects main-network alias when missing after restart', async () => {

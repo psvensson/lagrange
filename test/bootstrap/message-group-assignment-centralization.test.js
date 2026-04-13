@@ -232,6 +232,14 @@ test('BootstrapAPI excludes non-seed MOVE_REPLICA sources during bootstrap',
       result.sourceNodeId,
       'bootstrap should not expose a remote source owner for handoff',
     );
+    t.notOk(
+      result.existingPeerIds,
+      'create-self-hosted fallback should not inherit arbitrary existing group peers',
+    );
+    t.notOk(
+      result.peerAddresses,
+      'create-self-hosted fallback should not reuse arbitrary existing group peer addresses',
+    );
   },
 );
 

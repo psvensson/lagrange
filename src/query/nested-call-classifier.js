@@ -60,6 +60,52 @@ const IN_CLAUSE_RE = /\bIN\s*\(/i;
  */
 const ANY_CLAUSE_RE = /=\s*ANY\s*\(/i;
 
+const NESTED_CALL_DECISION = Object.freeze({
+  JOIN_DETECTED: 'joinDetected',
+  SUBQUERY_DETECTED: 'subqueryDetected',
+  FULL_TABLE_SCAN: 'fullTableScan',
+  BOUNDED_IN_CLAUSE: 'boundedInClause',
+  RANGE_SCAN_NO_LIMIT: 'rangeScanNoLimit',
+  PK_POINT_LOOKUP: 'pkPointLookup',
+  INDEXED_LIMIT_QUERY: 'indexedLimitQuery',
+  CONSERVATIVE_DEFAULT: 'conservativeDefault',
+});
+
+const NESTED_CALL_OUTCOME_BY_DECISION = Object.freeze({
+  [NESTED_CALL_DECISION.JOIN_DETECTED]: Object.freeze({
+    classification: CLS.UNBOUNDED,
+    reason: REASON.JOIN_DETECTED,
+  }),
+  [NESTED_CALL_DECISION.SUBQUERY_DETECTED]: Object.freeze({
+    classification: CLS.UNBOUNDED,
+    reason: REASON.SUBQUERY_DETECTED,
+  }),
+  [NESTED_CALL_DECISION.FULL_TABLE_SCAN]: Object.freeze({
+    classification: CLS.UNBOUNDED,
+    reason: REASON.FULL_TABLE_SCAN,
+  }),
+  [NESTED_CALL_DECISION.BOUNDED_IN_CLAUSE]: Object.freeze({
+    classification: CLS.BOUNDED,
+    reason: REASON.BOUNDED_IN_CLAUSE,
+  }),
+  [NESTED_CALL_DECISION.RANGE_SCAN_NO_LIMIT]: Object.freeze({
+    classification: CLS.UNBOUNDED,
+    reason: REASON.RANGE_SCAN_NO_LIMIT,
+  }),
+  [NESTED_CALL_DECISION.PK_POINT_LOOKUP]: Object.freeze({
+    classification: CLS.BOUNDED,
+    reason: REASON.PK_POINT_LOOKUP,
+  }),
+  [NESTED_CALL_DECISION.INDEXED_LIMIT_QUERY]: Object.freeze({
+    classification: CLS.BOUNDED,
+    reason: REASON.INDEXED_LIMIT_QUERY,
+  }),
+  [NESTED_CALL_DECISION.CONSERVATIVE_DEFAULT]: Object.freeze({
+    classification: CLS.UNBOUNDED,
+    reason: REASON.CONSERVATIVE_DEFAULT,
+  }),
+});
+
 /**
  * Counts the number of parameter placeholders (?) inside the
  * first IN(...) clause of the query.
@@ -89,79 +135,33 @@ function classifyNestedCall(query) {
   }
 
   const normalized = query.trim();
-
-  // JOIN → always unbounded
-  if (JOIN_RE.test(normalized)) {
-    return {
-      classification: CLS.UNBOUNDED,
-      reason: REASON.JOIN_DETECTED,
-    };
-  }
-
-  // Subquery → always unbounded
-  if (SUBQUERY_RE.test(normalized)) {
-    return {
-      classification: CLS.UNBOUNDED,
-      reason: REASON.SUBQUERY_DETECTED,
-    };
-  }
-
+  const hasJoin = JOIN_RE.test(normalized);
+  const hasSubquery = SUBQUERY_RE.test(normalized);
   const hasWhere = WHERE_RE.test(normalized);
   const hasLimit = LIMIT_RE.test(normalized);
-
-  // No WHERE → full table scan → unbounded
-  if (!hasWhere) {
-    return {
-      classification: CLS.UNBOUNDED,
-      reason: REASON.FULL_TABLE_SCAN,
-    };
-  }
-
-  // Has WHERE — check for IN/ANY bounded batch
   const hasIn = IN_CLAUSE_RE.test(normalized);
   const hasAny = ANY_CLAUSE_RE.test(normalized);
-  if (hasIn || hasAny) {
-    const paramCount = hasIn ? countInParams(normalized) : 1;
-    if (paramCount >= 0 &&
-        paramCount <= NESTED_CALL_MAX_IN_PARAMS) {
-      return {
-        classification: CLS.BOUNDED,
-        reason: REASON.BOUNDED_IN_CLAUSE,
-      };
-    }
-  }
-
   const hasRange = RANGE_OP_RE.test(normalized);
+  const paramCount = hasIn ? countInParams(normalized) : 1;
+  const decision = hasJoin ?
+    NESTED_CALL_DECISION.JOIN_DETECTED :
+    hasSubquery ?
+      NESTED_CALL_DECISION.SUBQUERY_DETECTED :
+      !hasWhere ?
+        NESTED_CALL_DECISION.FULL_TABLE_SCAN :
+        (hasIn || hasAny) &&
+          paramCount >= 0 &&
+          paramCount <= NESTED_CALL_MAX_IN_PARAMS ?
+          NESTED_CALL_DECISION.BOUNDED_IN_CLAUSE :
+          hasRange && !hasLimit ?
+            NESTED_CALL_DECISION.RANGE_SCAN_NO_LIMIT :
+            !hasRange && !hasIn && !hasAny ?
+              NESTED_CALL_DECISION.PK_POINT_LOOKUP :
+              hasLimit ?
+                NESTED_CALL_DECISION.INDEXED_LIMIT_QUERY :
+                NESTED_CALL_DECISION.CONSERVATIVE_DEFAULT;
 
-  // Range scan without LIMIT → unbounded
-  if (hasRange && !hasLimit) {
-    return {
-      classification: CLS.UNBOUNDED,
-      reason: REASON.RANGE_SCAN_NO_LIMIT,
-    };
-  }
-
-  // WHERE with equality (no range) — likely pk/unique lookup
-  if (!hasRange && !hasIn && !hasAny) {
-    return {
-      classification: CLS.BOUNDED,
-      reason: REASON.PK_POINT_LOOKUP,
-    };
-  }
-
-  // WHERE + LIMIT → bounded indexed query
-  if (hasLimit) {
-    return {
-      classification: CLS.BOUNDED,
-      reason: REASON.INDEXED_LIMIT_QUERY,
-    };
-  }
-
-  // Conservative default
-  return {
-    classification: CLS.UNBOUNDED,
-    reason: REASON.CONSERVATIVE_DEFAULT,
-  };
+  return {...NESTED_CALL_OUTCOME_BY_DECISION[decision]};
 }
 
 export {classifyNestedCall};

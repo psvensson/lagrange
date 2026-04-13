@@ -11,8 +11,10 @@ import {MessageGroupServiceRowOwner} from
   '../message-group/message-group-service-row-owner.js';
 import {
   ENTITY_TYPE,
+  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  TYPEOF,
   WORKFLOW_STEP,
 } from '../constants/index.js';
 import {
@@ -34,7 +36,14 @@ import {
 } from './message-group-service-handler-constants.js';
 
 function isFunction(value) {
-  return typeof value === 'function';
+  return typeof value === TYPEOF.FUNCTION;
+}
+
+function buildReplicaOperationResponse(status, fields = {}) {
+  return {
+    status,
+    ...fields,
+  };
 }
 
 class MessageGroupServiceHandler extends EventEmitter {
@@ -132,13 +141,15 @@ class MessageGroupServiceHandler extends EventEmitter {
     } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
       response = await this.handleRemoveReplica(payload);
     } else {
-      response = {
-        status: ReplicaOperationResponseStatus.ERROR,
+      response = buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
         error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(
             type,
           ),
-      };
+        },
+      );
     }
 
     return {...response, correlationId};
@@ -160,12 +171,14 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS,
         {operationId, groupId, replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.ERROR,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
         error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     const existingReplica =
@@ -176,11 +189,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
         {groupId, replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        {
         replicaId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     if (existingReplica &&
@@ -189,11 +204,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
         {groupId, replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        {
         replicaId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     if (this.inProgressOperations.has(operationId)) {
@@ -201,11 +218,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
         {operationId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        {
         operationId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     let replicaOptions;
@@ -222,11 +241,13 @@ class MessageGroupServiceHandler extends EventEmitter {
           nodeId: this.nodeId,
         },
       );
-      return {
-        status: ReplicaOperationResponseStatus.ERROR,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
         error: error.message,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     this.localReplicas.set(replicaId, {
@@ -261,12 +282,14 @@ class MessageGroupServiceHandler extends EventEmitter {
       });
     });
 
-    return {
-      status: ReplicaOperationResponseStatus.INITIATED,
+    return buildReplicaOperationResponse(
+      ReplicaOperationResponseStatus.INITIATED,
+      {
       operationId,
       replicaId,
       nodeId: this.nodeId,
-    };
+      },
+    );
   }
 
   async createReplicaAsync({
@@ -357,12 +380,14 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_MISSING_FIELDS,
         {operationId, groupId, replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.ERROR,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.ERROR,
+        {
         error:
           MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.REMOVE_REQUIRED_FIELDS,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     const replica = this.getKnownLocalReplica(replicaId, groupId);
@@ -371,11 +396,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_NOT_FOUND,
         {replicaId, groupId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.NOT_FOUND,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.NOT_FOUND,
+        {
         replicaId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     if (replica.status === ReplicaStatus.REMOVING) {
@@ -383,11 +410,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_IN_PROGRESS,
         {replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        {
         replicaId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     if (replica.status === ReplicaStatus.REMOVED) {
@@ -395,11 +424,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_ALREADY_REMOVED,
         {replicaId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.COMPLETED,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.COMPLETED,
+        {
         replicaId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     if (this.inProgressOperations.has(operationId)) {
@@ -407,11 +438,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
         {operationId, nodeId: this.nodeId},
       );
-      return {
-        status: ReplicaOperationResponseStatus.IN_PROGRESS,
+      return buildReplicaOperationResponse(
+        ReplicaOperationResponseStatus.IN_PROGRESS,
+        {
         operationId,
         nodeId: this.nodeId,
-      };
+        },
+      );
     }
 
     this.inProgressOperations.set(operationId, {
@@ -444,12 +477,14 @@ class MessageGroupServiceHandler extends EventEmitter {
       });
     });
 
-    return {
-      status: ReplicaOperationResponseStatus.INITIATED,
+    return buildReplicaOperationResponse(
+      ReplicaOperationResponseStatus.INITIATED,
+      {
       operationId,
       replicaId,
       nodeId: this.nodeId,
-    };
+      },
+    );
   }
 
   async removeReplicaAsync({
@@ -627,7 +662,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       replicaIds,
       peerAddresses,
       deferElection: false,
-      createDelayMs: 0,
+      createDelayMs: NUM.ZERO,
     };
   }
 

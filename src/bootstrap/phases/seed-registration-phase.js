@@ -55,6 +55,8 @@ import {
 import {
   SeedRegistrationRuntimeOwner,
 } from '../owners/seed-registration-runtime-owner.js';
+import {createBootstrapCacheHydrationApplier} from
+  '../bootstrap-cache-hydration-applier.js';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const REGISTRATION_REQUIRED_LEADER_TABLES = Object.freeze([
@@ -317,11 +319,12 @@ class SeedRegistrationPhase {
   projectBootstrapRowToCache(tableName, row) {
     const systemTableCache =
       this.delegates.getSystemTableCache?.();
-    if (!systemTableCache ||
-      typeof systemTableCache.applySystemTableChange !== 'function') {
+    if (!systemTableCache) {
       return;
     }
-    systemTableCache.applySystemTableChange(
+    const applyBootstrapCacheHydration =
+      createBootstrapCacheHydrationApplier(systemTableCache);
+    applyBootstrapCacheHydration(
       tableName,
       'INSERT',
       row,

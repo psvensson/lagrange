@@ -31,6 +31,7 @@ import {
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-local';
 const TEST_OPERATION_ID = 'op-outcome-1';
@@ -95,6 +96,32 @@ function createTestCoordinator(options = {}) {
     ownerKeys.push(ownerKey);
     return originalRunExclusive(ownerKey, factory);
   };
+  const executeQuery = async (sql, params) => {
+    // SELECT by operation_id
+    if (sql.includes('WHERE operation_id') && operation) {
+      const opId = params?.[0];
+      if (opId === operation.operationId) {
+        return {
+          success: true,
+          rows: [operationToRow(operation)],
+        };
+      }
+    }
+    if (sql.includes('UPDATE') && operation) {
+      operation.status = params?.[0];
+      operation.workflowStep = params?.[1];
+      operation.updatedAt = params?.[2];
+      operation.completedAt = params?.[3];
+      operation.errorMessage = params?.[4];
+      operation.stepsHistory =
+        typeof params?.[5] === 'string' ?
+          JSON.parse(params[5]) :
+          operation.stepsHistory;
+      operation.replicaId = params?.[6];
+      return persistResults;
+    }
+    return {success: true, rows: []};
+  };
 
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
@@ -114,24 +141,12 @@ function createTestCoordinator(options = {}) {
       },
     },
     sqlQueryEngine: {
-      async executeQuery(sql, params) {
-        // SELECT by operation_id
-        if (sql.includes('WHERE operation_id') && operation) {
-          const opId = params?.[0];
-          if (opId === operation.operationId) {
-            return {
-              success: true,
-              rows: [operationToRow(operation)],
-            };
-          }
-        }
-        // UPDATE
-        if (sql.includes('UPDATE')) {
-          return persistResults;
-        }
-        return {success: true, rows: []};
-      },
+      executeQuery,
     },
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway({
+        executeQuery,
+      }),
     storageAccountingService: {estimateReplicaBytes: () => 1},
     storageAdmissionService: {
       async checkAdd() {
@@ -174,6 +189,18 @@ function operationToRow(op) {
   };
 }
 
+function waitForCoordinatorEvent(coordinator, eventName, timeoutMs = 2000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Timed out waiting for ${eventName}`));
+    }, timeoutMs);
+    coordinator.once(eventName, (event) => {
+      clearTimeout(timer);
+      resolve(event);
+    });
+  });
+}
+
 test('Executor outcome routing through owner-key reconcile path',
   async (t) => {
     await t.test(
@@ -186,21 +213,17 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter, ownerKeys} =
           createTestCoordinator({operation});
 
-        const routed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
-          (evt) => routed.push(evt),
-        );
-
         try {
+          const routedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.SYNCING,
           );
-
-          // Wait for the async reconcile to complete.
-          await new Promise((r) => setImmediate(r));
+          const routedEvent = await routedEventPromise;
 
           t.ok(
             ownerKeys.length > 0,
@@ -210,14 +233,13 @@ test('Executor outcome routing through owner-key reconcile path',
             ownerKeys[0].includes(TEST_OPERATION_ID),
             'owner key must contain the operationId',
           );
-          t.equal(routed.length, 1, 'one outcome should be routed');
           t.equal(
-            routed[0].action,
+            routedEvent.action,
             EXECUTOR_OUTCOME_ACTION.UPDATE_STEP,
             'action should be updateStep',
           );
           t.equal(
-            routed[0].outcomeType,
+            routedEvent.outcomeType,
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
             'outcomeType should match',
           );
@@ -237,29 +259,21 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter, ownerKeys} =
           createTestCoordinator({operation});
 
-        const completed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-          (evt) => completed.push(evt),
-        );
-
         try {
+          const completedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.ACTIVE,
           );
-
-          await new Promise((r) => setImmediate(r));
+          await completedEventPromise;
 
           t.ok(
             ownerKeys.length > 0,
             'outcome must be routed through runExclusive',
-          );
-          t.equal(
-            completed.length,
-            1,
-            'completeOperation should fire OPERATION_COMPLETED',
           );
         } finally {
           await coordinator.shutdown();
@@ -277,29 +291,21 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter} =
           createTestCoordinator({operation});
 
-        const failed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
-          (evt) => failed.push(evt),
-        );
-
         try {
+          const failedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.FAILED,
             {errorMessage: 'disk full'},
           );
+          const failedEvent = await failedEventPromise;
 
-          await new Promise((r) => setImmediate(r));
-
-          t.equal(
-            failed.length,
-            1,
-            'failOperation should fire OPERATION_FAILED',
-          );
           t.match(
-            failed[0].errorMessage,
+            failedEvent.errorMessage,
             /disk full/,
             'error message should propagate',
           );
@@ -319,23 +325,17 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter} =
           createTestCoordinator({operation});
 
-        const completed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-          (evt) => completed.push(evt),
-        );
-
         try {
+          const completedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.REMOVED,
           );
-
-          await new Promise((r) => setImmediate(r));
-
-          t.equal(completed.length, 1,
-            'remove completion should fire OPERATION_COMPLETED');
+          await completedEventPromise;
         } finally {
           await coordinator.shutdown();
         }
@@ -353,23 +353,17 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter} =
           createTestCoordinator({operation});
 
-        const completed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-          (evt) => completed.push(evt),
-        );
-
         try {
+          const completedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.ACTIVE,
           );
-
-          await new Promise((r) => setImmediate(r));
-
-          t.equal(completed.length, 1,
-            'message group active should complete');
+          await completedEventPromise;
         } finally {
           await coordinator.shutdown();
         }
@@ -387,24 +381,18 @@ test('Executor outcome routing through owner-key reconcile path',
         const {coordinator, emitter} =
           createTestCoordinator({operation});
 
-        const failed = [];
-        coordinator.on(
-          REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
-          (evt) => failed.push(evt),
-        );
-
         try {
+          const failedEventPromise = waitForCoordinatorEvent(
+            coordinator,
+            REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+          );
           emitter.emitOutcome(
             EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_FAILED,
             TEST_OPERATION_ID,
             WORKFLOW_STEP.FAILED,
             {errorMessage: 'container pull failed'},
           );
-
-          await new Promise((r) => setImmediate(r));
-
-          t.equal(failed.length, 1,
-            'runtime service failure should fire OPERATION_FAILED');
+          await failedEventPromise;
         } finally {
           await coordinator.shutdown();
         }

@@ -15,6 +15,11 @@ import {SYSTEM_TABLE_NAME} from
 import {ControlPlaneField} from
   '../../src/control-plane/control-plane-constants.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {DISPATCH_SUBSYSTEM} from
+  '../../src/control-plane/replica-dispatch-service-constants.js';
+import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
@@ -321,6 +326,127 @@ test(
         operation.workflowStep,
         WORKFLOW_STEP.SENDING,
         'operation should be claimed after coordinator event',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'ReplicaDispatchService reconciles authoritative pending operation when cache visibility lags',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const operationRow = {
+      operation_id: 'op-authoritative-only-1',
+      type: 'ADD',
+      partition_id: 'tables-p1',
+      replica_id: 'tables-p1-r4',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: '[]',
+    };
+
+    let authoritativeReadCount = 0;
+    let dispatchedOperation = null;
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+      },
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows(tableName, sql, params, options) {
+          authoritativeReadCount += 1;
+          t.equal(
+            tableName,
+            SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+            'should read authoritative replica operations',
+          );
+          t.match(
+            sql,
+            /SELECT \* FROM replica_operations WHERE operation_id = \?/,
+            'should query by operation id',
+          );
+          t.same(
+            params,
+            [operationRow.operation_id],
+            'should request the missing operation row',
+          );
+          t.equal(
+            options?.owner,
+            DISPATCH_SUBSYSTEM,
+            'should use dispatch subsystem ownership for the fallback read',
+          );
+          return {
+            success: true,
+            rows: [{...operationRow}],
+          };
+        },
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+            },
+          };
+        },
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+      },
+      rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        isOperationLocallyOwned(operation) {
+          return (
+            operation?.sourceNodeId === 'node-1' ||
+            operation?.source_node_id === 'node-1'
+          );
+        },
+        async dispatchOperation(operation) {
+          dispatchedOperation = operation;
+          return {success: true};
+        },
+      },
+    });
+    service.initialize();
+
+    try {
+      await service.reconcileOperationDispatch(operationRow.operation_id);
+
+      t.equal(
+        authoritativeReadCount,
+        1,
+        'should fall back to an authoritative operation lookup once',
+      );
+      t.equal(
+        dispatchedOperation?.operationId,
+        operationRow.operation_id,
+        'should dispatch the authoritative pending operation',
+      );
+      t.equal(
+        dispatchedOperation?.targetNodeId,
+        operationRow.target_node_id,
+        'should preserve the target node from the authoritative row',
       );
     } finally {
       service.stop();

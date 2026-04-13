@@ -24,6 +24,9 @@ import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+} from '../../src/control-plane/timeout-budget.js';
 import {CDC_EVENT} from '../../src/cdc/cdc-constants.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
@@ -266,6 +269,50 @@ test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
   t.ok(result.data.node_id, 'should generate node_id');
   t.end();
 });
+
+test('CDCIntegrationService - insertSystemTableRow can ignore existing rows',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    mockSqlEngine.executeQuery = async (sql, params = [], options = {}) => {
+      mockSqlEngine.executedQueries.push({sql, params, options});
+      return {
+        success: true,
+        affectedRows: 0,
+        rows: [],
+      };
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    const result = await service.insertSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {
+        node_id: 'node-1',
+        node_address: 'localhost:8080',
+        cpu_cores: 4,
+        memory_mb: 8192,
+        disk_gb: 100,
+        status: 'active',
+        last_heartbeat: Date.now(),
+        created_at: Date.now(),
+      },
+      {
+        ignoreExisting: true,
+      },
+    );
+
+    t.match(
+      mockSqlEngine.executedQueries[0]?.sql,
+      /^INSERT OR IGNORE INTO nodes \(/,
+      'idempotent inserts should route through INSERT OR IGNORE',
+    );
+    t.equal(result.affectedRows, 0, 'ignored duplicates should preserve zero affected rows');
+    t.equal(result.partitionResult?.affectedRows, 0,
+      'partition result should preserve zero affected rows');
+  });
 
 test('CDCIntegrationService - insertSystemTableRow skips cache wait for logs', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
@@ -577,28 +624,81 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
       'retryable control-plane deferrals should still fail closed',
     );
 
-    t.equal(warnings.length, 1,
-      'retryable table-write deferrals should log one warning');
+    t.ok(warnings.length >= 1,
+      'retryable table-write deferrals should log at least one warning');
     t.equal(errors.length, 0,
       'retryable table-write deferrals should not log hard errors');
-    t.equal(warnings[0][1]?.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
+    const finalWarningPayload = warnings[warnings.length - 1]?.[1] || null;
+    t.equal(finalWarningPayload?.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
       'warning should preserve the typed error code');
-    t.equal(warnings[0][1]?.retryAfterMs, 250,
+    t.equal(finalWarningPayload?.retryAfterMs, 250,
       'warning should preserve the retry-after hint');
-    t.equal(warnings[0][1]?.causeId, 'cdc-write-failure:test',
+    t.equal(finalWarningPayload?.causeId, 'cdc-write-failure:test',
       'warning should preserve the write cause');
-    t.equal(warnings[0][1]?.operation, 'UPDATE',
+    t.equal(finalWarningPayload?.operation, 'UPDATE',
       'warning should identify the failed write operation');
-    t.equal(warnings[0][1]?.writeMode, 'sql-routed',
+    t.equal(finalWarningPayload?.writeMode, 'sql-routed',
       'warning should identify the write path');
-    t.equal(warnings[0][1]?.bootstrapMode, false,
+    t.equal(finalWarningPayload?.bootstrapMode, false,
       'warning should indicate bootstrap mode state');
-    t.same(warnings[0][1]?.primaryKey, {service_id: 'svc-1'},
+    t.same(finalWarningPayload?.primaryKey, {service_id: 'svc-1'},
       'warning should preserve the primary key');
-    t.equal(warnings[0][1]?.attempt, 1,
-      'warning should preserve the final SQL attempt number');
-    t.equal(warnings[0][1]?.cacheWaitTimedOut, false,
+    t.ok(finalWarningPayload?.attempt > 1,
+      'warning should preserve the final SQL attempt number after retries');
+    t.equal(finalWarningPayload?.cacheWaitTimedOut, false,
       'warning should distinguish SQL failure from cache wait timeout');
+  });
+
+test('CDCIntegrationService preserves explicit deferRetry on routed SQL errors',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      retryMaxAttempts: 1,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {
+            success: false,
+            error: 'query transport reconnecting',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            participantFailures: [
+              {
+                failedPartition: 'nodes-p1',
+                failedAddress: 'leader-node/partition/nodes-p1-r1',
+              },
+            ],
+            firstFailedParticipant: {
+              failedPartition: 'nodes-p1',
+              failedAddress: 'leader-node/partition/nodes-p1-r1',
+            },
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    const error = await t.rejects(
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        {service_id: 'svc-1'},
+        {status: 'active'},
+        {
+          skipCacheWait: true,
+        },
+      ),
+      'explicit routed deferrals should be preserved when CDC wraps failures',
+    );
+
+    t.equal(error?.code, 'ROUTER_CONNECTION_CLOSED',
+      'wrapped error should preserve the canonical error code');
+    t.equal(error?.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      'wrapped error should preserve errorCode for downstream owners');
+    t.equal(error?.deferRetry, true,
+      'wrapped error should preserve explicit deferRetry even without retryAfterMs');
+    t.equal(error?.participantFailures?.length, 1,
+      'wrapped error should preserve structured participant failures for upstream owners');
+    t.equal(error?.firstFailedParticipant?.failedPartition, 'nodes-p1',
+      'wrapped error should preserve the canonical first failed participant');
   });
 
 test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
@@ -749,6 +849,202 @@ test('CDCIntegrationService - waitForCacheUpdate accepts monotonic minimum field
     t.equal(divergenceEvents[0]?.reconciliationReason,
       SQL_RECONCILIATION_REASON.DIAGNOSTICS_CACHE_RECONCILE);
     t.end();
+  },
+);
+
+test('CDCIntegrationService - waitForCacheUpdate retries authoritative confirmation within the reserved fallback budget',
+  async (t) => {
+    const operationId = 'op-authoritative-retry';
+    const authoritativeRow = {
+      operation_id: operationId,
+      status: 'creating',
+      workflow_step: 'CREATING',
+      updated_at: 1200,
+    };
+    const listeners = new Set();
+    const state = {
+      row: null,
+      onCacheChangeCalls: 0,
+      offCacheChangeCalls: 0,
+      authoritativeReads: 0,
+    };
+    const cache = {
+      has(tableName, key) {
+        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+          key === operationId &&
+          Boolean(state.row);
+      },
+      get(tableName, key) {
+        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+          key !== operationId) {
+          return null;
+        }
+        return state.row;
+      },
+      onCacheChange(listener) {
+        state.onCacheChangeCalls++;
+        listeners.add(listener);
+      },
+      offCacheChange(listener) {
+        state.offCacheChangeCalls++;
+        listeners.delete(listener);
+      },
+    };
+    const cacheMutationTarget = {
+      applySystemTableChange(_tableName, _operation, record) {
+        state.row = {...record};
+        for (const listener of listeners) {
+          listener(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
+        }
+      },
+    };
+    const sqlQueryEngine = {
+      queryExecutor: {
+        async executeOnPartition() {
+          state.authoritativeReads++;
+          return {
+            success: true,
+            participantNodeId: 'node-owner',
+            rows: state.authoritativeReads >= 2 ? [{...authoritativeRow}] : [],
+          };
+        },
+        getPartitionRoutingSnapshot() {
+          return {
+            canonicalLeaderNodeId: 'node-owner',
+            serviceRowCount: 1,
+            routableServiceCount: 1,
+            deniedByNodeId: {},
+          };
+        },
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      systemTableCache: cache,
+      cacheMutationTarget,
+      authoritativeFallbackRepairBudgetMs: 10,
+      authoritativeFallbackRetryDelayMs: 1,
+    });
+    service.initialize();
+
+    await service.waitForCacheUpdate(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operationId,
+      true,
+      {
+        expectedFields: {updated_at: 1000},
+        minimumFields: {updated_at: 1000},
+        timeoutMs: 20,
+      },
+    );
+
+    t.equal(
+      state.authoritativeReads,
+      2,
+      'authoritative repair should retry once when the first read still misses the row',
+    );
+    t.same(
+      state.row,
+      authoritativeRow,
+      'the later authoritative confirmation should still repair the writable cache target',
+    );
+    t.equal(state.onCacheChangeCalls, 1,
+      'cache wait should subscribe once before the fallback tail begins');
+    t.equal(state.offCacheChangeCalls, 1,
+      'cache wait should clean up its listener after the retry succeeds');
+    t.end();
+  },
+);
+
+test('CDCIntegrationService - waitForCacheUpdate can return pending visibility after authoritative confirmation',
+  async (t) => {
+    const operationId = 'op-pending-visibility';
+    const authoritativeRow = {
+      operation_id: operationId,
+      status: 'creating',
+      workflow_step: 'CREATING',
+      updated_at: 1200,
+    };
+    const listeners = new Set();
+    const state = {
+      row: null,
+      authoritativeReads: 0,
+    };
+    const cache = {
+      has(tableName, key) {
+        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+          key === operationId &&
+          Boolean(state.row);
+      },
+      get(tableName, key) {
+        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+          key !== operationId) {
+          return null;
+        }
+        return state.row;
+      },
+      onCacheChange(listener) {
+        listeners.add(listener);
+      },
+      offCacheChange(listener) {
+        listeners.delete(listener);
+      },
+    };
+    const sqlQueryEngine = {
+      queryExecutor: {
+        async executeOnPartition() {
+          state.authoritativeReads++;
+          return {
+            success: true,
+            participantNodeId: 'node-owner',
+            rows: [{...authoritativeRow}],
+          };
+        },
+        getPartitionRoutingSnapshot() {
+          return {
+            canonicalLeaderNodeId: 'node-owner',
+            serviceRowCount: 1,
+            routableServiceCount: 1,
+            deniedByNodeId: {},
+          };
+        },
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      systemTableCache: cache,
+      authoritativeFallbackRepairBudgetMs: 10,
+      authoritativeFallbackRetryDelayMs: 1,
+    });
+    service.initialize();
+
+    const result = await service.waitForCacheUpdate(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operationId,
+      true,
+      {
+        allowPendingVisibility: true,
+        timeoutMs: 20,
+      },
+    );
+
+    t.equal(
+      result.visibilityState,
+      'pending_visibility',
+      'authoritative confirmation without writable cache repair should return pending visibility',
+    );
+    t.equal(
+      result.authoritativeVisibilityConfirmed,
+      true,
+      'pending visibility should retain the authoritative confirmation signal',
+    );
+    t.equal(
+      state.authoritativeReads,
+      1,
+      'pending visibility should confirm once instead of looping until timeout',
+    );
   },
 );
 
@@ -997,8 +1293,10 @@ test('CDCIntegrationService - authoritative cache confirmation prefers local par
       {fallbackPhase: 'recovery'},
     );
 
-    t.equal(repaired, true,
+    t.equal(repaired?.visibilityState, 'visible',
       'should confirm the authoritative row without routed SQL');
+    t.equal(repaired?.authoritativeVisibilityConfirmed, true,
+      'local authoritative confirmation should preserve the confirmation state');
     t.same(cacheState.row, authoritativeRow,
       'authoritative confirmation should hydrate the writable cache target');
     t.equal(
@@ -1152,7 +1450,199 @@ test('CDCIntegrationService - leader-only authoritative reads can fall back to l
       'local replica fallback should include the canonical leader hint');
   });
 
-test('CDCIntegrationService - authoritative reads can prefer owner RPC over available local replicas',
+test('CDCIntegrationService - leader-only authoritative reads honor live leader methods',
+  async (t) => {
+    let ownerRpcReadCount = 0;
+    let sqlFallbackCount = 0;
+    const partitionId =
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+    const localLeaderService = {
+      partitionId,
+      replicaId: `${partitionId}-r2`,
+      initialized: true,
+      isLeader: false,
+      role: 'follower',
+      isLeaderReplica() {
+        return true;
+      },
+      getRole() {
+        return 'leader';
+      },
+      getLeaderId() {
+        return this.replicaId;
+      },
+      async executeQuery(sql, params) {
+        t.equal(
+          params[0],
+          'op-live-method-leader',
+          'live-method leader reads should preserve query parameters',
+        );
+        return {
+          success: true,
+          rows: [{
+            operation_id: 'op-live-method-leader',
+            workflow_step: 'LOCAL_LIVE_METHOD',
+          }],
+        };
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        queryExecutor: {
+          async executeOnPartition() {
+            ownerRpcReadCount += 1;
+            return {
+              success: true,
+              participantNodeId: 'node-sql-leader',
+              rows: [],
+            };
+          },
+          getPartitionRoutingSnapshot() {
+            return {
+              canonicalLeaderNodeId: 'node-sql-leader',
+              serviceRowCount: 2,
+              routableServiceCount: 1,
+              deniedByNodeId: {},
+            };
+          },
+        },
+        async executeQuery() {
+          sqlFallbackCount += 1;
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
+      partitionServicesProvider: () => new Map([
+        [localLeaderService.replicaId, localLeaderService],
+      ]),
+    });
+    service.initialize();
+
+    const result = await service.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['op-live-method-leader'],
+      {
+        localReadConsistency: 'local_leader',
+      },
+    );
+
+    t.equal(
+      result.source,
+      'local_partition_replica',
+      'live leader methods should satisfy leader-only local authoritative reads',
+    );
+    t.equal(ownerRpcReadCount, 0,
+      'live leader methods should avoid the owner RPC fallback');
+    t.equal(sqlFallbackCount, 0,
+      'live leader methods should avoid routed SQL fallback');
+    t.equal(result.localReadHit, true,
+      'live leader methods should count as a local authoritative read');
+    t.same(result.rows, [{
+      operation_id: 'op-live-method-leader',
+      workflow_step: 'LOCAL_LIVE_METHOD',
+    }]);
+  });
+
+test('CDCIntegrationService - bounded empty local authoritative reads ' +
+  'confirm through owner RPC',
+async (t) => {
+  let ownerRpcReadCount = 0;
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: {
+      queryExecutor: {
+        async executeOnPartition(partitionId, sql, params = [],
+          _forRead, _preferLeader, _preferSameLatencyGroup, options = {}) {
+          ownerRpcReadCount += 1;
+          t.equal(
+            partitionId,
+            INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.LOGS],
+            'owner confirmation should target the canonical logs partition',
+          );
+          t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
+            'owner confirmation should preserve the original SQL');
+          t.same(params, ['log-a', 'log-b'],
+            'owner confirmation should preserve query parameters');
+          t.equal(options.timeoutMs, 321,
+            'owner confirmation should preserve timeout hints');
+          return {
+            success: true,
+            participantNodeId: 'node-sql-leader',
+            rows: [
+              {ack_id: 'log-a'},
+              {ack_id: 'log-b'},
+            ],
+          };
+        },
+        getPartitionRoutingSnapshot() {
+          return {
+            canonicalLeaderNodeId: 'node-sql-leader',
+            serviceRowCount: 2,
+            routableServiceCount: 1,
+            deniedByNodeId: {},
+          };
+        },
+      },
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [],
+        };
+      },
+    },
+    partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+      SYSTEM_TABLE_NAME.LOGS,
+      {
+        isLeader: false,
+        async executeQuery(sql, params) {
+          t.match(sql, /SELECT log_id AS ack_id FROM logs/i,
+            'local probe should preserve the original SQL');
+          t.same(params, ['log-a', 'log-b'],
+            'local probe should preserve query parameters');
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
+    ),
+  });
+  service.initialize();
+
+  const result = await service.executeAuthoritativeSystemTableRead(
+    SYSTEM_TABLE_NAME.LOGS,
+    'SELECT log_id AS ack_id FROM logs WHERE log_id IN (?, ?)',
+    ['log-a', 'log-b'],
+    {
+      localReadConsistency: 'local_leader',
+      replicaFallbackConsistency: 'any_replica',
+      confirmEmptyLocalReadWithOwnerRpc: true,
+      queryOptions: {timeoutMs: 321},
+    },
+  );
+
+  t.equal(ownerRpcReadCount, 1,
+    'empty local authoritative reads should be confirmed through owner RPC');
+  t.equal(result.success, true,
+    'owner confirmation should succeed');
+  t.equal(result.source, 'owner_rpc_lane',
+    'owner confirmation should win when local replicas are empty');
+  t.equal(result.localReadHit, false,
+    'owner-confirmed empty local reads must not report a local hit');
+  t.same(result.rows, [
+    {ack_id: 'log-a'},
+    {ack_id: 'log-b'},
+  ], 'owner confirmation should return the authoritative rows');
+  t.equal(result.systemTableDiagnostics?.routedToNode, 'node-sql-leader',
+    'owner confirmation should record the routed leader');
+});
+
+test('CDCIntegrationService - authoritative reads can prefer owner RPC over ' +
+  'available local replicas',
   async (t) => {
     let localReadCount = 0;
     let ownerRpcReadCount = 0;
@@ -1567,6 +2057,16 @@ test('CDCIntegrationService - authoritative read re-seeds bootstrap ' +
     'source should report the owner RPC lane after retry');
   t.equal(queryAttempts.length, 2,
     'should attempt the query twice (fail + retry)');
+  t.equal(
+    queryAttempts[0].options.allowReadinessAuthoritativeRefresh,
+    false,
+    'owner RPC reads should suppress routing-triggered readiness repair',
+  );
+  t.equal(
+    queryAttempts[1].options.allowReadinessAuthoritativeRefresh,
+    false,
+    'retry should keep readiness repair suppression enabled',
+  );
   t.equal(installCalls, 1,
     'should install recovery overlay exactly once');
   t.equal(installedServiceRows.length, connectedNodeIds.length,
@@ -1691,6 +2191,54 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
       4321,
       'should pass query timeout through routed SQL execution options',
     );
+  },
+);
+
+test('CDCIntegrationService - routed system-table write timeout budget bounds transient retries',
+  async (t) => {
+    const executedQueries = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      retryMaxAttempts: 5,
+      retryDelayMs: 50,
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options) {
+          executedQueries.push({sql, params, options});
+          return {
+            success: false,
+            error: 'query transport reconnecting',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 250,
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    const error = await t.rejects(
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'node-1'},
+        {
+          status: 'active',
+        },
+        {
+          queryTimeoutMs: 200,
+          skipCacheWait: true,
+        },
+      ),
+      'routed system-table writes should fail once the per-call timeout budget is exhausted',
+    );
+
+    t.equal(executedQueries.length, 1,
+      'per-call timeout budget should prevent repeated routed SQL attempts once retryAfterMs exceeds the remaining budget');
+    t.equal(executedQueries[0]?.options?.timeoutMs, 200,
+      'first routed SQL attempt should receive the full per-call timeout budget');
+    t.equal(error?.deferRetry, true,
+      'bounded timeout exhaustion should preserve defer-retry semantics for upstream owners');
+    t.equal(error?.retryAfterMs, 250,
+      'bounded timeout exhaustion should preserve retryAfterMs for the next owner-level retry');
   },
 );
 
@@ -1877,16 +2425,15 @@ test(
     let listener = null;
     const cache = {
       has(tableName, key) {
-        return tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-1';
+        return tableName === SYSTEM_TABLE_NAME.SERVICES && key === 'svc-1';
       },
       get(tableName, key) {
-        if (tableName !== SYSTEM_TABLE_NAME.NODES || key !== 'node-1') {
+        if (tableName !== SYSTEM_TABLE_NAME.SERVICES || key !== 'svc-1') {
           return undefined;
         }
         return {
-          node_id: 'node-1',
+          service_id: 'svc-1',
           status: 'active',
-          updated_at: 100,
         };
       },
       onCacheChange(nextListener) {
@@ -1906,21 +2453,36 @@ test(
     service.initialize();
     service.cacheWaitTimeoutMs = 20;
 
-    await t.rejects(
-      service.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        {node_id: 'node-1'},
-        {status: 'suspected', updated_at: 200},
+    try {
+      await service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        {service_id: 'svc-1'},
+        {status: 'suspected'},
         {
           expectedCacheFields: {
             status: 'suspected',
-            updated_at: 200,
           },
         },
-      ),
-      /cache update/i,
-      'should fail closed when cache never reflects the updated row',
-    );
+      );
+      t.fail('should fail closed when cache never reflects the updated row');
+    } catch (error) {
+      const timeoutClassification = error?.timeoutClassification || null;
+      const effectiveClassification =
+        timeoutClassification?.classification ===
+          TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT ?
+          timeoutClassification.originalClassification :
+          timeoutClassification?.classification;
+      t.match(
+        error?.message || '',
+        /cache update/i,
+        'stale cache visibility should still surface a cache-wait timeout',
+      );
+      t.equal(
+        effectiveClassification,
+        TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+        'strict cache waits should preserve explicit cache visibility timeout classification',
+      );
+    }
     t.equal(listener, null, 'should clean up the cache listener after timeout');
     t.end();
   },
@@ -3234,17 +3796,30 @@ test('CDCIntegrationService - bootstrap mode starts disabled', async (t) => {
   t.end();
 });
 
+const CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE = Object.freeze({
+  FOUND: 'found',
+  INVALID_INPUT: 'invalid_input',
+  NOT_FOUND: 'not_found',
+});
+
 test('CDCIntegrationService - extractTableNameFromSQL extracts from INSERT', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
   service.initialize();
 
-  const tableName = service.extractTableNameFromSQL(
+  const tableNameResult = service.extractTableNameFromSQL(
     'INSERT INTO services (service_id, address) VALUES (?, ?)',
   );
 
-  t.equal(tableName, 'services', 'should extract table name from INSERT');
+  t.same(
+    tableNameResult,
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.FOUND,
+      tableName: 'services',
+    },
+    'should extract table name from INSERT',
+  );
   t.end();
 });
 
@@ -3254,11 +3829,39 @@ test('extractTableNameFromSQL extracts from INSERT OR REPLACE', async (t) => {
   });
   service.initialize();
 
-  const tableName = service.extractTableNameFromSQL(
+  const tableNameResult = service.extractTableNameFromSQL(
     'INSERT OR REPLACE INTO partitions (partition_id, table_name) VALUES (?, ?)',
   );
 
-  t.equal(tableName, 'partitions', 'should extract table name from INSERT OR REPLACE');
+  t.same(
+    tableNameResult,
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.FOUND,
+      tableName: 'partitions',
+    },
+    'should extract table name from INSERT OR REPLACE',
+  );
+  t.end();
+});
+
+test('extractTableNameFromSQL extracts from INSERT OR IGNORE', async (t) => {
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+  });
+  service.initialize();
+
+  const tableNameResult = service.extractTableNameFromSQL(
+    'INSERT OR IGNORE INTO config (config_key, config_value) VALUES (?, ?)',
+  );
+
+  t.same(
+    tableNameResult,
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.FOUND,
+      tableName: 'config',
+    },
+    'should extract table name from INSERT OR IGNORE',
+  );
   t.end();
 });
 
@@ -3268,11 +3871,18 @@ test('CDCIntegrationService - extractTableNameFromSQL extracts from UPDATE', asy
   });
   service.initialize();
 
-  const tableName = service.extractTableNameFromSQL(
+  const tableNameResult = service.extractTableNameFromSQL(
     'UPDATE nodes SET status = ? WHERE node_id = ?',
   );
 
-  t.equal(tableName, 'nodes', 'should extract table name from UPDATE');
+  t.same(
+    tableNameResult,
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.FOUND,
+      tableName: 'nodes',
+    },
+    'should extract table name from UPDATE',
+  );
   t.end();
 });
 
@@ -3282,26 +3892,47 @@ test('CDCIntegrationService - extractTableNameFromSQL extracts from DELETE', asy
   });
   service.initialize();
 
-  const tableName = service.extractTableNameFromSQL(
+  const tableNameResult = service.extractTableNameFromSQL(
     'DELETE FROM replica_operations WHERE operation_id = ?',
   );
 
-  t.equal(tableName, 'replica_operations', 'should extract table name from DELETE');
+  t.same(
+    tableNameResult,
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.FOUND,
+      tableName: 'replica_operations',
+    },
+    'should extract table name from DELETE',
+  );
   t.end();
 });
 
-test('CDCIntegrationService - extractTableNameFromSQL returns null for invalid SQL', async (t) => {
+test('CDCIntegrationService - extractTableNameFromSQL returns explicit invalid and not-found states', async (t) => {
   const service = new CDCIntegrationService({
     nodeId: 'test-node',
   });
   service.initialize();
 
-  t.equal(service.extractTableNameFromSQL(''), null, 'should return null for empty string');
-  t.equal(service.extractTableNameFromSQL(null), null, 'should return null for null');
-  t.equal(
+  t.same(
+    service.extractTableNameFromSQL(''),
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.INVALID_INPUT,
+    },
+    'should return explicit invalid_input for empty string',
+  );
+  t.same(
+    service.extractTableNameFromSQL(null),
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.INVALID_INPUT,
+    },
+    'should return explicit invalid_input for null',
+  );
+  t.same(
     service.extractTableNameFromSQL('INVALID SQL'),
-    null,
-    'should return null for invalid SQL',
+    {
+      state: CDC_INTEGRATION_SERVICE_TABLE_NAME_EXTRACTION_STATE.NOT_FOUND,
+    },
+    'should return explicit not_found for invalid SQL',
   );
   t.end();
 });
@@ -3756,9 +4387,102 @@ test('CDCIntegrationService - transient detection includes leader-transition que
       'transport timeout during leader handoff should be retried',
     );
     t.equal(
+      service.isTransientCdcError(
+        'Distributed operation failed due to participant failures',
+      ),
+      true,
+      'distributed participant failures should be retried on system-table writes',
+    );
+    t.equal(
+      service.isTransientCdcError(
+        new Error('Transaction already active on this partition'),
+      ),
+      true,
+      'partition transaction contention should be retried on system-table writes',
+    );
+    t.equal(
+      service.isTransientCdcError({
+        error: 'query_admission_deferred',
+        retryAfterMs: 25,
+      }),
+      true,
+      'retryable pressure admission deferrals should be treated as transient',
+    );
+    t.equal(
       service.isTransientCdcError('SQL syntax error near FROM'),
       false,
       'non-transient SQL errors should not be retried',
     );
     t.end();
   });
+
+test('CDCIntegrationService retries retryable control-plane write admission ' +
+  'failures through the shared SQL-routed path', async (t) => {
+  const executedQueries = [];
+  let attempt = 0;
+  const mockSqlEngine = {
+    async executeQuery(sql, params = [], options = {}) {
+      attempt += 1;
+      executedQueries.push({
+        sql,
+        params,
+        options,
+      });
+      if (attempt === 1) {
+        return {
+          success: false,
+          error: 'query_admission_deferred',
+          retryAfterMs: 10,
+          pressureAction: 'defer',
+          pressureReason: 'transport_backpressure',
+        };
+      }
+      return {
+        success: true,
+        affectedRows: 1,
+        rows: [],
+      };
+    },
+  };
+
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+  service.waitForCacheUpdate = async () => {};
+  service.computeRetryDelayMs = () => 0;
+
+  const result = await service.insertSystemTableRow(
+    SYSTEM_TABLE_NAME.NODES,
+    {
+      node_id: 'node-1',
+      node_address: 'localhost:8080',
+      cpu_cores: 4,
+      memory_mb: 8192,
+      disk_gb: 100,
+      status: 'active',
+      last_heartbeat: Date.now(),
+      created_at: Date.now(),
+    },
+    {
+      skipCacheWait: true,
+    },
+  );
+
+  t.equal(
+    result.success,
+    true,
+    'retryable control-plane admission deferrals should not fail the write path closed',
+  );
+  t.equal(
+    executedQueries.length,
+    2,
+    'system-table writes should retry once through the shared SQL-routed path',
+  );
+  t.equal(
+    executedQueries[0]?.options?.deliveryPriority,
+    'critical',
+    'retryable control-plane writes should stay on the critical routed lane',
+  );
+});

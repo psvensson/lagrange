@@ -323,6 +323,112 @@ t.test('MessageRouter unit tests', async (t) => {
       await router.shutdown();
     });
 
+  t.test('should defer QUERY messages when query transport throws while target reconnects',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      router.nodeConnections.set('node-2', {
+        state: ConnectionState.RECONNECTING,
+        reconnectDueAt: Date.now() + 175,
+        reconnectTimeout: {},
+      });
+      router.setQueryMessageGroupServiceResolver(() => ({
+        async sendMessage() {
+          throw new Error('Connection to node node-2 closed');
+        },
+      }));
+
+      const result = await router.deliver('node-2/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+
+      t.equal(result.acknowledged, false,
+        'query transport connection closure should fail closed');
+      t.equal(result.deferRetry, true,
+        'query transport connection closure should defer while reconnect is armed');
+      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+        'query transport closure should normalize to the canonical router error code');
+      t.ok(result.retryAfterMs > 0,
+        'query transport closure should preserve a bounded retry hint');
+
+      await router.shutdown();
+    });
+
+  t.test('should preserve explicit deferred retry metadata from query transport failures',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      router.setQueryMessageGroupServiceResolver(() => ({
+        async sendMessage() {
+          const error = new Error('query ingress backpressure');
+          error.code = 'QUERY_INGRESS_BACKPRESSURE';
+          error.deferRetry = true;
+          error.retryAfterMs = 222;
+          throw error;
+        },
+      }));
+
+      const result = await router.deliver('node-2/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+
+      t.equal(result.acknowledged, false,
+        'explicit query transport deferrals should fail closed');
+      t.equal(result.deferRetry, true,
+        'explicit query transport deferrals should preserve defer semantics');
+      t.equal(result.errorCode, 'QUERY_INGRESS_BACKPRESSURE',
+        'explicit query transport deferrals should preserve the error code');
+      t.equal(result.retryAfterMs, 222,
+        'explicit query transport deferrals should preserve retryAfterMs');
+      t.equal(result.error, 'query ingress backpressure',
+        'explicit query transport deferrals should preserve the error message');
+
+      await router.shutdown();
+    });
+
+  t.test('should forward router delivery options to query transport sends',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      let capturedOptions = null;
+      router.setQueryMessageGroupServiceResolver(() => ({
+        async sendMessage(_targetService, _message, options = {}) {
+          capturedOptions = options;
+          return {
+            acknowledged: true,
+            success: true,
+            rows: [],
+          };
+        },
+      }));
+
+      const result = await router.deliver('node-2/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      }, {
+        timeoutMs: 1234,
+        deliveryPriority: 'critical',
+      });
+
+      t.equal(result.acknowledged, true,
+        'query transport send should still succeed');
+      t.equal(capturedOptions?.transportDeliveryOptions?.timeoutMs, 1234,
+        'query transport sends should inherit timeoutMs from router delivery');
+      t.equal(capturedOptions?.transportDeliveryOptions?.deliveryPriority,
+        'critical',
+      'query transport sends should inherit delivery priority from router delivery');
+
+      await router.shutdown();
+    });
+
   t.test('should deliver locally for async handler without connection', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
@@ -646,6 +752,124 @@ t.test('MessageRouter unit tests', async (t) => {
       releaseFirstSend();
       await firstDelivery;
       await secondDelivery;
+      await router.shutdown();
+    });
+
+  t.test('should deliver live Raft packets directly without queueing',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      const sentMessages = [];
+      let pendingResponseRegistered = false;
+      let enqueueOutboundCalled = false;
+      router.registerPendingResponse = () => {
+        pendingResponseRegistered = true;
+        return new Promise(() => {});
+      };
+      router.enqueueOutbound = async () => {
+        enqueueOutboundCalled = true;
+        return {acknowledged: false, error: 'should-not-queue'};
+      };
+      const ws = new EventEmitter();
+      ws.readyState = 1;
+      ws.send = (frame) => sentMessages.push(JSON.parse(frame));
+      ws.terminate = () => {
+        ws.readyState = 3;
+        ws.emit('close');
+      };
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.CONNECTED,
+        ws,
+        isIncoming: false,
+      });
+
+      const result = await router.deliver(
+        'remote-node/message-group/mg-1-r1',
+        {
+          type: 'append',
+          messageId: 'msg-raft-direct',
+          data: [{command: {type: 'CDC_BATCH'}}],
+        },
+      );
+
+      t.equal(result.acknowledged, true,
+        'Raft delivery should be acknowledged immediately');
+      t.equal(result.direct, true,
+        'Raft delivery should report the direct path');
+      t.equal(enqueueOutboundCalled, false,
+        'direct Raft delivery should bypass the outbound queue');
+      t.equal(pendingResponseRegistered, false,
+        'direct Raft delivery should not register a service response waiter');
+      t.equal(router.pendingMessages.size, 0,
+        'direct Raft delivery should not await a transport ACK');
+      t.equal(router.pendingResponses.size, 0,
+        'direct Raft delivery should not await a service response');
+      t.equal(sentMessages.length, 1, 'direct delivery should send one frame');
+      t.equal(sentMessages[0].type, RouterMessageType.SERVICE_MESSAGE,
+        'direct delivery should still use a service envelope');
+      t.equal(sentMessages[0].payload.type, 'append',
+        'direct delivery should preserve the Raft payload');
+
+      await router.shutdown();
+    });
+
+  t.test('should fall back to queued delivery when Raft socket is not live',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      let enqueueOutboundCalled = false;
+      let pendingResponseRegistered = false;
+      router.registerPendingResponse = () => {
+        pendingResponseRegistered = true;
+        return new Promise(() => {});
+      };
+      router.enqueueOutbound = async () => {
+        enqueueOutboundCalled = true;
+        return {acknowledged: false, error: 'queued-fallback'};
+      };
+      const ws = new EventEmitter();
+      ws.readyState = 0;
+      ws.send = () => {
+        throw new Error('should-not-send-directly');
+      };
+      ws.terminate = () => {
+        ws.readyState = 3;
+        ws.emit('close');
+      };
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.CONNECTED,
+        ws,
+        isIncoming: false,
+      });
+
+      const result = await router.deliver(
+        'remote-node/message-group/mg-1-r1',
+        {
+          type: 'append',
+          messageId: 'msg-raft-fallback',
+          data: [{command: {type: 'CDC_BATCH'}}],
+        },
+      );
+
+      t.equal(enqueueOutboundCalled, true,
+        'Raft delivery should fall back to the queue when no live socket exists');
+      t.equal(pendingResponseRegistered, true,
+        'queued fallback should preserve the normal response registration path');
+      t.equal(result.acknowledged, false,
+        'fallback result should come from the queued path');
+      t.equal(result.error, 'queued-fallback',
+        'fallback result should preserve the queued delivery outcome');
+
       await router.shutdown();
     });
 
@@ -1812,6 +2036,120 @@ t.test('MessageRouter unit tests', async (t) => {
         [],
         'should not emit unhandled rejections when shutdown beats ACK',
       );
+    });
+
+  t.test('should rate-limit unmatched service response warnings', async (t) => {
+    let nowMs = 1000;
+    const router = new MessageRouter({
+      nodeId: 'service-response-throttle-test',
+      nowFn: () => nowMs,
+      unmatchedServiceResponseWarnIntervalMs: 5000,
+    });
+    await router.initialize({startServer: false});
+
+    const warns = [];
+    const debugs = [];
+    router.logger = {
+      info() {},
+      error() {},
+      warn(message, context) {
+        warns.push({message, context});
+      },
+      debug(message, context) {
+        debugs.push({message, context});
+      },
+    };
+
+    router.handleServiceResponse({
+      messageId: 'orphan-response-1',
+      result: {ok: true},
+    });
+    nowMs = 2000;
+    router.handleServiceResponse({
+      messageId: 'orphan-response-2',
+      result: {ok: true},
+    });
+    nowMs = 7000;
+    router.handleServiceResponse({
+      messageId: 'orphan-response-3',
+      result: {ok: true},
+    });
+
+    t.equal(warns.length, 2, 'should only warn once per throttle window');
+    t.equal(debugs.length, 4,
+      'should keep debug visibility for receive events and suppressed warnings');
+    t.equal(
+      warns[0].message,
+      'No pending service response request',
+      'should preserve the warning message',
+    );
+    t.equal(
+      warns[1].context.suppressedSinceLastWarn,
+      1,
+      'later warnings should summarize suppressed duplicates',
+    );
+    t.ok(
+      debugs.some((entry) => entry.context.suppressedByRateLimit === true),
+      'suppressed duplicate warnings should degrade to debug',
+    );
+
+    await router.shutdown();
+  });
+
+  t.test('should absorb one late service response for a retired pending waiter',
+    async (t) => {
+      let nowMs = 1000;
+      const router = new MessageRouter({
+        nodeId: 'retired-service-response-test',
+        nowFn: () => nowMs,
+        unmatchedServiceResponseWarnIntervalMs: 5000,
+      });
+      await router.initialize({startServer: false});
+
+      const warns = [];
+      const debugs = [];
+      router.logger = {
+        info() {},
+        error() {},
+        warn(message, context) {
+          warns.push({message, context});
+        },
+        debug(message, context) {
+          debugs.push({message, context});
+        },
+      };
+
+      router.registerPendingResponse('retired-response-1', 'node-remote');
+      router.cancelPendingResponse('retired-response-1', {
+        ignoreLateResponse: true,
+      });
+
+      nowMs = 1500;
+      router.handleServiceResponse({
+        messageId: 'retired-response-1',
+        result: {ok: true},
+      });
+      router.handleServiceResponse({
+        messageId: 'orphan-response-after-retired',
+        result: {ok: true},
+      });
+
+      t.equal(
+        warns.length,
+        1,
+        'retired late responses should be absorbed while true orphaned responses still warn',
+      );
+      t.equal(
+        warns[0]?.context?.messageId,
+        'orphan-response-after-retired',
+        'only the genuinely orphaned response should emit a warning',
+      );
+      t.ok(
+        debugs.some((entry) => entry.context?.ignoredRetiredPending === true),
+        'router should mark absorbed late responses explicitly in debug logs',
+      );
+
+      await router.shutdown();
     });
 
   t.test('should handle multiple initializations idempotently', async (t) => {

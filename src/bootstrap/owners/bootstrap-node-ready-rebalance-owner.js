@@ -4,6 +4,7 @@ import {
   BOOTSTRAP_REBALANCE_REASON,
 } from '../bootstrap-constants.js';
 import {
+  compareNodeHeartbeatWatermarks,
   isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
 } from '../../node/node-readiness-policy.js';
@@ -17,6 +18,7 @@ class BootstrapNodeReadyRebalanceOwner {
     this.delegates = options.delegates || {};
     this.rebalanceTriggeredNodeIds = new Set();
     this.pendingNodeReadyRebalanceTimers = new Map();
+    this.latestObservedNodeRows = new Map();
   }
 
   getLogger() {
@@ -29,6 +31,14 @@ class BootstrapNodeReadyRebalanceOwner {
 
   getPartitionServices() {
     return this.delegates.getPartitionServices?.() || new Map();
+  }
+
+  getLocalNodeId() {
+    return this.delegates.getLocalNodeId?.() || null;
+  }
+
+  isBootstrapNodeReadyRebalanceActive() {
+    return this.delegates.isBootstrapNodeReadyRebalanceActive?.() !== false;
   }
 
   executeNodeReadyRebalance(reason) {
@@ -142,6 +152,7 @@ class BootstrapNodeReadyRebalanceOwner {
         null,
     };
     const nodeId = nodeRow?.node_id;
+    const localNodeId = this.getLocalNodeId();
     if (!nodeId) {
       logger.info('Skipping node-ready rebalance trigger: missing node_id', {
         operation: cdcEvent?.operation || null,
@@ -149,12 +160,96 @@ class BootstrapNodeReadyRebalanceOwner {
       return false;
     }
 
+    if (this.isBootstrapNodeReadyRebalanceActive() !== true) {
+      logger.debug(
+        'Skipping node-ready rebalance trigger: bootstrap node_ready lane is inactive',
+        {
+          readyNodeId: nodeId,
+          localNodeId,
+          operation: cdcEvent?.operation || null,
+        },
+      );
+      return false;
+    }
+
+    if (nodeId === localNodeId) {
+      logger.debug(
+        'Skipping node-ready rebalance trigger: local node readiness is runtime-owned',
+        {
+          readyNodeId: nodeId,
+          localNodeId,
+          operation: cdcEvent?.operation || null,
+        },
+      );
+      return false;
+    }
+
     const now = Date.now();
+    const observedNodeRow =
+      this.latestObservedNodeRows.get(nodeId) || null;
+    const effectivePreviousRow =
+      this.resolveMostRecentNodeRow(previousRow, observedNodeRow);
+    const previousRowWasReady = isNodeRecordReady(previousRow, {now});
+    const incomingRowIsReady = isNodeRecordReady(nodeRow, {now});
+    const incomingLastHeartbeat = Number(
+      nodeRow.last_heartbeat ??
+      nodeRow.lastHeartbeat ??
+      NaN,
+    );
+    const incomingLooksOlderThanObserved =
+      effectivePreviousRow &&
+      compareNodeHeartbeatWatermarks(
+        effectivePreviousRow,
+        nodeRow,
+      ) < NUM.ZERO;
+    const shouldSuppressObservedRegression =
+      incomingLooksOlderThanObserved &&
+      (
+        incomingRowIsReady ||
+        !previousRowWasReady ||
+        Number.isFinite(incomingLastHeartbeat)
+      );
+
+    if (shouldSuppressObservedRegression) {
+      logger.debug(
+        'Skipping node-ready rebalance trigger: stale node liveness regression',
+        {
+          readyNodeId: nodeId,
+          localNodeId,
+          operation: cdcEvent?.operation || null,
+          previousReadyLeaseExpiresAt:
+            effectivePreviousRow.ready_lease_expires_at ??
+            effectivePreviousRow.readyLeaseExpiresAt ??
+            null,
+          incomingReadyLeaseExpiresAt:
+            nodeRow.ready_lease_expires_at ??
+            nodeRow.readyLeaseExpiresAt ??
+            null,
+          previousLastHeartbeat:
+            effectivePreviousRow.last_heartbeat ??
+            effectivePreviousRow.lastHeartbeat ??
+            null,
+          incomingLastHeartbeat:
+            nodeRow.last_heartbeat ??
+            nodeRow.lastHeartbeat ??
+            null,
+        },
+      );
+      return false;
+    }
+
+    const nextObservedRow =
+      incomingLooksOlderThanObserved ?
+        nodeRow :
+        this.resolveMostRecentNodeRow(effectivePreviousRow, nodeRow);
+    this.latestObservedNodeRows.set(nodeId, nextObservedRow);
+
     if (isNodeHeartbeatWatermarkRegression(previousRow, incomingRow)) {
       logger.debug(
         'Skipping node-ready rebalance trigger: stale node liveness regression',
         {
-          nodeId,
+          readyNodeId: nodeId,
+          localNodeId,
           operation: cdcEvent?.operation || null,
           previousReadyLeaseExpiresAt:
             previousRow.ready_lease_expires_at ??
@@ -176,14 +271,15 @@ class BootstrapNodeReadyRebalanceOwner {
       );
       return false;
     }
-    const isReady = isNodeRecordReady(nodeRow, {now});
-    const wasReady = isNodeRecordReady(previousRow, {now});
+    const isReady = isNodeRecordReady(nextObservedRow, {now});
+    const wasReady = isNodeRecordReady(effectivePreviousRow, {now});
 
     if (!isReady) {
       logger.info('Skipping node-ready rebalance trigger: node not ready', {
-        nodeId,
-        status: nodeRow.status || null,
-        readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+        readyNodeId: nodeId,
+        localNodeId,
+        status: nextObservedRow.status || null,
+        readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
         operation: cdcEvent?.operation || null,
       });
       const existingTimer = this.pendingNodeReadyRebalanceTimers.get(nodeId);
@@ -199,9 +295,10 @@ class BootstrapNodeReadyRebalanceOwner {
       logger.debug(
         'Skipping node-ready rebalance trigger: no not-ready to ready transition',
         {
-          nodeId,
-          status: nodeRow.status || null,
-          readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+          readyNodeId: nodeId,
+          localNodeId,
+          status: nextObservedRow.status || null,
+          readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
           operation: cdcEvent?.operation || null,
         },
       );
@@ -210,7 +307,8 @@ class BootstrapNodeReadyRebalanceOwner {
 
     if (this.rebalanceTriggeredNodeIds.has(nodeId)) {
       logger.info('Skipping node-ready rebalance trigger: already scheduled', {
-        nodeId,
+        readyNodeId: nodeId,
+        localNodeId,
       });
       return false;
     }
@@ -221,11 +319,12 @@ class BootstrapNodeReadyRebalanceOwner {
     }
 
     logger.info('Scheduling node-ready rebalance trigger', {
-      nodeId,
+      readyNodeId: nodeId,
+      localNodeId,
       reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
       delayMs: this.getNodeReadyRebalanceDelayMs(),
-      status: nodeRow.status || null,
-      readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+      status: nextObservedRow.status || null,
+      readyLeaseExpiresAt: nextObservedRow.ready_lease_expires_at || null,
     });
 
     const timer = setTimeout(() => {
@@ -240,6 +339,7 @@ class BootstrapNodeReadyRebalanceOwner {
 
   async executeNodeReadyRebalanceTrigger(nodeId) {
     this.pendingNodeReadyRebalanceTimers.delete(nodeId);
+    this.rebalanceTriggeredNodeIds.delete(nodeId);
     this.executeNodeReadyRebalance(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
   }
 
@@ -249,6 +349,32 @@ class BootstrapNodeReadyRebalanceOwner {
     }
     this.pendingNodeReadyRebalanceTimers.clear();
     this.rebalanceTriggeredNodeIds.clear();
+    this.latestObservedNodeRows.clear();
+  }
+
+  resolveMostRecentNodeRow(primaryRow, fallbackRow) {
+    if (!primaryRow) {
+      return fallbackRow || null;
+    }
+    if (!fallbackRow) {
+      return primaryRow;
+    }
+
+    const comparison = compareNodeHeartbeatWatermarks(
+      primaryRow,
+      fallbackRow,
+    );
+    if (comparison > NUM.ZERO) {
+      return fallbackRow;
+    }
+    if (comparison < NUM.ZERO) {
+      return primaryRow;
+    }
+
+    return {
+      ...fallbackRow,
+      ...primaryRow,
+    };
   }
 }
 

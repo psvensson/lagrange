@@ -84,6 +84,14 @@ const JOIN_READINESS_REPAIR = Object.freeze({
   MIN_INTERVAL_MS: TIME_MS.SECOND * NUM.FIVE,
 });
 
+const JOIN_MESH_CONNECTIVITY_REPAIR = Object.freeze({
+  TABLES: Object.freeze([
+    TABLES.NODES,
+    TABLES.NODE_ENDPOINTS,
+  ]),
+  MIN_INTERVAL_MS: JOIN_READINESS_REPAIR.MIN_INTERVAL_MS,
+});
+
 const JOIN_BACKFILL_SCOPE = (() => {
   const blockingTables = JOIN_READINESS_REPAIR.TABLES;
   const blockingTableSet = new Set(blockingTables);
@@ -160,6 +168,8 @@ const JOINING_LOG_MSG = Object.freeze({
   NODE_STATE_UPDATE_FAILED: 'Failed to send NODE_STATE_UPDATE to control plane',
   RETRYABLE_FAILURE_RESUMING:
     'Resuming join session after retryable control-plane failure',
+  RETRYABLE_FAILURE_LIFECYCLE_RESET:
+    'Reset join lifecycle state machine for retryable resume attempt',
   RETRYABLE_FAILURE_RESUME_EXHAUSTED:
     'Join retryable resume budget exhausted',
   WS_INFRA_READY: 'WebSocket infrastructure setup complete',
@@ -336,6 +346,7 @@ export {
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_UNIFIED_RECONCILE,
+  JOIN_MESH_CONNECTIVITY_REPAIR,
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,

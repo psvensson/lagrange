@@ -35,12 +35,11 @@ import {
   normalizeSchemaVersionValue,
   uniqueSorted,
 } from './admin-helpers.js';
+import {evaluatePartitionReplicaTopology} from
+  './admin-shared-metadata-consistency.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const EMPTY_STRING = '';
-const LEADER_RAFT_ROLE = 'leader';
-const SERVICE_TYPE_PARTITION = 'partition';
-const STATUS_ACTIVE = 'active';
 const PREFLIGHT_AUTHORITATIVE_REPAIR_WAIT_BUDGET_MS = 1000;
 const PREFLIGHT_ERROR_CODE = Object.freeze({
   PARTITION_ID_UNKNOWN: 'partition_id_unknown',
@@ -426,48 +425,13 @@ class AdminPreflightSnapshot {
       'leader_node_id',
       'leaderNodeId',
     );
-    const leaderService = serviceRows.find((service) => {
-      if (service?.[COLUMN.SERVICE_TYPE] !==
-          SERVICE_TYPE_PARTITION) {
-        return false;
-      }
-      if (service?.[COLUMN.PARTITION_ID] !== partitionId) {
-        return false;
-      }
-      if (String(service?.[COLUMN.RAFT_ROLE] || EMPTY_STRING)
-        .toLowerCase() !== LEADER_RAFT_ROLE) {
-        return false;
-      }
-      if (String(service?.[COLUMN.STATUS] || EMPTY_STRING)
-        .toLowerCase() !== STATUS_ACTIVE) {
-        return false;
-      }
-      if (requiresAddress && !service?.[COLUMN.ADDRESS]) {
-        return false;
-      }
-      return true;
+    const partitionTopology = evaluatePartitionReplicaTopology({
+      partitionRow,
+      serviceRows,
+      requiresAddress,
+      requireLeaderNodeId: false,
     });
-    const canonicalLeaderReplica = canonicalLeaderNodeId ?
-      serviceRows.find((service) => {
-        if (service?.[COLUMN.SERVICE_TYPE] !==
-            SERVICE_TYPE_PARTITION) {
-          return false;
-        }
-        if (service?.[COLUMN.PARTITION_ID] !== partitionId) {
-          return false;
-        }
-        if (String(service?.[COLUMN.STATUS] || EMPTY_STRING)
-          .toLowerCase() !== STATUS_ACTIVE) {
-          return false;
-        }
-        return firstStringField(
-          service,
-          COLUMN.NODE_ID,
-          'nodeId',
-        ) === canonicalLeaderNodeId;
-      }) :
-      null;
-    if (!leaderService && !canonicalLeaderReplica) {
+    if (partitionTopology.leaderKnown !== true) {
       return {
         leaderKnown: false,
         leaderNodeId: null,
@@ -477,9 +441,8 @@ class AdminPreflightSnapshot {
     }
 
     const leaderNodeId = canonicalLeaderNodeId ||
-      firstStringField(
-        leaderService, COLUMN.NODE_ID, 'nodeId',
-      );
+      partitionTopology.leaderRoleNodeIds[NUM.ZERO] ||
+      null;
     if (!leaderNodeId) {
       return {
         leaderKnown: false,
@@ -640,59 +603,96 @@ class AdminPreflightSnapshot {
    * @return {Object}
    */
   buildPreflightDiscoverySummary() {
+    const emptySummary = this.buildEmptyPreflightDiscoverySummary();
     try {
       if (!this.buildLocalServiceDiscoverySnapshot) {
-        return {
-          selectedNodeIds: ADMIN_CACHE_DUMP.EMPTY,
-          excludedByNodeId: {},
-        };
+        return emptySummary;
       }
       const snapshot = this.buildLocalServiceDiscoverySnapshot({
         serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
       });
-      const selectedNodeIds = [];
-      const excludedByNodeId = {};
-
-      const services = Array.isArray(snapshot?.services) ?
-        snapshot.services :
-        [];
-      for (const service of services) {
-        const replicas = Array.isArray(service?.replicas) ?
-          service.replicas :
-          [];
-        for (const replica of replicas) {
-          const nodeId = typeof replica?.nodeId === TYPEOF.STRING ?
-            replica.nodeId :
-            null;
-          if (!nodeId) {
-            continue;
-          }
-          const readiness = replica?.readiness || null;
-          const reasons = Array.isArray(readiness?.reasons) ?
-            readiness.reasons :
-            [];
-          const reasonCodes = uniqueSorted(reasons
-            .map((reason) =>
-              String(reason?.code || EMPTY_STRING))
-            .filter(Boolean));
-          if (reasonCodes.length === NUM.ZERO) {
-            selectedNodeIds.push(nodeId);
-          } else {
-            excludedByNodeId[nodeId] = reasonCodes;
-          }
-        }
-      }
-
-      return {
-        selectedNodeIds: uniqueSorted(selectedNodeIds),
-        excludedByNodeId,
-      };
+      return this.buildPreflightDiscoverySummaryFromSnapshot(snapshot);
     } catch (_error) {
-      return {
-        selectedNodeIds: ADMIN_CACHE_DUMP.EMPTY,
-        excludedByNodeId: {},
-      };
+      return emptySummary;
     }
+  }
+
+  /**
+   * @return {Object}
+   * @private
+   */
+  buildEmptyPreflightDiscoverySummary() {
+    return {
+      selectedNodeIds: ADMIN_CACHE_DUMP.EMPTY,
+      excludedByNodeId: {},
+    };
+  }
+
+  /**
+   * @param {Object} snapshot
+   * @return {Object}
+   * @private
+   */
+  buildPreflightDiscoverySummaryFromSnapshot(snapshot) {
+    const summary = {
+      selectedNodeIds: [],
+      excludedByNodeId: {},
+    };
+    const services = Array.isArray(snapshot?.services) ?
+      snapshot.services :
+      ADMIN_CACHE_DUMP.EMPTY;
+
+    for (const service of services) {
+      const replicas = Array.isArray(service?.replicas) ?
+        service.replicas :
+        ADMIN_CACHE_DUMP.EMPTY;
+      for (const replica of replicas) {
+        this.appendPreflightDiscoveryReplicaSummary(summary, replica);
+      }
+    }
+
+    return {
+      selectedNodeIds: uniqueSorted(summary.selectedNodeIds),
+      excludedByNodeId: summary.excludedByNodeId,
+    };
+  }
+
+  /**
+   * @param {Object} summary
+   * @param {Object} replica
+   * @private
+   */
+  appendPreflightDiscoveryReplicaSummary(summary, replica) {
+    const nodeId = typeof replica?.nodeId === TYPEOF.STRING ?
+      replica.nodeId :
+      null;
+    if (!nodeId) {
+      return;
+    }
+
+    const reasonCodes = this.resolvePreflightDiscoveryReasonCodes(replica);
+    if (reasonCodes.length === NUM.ZERO) {
+      summary.selectedNodeIds.push(nodeId);
+      return;
+    }
+    summary.excludedByNodeId[nodeId] = reasonCodes;
+  }
+
+  /**
+   * @param {Object} replica
+   * @return {Array<string>}
+   * @private
+   */
+  resolvePreflightDiscoveryReasonCodes(replica) {
+    const readiness = replica?.readiness && typeof replica.readiness === TYPEOF.OBJECT ?
+      replica.readiness :
+      null;
+    const reasons = Array.isArray(readiness?.reasons) ?
+      readiness.reasons :
+      ADMIN_CACHE_DUMP.EMPTY;
+    return uniqueSorted(reasons
+      .map((reason) => String(reason?.code || EMPTY_STRING))
+      .filter(Boolean));
   }
 
   /**

@@ -10,6 +10,10 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   DEFAULT_REPLICA_COUNT: NUM.THREE,
   SIZE_UPDATE_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
   SIZE_UPDATE_INTERVAL_MS: TIME_MS.MINUTE,
+  MANAGED_SPLIT_WRITE_ACTIVITY_DEBOUNCE_MS: TIME_MS.SECOND * NUM.FIVE,
+  SIZE_PERSIST_RETRY_TIMEOUT_MS: TIME_MS.SECOND,
+  SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
+  SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
   KEY_RANGE_START: null,
   KEY_RANGE_END: null,
@@ -153,6 +157,8 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
   CAPABILITIES: 'capabilities',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
+  TRANSACTION_EPOCH: 'transaction_epoch',
+  TIMEOUT_DEADLINE: 'timeout_deadline',
   TABLE_NAME: 'table_name',
   ACTIVE_PARTITION_VERSION: 'active_partition_version',
   PENDING_PARTITION_VERSION: 'pending_partition_version',
@@ -168,6 +174,10 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN capabilities TEXT DEFAULT \'[]\'',
   ADD_READY_LEASE_EXPIRES_AT:
     'ADD COLUMN ready_lease_expires_at INTEGER',
+  ADD_TRANSACTION_EPOCH:
+    'ADD COLUMN transaction_epoch INTEGER',
+  ADD_TIMEOUT_DEADLINE:
+    'ADD COLUMN timeout_deadline INTEGER',
   ADD_LEADER_NODE_ID:
     'ADD COLUMN leader_node_id TEXT',
   ADD_TABLE_NAME:
@@ -255,6 +265,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Migrated connection_state values from legacy ws_connection_state column',
   ADDED_CAPABILITIES: 'Added capabilities column to nodes table',
   ADDED_READY_LEASE: 'Added ready_lease_expires_at column to nodes table',
+  ADDED_SQL_TRANSACTIONS_TRANSACTION_EPOCH:
+    'Added transaction_epoch column to sql_transactions table',
+  ADDED_SQL_TRANSACTIONS_TIMEOUT_DEADLINE:
+    'Added timeout_deadline column to sql_transactions table',
   ADDED_MESSAGE_GROUP_LEADER: 'Added leader_node_id column to message_groups table',
   ADDED_ACTIVE_PARTITION_VERSION:
     'Added active_partition_version column to tables table',
@@ -374,6 +388,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   TRANSACTION_WRITE_FAILED: 'Transaction write failed',
   RAFT_COMMAND_FAILED: 'Raft command failed',
   TRANSACTION_COMMIT_RAFT_FAILED: 'Raft command failed for transaction commit',
+  SINGLE_REPLICA_RAFT_OWNER_REQUIRED:
+    'PartitionService single-replica leadership requires raft.change(...)',
   QUERY_FAILED: 'Query execution failed',
   CDC_UNKNOWN_OPERATION: 'Unknown operation type, skipping CDC',
   CDC_PARSE_INSERT_FAILED: 'Could not parse INSERT SQL for CDC',
@@ -457,6 +473,8 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
   CDC_REDACTION_LIMIT: NUM.HUNDRED,
   CDC_PARSE_SLICE_START: NUM.ZERO,
   CDC_PARSE_SLICE_END: NUM.HUNDRED,
+  CDC_TABLE_NAME_EXTRACTION_STATE_FOUND: 'found',
+  CDC_TABLE_NAME_EXTRACTION_STATE_NOT_FOUND: 'not_found',
   LIFERAFT_SINGLE_REPLICA_COUNT: NUM.ONE,
   ADDRESS_PARTS_MIN: NUM.ONE,
 });

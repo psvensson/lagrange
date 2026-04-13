@@ -19,16 +19,55 @@ const THRESHOLD_DEMOTION_POLICY =
 const IMMEDIATE_DEMOTION_POLICY =
   LIFECYCLE_DEPENDENCY_DEMOTION_POLICY.IMMEDIATE;
 const EMPTY_REASONS = Object.freeze([]);
+const TYPE_FUNCTION = 'function';
+const TYPE_STRING = 'string';
+const TYPE_OBJECT = 'object';
+const TYPE_BOOLEAN = 'boolean';
+const ZERO_COUNT = 0;
+const ONE_COUNT = 1;
+const PHASE_RANK_INIT = 0;
+const PHASE_RANK_CONTROL_READY = 1;
+const PHASE_RANK_JOIN_READY = 2;
+const PHASE_RANK_TRAFFIC_READY = 3;
+const MIN_STABLE_WINDOW_MS = 0;
+const MIN_DEMOTION_FAILURE_THRESHOLD = 1;
+const MIN_RETRY_AFTER_MS = 0;
+const NO_FAILURE_COUNT = 0;
+const FAILURE_COUNT_STEP = 1;
+const LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR =
+  'Lifecycle dependency name is required';
+const UNKNOWN_LIFECYCLE_PHASE_ERROR_PREFIX = 'Unknown lifecycle phase: ';
+const INVALID_LIFECYCLE_PHASE_TRANSITION_ERROR_PREFIX =
+  'Invalid lifecycle phase transition: ';
+const INVALID_LIFECYCLE_PHASE_TRANSITION_SEPARATOR = ' -> ';
+const UNKNOWN_EVALUATION_STATE_ERROR_PREFIX =
+  'Unknown lifecycle evaluation state: ';
+const PROBE_STATUS_SUCCESS_MIN = 200;
+const PROBE_STATUS_SUCCESS_MAX = 300;
+const PROBE_STATUS_CLIENT_ERROR_MIN = 400;
+const PROBE_STATUS_CLIENT_ERROR_MAX = 500;
+const PROBE_STATUS_SERVER_ERROR_MIN = 500;
+const PROBE_STATUS_SERVER_ERROR_MAX = 600;
+const LIFECYCLE_EVALUATION_STATE = Object.freeze({
+  DRAINING: 'draining',
+  STARTUP_PENDING: 'startup_pending',
+  HARD_CONTROL_BLOCKED: 'hard_control_blocked',
+  HARD_DEGRADED_IMMEDIATE: 'hard_degraded_immediate',
+  HARD_DEGRADED_THRESHOLD: 'hard_degraded_threshold',
+  HARD_TRAFFIC_GRACE: 'hard_traffic_grace',
+  STABLE_WINDOW_PENDING: 'stable_window_pending',
+  TRAFFIC_READY: 'traffic_ready',
+});
 const LIFECYCLE_PHASE_RANK = Object.freeze({
-  [LIFECYCLE_PHASE.INIT]: 0,
-  [LIFECYCLE_PHASE.CONTROL_READY]: 1,
-  [LIFECYCLE_PHASE.JOIN_READY]: 2,
-  [LIFECYCLE_PHASE.TRAFFIC_READY]: 3,
-  [LIFECYCLE_PHASE.DEGRADED]: 1,
+  [LIFECYCLE_PHASE.INIT]: PHASE_RANK_INIT,
+  [LIFECYCLE_PHASE.CONTROL_READY]: PHASE_RANK_CONTROL_READY,
+  [LIFECYCLE_PHASE.JOIN_READY]: PHASE_RANK_JOIN_READY,
+  [LIFECYCLE_PHASE.TRAFFIC_READY]: PHASE_RANK_TRAFFIC_READY,
+  [LIFECYCLE_PHASE.DEGRADED]: PHASE_RANK_CONTROL_READY,
 });
 
 function resolveLifecyclePhaseRank(phase) {
-  return LIFECYCLE_PHASE_RANK[phase] || 0;
+  return LIFECYCLE_PHASE_RANK[phase] || PHASE_RANK_INIT;
 }
 
 /**
@@ -37,28 +76,31 @@ function resolveLifecyclePhaseRank(phase) {
 class LifecycleController extends EventEmitter {
   constructor(options = {}) {
     super();
-    this._now = typeof options.now === 'function' ?
+    this._now = typeof options.now === TYPE_FUNCTION ?
       options.now :
       () => Date.now();
     this._stableWindowMs = Number.isFinite(options.readyStableWindowMs) ?
-      Math.max(0, Math.floor(options.readyStableWindowMs)) :
+      Math.max(MIN_STABLE_WINDOW_MS, Math.floor(options.readyStableWindowMs)) :
       LIFECYCLE_DEFAULT.STABLE_WINDOW_MS;
     this._demotionFailureThreshold =
       Number.isFinite(options.demotionFailureThreshold) ?
-        Math.max(1, Math.floor(options.demotionFailureThreshold)) :
+        Math.max(
+          MIN_DEMOTION_FAILURE_THRESHOLD,
+          Math.floor(options.demotionFailureThreshold),
+        ) :
         LIFECYCLE_DEFAULT.DEMOTION_FAILURE_THRESHOLD;
     this._defaultRetryAfterMs = Number.isFinite(options.retryAfterMs) ?
-      Math.max(0, Math.floor(options.retryAfterMs)) :
+      Math.max(MIN_RETRY_AFTER_MS, Math.floor(options.retryAfterMs)) :
       LIFECYCLE_DEFAULT.RETRY_AFTER_MS;
 
     this._phase = LIFECYCLE_PHASE.INIT;
     this._ready = false;
     this._reasons = [];
     this._degradedReasons = [];
-    this._consecutiveFailureCount = 0;
+    this._consecutiveFailureCount = ZERO_COUNT;
     this._stableWindowStartedAt = null;
     this._dependencies = new Map();
-    this._transitionCount = 0;
+    this._transitionCount = ZERO_COUNT;
     this._transitionHistory = [];
     this._probeStatusCounts = new Map();
     this._blockedReasonSince = new Map();
@@ -78,14 +120,14 @@ class LifecycleController extends EventEmitter {
    * @param {Object|null} [options.details]
    */
   setDependency(name, ready, options = {}) {
-    if (typeof name !== 'string' || name.length === 0) {
-      throw new Error('Lifecycle dependency name is required');
+    if (typeof name !== TYPE_STRING || name.length === PHASE_RANK_INIT) {
+      throw new Error(LIFECYCLE_DEPENDENCY_NAME_REQUIRED_ERROR);
     }
     const classification = options.classification === SOFT_CLASS ?
       SOFT_CLASS :
       HARD_CLASS;
-    const reasonCode = typeof options.reasonCode === 'string' &&
-      options.reasonCode.length > 0 ?
+    const reasonCode = typeof options.reasonCode === TYPE_STRING &&
+      options.reasonCode.length > PHASE_RANK_INIT ?
       options.reasonCode :
       null;
     const demotionPolicy = options.demotionPolicy === IMMEDIATE_DEMOTION_POLICY ?
@@ -96,7 +138,7 @@ class LifecycleController extends EventEmitter {
       classification,
       reasonCode,
       demotionPolicy,
-      details: options.details && typeof options.details === 'object' ?
+      details: options.details && typeof options.details === TYPE_OBJECT ?
         options.details :
         null,
     });
@@ -115,74 +157,18 @@ class LifecycleController extends EventEmitter {
     const previousReady = this._ready;
     const previousReasons = this._reasons;
     const dependencyStatus = this.collectDependencyStatus();
-    const hardReasons = dependencyStatus.hardReasons;
-    const immediateHardReasons = dependencyStatus.immediateHardReasons;
-    const degradedReasons = dependencyStatus.softReasons;
-    const startupComplete = dependencyStatus.startupComplete;
-    let nextReady = this._ready;
-    let nextPhase = this._phase;
-    let nextReasons = EMPTY_REASONS;
+    const evaluationContext = this.collectEvaluationContext({
+      now,
+      dependencyStatus,
+    });
+    const outcome = this.resolveEvaluationOutcome(evaluationContext);
 
-    if (this._draining) {
-      this._stableWindowStartedAt = null;
-      this._consecutiveFailureCount = 0;
-      nextReady = false;
-      nextPhase = LIFECYCLE_PHASE.DEGRADED;
-      nextReasons = this.uniqueReasons([
-        LIFECYCLE_REASON.NODE_DRAINING,
-        ...hardReasons,
-      ]);
-    } else if (!startupComplete) {
-      this._stableWindowStartedAt = null;
-      this._consecutiveFailureCount = 0;
-      nextReady = false;
-      nextPhase = LIFECYCLE_PHASE.INIT;
-      nextReasons = hardReasons;
-    } else if (hardReasons.length > 0) {
-      this._stableWindowStartedAt = null;
-      if (immediateHardReasons.length > 0) {
-        this._consecutiveFailureCount = 0;
-        nextReady = false;
-        nextPhase = LIFECYCLE_PHASE.DEGRADED;
-        nextReasons = hardReasons;
-      } else if (this._ready) {
-        this._consecutiveFailureCount += 1;
-        if (this._consecutiveFailureCount >= this._demotionFailureThreshold) {
-          nextReady = false;
-          nextPhase = LIFECYCLE_PHASE.DEGRADED;
-          nextReasons = hardReasons;
-        } else {
-          nextReady = true;
-          nextPhase = LIFECYCLE_PHASE.TRAFFIC_READY;
-          nextReasons = EMPTY_REASONS;
-        }
-      } else {
-        this._consecutiveFailureCount = 0;
-        nextReady = false;
-        nextPhase = LIFECYCLE_PHASE.CONTROL_READY;
-        nextReasons = hardReasons;
-      }
-    } else {
-      this._consecutiveFailureCount = 0;
-      if (this._stableWindowStartedAt === null) {
-        this._stableWindowStartedAt = now;
-      }
-      const stableElapsedMs = now - this._stableWindowStartedAt;
-      if (stableElapsedMs < this._stableWindowMs) {
-        nextReady = false;
-        nextPhase = LIFECYCLE_PHASE.JOIN_READY;
-        nextReasons = [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING];
-      } else {
-        nextReady = true;
-        nextPhase = LIFECYCLE_PHASE.TRAFFIC_READY;
-        nextReasons = EMPTY_REASONS;
-      }
-    }
-
-    this._phase = nextPhase;
-    this._ready = nextReady;
-    this._reasons = [...nextReasons];
-    this._degradedReasons = degradedReasons;
+    this._stableWindowStartedAt = outcome.stableWindowStartedAt;
+    this._consecutiveFailureCount = outcome.consecutiveFailureCount;
+    this._phase = outcome.phase;
+    this._ready = outcome.ready;
+    this._reasons = [...outcome.reasons];
+    this._degradedReasons = evaluationContext.degradedReasons;
     this._lastEvaluatedAt = now;
     this.updateBlockedReasonDurations(now, previousReasons);
 
@@ -204,6 +190,158 @@ class LifecycleController extends EventEmitter {
     return this.getSnapshot();
   }
 
+  collectEvaluationContext(context = {}) {
+    const dependencyStatus = context.dependencyStatus &&
+      typeof context.dependencyStatus === TYPE_OBJECT ?
+      context.dependencyStatus :
+      {};
+    const hardReasons = Array.isArray(dependencyStatus.hardReasons) ?
+      dependencyStatus.hardReasons :
+      EMPTY_REASONS;
+    const immediateHardReasons = Array.isArray(dependencyStatus.immediateHardReasons) ?
+      dependencyStatus.immediateHardReasons :
+      EMPTY_REASONS;
+    const degradedReasons = Array.isArray(dependencyStatus.softReasons) ?
+      dependencyStatus.softReasons :
+      EMPTY_REASONS;
+    const stableWindowStartedAt = this._stableWindowStartedAt === null ?
+      context.now :
+      this._stableWindowStartedAt;
+
+    return {
+      now: context.now,
+      startupComplete: dependencyStatus.startupComplete === true,
+      hardReasons,
+      immediateHardReasons,
+      degradedReasons,
+      stableWindowStartedAt,
+      stableElapsedMs: context.now - stableWindowStartedAt,
+      currentFailureCount: this._consecutiveFailureCount,
+      currentlyReady: this._ready === true,
+      draining: this._draining === true,
+    };
+  }
+
+  resolveEvaluationOutcome(context = {}) {
+    const evaluationDecision = this.resolveEvaluationDecision(context);
+
+    switch (evaluationDecision.state) {
+      case LIFECYCLE_EVALUATION_STATE.DRAINING:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          ready: false,
+          phase: LIFECYCLE_PHASE.DEGRADED,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          reasons: this.uniqueReasons([
+            LIFECYCLE_REASON.NODE_DRAINING,
+            ...context.hardReasons,
+          ]),
+        });
+      case LIFECYCLE_EVALUATION_STATE.STARTUP_PENDING:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          ready: false,
+          phase: LIFECYCLE_PHASE.INIT,
+          reasons: context.hardReasons,
+        });
+      case LIFECYCLE_EVALUATION_STATE.HARD_CONTROL_BLOCKED:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          ready: false,
+          phase: LIFECYCLE_PHASE.CONTROL_READY,
+          reasons: context.hardReasons,
+        });
+      case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_IMMEDIATE:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          ready: false,
+          phase: LIFECYCLE_PHASE.DEGRADED,
+          reasons: context.hardReasons,
+        });
+      case LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_THRESHOLD:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
+          ready: false,
+          phase: LIFECYCLE_PHASE.DEGRADED,
+          reasons: context.hardReasons,
+        });
+      case LIFECYCLE_EVALUATION_STATE.HARD_TRAFFIC_GRACE:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: null,
+          consecutiveFailureCount: evaluationDecision.consecutiveFailureCount,
+          ready: true,
+          phase: LIFECYCLE_PHASE.TRAFFIC_READY,
+          reasons: EMPTY_REASONS,
+        });
+      case LIFECYCLE_EVALUATION_STATE.STABLE_WINDOW_PENDING:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: context.stableWindowStartedAt,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+        });
+      case LIFECYCLE_EVALUATION_STATE.TRAFFIC_READY:
+        return this.buildEvaluationOutcome({
+          stableWindowStartedAt: context.stableWindowStartedAt,
+          consecutiveFailureCount: NO_FAILURE_COUNT,
+          ready: true,
+          phase: LIFECYCLE_PHASE.TRAFFIC_READY,
+          reasons: EMPTY_REASONS,
+        });
+      default:
+        throw new Error(
+          UNKNOWN_EVALUATION_STATE_ERROR_PREFIX +
+          String(evaluationDecision.state),
+        );
+    }
+  }
+
+  resolveEvaluationDecision(context = {}) {
+    if (context.draining === true) {
+      return {state: LIFECYCLE_EVALUATION_STATE.DRAINING};
+    } else if (context.startupComplete !== true) {
+      return {state: LIFECYCLE_EVALUATION_STATE.STARTUP_PENDING};
+    } else if (context.hardReasons.length > NO_FAILURE_COUNT) {
+      return this.resolveHardFailureEvaluationDecision(context);
+    } else if (context.stableElapsedMs < this._stableWindowMs) {
+      return {state: LIFECYCLE_EVALUATION_STATE.STABLE_WINDOW_PENDING};
+    } else {
+      return {state: LIFECYCLE_EVALUATION_STATE.TRAFFIC_READY};
+    }
+  }
+
+  resolveHardFailureEvaluationDecision(context = {}) {
+    if (context.immediateHardReasons.length > NO_FAILURE_COUNT) {
+      return {state: LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_IMMEDIATE};
+    } else if (context.currentlyReady !== true) {
+      return {state: LIFECYCLE_EVALUATION_STATE.HARD_CONTROL_BLOCKED};
+    } else {
+      const consecutiveFailureCount =
+        context.currentFailureCount + FAILURE_COUNT_STEP;
+      return {
+        state: consecutiveFailureCount >= this._demotionFailureThreshold ?
+          LIFECYCLE_EVALUATION_STATE.HARD_DEGRADED_THRESHOLD :
+          LIFECYCLE_EVALUATION_STATE.HARD_TRAFFIC_GRACE,
+        consecutiveFailureCount,
+      };
+    }
+  }
+
+  buildEvaluationOutcome(options = {}) {
+    return {
+      stableWindowStartedAt: options.stableWindowStartedAt,
+      consecutiveFailureCount: options.consecutiveFailureCount,
+      ready: options.ready === true,
+      phase: options.phase,
+      reasons: Array.isArray(options.reasons) ? options.reasons : EMPTY_REASONS,
+    };
+  }
+
   /**
    * Apply one explicit phase transition with invariant validation.
    * @param {string} phase
@@ -216,12 +354,14 @@ class LifecycleController extends EventEmitter {
   transitionTo(phase, options = {}) {
     if (!Object.prototype.hasOwnProperty.call(LIFECYCLE_ALLOWED_TRANSITIONS, phase) &&
         phase !== this._phase) {
-      throw new Error('Unknown lifecycle phase: ' + String(phase));
+      throw new Error(UNKNOWN_LIFECYCLE_PHASE_ERROR_PREFIX + String(phase));
     }
     if (phase !== this._phase && !this.isTransitionAllowed(this._phase, phase)) {
       throw new Error(
-        'Invalid lifecycle phase transition: ' +
-        this._phase + ' -> ' + phase,
+        INVALID_LIFECYCLE_PHASE_TRANSITION_ERROR_PREFIX +
+        this._phase +
+        INVALID_LIFECYCLE_PHASE_TRANSITION_SEPARATOR +
+        phase,
       );
     }
 
@@ -236,7 +376,7 @@ class LifecycleController extends EventEmitter {
     const degradedReasons = this.normalizeReasons(options.degradedReasons);
 
     this._phase = phase;
-    this._ready = typeof options.ready === 'boolean' ?
+    this._ready = typeof options.ready === TYPE_BOOLEAN ?
       options.ready :
       phase === LIFECYCLE_PHASE.TRAFFIC_READY;
     this._reasons = reasons;
@@ -264,8 +404,8 @@ class LifecycleController extends EventEmitter {
    * @return {Object}
    */
   beginDrain(options = {}) {
-    const reasonCode = typeof options.reasonCode === 'string' &&
-      options.reasonCode.length > 0 ?
+    const reasonCode = typeof options.reasonCode === TYPE_STRING &&
+      options.reasonCode.length > PHASE_RANK_INIT ?
       options.reasonCode :
       LIFECYCLE_REASON.NODE_DRAINING;
     this._draining = true;
@@ -285,12 +425,15 @@ class LifecycleController extends EventEmitter {
    * @param {number} statusCode
    */
   recordProbeResult(endpoint, statusCode) {
-    if (typeof endpoint !== 'string' || endpoint.length === 0) {
+    if (typeof endpoint !== TYPE_STRING || endpoint.length === ZERO_COUNT) {
       return;
     }
     const statusClass = this.classifyProbeStatusCode(statusCode);
     const key = endpoint + ':' + statusClass;
-    this._probeStatusCounts.set(key, (this._probeStatusCounts.get(key) || 0) + 1);
+    this._probeStatusCounts.set(
+      key,
+      (this._probeStatusCounts.get(key) || ZERO_COUNT) + ONE_COUNT,
+    );
   }
 
   /**
@@ -311,12 +454,12 @@ class LifecycleController extends EventEmitter {
       degradedReasons: [...this._degradedReasons],
       draining: this._draining,
       drainDeadlineMs: this._drainDeadlineMs,
-      retryAfterMs: this._ready ? 0 : this._defaultRetryAfterMs,
+      retryAfterMs: this._ready ? ZERO_COUNT : this._defaultRetryAfterMs,
       transitionCount: this._transitionCount,
       stableWindowMs: this._stableWindowMs,
       stableElapsedMs: this._stableWindowStartedAt === null ?
-        0 :
-        Math.max(0, now - this._stableWindowStartedAt),
+        ZERO_COUNT :
+        Math.max(ZERO_COUNT, now - this._stableWindowStartedAt),
       stableSinceMs,
       consecutiveFailureCount: this._consecutiveFailureCount,
       timestamp: now,
@@ -333,8 +476,8 @@ class LifecycleController extends EventEmitter {
       blockedDurationMs[reason] = duration;
     }
     for (const [reason, since] of this._blockedReasonSince.entries()) {
-      blockedDurationMs[reason] = (blockedDurationMs[reason] || 0) +
-        Math.max(0, this._now() - since);
+      blockedDurationMs[reason] = (blockedDurationMs[reason] || ZERO_COUNT) +
+        Math.max(ZERO_COUNT, this._now() - since);
     }
 
     const probeStatusCounts = {};
@@ -378,13 +521,16 @@ class LifecycleController extends EventEmitter {
       return LIFECYCLE_PROBE_STATUS_CLASS.UNKNOWN;
     }
     const normalizedStatus = Math.floor(statusCode);
-    if (normalizedStatus >= 200 && normalizedStatus < 300) {
+    if (normalizedStatus >= PROBE_STATUS_SUCCESS_MIN &&
+        normalizedStatus < PROBE_STATUS_SUCCESS_MAX) {
       return LIFECYCLE_PROBE_STATUS_CLASS.SUCCESS_2XX;
     }
-    if (normalizedStatus >= 400 && normalizedStatus < 500) {
+    if (normalizedStatus >= PROBE_STATUS_CLIENT_ERROR_MIN &&
+        normalizedStatus < PROBE_STATUS_CLIENT_ERROR_MAX) {
       return LIFECYCLE_PROBE_STATUS_CLASS.CLIENT_4XX;
     }
-    if (normalizedStatus >= 500 && normalizedStatus < 600) {
+    if (normalizedStatus >= PROBE_STATUS_SERVER_ERROR_MIN &&
+        normalizedStatus < PROBE_STATUS_SERVER_ERROR_MAX) {
       return LIFECYCLE_PROBE_STATUS_CLASS.SERVER_5XX;
     }
     return LIFECYCLE_PROBE_STATUS_CLASS.UNKNOWN;
@@ -402,12 +548,12 @@ class LifecycleController extends EventEmitter {
       }
       const reason = dependency.reasonCode;
       if (dependency.classification === SOFT_CLASS) {
-        if (typeof reason === 'string' && reason.length > 0) {
+        if (typeof reason === TYPE_STRING && reason.length > ZERO_COUNT) {
           softReasons.push(reason);
         }
         continue;
       }
-      if (typeof reason === 'string' && reason.length > 0) {
+      if (typeof reason === TYPE_STRING && reason.length > ZERO_COUNT) {
         hardReasons.push(reason);
         if (dependency.demotionPolicy === IMMEDIATE_DEMOTION_POLICY) {
           immediateHardReasons.push(reason);
@@ -457,7 +603,8 @@ class LifecycleController extends EventEmitter {
       return [];
     }
     return this.uniqueReasons(
-      reasons.filter((reason) => typeof reason === 'string' && reason.length > 0),
+      reasons.filter((reason) =>
+        typeof reason === TYPE_STRING && reason.length > ZERO_COUNT),
     );
   }
 
@@ -469,7 +616,7 @@ class LifecycleController extends EventEmitter {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
       return false;
     }
-    for (let index = 0; index < a.length; index += 1) {
+    for (let index = ZERO_COUNT; index < a.length; index += ONE_COUNT) {
       if (a[index] !== b[index]) {
         return false;
       }
@@ -497,7 +644,7 @@ class LifecycleController extends EventEmitter {
       const elapsed = Math.max(0, now - since);
       this._blockedDurationMs.set(
         reason,
-        (this._blockedDurationMs.get(reason) || 0) + elapsed,
+        (this._blockedDurationMs.get(reason) || ZERO_COUNT) + elapsed,
       );
       this.emit(LIFECYCLE_EVENT.BLOCKED_DURATION, {
         reason,
@@ -516,7 +663,7 @@ class LifecycleController extends EventEmitter {
   }
 
   recordTransition(transition) {
-    this._transitionCount += 1;
+    this._transitionCount += ONE_COUNT;
     this._transitionHistory.push({
       previousPhase: transition.previousPhase,
       previousReady: transition.previousReady,

@@ -75,10 +75,27 @@ class ContactSeedPhase {
     let attempt = 0;
     let lastBootstrapError = null;
     let lastRetryableSeedContactError = null;
+    let lastRetryAfterMs = null;
     const config = this.delegates.getConfig();
     const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
       config.httpTimeoutMs,
     );
+    const buildRetryableSeedContactError = (message, options = {}) => {
+      const retryableError = new Error(message);
+      retryableError.deferRetry = true;
+      if (Number.isFinite(options.retryAfterMs) &&
+          options.retryAfterMs > NUM.ZERO) {
+        retryableError.retryAfterMs = Math.floor(options.retryAfterMs);
+      }
+      if (options.parsedError) {
+        retryableError.bootstrapResponse = options.parsedError;
+      }
+      if (typeof options.code === TYPEOF.STRING &&
+          options.code.length > NUM.ZERO) {
+        retryableError.code = options.code;
+      }
+      return retryableError;
+    };
 
     while (now() - startTime < retryTimeoutMs) {
       attempt += 1;
@@ -136,6 +153,7 @@ class ContactSeedPhase {
             maxDelayMs,
             retryAfterMs: classification.retryAfterMs,
           });
+          lastRetryAfterMs = nextDelayMs;
           logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
             nodeId: this.nodeId,
             bootstrapUrl,
@@ -154,6 +172,42 @@ class ContactSeedPhase {
             maxDelayMs,
           );
           continue;
+        }
+
+        if (classification.retryable) {
+          if (parsedError?.code ===
+              BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
+            throw buildRetryableSeedContactError(
+              JOINING_ERROR_MSG.leaderMetadataIncomplete(
+                formatLeaderMetadataDetails(parsedError),
+              ),
+              {
+                retryAfterMs: lastRetryAfterMs,
+                parsedError,
+                code: classification.code,
+              },
+            );
+          }
+
+          if (parsedError?.code ===
+              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
+            throw buildRetryableSeedContactError(
+              JOINING_ERROR_MSG.bootstrapNotReady(parsedError.phase),
+              {
+                retryAfterMs: lastRetryAfterMs,
+                parsedError,
+                code: classification.code,
+              },
+            );
+          }
+
+          throw buildRetryableSeedContactError(
+            JOINING_ERROR_MSG.contactSeedFailed(error.message),
+            {
+              retryAfterMs: lastRetryAfterMs,
+              parsedError,
+            },
+          );
         }
 
         if (classification.terminalValidationOrConflict) {
@@ -200,25 +254,38 @@ class ContactSeedPhase {
 
     if (lastBootstrapError?.code ===
         BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      throw new Error(
+      throw buildRetryableSeedContactError(
         JOINING_ERROR_MSG.leaderMetadataIncomplete(
           formatLeaderMetadataDetails(lastBootstrapError),
         ),
+        {
+          retryAfterMs: lastRetryAfterMs,
+          parsedError: lastBootstrapError,
+          code: lastBootstrapError.code,
+        },
       );
     }
 
     if (lastBootstrapError?.code ===
         BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      throw new Error(
+      throw buildRetryableSeedContactError(
         JOINING_ERROR_MSG.bootstrapNotReady(lastBootstrapError.phase),
+        {
+          retryAfterMs: lastRetryAfterMs,
+          parsedError: lastBootstrapError,
+          code: lastBootstrapError.code,
+        },
       );
     }
 
     if (lastRetryableSeedContactError) {
-      throw new Error(
+      throw buildRetryableSeedContactError(
         JOINING_ERROR_MSG.contactSeedFailed(
           lastRetryableSeedContactError,
         ),
+        {
+          retryAfterMs: lastRetryAfterMs,
+        },
       );
     }
 

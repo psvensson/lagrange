@@ -74,11 +74,60 @@ class ControlPlaneKernelIngress {
     return this.resolveTargetCandidates(options)[NUM.ZERO] || null;
   }
 
+  resolveNodeStateUpdateTargetCandidates(options = {}) {
+    const sharedOptions = {
+      allowBootstrapHints: options.allowBootstrapHints !== false,
+      localTargetMode:
+        options.localTargetMode === 'any_replica' ?
+          'any_replica' :
+          'leader_only',
+      requiredTables: Array.isArray(options.requiredTables) ?
+        options.requiredTables :
+        [],
+    };
+    const isReadyHeartbeatPublication =
+      options.state === STATE.READY &&
+      Number.isFinite(options.heartbeatAt);
+    if (!isReadyHeartbeatPublication) {
+      return this.resolveTargetCandidates({
+        ...sharedOptions,
+        allowSelfTarget: true,
+      });
+    }
+
+    const remoteCandidates = this.resolveTargetCandidates({
+      ...sharedOptions,
+      allowSelfTarget: false,
+    });
+    const optimisticRemoteCandidates =
+      remoteCandidates.length > NUM.ZERO ?
+        [] :
+        this.resolveTargetCandidates({
+          ...sharedOptions,
+          allowSelfTarget: false,
+          allowDisconnectedTargets: true,
+        });
+    const allCandidates = this.resolveTargetCandidates({
+      ...sharedOptions,
+      allowSelfTarget: true,
+    });
+    const mergedCandidates = [...remoteCandidates];
+    for (const address of optimisticRemoteCandidates) {
+      pushUniqueAddress(mergedCandidates, address);
+    }
+    for (const address of allCandidates) {
+      pushUniqueAddress(mergedCandidates, address);
+    }
+    return mergedCandidates;
+  }
+
   resolveTargetCandidates(options = {}) {
     this.pruneExpiredState();
     const targets = [];
     const allowBootstrapHints = options.allowBootstrapHints !== false;
     const allowSelfTarget = options.allowSelfTarget === true;
+    const allowDisconnectedTargets =
+      options.allowDisconnectedTargets === true;
     const requiredTables = Array.isArray(options.requiredTables) ?
       options.requiredTables :
       [];
@@ -98,7 +147,7 @@ class ControlPlaneKernelIngress {
       if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
         return;
       }
-      if (!this.isTargetReachable(address)) {
+      if (!this.isTargetReachable(address, {allowDisconnectedTargets})) {
         return;
       }
       pushUniqueAddress(targets, address);
@@ -120,7 +169,9 @@ class ControlPlaneKernelIngress {
       }
     }
     if (allowBootstrapHints) {
-      for (const address of this.resolveBootstrapTargetAddresses(assignment)) {
+      for (const address of this.resolveBootstrapTargetAddresses(assignment, {
+        allowDisconnectedTargets,
+      })) {
         pushOrderedTarget(address);
       }
     }
@@ -216,7 +267,7 @@ class ControlPlaneKernelIngress {
     return replicaFallback;
   }
 
-  resolveBootstrapTargetAddresses(assignment = null) {
+  resolveBootstrapTargetAddresses(assignment = null, options = {}) {
     if (!assignment || typeof assignment !== TYPEOF.OBJECT) {
       return [];
     }
@@ -234,6 +285,8 @@ class ControlPlaneKernelIngress {
     ];
     const seedTargets = [];
     const remoteTargets = [];
+    const allowDisconnectedTargets =
+      options.allowDisconnectedTargets === true;
 
     for (const address of hintCandidates) {
       const parsed = parseMessageGroupAddress(address);
@@ -249,7 +302,8 @@ class ControlPlaneKernelIngress {
       if (replicaToMove && parsed.replicaId === replicaToMove) {
         continue;
       }
-      const reachable = this.isConnectedNode(parsed.nodeId);
+      const reachable = allowDisconnectedTargets === true ||
+        this.isConnectedNode(parsed.nodeId);
       if (seedNodeId && parsed.nodeId === seedNodeId) {
         if (reachable) {
           pushUniqueAddress(seedTargets, address);
@@ -304,13 +358,18 @@ class ControlPlaneKernelIngress {
     return Number.isFinite(suppressedUntil) && suppressedUntil > this.now();
   }
 
-  isTargetReachable(targetAddress) {
+  isTargetReachable(targetAddress, options = {}) {
     const parsed = parseMessageGroupAddress(targetAddress);
     if (!parsed) {
       return false;
     }
-    return !this.isTargetSuppressed(targetAddress) &&
-      this.isConnectedNode(parsed.nodeId);
+    if (this.isTargetSuppressed(targetAddress)) {
+      return false;
+    }
+    if (options.allowDisconnectedTargets === true) {
+      return true;
+    }
+    return this.isConnectedNode(parsed.nodeId);
   }
 }
 

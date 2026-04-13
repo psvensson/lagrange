@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "tap",
+  "tap": {
+    "testFiles": [
+      "test/**/*.test.js"
+    ],
+    "forceBail": true
+  },
+  "mutate": [
+    "src/**/*.js"
+  ],
+  "coverageAnalysis": "perTest",
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html"
+  ],
+  "concurrency": 2,
+  "timeoutMS": 60000
+}

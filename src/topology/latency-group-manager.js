@@ -325,79 +325,48 @@ class LatencyGroupManager extends EventEmitter {
       measurements,
       currentGroupId,
     );
-
-    if (!currentGroupId) {
-      if (nearestEligible) {
+    const shouldCreateNewGroup = !currentGroupId && !nearestEligible;
+    const createdGroupRow = shouldCreateNewGroup ?
+      (() => {
+        const now = this.now();
+        const groupId = this.buildGroupId(now);
         return {
-          reason: LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP,
-          currentGroupId: null,
-          targetGroupId: nearestEligible.groupId,
-          changed: true,
-          createdGroupRow: null,
-          measurements,
+          [COLUMN.GROUP_ID]: groupId,
+          [COLUMN.REPRESENTATIVE_NODE_ID]: this.nodeId,
+          [COLUMN.COORDINATOR_NODE_ID]: this.nodeId,
+          [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
+          [COLUMN.CREATED_AT]: now,
+          [COLUMN.UPDATED_AT]: now,
         };
-      }
-
-      const now = this.now();
-      const groupId = this.buildGroupId(now);
-      const createdGroupRow = {
-        [COLUMN.GROUP_ID]: groupId,
-        [COLUMN.REPRESENTATIVE_NODE_ID]: this.nodeId,
-        [COLUMN.COORDINATOR_NODE_ID]: this.nodeId,
-        [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
-        [COLUMN.CREATED_AT]: now,
-        [COLUMN.UPDATED_AT]: now,
-      };
-      return {
-        reason: LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP,
-        currentGroupId: null,
-        targetGroupId: groupId,
-        changed: true,
-        createdGroupRow,
-        measurements,
-      };
-    }
-
-    if (!nearestEligible) {
-      return {
-        reason: LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP,
-        currentGroupId,
-        targetGroupId: currentGroupId,
-        changed: false,
-        createdGroupRow: null,
-        measurements,
-      };
-    }
-
-    if (nearestEligible.groupId === currentGroupId) {
-      return {
-        reason: LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP,
-        currentGroupId,
-        targetGroupId: currentGroupId,
-        changed: false,
-        createdGroupRow: null,
-        measurements,
-      };
-    }
-
+      })() :
+      null;
     const currentRttMs = Number(currentGroupMeasurement?.rttMs);
-    if (!Number.isFinite(currentRttMs) || nearestEligible.rttMs < currentRttMs) {
-      return {
-        reason: LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP,
-        currentGroupId,
-        targetGroupId: nearestEligible.groupId,
-        changed: true,
-        createdGroupRow: null,
-        measurements,
-      };
-    }
+    const reason = !currentGroupId && nearestEligible ?
+      LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP :
+      shouldCreateNewGroup ?
+        LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP :
+        !nearestEligible ?
+          LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP :
+          nearestEligible.groupId === currentGroupId ?
+            LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP :
+            !Number.isFinite(currentRttMs) ||
+              nearestEligible.rttMs < currentRttMs ?
+              LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP :
+              LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP;
+    const targetGroupId =
+      reason === LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP ||
+      reason === LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP ?
+        nearestEligible.groupId :
+        reason === LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP ?
+          createdGroupRow[COLUMN.GROUP_ID] :
+          currentGroupId;
 
     return {
-      reason: LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP,
+      reason,
       currentGroupId,
-      targetGroupId: currentGroupId,
-      changed: false,
-      createdGroupRow: null,
+      targetGroupId,
+      changed: reason !== LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP,
+      createdGroupRow,
       measurements,
     };
   }

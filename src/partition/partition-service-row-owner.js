@@ -15,6 +15,8 @@ const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   REPLICA_ID_REQUIRED: 'PartitionServiceRowOwner requires replicaId',
   UPSERT_REQUIRED:
     'PartitionServiceRowOwner requires upsertSystemTableRow for registration',
+  DELETE_REQUIRED:
+    'PartitionServiceRowOwner requires deleteSystemTableRow for removal',
 });
 const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
   allowCoalescing: true,
@@ -125,6 +127,36 @@ class PartitionServiceRowOwner {
     };
   }
 
+  buildPartitionLeaderUpdateOptions(partitionId) {
+    return {
+      ...(this.isCriticalSystemPartition(partitionId) ?
+        CRITICAL_SERVICE_ROW_UPDATE_OPTION :
+        SERVICE_ROW_UPDATE_OPTION),
+      coalescingKey: `partitions:leader:${partitionId}`,
+    };
+  }
+
+  async publishCanonicalLeaderNodeId(row) {
+    if (!row ||
+        row.service_type !== SERVICE_TYPE.PARTITION ||
+        row.status !== SERVICE_STATUS.ACTIVE ||
+        row.raft_role !== RAFT_ROLE.LEADER ||
+        !this.systemTableWriter ||
+        typeof this.systemTableWriter.updateSystemTableRow !== TYPEOF.FUNCTION) {
+      return;
+    }
+
+    await this.systemTableWriter.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      {partition_id: row.partition_id},
+      {
+        leader_node_id: row.node_id,
+        updated_at: row.updated_at,
+      },
+      this.buildPartitionLeaderUpdateOptions(row.partition_id),
+    );
+  }
+
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
@@ -145,6 +177,7 @@ class PartitionServiceRowOwner {
       row,
       this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
     );
+    await this.publishCanonicalLeaderNodeId(row);
 
     return row;
   }
@@ -192,7 +225,42 @@ class PartitionServiceRowOwner {
       updates,
       this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
     );
+    await this.publishCanonicalLeaderNodeId(row);
     return row;
+  }
+
+  async removeReplica(options = {}) {
+    if (
+      !this.systemTableWriter ||
+      typeof this.systemTableWriter.deleteSystemTableRow !== TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        PARTITION_SERVICE_ROW_OWNER_ERROR.DELETE_REQUIRED,
+      );
+    }
+
+    const {partitionId, replicaId, nodeId} = options;
+    assertRequiredString(
+      replicaId,
+      PARTITION_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED,
+    );
+
+    const whereClause = {
+      service_id: replicaId,
+      service_type: SERVICE_TYPE.PARTITION,
+    };
+    if (typeof partitionId === TYPEOF.STRING && partitionId.length > 0) {
+      whereClause.partition_id = partitionId;
+    }
+    if (typeof nodeId === TYPEOF.STRING && nodeId.length > 0) {
+      whereClause.node_id = nodeId;
+    }
+
+    await this.systemTableWriter.deleteSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      whereClause,
+      this.buildDeferredUpdateOptions(replicaId, partitionId || null),
+    );
   }
 }
 

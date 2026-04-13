@@ -226,6 +226,63 @@ test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
     'overlay service should remain routable during the cache gap');
 });
 
+test('SQLQueryEngine - recovery routing overlay does not invent a leader ' +
+  'from follower-only service visibility', async (t) => {
+  const partitionId = 'nodes-p1';
+  const cache = createMockSystemCache([], [], [], []);
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    nodeId: 'join-node',
+  });
+
+  const installed = engine.installRecoveryRoutingOverlayEntry(
+    partitionId,
+    TABLES.NODES,
+    [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'seed-node',
+        raft_role: 'follower',
+        address: 'seed-node/partition/nodes-p1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: `${partitionId}-r2`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'node-b',
+        raft_role: 'follower',
+        address: 'node-b/partition/nodes-p1-r2',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: `${partitionId}-r3`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'node-c',
+        raft_role: 'follower',
+        address: 'node-c/partition/nodes-p1-r3',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+  );
+
+  t.equal(installed, true, 'recovery overlay should still install service visibility');
+  t.equal(
+    engine.getTablePartitions(TABLES.NODES)[0]?.leader_node_id || null,
+    null,
+    'recovery overlay should not fabricate canonical leader ownership from follower-only services',
+  );
+  t.equal(
+    engine.queryExecutor.findPartitionLeaderAddress(partitionId),
+    null,
+    'routing should fail closed until coherent leader evidence exists',
+  );
+});
+
 test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
   'into QueryExecutor runtime repair', async (t) => {
   const partitionId = 'replica_operations-p1';
@@ -320,6 +377,50 @@ test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
     recoveryCandidates[0].address,
     'new-owner/partition/replica_operations-p1-r4',
     'leader recovery should target the refreshed authoritative owner endpoint',
+  );
+});
+
+test('SQLQueryEngine - authoritative system-table selects request bounded ' +
+  'local replica fallback before owner RPC', async (t) => {
+  const authoritativeReads = [];
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [], [], []),
+    messageRouter: createMockMessageRouter(),
+    authoritativeControlPlaneView: {
+      async readRows(tableName, sql, params, options) {
+        authoritativeReads.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{
+            log_id: params[0],
+          }],
+          source: 'local_partition_replica',
+        };
+      },
+    },
+  });
+
+  const result = await engine.executeQuery(
+    'SELECT log_id FROM logs WHERE log_id = ?',
+    ['log-visible-1'],
+  );
+
+  t.equal(result.success, true, 'authoritative system-table reads should succeed');
+  t.equal(result.rows.length, 1, 'authoritative local rows should be returned');
+  t.equal(
+    authoritativeReads.length,
+    1,
+    'system-table SELECT should use one authoritative local read',
+  );
+  t.equal(
+    authoritativeReads[0]?.options?.replicaFallbackConsistency,
+    'any_replica',
+    'system-table SELECT should allow bounded local replica fallback before owner RPC',
+  );
+  t.equal(
+    authoritativeReads[0]?.options?.allowSqlFallback,
+    false,
+    'system-table SELECT should keep routed SQL disabled during the authoritative preflight',
   );
 });
 
@@ -586,6 +687,24 @@ async (t) => {
     'transaction rows should use background delivery priority');
   t.equal(submissions[1].options.deliveryPriority, 'background',
     'participant rows should use background delivery priority');
+  t.equal(submissions[0].options.skipCacheWait, true,
+    'transaction rows should not fail closed on cache visibility lag');
+  t.equal(submissions[1].options.skipCacheWait, true,
+    'participant rows should not fail closed on cache visibility lag');
+  t.equal(submissions[0].options.mergePolicy, 'replace_pending',
+    'transaction rows should coalesce to the latest durable state');
+  t.equal(submissions[1].options.mergePolicy, 'replace_pending',
+    'participant rows should coalesce to the latest durable state');
+  t.equal(
+    submissions[0].options.coalescingKey,
+    'sql-transaction:tx-1',
+    'transaction persistence should use a stable coalescing key',
+  );
+  t.equal(
+    submissions[1].options.coalescingKey,
+    'sql-transaction-participant:participant-1',
+    'participant persistence should use a stable coalescing key',
+  );
 });
 
 test('SQLQueryEngine - query ingress reuses the shared pressure admission ' +
@@ -838,12 +957,41 @@ test('SQLQueryEngine - shuts down lifecycle-owned table creation services', asyn
 test('SQLQueryEngine - requests debounced managed split evaluation after ' +
   'successful non-system writes', async (t) => {
   const requestedContexts = [];
+  const cache = createMockSystemCache(
+    [{
+      table_id: 'tbl-users',
+      table_name: 'users',
+      active_partition_version: 1,
+    }],
+    [
+      {
+        partition_id: 'users-p1',
+        table_id: 'tbl-users',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: 'm',
+        partition_version: 1,
+        leader_node_id: 'test-node',
+      },
+      {
+        partition_id: 'users-p2',
+        table_id: 'tbl-users',
+        table_name: 'users',
+        partition_key_start: 'm',
+        partition_key_end: null,
+        partition_version: 1,
+        leader_node_id: 'node-b',
+      },
+    ],
+  );
   const partitionSplitMergeManager = {
     requestEvaluation(context) {
       requestedContexts.push(context);
     },
   };
   const engine = new SQLQueryEngine({
+    nodeId: 'test-node',
+    systemCache: cache,
     partitionSplitMergeManager,
   });
   const writePlan = {
@@ -884,9 +1032,19 @@ test('SQLQueryEngine - requests debounced managed split evaluation after ' +
     {
       reasonCode: 'write_activity',
       tableName: 'users',
-      partitionIds: ['users-p1', 'users-p2'],
+      partitionIds: ['users-p1'],
     },
-    'write-activity evaluation should include write partition context',
+    'write-activity evaluation should only target locally-owned split partitions',
+  );
+  t.same(
+    engine.lastWriteSplitEvaluationByTable.get('users'),
+    {
+      requestedAtMs:
+        engine.lastWriteSplitEvaluationByTable.get('users').requestedAtMs,
+      partitionIds: ['users-p1', 'users-p2'],
+      localLeaderPartitionIds: ['users-p1'],
+    },
+    'write tracking should retain full and locally-owned partition context',
   );
 });
 
@@ -1374,6 +1532,54 @@ test('SQLQueryEngine - returns syntax error for invalid SQL', async (t) => {
   t.ok(result.errorCode);
 });
 
+test('SQLQueryEngine - preserves structured retry metadata from thrown ' +
+  'execution errors', async (t) => {
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], []),
+    messageRouter: createMockMessageRouter(),
+  });
+  engine.executeSelect = async () => {
+    const error = new Error('query_admission_deferred');
+    error.errorCode = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+    error.retryAfterMs = 321;
+    error.deferRetry = true;
+    error.participantFailures = [{
+      error: 'control_plane_pressure_degraded',
+      errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+      retryAfterMs: 321,
+      deferRetry: true,
+      failedTable: 'replica_operations',
+    }];
+    error.firstFailedParticipant = error.participantFailures[0];
+    throw error;
+  };
+
+  const result = await engine.executeQuery('SELECT * FROM users');
+
+  t.equal(result.success, false);
+  t.equal(result.error, 'query_admission_deferred');
+  t.equal(
+    result.errorCode,
+    'CONTROL_PLANE_PRESSURE_DEGRADED',
+    'explicit lower-layer error codes should survive executeQuery catch handling',
+  );
+  t.equal(
+    result.retryAfterMs,
+    321,
+    'retry-after hints should survive executeQuery catch handling',
+  );
+  t.equal(
+    result.deferRetry,
+    true,
+    'defer markers should survive executeQuery catch handling',
+  );
+  t.equal(
+    result.firstFailedParticipant?.failedTable,
+    'replica_operations',
+    'participant failure details should survive executeQuery catch handling',
+  );
+});
+
 test('SQLQueryEngine - parse method returns AST', async (t) => {
   const engine = new SQLQueryEngine({
     systemCache: createMockSystemCache([], []),
@@ -1433,7 +1639,8 @@ test('SQLQueryEngine - returns empty array when no partitions found in cache', a
   t.ok(result.error.includes('not found'));
 });
 
-test('SQLQueryEngine - persists non-transactional distributed write operations',
+test('SQLQueryEngine - does not persist successful non-transactional ' +
+  'distributed write operations',
   async (t) => {
     const upserts = [];
     const cache = createMockSystemCache(
@@ -1477,9 +1684,8 @@ test('SQLQueryEngine - persists non-transactional distributed write operations',
 
     const writeOpRows = upserts.filter((entry) =>
       entry.tableName === TABLES.SQL_WRITE_OPERATIONS);
-    t.equal(writeOpRows.length, 2);
-    t.equal(writeOpRows[0].row.status, 'PENDING');
-    t.equal(writeOpRows[1].row.status, 'SUCCEEDED');
+    t.equal(writeOpRows.length, 0,
+      'successful non-transactional writes should not emit tracking rows');
   });
 
 test('SQLQueryEngine - mirrors post-cutover writes back to the source partition',
@@ -2085,13 +2291,8 @@ test('SQLQueryEngine - hides pending split children until active version flips',
     mockPartitionData.clear();
   });
 
-test('SQLQueryEngine - non-transactional write persistence does not block ' +
-  'INSERT critical path', async (t) => {
-  // Bug: persistNonTransactionalWriteStart and persistNonTransactionalWriteResult
-  // are awaited in the INSERT path, adding 2 full SQL round-trips per write.
-  // For non-transactional single-partition writes, this tracking is not needed
-  // for correctness (only used in distributed transaction recovery).
-  // The persistence should be fire-and-forget to avoid tripling write latency.
+test('SQLQueryEngine - successful non-transactional INSERT does not persist ' +
+  'write-tracking rows or block the critical path', async (t) => {
   const SLOW_PERSIST_MS = 50;
   const upserts = [];
   let upsertResolvers = [];
@@ -2144,6 +2345,8 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
     `INSERT took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
     '(write persistence should not block critical path)',
   );
+  t.equal(upserts.length, 0,
+    'successful non-transactional INSERT should not persist sql_write_operations rows');
 
   // Allow fire-and-forget upserts to complete before test cleanup.
   await Promise.resolve();
@@ -2154,9 +2357,10 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
   await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
 });
 
-test('SQLQueryEngine - non-transactional write persistence does not block ' +
-  'UPDATE critical path', async (t) => {
+test('SQLQueryEngine - successful non-transactional UPDATE does not persist ' +
+  'write-tracking rows or block the critical path', async (t) => {
   const SLOW_PERSIST_MS = 50;
+  const upserts = [];
   let upsertResolvers = [];
 
   const cache = createMockSystemCache(
@@ -2170,7 +2374,8 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
   );
 
   const cdcIntegrationService = {
-    async upsertSystemTableRow(_tableName, _row) {
+    async upsertSystemTableRow(tableName, row) {
+      upserts.push({tableName, row});
       await new Promise((resolve) => {
         upsertResolvers.push(resolve);
         setTimeout(resolve, SLOW_PERSIST_MS);
@@ -2199,6 +2404,8 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
     `UPDATE took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
     '(write persistence should not block critical path)',
   );
+  t.equal(upserts.length, 0,
+    'successful non-transactional UPDATE should not persist sql_write_operations rows');
 
   await Promise.resolve();
   for (const resolver of upsertResolvers) {
@@ -2208,9 +2415,10 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
   await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
 });
 
-test('SQLQueryEngine - non-transactional write persistence does not block ' +
-  'DELETE critical path', async (t) => {
+test('SQLQueryEngine - successful non-transactional DELETE does not persist ' +
+  'write-tracking rows or block the critical path', async (t) => {
   const SLOW_PERSIST_MS = 50;
+  const upserts = [];
   let upsertResolvers = [];
 
   const cache = createMockSystemCache(
@@ -2224,7 +2432,8 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
   );
 
   const cdcIntegrationService = {
-    async upsertSystemTableRow(_tableName, _row) {
+    async upsertSystemTableRow(tableName, row) {
+      upserts.push({tableName, row});
       await new Promise((resolve) => {
         upsertResolvers.push(resolve);
         setTimeout(resolve, SLOW_PERSIST_MS);
@@ -2253,8 +2462,79 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
     `DELETE took ${durationMs}ms, expected < ${maxAcceptableMs}ms ` +
     '(write persistence should not block critical path)',
   );
+  t.equal(upserts.length, 0,
+    'successful non-transactional DELETE should not persist sql_write_operations rows');
 
   await Promise.resolve();
+  for (const resolver of upsertResolvers) {
+    resolver();
+  }
+  upsertResolvers = [];
+  await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});
+
+test('SQLQueryEngine - failed non-transactional INSERT persists one ' +
+  'terminal write-tracking row without blocking the caller', async (t) => {
+  const SLOW_PERSIST_MS = 50;
+  const upserts = [];
+  let upsertResolvers = [];
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+
+  const cdcIntegrationService = {
+    async upsertSystemTableRow(tableName, row) {
+      upserts.push({tableName, row, timestamp: Date.now()});
+      await new Promise((resolve) => {
+        upsertResolvers.push(resolve);
+        setTimeout(resolve, SLOW_PERSIST_MS);
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    cdcIntegrationService,
+  });
+  engine.distributedWriteCoordinator.executePlan = async () => {
+    throw new Error('synthetic distributed write failure');
+  };
+
+  const startMs = Date.now();
+  const result = await engine.executeQuery(
+    'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
+  );
+  const durationMs = Date.now() - startMs;
+
+  t.equal(result.success, false,
+    'failed distributed write should surface a failed query result');
+  t.match(result.error, /synthetic distributed write failure/,
+    'failed query result should preserve the write error');
+  t.ok(
+    durationMs < SLOW_PERSIST_MS,
+    `failed INSERT took ${durationMs}ms, expected < ${SLOW_PERSIST_MS}ms ` +
+    '(failure tracking should remain fire-and-forget)',
+  );
+
+  await Promise.resolve();
+  t.equal(upserts.length, 1,
+    'failed non-transactional INSERT should persist one terminal tracking row');
+  t.equal(upserts[0].tableName, TABLES.SQL_WRITE_OPERATIONS,
+    'failure tracking should target sql_write_operations');
+  t.equal(upserts[0].row.status, 'FAILED',
+    'terminal tracking row should record failed status');
+  t.match(upserts[0].row.last_error, /synthetic distributed write failure/,
+    'terminal tracking row should preserve the failure');
+
   for (const resolver of upsertResolvers) {
     resolver();
   }
@@ -5019,6 +5299,53 @@ test('SQLQueryEngine - only evaluates local leader partitions for managed splits
     );
   });
 
+test('SQLQueryEngine - includes retryable failed managed split transitions ' +
+  'in local leader evaluation', async (t) => {
+  const cache = createMockSystemCache(
+    [{
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key: 'id',
+      active_partition_version: 1,
+      partition_transition_state: PARTITION_TRANSITION_STATE.FAILED,
+      partition_transition_metadata: JSON.stringify({
+        workflowId: 'split-tbl-users-users-p1-v2',
+        failure: {
+          classification: 'split_execution_failure',
+          message:
+            'Timed out waiting for routable partition service for partition ' +
+            'users-p-right',
+          timeoutClassification: {
+            classification:
+              TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+          },
+        },
+      }),
+    }],
+    [{
+      partition_id: 'users-p1',
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+      partition_version: 1,
+      leader_node_id: 'node-a',
+    }],
+  );
+
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+  });
+
+  t.same(
+    engine.listManagedSplitPartitions().map((partition) => partition.partition_id),
+    ['users-p1'],
+    'retryable failed split transitions should not drop the source partition out of managed split evaluation',
+  );
+});
+
 test('SQLQueryEngine - executeManagedSplit rejects non-leader callers', async (t) => {
   const cache = createMockSystemCache(
     [{
@@ -5826,6 +6153,148 @@ test('SQLQueryEngine - provisionInitialTablePartition uses explicit child ' +
   );
 });
 
+test('SQLQueryEngine - provisionInitialTablePartition reuses explicit child ' +
+  'prechecks during bootstrap creation', async (t) => {
+  const partitionId = 'tbl-split-child-prechecked-p1';
+  const localNodeId = 'node-a';
+  const checkedTargetNodeIds = [];
+  const createdTargetMoves = [];
+  const executedTargetNodeIds = [];
+  const services = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active', connection_state: 'ready'},
+    {node_id: 'node-b', status: 'active', connection_state: 'ready'},
+    {node_id: 'node-c', status: 'active', connection_state: 'ready'},
+  ];
+
+  const cache = {
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const deniedAdmissionResult = {
+    allowed: false,
+    decisionType: 'deferred',
+    blockingReasons: ['control_plane_write_unhealthy'],
+    ineligibleNodes: [{
+      nodeId: localNodeId,
+      failedDimensions: ['controlPlaneWritable'],
+      reasonCodes: ['control_plane_write_unhealthy'],
+    }],
+  };
+  const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      checkedTargetNodeIds.push(move.nodeId);
+      return {
+        allowed: false,
+        decisionType: 'deferred',
+        admissionResult: deniedAdmissionResult,
+      };
+    },
+    async createOperation(move) {
+      createdTargetMoves.push({
+        nodeId: move.nodeId,
+        skipProvisioningAdmissionRecheck:
+          move.skipProvisioningAdmissionRecheck === true,
+      });
+      if (move.skipProvisioningAdmissionRecheck !== true) {
+        const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
+        error.admissionResult = deniedAdmissionResult;
+        throw error;
+      }
+      return {
+        operationId: `op-${move.nodeId}`,
+        createdAt: Date.now(),
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      executedTargetNodeIds.push(targetNodeId);
+      services.push({
+        replica_id: operation.replicaId || operation.replica_id,
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: targetNodeId,
+        raft_role: 'leader',
+        address: `${targetNodeId}/partition/${operation.partitionId}`,
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await engine.provisionInitialTablePartition({
+    partitionId,
+    replicaCount: 3,
+    minimumRoutableReplicaCount: 1,
+    targetNodeIds: [localNodeId, 'node-b', 'node-c'],
+    admissionConvergence: {
+      candidateTargetNodeIds: [localNodeId, 'node-b', 'node-c'],
+      admittedTargetNodeIds: [localNodeId],
+      rejectedTargetNodePlans: [
+        {
+          targetNodeId: 'node-b',
+          decisionType: 'deferred',
+          blockingReasons: ['control_plane_write_unhealthy'],
+          reasonCodes: ['control_plane_write_unhealthy'],
+        },
+        {
+          targetNodeId: 'node-c',
+          decisionType: 'deferred',
+          blockingReasons: ['control_plane_write_unhealthy'],
+          reasonCodes: ['control_plane_write_unhealthy'],
+        },
+      ],
+      maximumProvisionableReplicaCount: 1,
+    },
+  });
+
+  t.same(
+    checkedTargetNodeIds,
+    [],
+    'prechecked child bootstrap should not re-run explicit target admission before planning',
+  );
+  t.same(
+    createdTargetMoves,
+    [{
+      nodeId: localNodeId,
+      skipProvisioningAdmissionRecheck: true,
+    }],
+    'bootstrap creation should reuse the admitted precheck target instead of re-admitting it',
+  );
+  t.same(
+    executedTargetNodeIds,
+    [localNodeId],
+    'bootstrap creation should proceed on the pre-admitted child target',
+  );
+});
+
 test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
   'initial replica cohort never becomes routable', async (t) => {
   const tableId = 'tbl-initial-quorum';
@@ -6348,7 +6817,7 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
     tablePartitionProvisioningPollIntervalMs: 5,
   });
 
-  await engine.provisionInitialTablePartition({
+  const provisionSummary = await engine.provisionInitialTablePartition({
     tableId,
     partitionId,
     replicaCount: 3,
@@ -6364,6 +6833,16 @@ test('SQLQueryEngine - provisionInitialTablePartition can stop waiting once ' +
     engine.getRoutablePartitionServiceNodeIds(partitionId).length,
     2,
     'split provisioning should only require the requested minimum routable cohort before continuing',
+  );
+  t.same(
+    provisionSummary,
+    {
+      requestedReplicaCount: 3,
+      resolvedReplicaCount: 3,
+      minimumRoutableReplicaCount: 2,
+      routableReplicaCount: 2,
+    },
+    'provisioning should report quorum-only convergence when the full replica cohort is still catching up',
   );
 });
 

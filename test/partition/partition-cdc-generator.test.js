@@ -539,4 +539,17 @@ describe('PartitionCDCGenerator', () => {
       assert.deepStrictEqual(values, ['it\'s a test']);
     });
   });
+
+  describe('extractTableNameFromSQL', () => {
+    it('should parse INSERT OR IGNORE statements', () => {
+      const tableNameResult = generator.extractTableNameFromSQL(
+        'INSERT OR IGNORE INTO test_table (id, name) VALUES (\'1\', \'a\')',
+      );
+
+      assert.deepStrictEqual(tableNameResult, {
+        state: 'found',
+        tableName: 'test_table',
+      });
+    });
+  });
 });

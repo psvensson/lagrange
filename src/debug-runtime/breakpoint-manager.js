@@ -197,26 +197,18 @@ class BreakpointManager {
     const pendingStepAction = this.consumePendingStepAction({
       sessionId: request.sessionId,
     });
-
-    if (hitResult.hit) {
-      return {
-        reason: 'breakpoint',
-        hitBreakpoints: hitResult.breakpoints,
-        stepAction: pendingStepAction,
-      };
-    }
-    if (pendingStepAction) {
-      return {
-        reason: 'step',
-        hitBreakpoints: [],
-        stepAction: pendingStepAction,
-      };
-    }
+    const pauseReason = hitResult.hit ?
+      'breakpoint' :
+      pendingStepAction ?
+        'step' :
+        'pause';
 
     return {
-      reason: 'pause',
-      hitBreakpoints: [],
-      stepAction: null,
+      reason: pauseReason,
+      hitBreakpoints: pauseReason === 'breakpoint' ?
+        hitResult.breakpoints :
+        [],
+      stepAction: pauseReason === 'pause' ? null : pendingStepAction,
     };
   }
 

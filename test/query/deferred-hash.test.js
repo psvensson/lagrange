@@ -2,9 +2,8 @@
  * Deferred Payload Hash Unit Tests
  *
  * Verifies that non-transactional writes defer hash computation
- * to the async fire-and-forget path (fireNonTransactionalWriteStart),
- * while transactional writes compute the hash synchronously before
- * recordWriteOperation.
+ * to the async fire-and-forget result path, while transactional
+ * writes compute the hash synchronously before recordWriteOperation.
  *
  * Requirements: 3.1, 3.2
  */
@@ -88,17 +87,15 @@ function createTestCdc() {
 
 // ── Non-transactional path tests ──────────────────────────────────
 //
-// Strategy: stub fireNonTransactionalWriteStart so it does NOT call
+// Strategy: stub fireNonTransactionalWriteResult so it does NOT call
 // the original (which internally calls createWriteOperationPayloadHash).
 // Then verify that createWriteOperationPayloadHash is never called
 // directly by executeInsert/Update/Delete on the non-tx path.
-// This proves the hash call lives only inside the fire-and-forget
-// method, not on the synchronous hot path.
+// This proves the hash call stays out of the synchronous hot path.
 
 test('deferred hash - non-transactional INSERT does not call ' +
   'createWriteOperationPayloadHash directly', async (t) => {
   let hashCallCount = 0;
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
@@ -106,11 +103,6 @@ test('deferred hash - non-transactional INSERT does not call ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  // Stub both fire-and-forget methods to no-ops so their internal
-  // hash calls don't fire. This isolates the executeInsert scope.
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -126,8 +118,6 @@ test('deferred hash - non-transactional INSERT does not call ' +
     'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
   );
 
-  t.equal(fireStartCalled, true,
-    'fireNonTransactionalWriteStart must be called');
   t.equal(fireResultCalled, true,
     'fireNonTransactionalWriteResult must be called');
   t.equal(hashCallCount, 0,
@@ -137,7 +127,6 @@ test('deferred hash - non-transactional INSERT does not call ' +
 test('deferred hash - non-transactional UPDATE does not call ' +
   'createWriteOperationPayloadHash directly', async (t) => {
   let hashCallCount = 0;
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
@@ -145,9 +134,6 @@ test('deferred hash - non-transactional UPDATE does not call ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -163,8 +149,6 @@ test('deferred hash - non-transactional UPDATE does not call ' +
     'UPDATE users SET name = \'Bob\' WHERE id = \'alice\'',
   );
 
-  t.equal(fireStartCalled, true,
-    'fireNonTransactionalWriteStart must be called');
   t.equal(fireResultCalled, true,
     'fireNonTransactionalWriteResult must be called');
   t.equal(hashCallCount, 0,
@@ -174,7 +158,6 @@ test('deferred hash - non-transactional UPDATE does not call ' +
 test('deferred hash - non-transactional DELETE does not call ' +
   'createWriteOperationPayloadHash directly', async (t) => {
   let hashCallCount = 0;
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createTestCache(),
@@ -182,9 +165,6 @@ test('deferred hash - non-transactional DELETE does not call ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -200,8 +180,6 @@ test('deferred hash - non-transactional DELETE does not call ' +
     'DELETE FROM users WHERE id = \'alice\'',
   );
 
-  t.equal(fireStartCalled, true,
-    'fireNonTransactionalWriteStart must be called');
   t.equal(fireResultCalled, true,
     'fireNonTransactionalWriteResult must be called');
   t.equal(hashCallCount, 0,

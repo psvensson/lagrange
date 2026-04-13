@@ -260,6 +260,66 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
       upsertCalls.every((call) => call.options?.skipCacheWait === true),
       'join-time endpoint upserts should skip cache waits before subscriptions are active',
     );
+    t.ok(
+      upsertCalls.every((call) => Number.isFinite(call.options?.queryTimeoutMs) &&
+        call.options.queryTimeoutMs > 0),
+      'join-time endpoint upserts should carry a bounded routed query timeout',
+    );
+  });
+
+test('registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active',
+  async (t) => {
+    const upsertCalls = [];
+    const mockCDCService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName, rowData, options) => {
+        upsertCalls.push({tableName, rowData, options});
+        return {success: true};
+      },
+    };
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-cache-wait-active',
+      nodeAddress: 'ws://localhost:9004',
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 9004,
+    });
+    service.cdcIntegrationService = mockCDCService;
+    service.cdcSubscriptionsActive = true;
+    service.seedJoinTimeCacheRow = () => {};
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+    service.getNodeStorageBudgetService = () => ({
+      resolveBudgetRow: (nodeRow) => ({
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 1024,
+          storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
+        },
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      }),
+    });
+
+    await service.registerNodeInCluster();
+
+    t.ok(upsertCalls.length > 0,
+      'should upsert join admission rows during registration');
+    t.ok(
+      upsertCalls.every((call) => call.options?.skipCacheWait === true),
+      'join admission writes should always skip cache waits while join readiness still owns convergence',
+    );
+    t.ok(
+      upsertCalls.every((call) => Number.isFinite(call.options?.queryTimeoutMs) &&
+        call.options.queryTimeoutMs > 0),
+      'join admission writes should carry a bounded routed query timeout even after CDC subscriptions become active',
+    );
   });
 
 test('registerNodeInCluster() - should use the registration owner path for nodes row creation',

@@ -144,7 +144,9 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
     });
 
     t.same(decision, {
+      state: 'join_recovered_peer',
       mode: 'join',
+      peerAddressState: 'selected',
       peerAddress: PEER_NODE_ADDRESS_A,
       source: 'rejoin_hints',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -268,7 +270,9 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
     });
 
     t.same(decision, {
+      state: 'join_recovered_peer',
       mode: 'join',
+      peerAddressState: 'selected',
       peerAddress: PEER_NODE_ADDRESS_A,
       source: 'rejoin_hints',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
@@ -310,7 +314,9 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     });
 
     t.same(decision, {
+      state: 'durable_seed',
       mode: 'seed',
+      peerAddressState: 'unavailable',
       peerAddress: null,
       source: 'rejoin_hints',
       startupMode: STARTUP_JOIN_MODE.SEED,
@@ -347,7 +353,9 @@ test('resolveAutoRejoinStartupDecision recovers peers from durable local nodes m
     });
 
     t.same(decision, {
+      state: 'join_probed_peer',
       mode: 'join',
+      peerAddressState: 'selected',
       peerAddress: PEER_NODE_ADDRESS_B,
       source: 'durable_nodes_table',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,

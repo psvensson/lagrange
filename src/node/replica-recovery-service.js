@@ -212,11 +212,23 @@ class ReplicaRecoveryService extends EventEmitter {
 
       if (healthyReplicas.length < targetCount) {
         deficitCount += 1;
-        recoveryCount += await this.triggerPartitionRecovery(
-          partition,
-          healthyReplicas,
-          targetCount,
-        );
+        try {
+          recoveryCount += await this.triggerPartitionRecovery(
+            partition,
+            healthyReplicas,
+            targetCount,
+          );
+        } catch (error) {
+          if (error?.isCritical) {
+            throw error;
+          }
+          this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
+            nodeId: this.nodeId,
+            entityType: REPLICA_RECOVERY_ENTITY_TYPE.PARTITION,
+            partitionId: partition.partition_id,
+            error: error.message,
+          });
+        }
       }
     }
 
@@ -242,11 +254,23 @@ class ReplicaRecoveryService extends EventEmitter {
 
       if (healthyReplicas.length < targetCount) {
         deficitCount += 1;
-        recoveryCount += await this.triggerMessageGroupRecovery(
-          group,
-          healthyReplicas,
-          targetCount,
-        );
+        try {
+          recoveryCount += await this.triggerMessageGroupRecovery(
+            group,
+            healthyReplicas,
+            targetCount,
+          );
+        } catch (error) {
+          if (error?.isCritical) {
+            throw error;
+          }
+          this.logger.error(REPLICA_RECOVERY_LOG_MSG.CHECK_ERROR, {
+            nodeId: this.nodeId,
+            entityType: REPLICA_RECOVERY_ENTITY_TYPE.MESSAGE_GROUP,
+            groupId: group.group_id,
+            error: error.message,
+          });
+        }
       }
     }
 
@@ -370,16 +394,18 @@ class ReplicaRecoveryService extends EventEmitter {
       targetNodes,
     });
 
-    // Create replacement replicas
-    let createdCount = REPLICA_RECOVERY_NUM.ZERO;
-    for (const node of targetNodes) {
-      await this.createPartitionReplica(partition, node.node_id);
-      createdCount += 1;
+    try {
+      // Create replacement replicas
+      let createdCount = REPLICA_RECOVERY_NUM.ZERO;
+      for (const node of targetNodes) {
+        await this.createPartitionReplica(partition, node.node_id);
+        createdCount += 1;
+      }
+      return createdCount;
+    } finally {
+      // Clear pending recovery even on failure so the next cycle can retry.
+      this.pendingRecoveries.delete(recoveryKey);
     }
-
-    // Clear pending recovery
-    this.pendingRecoveries.delete(recoveryKey);
-    return createdCount;
   }
 
   /**
@@ -432,16 +458,18 @@ class ReplicaRecoveryService extends EventEmitter {
       targetNodes,
     });
 
-    // Create replacement replicas
-    let createdCount = REPLICA_RECOVERY_NUM.ZERO;
-    for (const node of targetNodes) {
-      await this.createMessageGroupReplica(group, node.node_id);
-      createdCount += 1;
+    try {
+      // Create replacement replicas
+      let createdCount = REPLICA_RECOVERY_NUM.ZERO;
+      for (const node of targetNodes) {
+        await this.createMessageGroupReplica(group, node.node_id);
+        createdCount += 1;
+      }
+      return createdCount;
+    } finally {
+      // Clear pending recovery even on failure so the next cycle can retry.
+      this.pendingRecoveries.delete(recoveryKey);
     }
-
-    // Clear pending recovery
-    this.pendingRecoveries.delete(recoveryKey);
-    return createdCount;
   }
 
   /**
@@ -454,24 +482,42 @@ class ReplicaRecoveryService extends EventEmitter {
    */
   selectTargetNodes(preferredNodes, allNodes, needed) {
     const selected = [];
+    const selectedNodeIds = new Set();
+    const pushDistinctNode = (node) => {
+      if (!node?.node_id || selectedNodeIds.has(node.node_id)) {
+        return false;
+      }
+      selected.push(node);
+      selectedNodeIds.add(node.node_id);
+      return true;
+    };
 
     // First, use preferred nodes (no existing replicas)
     for (let i = REPLICA_RECOVERY_NUM.ZERO;
       i < Math.min(needed, preferredNodes.length);
       i++) {
-      selected.push(preferredNodes[i]);
+      pushDistinctNode(preferredNodes[i]);
     }
 
-    // If still need more, use any healthy node
+    // If still need more, use other healthy nodes before duplicating.
     const remaining = needed - selected.length;
     if (remaining > REPLICA_RECOVERY_NUM.ZERO &&
       allNodes.length > REPLICA_RECOVERY_NUM.ZERO) {
-      // Sort by load (prefer less loaded nodes)
       const sortedNodes = this.sortNodesByLoad(allNodes);
-      for (let i = REPLICA_RECOVERY_NUM.ZERO;
-        i < remaining && i < sortedNodes.length;
-        i++) {
-        selected.push(sortedNodes[i]);
+      for (const node of sortedNodes) {
+        if (selected.length >= needed) {
+          break;
+        }
+        pushDistinctNode(node);
+      }
+
+      // Only duplicate placements when the cluster cannot satisfy the request
+      // with distinct healthy nodes.
+      for (const node of sortedNodes) {
+        if (selected.length >= needed) {
+          break;
+        }
+        selected.push(node);
       }
     }
 

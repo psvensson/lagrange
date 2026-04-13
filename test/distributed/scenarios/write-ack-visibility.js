@@ -163,16 +163,16 @@ async function run(cluster, options = {}) {
   } = resolveWriteAckVisibilityScenarioConfig(options);
 
   let convergence = null;
-  if (typeof cluster.waitForAllActive === 'function') {
-    await cluster.waitForAllActive({
-      mode: 'load',
-      timeoutMs: CONVERGENCE_SETTLE_TIMEOUT_MS,
-    });
-  } else {
+  if (typeof cluster.waitForConvergence === 'function') {
     convergence = await cluster.waitForConvergence({
       settleTimeoutMs: CONVERGENCE_SETTLE_TIMEOUT_MS,
       quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
       targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    });
+  } else if (typeof cluster.waitForAllActive === 'function') {
+    await cluster.waitForAllActive({
+      mode: 'load',
+      timeoutMs: CONVERGENCE_SETTLE_TIMEOUT_MS,
     });
   }
 

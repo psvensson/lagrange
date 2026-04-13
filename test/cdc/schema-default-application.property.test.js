@@ -23,6 +23,12 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDCSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
 
+const DEFAULT_VALUE_NORMALIZATION_STATE = Object.freeze({
+  NULL: 'null',
+  UNDEFINED: 'undefined',
+  VALUE: 'value',
+});
+
 /**
  * Initialize test environment with required singletons.
  */
@@ -138,13 +144,23 @@ function generateMinimalData(tableName) {
 }
 
 /**
- * Normalize a default value using the same logic as CDCSqlBuilder.
+ * Normalize a default value using the same explicit contract as CDCSqlBuilder.
  * @param {string|number|null} value - Default value from schema.
  * @return {string|number|null} Normalized default value.
  */
 function normalizeDefaultValue(value) {
   const builder = new CDCSqlBuilder();
-  return builder.normalizeDefaultValue(value);
+  const result = builder.normalizeDefaultValue(value);
+  if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.VALUE) {
+    return result.value;
+  }
+  if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.NULL) {
+    return null;
+  }
+  if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.UNDEFINED) {
+    return undefined;
+  }
+  return undefined;
 }
 
 /**

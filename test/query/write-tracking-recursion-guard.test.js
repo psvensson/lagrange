@@ -110,7 +110,6 @@ test('WRITE_TRACKING_EXCLUDED_TABLES contains all three ' +
 
 test('recursion guard - INSERT into sql_write_operations skips ' +
   'write tracking', async (t) => {
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
@@ -118,9 +117,6 @@ test('recursion guard - INSERT into sql_write_operations skips ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -130,8 +126,6 @@ test('recursion guard - INSERT into sql_write_operations skips ' +
     '(id, status) VALUES (\'op1\', \'pending\')',
   );
 
-  t.equal(fireStartCalled, false,
-    'fireNonTransactionalWriteStart must NOT be called');
   t.equal(fireResultCalled, false,
     'fireNonTransactionalWriteResult must NOT be called');
 });
@@ -140,7 +134,6 @@ test('recursion guard - INSERT into sql_write_operations skips ' +
 
 test('recursion guard - UPDATE on sql_write_operations skips ' +
   'write tracking', async (t) => {
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
@@ -148,9 +141,6 @@ test('recursion guard - UPDATE on sql_write_operations skips ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -160,8 +150,6 @@ test('recursion guard - UPDATE on sql_write_operations skips ' +
     'SET status = \'done\' WHERE id = \'op1\'',
   );
 
-  t.equal(fireStartCalled, false,
-    'fireNonTransactionalWriteStart must NOT be called');
   t.equal(fireResultCalled, false,
     'fireNonTransactionalWriteResult must NOT be called');
 });
@@ -170,7 +158,6 @@ test('recursion guard - UPDATE on sql_write_operations skips ' +
 
 test('recursion guard - DELETE on sql_write_operations skips ' +
   'write tracking', async (t) => {
-  let fireStartCalled = false;
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createCacheForTable(TABLES.SQL_WRITE_OPERATIONS),
@@ -178,9 +165,6 @@ test('recursion guard - DELETE on sql_write_operations skips ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -189,8 +173,6 @@ test('recursion guard - DELETE on sql_write_operations skips ' +
     `DELETE FROM ${TABLES.SQL_WRITE_OPERATIONS} WHERE id = 'op1'`,
   );
 
-  t.equal(fireStartCalled, false,
-    'fireNonTransactionalWriteStart must NOT be called');
   t.equal(fireResultCalled, false,
     'fireNonTransactionalWriteResult must NOT be called');
 });
@@ -199,32 +181,30 @@ test('recursion guard - DELETE on sql_write_operations skips ' +
 
 test('recursion guard - INSERT into sql_transactions skips ' +
   'write tracking', async (t) => {
-  let fireStartCalled = false;
+  let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createCacheForTable(TABLES.SQL_TRANSACTIONS),
     messageRouter: createTestRouter(),
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
+  engine.fireNonTransactionalWriteResult = () => {
+    fireResultCalled = true;
   };
-  engine.fireNonTransactionalWriteResult = () => {};
 
   await engine.executeQuery(
     `INSERT INTO ${TABLES.SQL_TRANSACTIONS} ` +
     '(id, status) VALUES (\'tx1\', \'active\')',
   );
 
-  t.equal(fireStartCalled, false,
-    'fireNonTransactionalWriteStart must NOT be called');
+  t.equal(fireResultCalled, false,
+    'fireNonTransactionalWriteResult must NOT be called');
 });
 
 // ── Regular table still tracked ───────────────────────────────────
 
 test('recursion guard - INSERT into regular table still triggers ' +
-  'write tracking', async (t) => {
-  let fireStartCalled = false;
+  'terminal write tracking', async (t) => {
   let fireResultCalled = false;
   const engine = new SQLQueryEngine({
     systemCache: createCacheForTable('users'),
@@ -232,9 +212,6 @@ test('recursion guard - INSERT into regular table still triggers ' +
     cdcIntegrationService: createTestCdc(),
   });
 
-  engine.fireNonTransactionalWriteStart = () => {
-    fireStartCalled = true;
-  };
   engine.fireNonTransactionalWriteResult = () => {
     fireResultCalled = true;
   };
@@ -243,8 +220,6 @@ test('recursion guard - INSERT into regular table still triggers ' +
     'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
   );
 
-  t.equal(fireStartCalled, true,
-    'fireNonTransactionalWriteStart must be called for regular tables');
   t.equal(fireResultCalled, true,
     'fireNonTransactionalWriteResult must be called for regular tables');
 });

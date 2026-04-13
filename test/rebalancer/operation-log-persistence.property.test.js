@@ -20,9 +20,13 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
   createMockCdcService,
+  createMockControlPlaneSystemTableGateway,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
 } from './test-helpers.js';
+
+const PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID = 'partition';
+const PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX = 'r1';
 
 function createTestCoordinatorWithPersistence() {
   const persistedOperations = new Map();
@@ -33,7 +37,7 @@ function createTestCoordinatorWithPersistence() {
         const [
           operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
           status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory,
+          stepsHistory, entityType, entityId,
         ] = params;
 
         persistedOperations.set(operationId, {
@@ -50,8 +54,10 @@ function createTestCoordinatorWithPersistence() {
           completed_at: completedAt,
           error_message: errorMessage,
           steps_history: stepsHistory,
+          entity_type: entityType,
+          entity_id: entityId,
         });
-        return {success: true};
+        return {success: true, affectedRows: 1};
       }
 
       if (sql.includes('UPDATE replica_operations')) {
@@ -73,7 +79,19 @@ function createTestCoordinatorWithPersistence() {
             replica_id: replicaId,
           });
         }
-        return {success: true};
+        return {success: true, affectedRows: 1};
+      }
+
+      if (sql.includes('INSERT INTO storage_reservations')) {
+        return {success: true, affectedRows: 1};
+      }
+
+      if (sql.includes('UPDATE storage_reservations')) {
+        return {success: true, affectedRows: 1};
+      }
+
+      if (sql.includes('FROM storage_reservations')) {
+        return {success: true, rows: [], affectedRows: 0};
       }
 
       if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
@@ -149,6 +167,8 @@ function createTestCoordinatorWithPersistence() {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine,
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway(sqlQueryEngine),
     transactionCoordinator: createMockTransactionCoordinator(),
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     storageAdmissionService: {
@@ -162,7 +182,30 @@ function createTestCoordinatorWithPersistence() {
   });
 
   coordinator.initialize();
+  const baseCreateOperation = coordinator.createOperation.bind(coordinator);
+  coordinator.createOperation = async (move = {}) => {
+    const normalizedMove = Object.hasOwn(move, 'emitOperationCreated') ?
+      move :
+      {
+        ...move,
+        emitOperationCreated: false,
+      };
+    return baseCreateOperation(normalizedMove);
+  };
   return {coordinator, persistedOperations};
+}
+
+function buildPersistencePropertyMove(move = {}) {
+  if (move?.type !== OperationType.ADD) {
+    return move;
+  }
+
+  const partitionId = move.partitionId || PERSISTENCE_PROPERTY_DEFAULT_PARTITION_ID;
+  return {
+    ...move,
+    partitionId,
+    replicaId: move.replicaId || `${partitionId}-${PERSISTENCE_PROPERTY_DEFAULT_REPLICA_SUFFIX}`,
+  };
 }
 
 test('Property 10: Operation Log Persistence', async (t) => {
@@ -179,7 +222,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             const persisted = persistedOperations.get(operation.operationId);
 
             return persisted !== undefined &&
@@ -208,7 +253,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             const persisted = persistedOperations.get(operation.operationId);
 
             if (!persisted) return false;
@@ -247,7 +294,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             await coordinator.updateStep(operation, 'SENDING');
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -279,7 +328,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             await coordinator.completeOperation(operation);
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -315,7 +366,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             await coordinator.failOperation(operation, errorMessage);
 
             const persisted = persistedOperations.get(operation.operationId);
@@ -349,7 +402,9 @@ test('Property 10: Operation Log Persistence', async (t) => {
             createTestCoordinatorWithPersistence();
 
           try {
-            const operation = await coordinator.createOperation(move);
+            const operation = await coordinator.createOperation(
+              buildPersistencePropertyMove(move),
+            );
             await coordinator.updateStep(operation, 'SENDING');
             await coordinator.updateStep(operation, 'CREATING');
 

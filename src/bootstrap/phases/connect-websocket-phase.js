@@ -23,7 +23,10 @@ import {
 } from '../../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
-import {resolveNodeWebSocketAddress} from
+import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+  resolveNodeWebSocketAddress,
+} from
   '../../transport/node-address-resolution.js';
 
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
@@ -34,6 +37,10 @@ const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
   CONNECTION_STATE.CONNECTED,
   CONNECTION_STATE.CONNECTING,
   CONNECTION_STATE.RECONNECTING,
+]);
+const MESH_CONNECTED_OR_CONNECTING_STATES = new Set([
+  CONNECTION_STATE.CONNECTED,
+  CONNECTION_STATE.CONNECTING,
 ]);
 
 function resolveQueryTransportSelection(getSelection) {
@@ -250,6 +257,15 @@ class ConnectWebSocketPhase {
         seedNodeId,
         error: error.message,
       });
+      try {
+        await this.connectToSeedNode(
+          messageRouter,
+          seedNodeId,
+          seedWsAddress,
+        );
+      } catch (_seedReconnectError) {
+        await this.connectToClusterNodes();
+      }
     }
 
     logger.debug(JOINING_LOG_MSG.WS_INFRA_READY, {
@@ -411,51 +427,31 @@ class ConnectWebSocketPhase {
   }
 
   /**
-   * Connect to all cluster nodes for full mesh connectivity.
-   * Skips nodes we're already connected to (checked via messageRouter).
-   * All nodes are equal peers - no special treatment for any node.
-   * @return {Promise<void>}
+   * Attempt peer mesh connectivity for one resolved node snapshot.
+   * @param {Object} options
+   * @param {Array<Object>} options.otherNodes
+   * @param {Object|null} options.bootstrapResponse
+   * @param {Object|null} options.systemTableCache
+   * @param {Object} options.messageRouter
+   * @param {Object} options.logger
+   * @return {Promise<{missingEndpointNodeIds: string[]}>}
+   * @private
    */
-  async connectToClusterNodes() {
-    const logger = this.delegates.getLogger();
-    const messageRouter = this.delegates.getMessageRouter();
-    const bootstrapResponse =
-      this.delegates.getBootstrapResponse?.() || null;
-    const systemTableCache =
-      this.delegates.getSystemTableCache?.() || null;
-    const {
-      source: nodeSource,
-      rows: nodesSnapshot,
-    } = this.delegates.resolveMeshConnectivityNodeRows();
+  async connectToClusterNodesFromSnapshot(options = {}) {
+    const otherNodes = Array.isArray(options.otherNodes) ?
+      options.otherNodes :
+      [];
+    const messageRouter = options.messageRouter;
+    const bootstrapResponse = options.bootstrapResponse || null;
+    const systemTableCache = options.systemTableCache || null;
+    const logger = options.logger;
+    const missingEndpointNodeIds = [];
+    const reusableConnectionStates =
+      options.requireReadyConnections === true ?
+        MESH_CONNECTED_OR_CONNECTING_STATES :
+        MESH_CONNECTED_OR_IN_FLIGHT_STATES;
 
-    if (!Array.isArray(nodesSnapshot) ||
-        nodesSnapshot.length === NUM.ZERO) {
-      return;
-    }
-
-    this.delegates.setLastClusterMeshSignature(
-      this.delegates.buildClusterMeshSignature(nodesSnapshot),
-    );
-
-    // Filter to nodes that are not this node
-    const otherNodes = nodesSnapshot.filter((node) => {
-      const nodeId = node?.node_id;
-      return nodeId && nodeId !== this.nodeId;
-    });
-
-    if (otherNodes.length === NUM.ZERO) {
-      return;
-    }
-
-    logger.info(JOINING_LOG_MSG.CONNECTING_TO_CLUSTER_NODES, {
-      nodeId: this.nodeId,
-      nodeSource,
-      otherNodeCount: otherNodes.length,
-      otherNodeIds: otherNodes.map((n) => n.node_id),
-    });
-
-    // Connect to each node in parallel, skipping already-connected nodes
-    const connectionPromises = otherNodes.map(async (node) => {
+    const connectionResults = await Promise.all(otherNodes.map(async (node) => {
       const targetNodeId = node.node_id;
       const nodeAddress = node.node_address;
 
@@ -465,24 +461,29 @@ class ConnectWebSocketPhase {
           messageRouter.nodeConnections?.get(targetNodeId)?.state ||
             null;
 
-      if (MESH_CONNECTED_OR_IN_FLIGHT_STATES.has(connectionState)) {
-        return;
+      if (reusableConnectionStates.has(connectionState)) {
+        return null;
       }
 
-      const wsAddress = resolveNodeWebSocketAddress({
+      const wsAddressResolution = resolveNodeWebSocketAddress({
         targetNodeId,
         bootstrapResponse,
         systemTableCache,
       });
-      if (!wsAddress) {
+      if (wsAddressResolution.state !==
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED) {
         logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
           nodeId: this.nodeId,
           targetNodeId,
           nodeAddress,
           error: ERR_MISSING_WS_ENDPOINT,
         });
-        return;
+        return {
+          targetNodeId,
+          missingEndpoint: true,
+        };
       }
+      const wsAddress = wsAddressResolution.address;
 
       try {
         await messageRouter.connectToNode(targetNodeId, wsAddress);
@@ -492,8 +493,6 @@ class ConnectWebSocketPhase {
           wsAddress,
         });
       } catch (error) {
-        // Log but don't fail - the node might be temporarily unavailable
-        // Raft will handle retries and leader election
         logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
           nodeId: this.nodeId,
           targetNodeId,
@@ -501,17 +500,117 @@ class ConnectWebSocketPhase {
           error: error.message,
         });
       }
-    });
+      return null;
+    }));
 
-    await Promise.all(connectionPromises);
+    for (const result of connectionResults) {
+      if (result?.missingEndpoint === true &&
+          typeof result.targetNodeId === TYPEOF.STRING &&
+          result.targetNodeId.length > NUM.ZERO) {
+        missingEndpointNodeIds.push(result.targetNodeId);
+      }
+    }
 
-    logger.info(JOINING_LOG_MSG.CLUSTER_CONNECTIONS_COMPLETE, {
-      nodeId: this.nodeId,
-      connectedNodes: messageRouter.getConnectedNodes?.() ||
-        Array.from(
-          messageRouter.nodeConnections?.keys() || [],
-        ),
-    });
+    return {
+      missingEndpointNodeIds,
+    };
+  }
+
+  /**
+   * Refresh mesh-connectivity authority when endpoint rows are missing.
+   * @param {string[]} missingEndpointNodeIds
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async repairMeshConnectivityAuthority(missingEndpointNodeIds) {
+    if (typeof this.delegates.repairMeshConnectivityAuthorityIfNeeded !==
+        TYPEOF.FUNCTION) {
+      return false;
+    }
+    return this.delegates.repairMeshConnectivityAuthorityIfNeeded(
+      missingEndpointNodeIds,
+    );
+  }
+
+  /**
+   * Connect to all cluster nodes for full mesh connectivity.
+   * Skips nodes we're already connected to (checked via messageRouter).
+   * All nodes are equal peers - no special treatment for any node.
+   * @return {Promise<void>}
+   */
+  async connectToClusterNodes(options = {}) {
+    const logger = this.delegates.getLogger();
+    const messageRouter = this.delegates.getMessageRouter();
+    const bootstrapResponse =
+      this.delegates.getBootstrapResponse?.() || null;
+    const systemTableCache =
+      this.delegates.getSystemTableCache?.() || null;
+    let attemptedAuthorityRepair = false;
+
+    while (true) {
+      const {
+        source: nodeSource,
+        rows: nodesSnapshot,
+      } = this.delegates.resolveMeshConnectivityNodeRows();
+      const addressBootstrapResponse =
+        nodeSource === 'bootstrap_snapshot' ?
+          bootstrapResponse :
+          null;
+
+      if (!Array.isArray(nodesSnapshot) ||
+          nodesSnapshot.length === NUM.ZERO) {
+        return;
+      }
+
+      this.delegates.setLastClusterMeshSignature(
+        this.delegates.buildClusterMeshSignature(nodesSnapshot),
+      );
+
+      const otherNodes = nodesSnapshot.filter((node) => {
+        const nodeId = node?.node_id;
+        return nodeId && nodeId !== this.nodeId;
+      });
+
+      if (otherNodes.length === NUM.ZERO) {
+        return;
+      }
+
+      logger.info(JOINING_LOG_MSG.CONNECTING_TO_CLUSTER_NODES, {
+        nodeId: this.nodeId,
+        nodeSource,
+        otherNodeCount: otherNodes.length,
+        otherNodeIds: otherNodes.map((n) => n.node_id),
+      });
+
+      const {
+        missingEndpointNodeIds,
+      } = await this.connectToClusterNodesFromSnapshot({
+        otherNodes,
+        bootstrapResponse: addressBootstrapResponse,
+        systemTableCache,
+        messageRouter,
+        logger,
+        requireReadyConnections: options.requireReadyConnections === true,
+      });
+
+      if (!attemptedAuthorityRepair &&
+          missingEndpointNodeIds.length > NUM.ZERO &&
+          await this.repairMeshConnectivityAuthority(
+            missingEndpointNodeIds,
+          )) {
+        attemptedAuthorityRepair = true;
+        continue;
+      }
+
+      logger.info(JOINING_LOG_MSG.CLUSTER_CONNECTIONS_COMPLETE, {
+        nodeId: this.nodeId,
+        connectedNodes: messageRouter.getConnectedNodes?.() ||
+          Array.from(
+            messageRouter.nodeConnections?.keys() || [],
+          ),
+      });
+      return;
+    }
   }
 }
 

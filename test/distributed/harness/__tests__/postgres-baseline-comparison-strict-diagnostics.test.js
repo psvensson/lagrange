@@ -2245,7 +2245,7 @@ describe('postgres-baseline-comparison scenario', () => {
     );
   });
 
-  it('continues with degraded preload mode when soft stall fallback is enabled',
+  it('fails degraded preload fallback when soft stall candidates still fail load-lane revalidation',
     async () => {
       const loadCalls = [];
       let inFlightProbeCount = 0;
@@ -2382,24 +2382,30 @@ describe('postgres-baseline-comparison scenario', () => {
         assertConsistency: async () => {},
       };
 
-      const result = await run(cluster);
+      await assert.rejects(
+        () => run(cluster),
+        (error) => {
+          assert.match(
+            String(error?.message || ''),
+            /degraded pre-load fallback produced no strict load-admissible nodes/,
+            'soft stall fallback should fail when degraded candidates still fail load-lane revalidation',
+          );
+          assert.equal(
+            error?.diagnostics?.failedPhase?.artifacts?.mode,
+            'degraded_soft_stall_fallback',
+            'failure diagnostics should preserve degraded pre-load gate mode',
+          );
+          return true;
+        },
+      );
       assert.equal(
-        result.details.phaseArtifacts.pre_load_gate.mode,
-        'degraded_soft_stall_fallback',
-        'soft stall fallback should record degraded pre-load gate mode',
-      );
-      assert.deepEqual(
-        loadCalls[0],
-        ['seed-1'],
-        'soft stall fallback should continue SUT load with available candidate nodes',
-      );
-      assert.ok(
-        loadCalls.length >= 2,
-        'soft stall fallback should continue through both SUT and baseline load phases',
+        loadCalls.length,
+        0,
+        'soft stall fallback should not start load when degraded candidates fail revalidation',
       );
       assert.ok(
         inFlightProbeCount >= 2,
-        'soft stall fallback should still exercise quiescence polling before continuing',
+        'soft stall fallback should still exercise quiescence polling before failing',
       );
     });
 

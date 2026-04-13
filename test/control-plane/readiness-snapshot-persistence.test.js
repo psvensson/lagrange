@@ -283,6 +283,58 @@ test('coordinator createOperation persists readiness snapshot in initial step',
     };
 
     let persistedStepsHistory = null;
+    let persistedOperationRow = null;
+    const controlPlaneSystemTableGateway = {
+      async submitMutation(_mutation) {
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async executeQuery(_sql, params = []) {
+        if (typeof _sql === 'string' &&
+            _sql.includes('FROM replica_operations') &&
+            Array.isArray(params) &&
+            params.length === NUM.ONE &&
+            params[0] === persistedOperationRow?.operation_id) {
+          return {
+            success: true,
+            rows: [persistedOperationRow],
+          };
+        }
+        if (Array.isArray(params) && params.length > NUM.TEN) {
+          persistedOperationRow = {
+            operation_id: params[0],
+            type: params[1],
+            partition_id: params[2],
+            replica_id: params[3],
+            source_node_id: params[4],
+            target_node_id: params[5],
+            status: params[6],
+            workflow_step: params[7],
+            created_at: params[8],
+            updated_at: params[9],
+            completed_at: params[10],
+            error_message: params[11],
+            steps_history: params[12],
+            entity_type: params[13],
+            entity_id: params[14],
+          };
+          if (typeof persistedOperationRow.steps_history === 'string') {
+            persistedStepsHistory = JSON.parse(
+              persistedOperationRow.steps_history,
+            );
+          }
+        }
+        return {success: true, rows: [], affectedRows: 1, changes: 1};
+      },
+      async readAuthoritativeRows(_tableName, _sql, params = []) {
+        return controlPlaneSystemTableGateway.executeQuery(_sql, params);
+      },
+      async readRows(_tableName, _sql, params = []) {
+        return controlPlaneSystemTableGateway.executeQuery(_sql, params);
+      },
+    };
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
       systemTableCache: {
@@ -305,17 +357,45 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       },
       sqlQueryEngine: {
         async executeQuery(_sql, params) {
+          if (typeof _sql === 'string' &&
+              _sql.includes('FROM replica_operations') &&
+              Array.isArray(params) &&
+              params.length === NUM.ONE &&
+              params[0] === persistedOperationRow?.operation_id) {
+            return {
+              success: true,
+              rows: [persistedOperationRow],
+            };
+          }
           if (params && Array.isArray(params) && params.length > NUM.TEN) {
             // INSERT_OPERATION — capture stepsHistory (param index 12)
             const historyJson = params[12];
             if (typeof historyJson === 'string') {
               persistedStepsHistory = JSON.parse(historyJson);
             }
+            persistedOperationRow = {
+              operation_id: params[0],
+              type: params[1],
+              partition_id: params[2],
+              replica_id: params[3],
+              source_node_id: params[4],
+              target_node_id: params[5],
+              status: params[6],
+              workflow_step: params[7],
+              created_at: params[8],
+              updated_at: params[9],
+              completed_at: params[10],
+              error_message: params[11],
+              steps_history: params[12],
+              entity_type: params[13],
+              entity_id: params[14],
+            };
           }
           return {success: true, rows: [], affectedRows: 1, changes: 1};
         },
       },
       controlPlaneReadinessService: readinessService,
+      controlPlaneSystemTableGateway,
       storageAccountingService,
       storageAdmissionService,
       enableTimeouts: false,
@@ -595,6 +675,9 @@ test('dispatch service emits failure event when target is not ready',
         off() {},
       },
       controlPlaneReadinessService: readinessService,
+    });
+    t.teardown(() => {
+      dispatchService.stop();
     });
 
     dispatchService.on(DISPATCH_EVENT.OPERATION_FAILED, (event) => {

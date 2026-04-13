@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
+  BOOTSTRAP_PHASE,
   BOOTSTRAP_REBALANCE_REASON,
 } from '../../src/bootstrap/bootstrap-constants.js';
 import {SERVICE_STATUS, STATE, TABLES} from '../../src/constants/index.js';
@@ -256,8 +257,75 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
 
     await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
 
-    t.equal(triggerCount, 0, 'invalid transitions should not trigger rebalancing');
+      t.equal(triggerCount, 0, 'invalid transitions should not trigger rebalancing');
   });
+
+  await t.test(
+    'ignores local node ready transitions because self-readiness is runtime-owned',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+
+      let triggerCount = 0;
+      bootstrapService.triggerRebalancingOnAllPartitions = () => {
+        triggerCount++;
+      };
+
+      const scheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent('seed-node', LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow('seed-node', LEASE_EXPIRED_MS),
+      );
+      t.equal(
+        scheduled,
+        false,
+        'local seed readiness should not schedule bootstrap-wide node_ready fanout',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.equal(triggerCount, 0, 'local readiness should not trigger rebalancing');
+    },
+  );
+
+  await t.test(
+    'ignores remote node ready transitions after bootstrap hands off to runtime ownership',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+      bootstrapService.phase = BOOTSTRAP_PHASE.COMPLETE;
+
+      let triggerCount = 0;
+      bootstrapService.triggerRebalancingOnAllPartitions = () => {
+        triggerCount++;
+      };
+
+      const scheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent('joiner-node', LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow('joiner-node', LEASE_EXPIRED_MS),
+      );
+      t.equal(
+        scheduled,
+        false,
+        'bootstrap-owned node_ready fanout should stop once bootstrap is complete',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.equal(
+        triggerCount,
+        0,
+        'runtime-owned readiness refreshes should not trigger bootstrap-wide rebalancing',
+      );
+    },
+  );
 
   await t.test(
     'fails closed for delayed ready CDC rows that are no longer ready at decision time',
@@ -529,6 +597,78 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     },
   );
 
+  await t.test(
+    'uses locally observed readiness to suppress stale cache replay of later ready heartbeats',
+    async (t) => {
+      const nodeId = 'node-local-observed-ready';
+      const now = Date.now();
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+
+      const reasons = [];
+      bootstrapService.triggerRebalancingOnAllPartitions = (reason) => {
+        reasons.push(reason);
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        {
+          data: {
+            node_id: nodeId,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.DISCONNECTED,
+            last_heartbeat: now,
+            ready_lease_expires_at: now + LEASE_VALID_MS,
+          },
+        },
+        {
+          node_id: nodeId,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.DISCONNECTED,
+          last_heartbeat: now - 5000,
+          ready_lease_expires_at: now - 6000,
+        },
+      );
+      t.equal(firstScheduled, true, 'first ready transition should still schedule');
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'first ready transition should trigger one node_ready rebalance',
+      );
+
+      const replayScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        {
+          data: {
+            node_id: nodeId,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.DISCONNECTED,
+            last_heartbeat: now + 100,
+            ready_lease_expires_at: now + LEASE_VALID_MS + 100,
+          },
+        },
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(
+        replayScheduled,
+        false,
+        'stale cache evidence should not turn a later ready heartbeat into a fresh transition',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'locally observed readiness should prevent duplicate node_ready fanout',
+      );
+    },
+  );
+
   await t.test('cleanup cancels pending node-ready rebalance timers', async (t) => {
     const bootstrapService = new BootstrapService({
       nodeId: 'seed-node',
@@ -568,6 +708,44 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       'dedupe node set should be empty after cleanup',
     );
   });
+
+  await t.test(
+    'dedupes duplicate ready transitions while the timer is still pending',
+    async (t) => {
+      const nodeId = 'node-pending-dedupe';
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: CLEANUP_TIMER_DELAY_MS,
+        },
+      });
+
+      let triggerCount = 0;
+      bootstrapService.triggerRebalancingOnAllPartitions = () => {
+        triggerCount++;
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(firstScheduled, true, 'first ready transition should schedule');
+
+      const secondScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(
+        secondScheduled,
+        false,
+        'duplicate ready transitions should stay deduped until the pending timer fires',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, CLEANUP_WAIT_MS));
+      t.equal(triggerCount, 1, 'pending dedupe should still produce one trigger');
+    },
+  );
 
   await t.test(
     'does not reschedule node-ready rebalance after transient lease flap',
@@ -618,15 +796,18 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       );
       t.equal(
         secondReadyScheduled,
-        false,
-        'dedupe should prevent repeated node_ready trigger after lease flap',
+        true,
+        'a later real ready restoration should schedule again after the previous trigger fired',
       );
 
       await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
-      t.equal(
-        reasons.length,
-        1,
-        'lease flap should not create additional node_ready rebalance triggers',
+      t.same(
+        reasons,
+        [
+          BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+        ],
+        'lease flap should create a second node_ready trigger once the prior one completed',
       );
     },
   );
@@ -708,6 +889,66 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
         reasons,
         [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
         'stale regression should not cancel the pending rebalance trigger',
+      );
+    },
+  );
+
+  await t.test(
+    'ignores stale not-ready replay even when cached previous row is older than local observation',
+    async (t) => {
+      const nodeId = 'node-local-observed-stale-regression';
+      const now = Date.now();
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+
+      const reasons = [];
+      bootstrapService.triggerRebalancingOnAllPartitions = (reason) => {
+        reasons.push(reason);
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        {
+          data: {
+            node_id: nodeId,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.DISCONNECTED,
+            last_heartbeat: now,
+            ready_lease_expires_at: now + LEASE_VALID_MS,
+          },
+        },
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(firstScheduled, true, 'fresh ready transition should schedule');
+
+      const staleRegressionScheduled =
+        bootstrapService.handleNodeReadyRebalanceTrigger(
+          {
+            data: {
+              node_id: nodeId,
+              status: SERVICE_STATUS.ACTIVE,
+              connection_state: STATE.DISCONNECTED,
+              last_heartbeat: now - 10000,
+              ready_lease_expires_at: now - 5000,
+            },
+          },
+          createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+        );
+      t.equal(
+        staleRegressionScheduled,
+        false,
+        'local heartbeat watermark should reject stale not-ready replay',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'stale replay should not cancel or duplicate the pending rebalance trigger',
       );
     },
   );

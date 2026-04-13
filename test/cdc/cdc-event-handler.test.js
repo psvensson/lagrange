@@ -18,6 +18,14 @@ import {
 } from '../../src/cdc/cdc-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
+import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+} from '../../src/transport/node-address-resolution.js';
+
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE = Object.freeze({
+  MOCK: 'mock',
+});
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -49,7 +57,8 @@ function createMockEventContext(overrides = {}) {
     rebalancer: overrides.rebalancer || null,
     messageRouter: overrides.messageRouter || null,
     resolveNodeWebSocketAddress:
-      overrides.resolveNodeWebSocketAddress || (() => null),
+      overrides.resolveNodeWebSocketAddress ||
+      (() => buildUnavailableNodeWebSocketAddressResolution()),
     events,
     emit(eventName, data) {
       events.push({eventName, data});
@@ -57,6 +66,22 @@ function createMockEventContext(overrides = {}) {
     incrementEpochChanges: overrides.incrementEpochChanges || (() => {}),
     incrementNodeStateChanges: overrides.incrementNodeStateChanges || (() => {}),
   };
+}
+
+function buildResolvedNodeWebSocketAddressResolution(address) {
+  return Object.freeze({
+    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+    address,
+    source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.MOCK,
+  });
+}
+
+function buildUnavailableNodeWebSocketAddressResolution() {
+  return Object.freeze({
+    state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
+    reason:
+      NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON.CANONICAL_METADATA_MISSING,
+  });
 }
 
 
@@ -733,7 +758,8 @@ test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
   const messageRouter = createMockMessageRouter();
   const context = createMockEventContext({
     messageRouter,
-    resolveNodeWebSocketAddress: () => 'ws://new-node:8082',
+    resolveNodeWebSocketAddress: () =>
+      buildResolvedNodeWebSocketAddressResolution('ws://new-node:8082'),
   });
 
   const handler = new CDCEventHandler({
@@ -826,7 +852,8 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
   });
   const context = createMockEventContext({
     messageRouter,
-    resolveNodeWebSocketAddress: () => 'ws://existing-node:8082',
+    resolveNodeWebSocketAddress: () =>
+      buildResolvedNodeWebSocketAddressResolution('ws://existing-node:8082'),
   });
 
   const handler = new CDCEventHandler({
@@ -1008,7 +1035,8 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
   });
   const context = createMockEventContext({
     messageRouter,
-    resolveNodeWebSocketAddress: () => 'ws://new-node:8082',
+    resolveNodeWebSocketAddress: () =>
+      buildResolvedNodeWebSocketAddressResolution('ws://new-node:8082'),
   });
 
   const handler = new CDCEventHandler({

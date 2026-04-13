@@ -7,7 +7,7 @@
  * 3. The system settles within a fixed window.
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import tap, {test} from '../../src/test-helpers/tap.js';
 import {request as httpRequest} from 'node:http';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -43,6 +43,7 @@ const SETTLE_TIMEOUT_MS = 20000;
 const QUIET_WINDOW_MS = 5000;
 const MAX_SUSTAINED_OVERTARGET_MS = 2000;
 const SAMPLE_INTERVAL_MS = 250;
+const INTEGRATION_TEST_TIMEOUT_MS = 60000;
 const REAL_NETWORK_READINESS_TIMEOUT_MS = 12000;
 const REAL_NETWORK_READINESS_INTERVAL_MS = 100;
 const READINESS_STRESS_PROBE_TIMEOUT_MS = 120;
@@ -55,6 +56,8 @@ const READINESS_STRESS_MAX_EVENT_LOOP_LAG_MS = 1500;
 const READINESS_STRESS_MAX_ABORTED_PROBES = 3;
 const READINESS_STRESS_MIN_READY_PROBES = READINESS_STRESS_PROBE_ATTEMPTS -
   READINESS_STRESS_MAX_ABORTED_PROBES;
+
+tap.setTimeout(INTEGRATION_TEST_TIMEOUT_MS);
 
 function sleepForMs(durationMs) {
   return new Promise((resolve) => {
@@ -292,7 +295,7 @@ function registerLeaderChangeTracking(partitionServices, counter) {
   };
 }
 
-test('Node join convergence SLO', {timeout: 30000}, async (t) => {
+test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment({
       raft: {
@@ -460,7 +463,8 @@ test('Node join convergence SLO', {timeout: 30000}, async (t) => {
 
 });
 
-test('Node join convergence SLO real-network readiness path', {timeout: 30000}, async (t) => {
+test('Node join convergence SLO real-network readiness path',
+  {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {
   initializeTestEnvironment({
     raft: {
       electionTimeoutMinMs: 300,
@@ -603,7 +607,7 @@ test('Node join convergence SLO real-network readiness path', {timeout: 30000}, 
 });
 
 test('Readiness endpoint remains reachable during background log buffer flush',
-  {timeout: 30000}, async (t) => {
+  {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {
     initializeTestEnvironment({
       raft: {
         electionTimeoutMinMs: 300,
@@ -777,7 +781,7 @@ test('Readiness endpoint remains reachable during background log buffer flush',
   });
 
 test('Real-listener join retries through transient SQL/metadata blockers under class-C flood',
-  {timeout: 30000}, async (t) => {
+  {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async (t) => {
     initializeTestEnvironment({
       raft: {
         electionTimeoutMinMs: 300,

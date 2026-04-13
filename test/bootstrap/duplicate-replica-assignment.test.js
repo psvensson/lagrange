@@ -168,21 +168,36 @@ test('BootstrapAPI - consecutive joins must assign different replicas after the 
   const firstAssignedReplica = body1.messageGroupAssignment.replicaToMove;
   t.ok(firstAssignedReplica, 'should assign a replica to first node');
 
-  // A second bootstrap should stay deferred while the first MOVE_REPLICA
-  // handoff is still non-terminal.
+  // A second bootstrap should still succeed while the first MOVE_REPLICA
+  // reservation is open because the canonical admission owner excludes the
+  // reserved replica and selects a different legal assignment.
   const node3Id = '550e8400-e29b-41d4-a716-446655440003';
-  const blockedResponse = await api.getFastify().inject({
+  const response2 = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
     payload: {nodeId: node3Id, nodeAddress: 'ws://localhost:9091'},
   });
 
-  t.equal(blockedResponse.statusCode, 503,
-    'bootstrap should remain deferred while the first MOVE_REPLICA handoff is still stabilizing');
+  t.equal(response2.statusCode, 200,
+    'bootstrap should keep progressing while the first MOVE_REPLICA reservation is open');
+  const body2 = JSON.parse(response2.body);
+  t.equal(body2.messageGroupAssignment.strategy, BootstrapStrategy.MOVE_REPLICA,
+    'second bootstrap should still prefer MOVE_REPLICA when another seed replica is available');
+  const secondAssignedReplica = body2.messageGroupAssignment.replicaToMove;
+  t.ok(secondAssignedReplica, 'second bootstrap should reserve a replica');
+  t.not(firstAssignedReplica, secondAssignedReplica,
+    'second bootstrap must not reuse the first in-flight replica reservation');
+
+  const secondAssignmentId =
+    body2.messageGroupAssignment.assignmentId;
   t.ok(
-    (JSON.parse(blockedResponse.body).reasons || [])
-      .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
-    'bootstrap defer should surface the handoff stabilization reason',
+    typeof secondAssignmentId === 'string' && secondAssignmentId.length > 0,
+    'second bootstrap should persist a distinct reservation token',
+  );
+  t.not(
+    body1.messageGroupAssignment.assignmentId,
+    secondAssignmentId,
+    'second bootstrap should receive a different reservation token',
   );
 
   // Simulate convergence of the first handoff:
@@ -202,23 +217,6 @@ test('BootstrapAPI - consecutive joins must assign different replicas after the 
     last_heartbeat: Date.now(),
     ready_lease_expires_at: Date.now() + 60_000,
   });
-
-  // Second node joins after convergence - it should get a DIFFERENT replica
-  const response2 = await api.getFastify().inject({
-    method: 'POST',
-    url: '/bootstrap',
-    payload: {nodeId: node3Id, nodeAddress: 'ws://localhost:9091'},
-  });
-
-  t.equal(response2.statusCode, 200, 'second bootstrap should succeed');
-  const body2 = JSON.parse(response2.body);
-  t.equal(body2.messageGroupAssignment.strategy, BootstrapStrategy.MOVE_REPLICA,
-    'should use MOVE_REPLICA strategy for second node');
-  const secondAssignedReplica = body2.messageGroupAssignment.replicaToMove;
-  t.ok(secondAssignedReplica, 'should assign a replica to second node');
-
-  t.not(firstAssignedReplica, secondAssignedReplica,
-    'second node must get a DIFFERENT replica once the first handoff has converged');
 
   await api.shutdown();
 });

@@ -351,8 +351,9 @@ class RouterMessageHandler {
 
   /**
    * Handle SERVICE_RESPONSE message (deferred handler result).
-   * Forwards to the onServiceResponse callback which will be wired
-   * to RouterDeliveryManager.resolvePendingResponse in task 3.2.
+   * This adapter does not own response semantics. It forwards the full message
+   * to the injected owner callback when present, while preserving the legacy
+   * `(messageId, result, error)` callback signature for older tests/helpers.
    * Requirements: 2.2, 2.3
    * @param {Object} message - SERVICE_RESPONSE message.
    */
@@ -366,12 +367,17 @@ class RouterMessageHandler {
     });
 
     if (this.onServiceResponse) {
-      this.onServiceResponse(messageId, result, error);
+      if (this.onServiceResponse.length >= 2) {
+        this.onServiceResponse(messageId, result, error);
+      } else {
+        this.onServiceResponse(message);
+      }
       return;
     }
 
-    this.logger.warn(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
+    this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
       messageId,
+      delegatedResponseHandler: false,
     });
   }
 }

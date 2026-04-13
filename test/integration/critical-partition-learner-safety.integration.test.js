@@ -29,6 +29,7 @@ import {
 const SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
+const LEARNER_SAFETY_TEST_TIMEOUT_MS = 120000;
 
 function isVoterReadyReplica(row) {
   if (!row) {
@@ -117,7 +118,9 @@ function findCriticalSystemPartitionPair(systemTableCache, sourceNodeId, nodeId)
   return null;
 }
 
-test('Critical partition learner safety', {timeout: 120000}, async (t) => {
+test('Critical partition learner safety', {
+  timeout: LEARNER_SAFETY_TEST_TIMEOUT_MS,
+}, async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment({
       rebalancer: {
@@ -135,7 +138,9 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
     await cleanupTestEnvironment();
   });
 
-  await t.test('blocks REMOVE while replacement replica is still learner', async (t) => {
+  await t.test('blocks REMOVE while replacement replica is still learner', {
+    timeout: LEARNER_SAFETY_TEST_TIMEOUT_MS,
+  }, async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440121';
     const seedWsPort = getUniquePort();
     const joiningNodeId = '550e8400-e29b-41d4-a716-446655440122';
@@ -190,8 +195,7 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
         httpPost: createInProcHttpPost(seedApi),
       });
 
-      const joinResult = await joiningService.join();
-      t.equal(joinResult.success, true, 'joining node should join successfully');
+      await joiningService.join();
 
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 

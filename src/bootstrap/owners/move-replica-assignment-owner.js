@@ -846,6 +846,30 @@ class MoveReplicaAssignmentOwner {
     return reservations;
   }
 
+  async getMoveReplicaBootstrapExclusionReservations(now = Date.now()) {
+    const reservations = [];
+    const byAssignmentId = new Map();
+    const collectedReservations =
+      await this.collectMoveReplicaAssignmentReservations({now});
+    for (const reservation of collectedReservations) {
+      byAssignmentId.set(reservation.assignmentId, reservation);
+    }
+
+    for (const reservation of byAssignmentId.values()) {
+      if (this.isMoveReplicaAssignmentReservationOpen(reservation, now) ||
+          this.isCommittedMoveReplicaHandoffStabilizing(reservation, now)) {
+        reservations.push(reservation);
+      }
+    }
+
+    reservations.sort((left, right) => {
+      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ? left.updatedAt : NUM.ZERO;
+      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ? right.updatedAt : NUM.ZERO;
+      return leftUpdatedAt - rightUpdatedAt;
+    });
+    return reservations;
+  }
+
   isMoveReplicaBootstrapAdmissionBlocked(
     reservation,
     now = Date.now(),

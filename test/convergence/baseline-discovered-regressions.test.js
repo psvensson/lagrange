@@ -38,7 +38,7 @@ function createNodeLeaseOwner(disconnectNodeDueToLeaseExpiry) {
   };
 }
 
-test('Convergence regression - stale lease sweep overwrite is rejected by guarded mutation',
+test('Convergence regression - authoritative lease sweep ignores stale observed snapshots',
   async (t) => {
     initEnv();
 
@@ -151,25 +151,19 @@ test('Convergence regression - stale lease sweep overwrite is rejected by guarde
     const result = await harness.runUntilIdle();
 
     t.same(expiredIds, [], 'renewed lease should not be expired by a stale sweep');
-    t.same(
+    t.equal(
       attemptedDisconnectWhereClause,
-      {
-        node_id: 'node-renewed',
-        ready_lease_expires_at: 90,
-        last_heartbeat: 80,
-      },
-      'guarded disconnect should target the stale observed snapshot',
+      null,
+      'authoritative sweep should not attempt a disconnect from a stale observed snapshot',
     );
     t.equal(authoritativeNodeRow.connection_state, STATE.READY);
     t.equal(authoritativeNodeRow.ready_lease_expires_at, 200);
     t.equal(authoritativeNodeRow.last_heartbeat, 150);
-    t.equal(invariantEvents.length, 1, 'stale guarded miss should emit one invariant');
     t.equal(
-      invariantEvents[0]?.invariantId,
-      INVARIANT_ID.NODE_LEASE_STATE_NOT_REGRESSED,
+      invariantEvents.length,
+      0,
+      'no guarded-write invariant should emit when the authoritative sweep skips the stale candidate',
     );
-    t.equal(invariantEvents[0]?.passed, true);
-    t.equal(invariantEvents[0]?.observed?.guardedWriteApplied, false);
     t.equal(result.invariantResults[0]?.passed, true);
   });
 

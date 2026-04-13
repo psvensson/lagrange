@@ -120,6 +120,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
           };
 
           const mockCoordinator = {
+            isOperationLocallyOwned: () => true,
             claimDispatchTransition: async () => ({
               operationId: opRow.operation_id,
               type: opRow.type,
@@ -175,11 +176,15 @@ test('Property 16: Replica dispatch forwards to correct leader',
               return {
                 nodeId,
                 dimensions: {
+                  [CONTROL_PLANE_READINESS_DIMENSION
+                    .CONTROL_PLANE_RECOVERY_ELIGIBLE]: ready,
                   [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
                   [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
                 },
               };
             },
+            getNodeReadiness: async (nodeId) =>
+              mockReadinessService.getNodeReadinessSync(nodeId),
           };
 
           const service = new ReplicaDispatchService({

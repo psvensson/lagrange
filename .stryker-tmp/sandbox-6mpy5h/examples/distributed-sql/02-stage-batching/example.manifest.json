@@ -1,0 +1,13 @@
+{
+  "id": "02-stage-batching",
+  "title": "Stage mode batching",
+  "level": "intermediate",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "runtimeKind": "native_js",
+  "callbackExport": "run",
+  "select": "SELECT * FROM nodes",
+  "params": [],
+  "required": true,
+  "expectedFile": "expected.json"
+}

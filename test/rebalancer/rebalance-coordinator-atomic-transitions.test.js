@@ -7,6 +7,7 @@ import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   OPERATION_TRANSITION_REASON,
+  REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {
   QUERY_ERROR_MSG,
@@ -14,6 +15,10 @@ import {
 import {
   PARTITION_SERVICE_ERROR_MSG,
 } from '../../src/partition/partition-service-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
@@ -39,13 +44,19 @@ function createMinimalCoordinator(overrides = {}) {
       });
   const coordinator = new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
-    systemTableCache: {get() { return null; }},
+    systemTableCache: {get() {
+      return null;
+    }},
     cdcIntegrationService: {async waitForCacheUpdate() {}},
     tablePolicyService: {
-      async getPolicyForPartition() { return {minReplicaCount: 1}; },
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
     },
     messageRouter: {
-      async deliver() { return {acknowledged: true, status: 'initiated'}; },
+      async deliver() {
+        return {acknowledged: true, status: 'initiated'};
+      },
     },
     sqlQueryEngine: {
       async executeQuery() {
@@ -183,7 +194,8 @@ test('updateStep persists through the opened transaction session',
       t.same(
         observedRoutingDimensions,
         [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
-        'owner mutation routing should stay on control-plane recovery readiness for internal topology work',
+        'owner mutation routing should stay on control-plane recovery ' +
+          'readiness for internal topology work',
       );
     } finally {
       await coordinator.shutdown();
@@ -243,6 +255,66 @@ test('updateStep confirms persisted state only after transaction commit',
       await coordinator.shutdown();
     }
   });
+
+test('updateStep keeps the committed transition when post-commit ' +
+  'confirmation is temporarily unavailable', async (t) => {
+  const callOrder = [];
+  const txCoordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+  const originalBegin = txCoordinator.begin.bind(txCoordinator);
+  const originalCommit = txCoordinator.commit.bind(txCoordinator);
+  txCoordinator.begin = async (sessionId) => {
+    callOrder.push(`begin:${sessionId}`);
+    return originalBegin(sessionId);
+  };
+  txCoordinator.commit = async (sessionId) => {
+    callOrder.push(`commit:${sessionId}`);
+    return originalCommit(sessionId);
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+  coordinator.repository.confirmReplicaOperationPersistence =
+    async (operation) => {
+      callOrder.push(`confirm:${operation.workflowStep}`);
+      throw new Error('Authoritative replica operation not confirmed');
+    };
+
+  try {
+    const operation = createTestOperation();
+    await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'post-commit confirmation gaps should not unwind the committed step',
+    );
+    t.same(
+      callOrder,
+      [
+        `begin:${buildExpectedTransitionSessionId(
+          operation.operationId,
+          WORKFLOW_STEP.SENDING,
+        )}`,
+        `commit:${buildExpectedTransitionSessionId(
+          operation.operationId,
+          WORKFLOW_STEP.SENDING,
+        )}`,
+        'confirm:SENDING',
+      ],
+      'authoritative confirmation should still run after commit without failing the transition',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('updateStep retries with a fresh transition session after stale-session ' +
   'begin contention', async (t) => {
@@ -304,6 +376,91 @@ test('updateStep retries with a fresh transition session after stale-session ' +
       observedBeginSessions[0],
       observedBeginSessions[1],
       'retries must rotate transition session ids to avoid stale-session deadlocks',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('updateStep retries on the same transition session after generic ' +
+  'persist contention', async (t) => {
+  const observedBeginSessions = [];
+  const observedPersistSessions = [];
+  const activeSessions = new Set();
+  let persistUpdateCalls = 0;
+  const txCoordinator = {
+    getTransaction(sessionId) {
+      return activeSessions.has(sessionId) ? {
+        sessionId,
+        status: TRANSACTION_STATUS.ACTIVE,
+      } : null;
+    },
+    async begin(sessionId) {
+      observedBeginSessions.push(sessionId);
+      activeSessions.add(sessionId);
+      return {success: true};
+    },
+    async commit(sessionId) {
+      activeSessions.delete(sessionId);
+      return {success: true};
+    },
+    async rollback(sessionId) {
+      activeSessions.delete(sessionId);
+      return {success: true};
+    },
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+  const originalPersistOperationUpdate =
+    coordinator.repository.persistOperationUpdate
+      .bind(coordinator.repository);
+  coordinator.repository.persistOperationUpdate = async (operation, options) => {
+    observedPersistSessions.push(options?.sessionId || null);
+    persistUpdateCalls += 1;
+    if (persistUpdateCalls === 1) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
+    }
+    return originalPersistOperationUpdate(operation, options);
+  };
+
+  try {
+    const operation = createTestOperation();
+
+    await t.rejects(
+      coordinator.updateStep(operation, WORKFLOW_STEP.SENDING),
+      /transaction already active/i,
+      'first attempt should fail when the transition session collides during persist',
+    );
+
+    await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'second attempt should succeed after reusing the canonical transition session',
+    );
+    t.equal(
+      observedBeginSessions.length,
+      2,
+      'owner should attempt begin twice across retries',
+    );
+    t.equal(
+      observedBeginSessions[0],
+      observedBeginSessions[1],
+      'generic persist contention should preserve the canonical transition session id',
+    );
+    t.equal(
+      observedPersistSessions[0],
+      observedPersistSessions[1],
+      'persist retries should stay on the same canonical transition session',
+    );
+    t.equal(
+      activeSessions.size,
+      0,
+      'successful retry should clear the previous transition session state',
     );
   } finally {
     await coordinator.shutdown();
@@ -396,6 +553,72 @@ test('completeOperation wraps transition and persist in transaction ' +
   }
 });
 
+test('completeOperation clamps persist retries to the enclosing ' +
+  'transaction budget', async (t) => {
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    'op-atomic-test',
+    WORKFLOW_STEP.ACTIVE,
+  );
+  const expectedDeadlineMs = Date.now() + 60000;
+  const txCoordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+  const originalGetTransaction =
+    txCoordinator.getTransaction.bind(txCoordinator);
+  txCoordinator.getTransaction = (sessionId) => ({
+    ...originalGetTransaction(sessionId),
+    timeoutDeadline: expectedDeadlineMs,
+  });
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+  const observedPersistOptions = [];
+  const originalPersistOperationUpdate =
+    coordinator.repository.persistOperationUpdate
+      .bind(coordinator.repository);
+  coordinator.repository.persistOperationUpdate = async (operation, options) => {
+    observedPersistOptions.push(options || null);
+    return originalPersistOperationUpdate(operation, options);
+  };
+
+  try {
+    const operation = createTestOperation({
+      workflowStep: WORKFLOW_STEP.SYNCING,
+      status: 'syncing',
+    });
+    await coordinator.completeOperation(operation);
+
+    t.same(
+      observedPersistOptions.map((options) => options?.sessionId || null),
+      [expectedSessionId],
+      'terminal completion should persist on the transition session',
+    );
+    t.equal(
+      observedPersistOptions.length,
+      1,
+      'terminal completion should emit one persisted transition update',
+    );
+    t.equal(
+      observedPersistOptions[0]?.timeoutBudget?.deadlineMs,
+      expectedDeadlineMs,
+      'terminal completion retries should inherit the enclosing transaction deadline',
+    );
+    t.equal(
+      observedPersistOptions[0]?.timeoutBudget?.operationName,
+      'transaction',
+      'terminal completion should classify the retry budget as transaction-owned',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('failOperation wraps transition and persist in transaction ' +
   'boundary', async (t) => {
   const txCalls = [];
@@ -437,6 +660,72 @@ test('failOperation wraps transition and persist in transaction ' +
     t.ok(
       txCalls.some((c) => c.startsWith('commit:')),
       'transaction commit must be called for failure transition',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('failOperation clamps persist retries to the enclosing transaction ' +
+  'budget', async (t) => {
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    'op-atomic-test',
+    WORKFLOW_STEP.FAILED,
+  );
+  const expectedDeadlineMs = Date.now() + 60000;
+  const txCoordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+  const originalGetTransaction =
+    txCoordinator.getTransaction.bind(txCoordinator);
+  txCoordinator.getTransaction = (sessionId) => ({
+    ...originalGetTransaction(sessionId),
+    timeoutDeadline: expectedDeadlineMs,
+  });
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+  const observedPersistOptions = [];
+  const originalPersistOperationUpdate =
+    coordinator.repository.persistOperationUpdate
+      .bind(coordinator.repository);
+  coordinator.repository.persistOperationUpdate = async (operation, options) => {
+    observedPersistOptions.push(options || null);
+    return originalPersistOperationUpdate(operation, options);
+  };
+
+  try {
+    const operation = createTestOperation({
+      workflowStep: WORKFLOW_STEP.CREATING,
+      status: 'creating',
+    });
+    await coordinator.failOperation(operation, 'test failure');
+
+    t.same(
+      observedPersistOptions.map((options) => options?.sessionId || null),
+      [expectedSessionId],
+      'terminal failure should persist on the transition session',
+    );
+    t.equal(
+      observedPersistOptions.length,
+      1,
+      'terminal failure should emit one persisted transition update',
+    );
+    t.equal(
+      observedPersistOptions[0]?.timeoutBudget?.deadlineMs,
+      expectedDeadlineMs,
+      'terminal failure retries should inherit the enclosing transaction deadline',
+    );
+    t.equal(
+      observedPersistOptions[0]?.timeoutBudget?.operationName,
+      'transaction',
+      'terminal failure should classify the retry budget as transaction-owned',
     );
   } finally {
     await coordinator.shutdown();
@@ -498,6 +787,375 @@ test('executeAtomicTransition rolls back on persist failure',
       await coordinator.shutdown();
     }
   });
+
+test('executeAtomicTransition reuses the same transition session while ' +
+  'retrying rollback cleanup', async (t) => {
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    'op-atomic-rollback-retry',
+    WORKFLOW_STEP.SENDING,
+  );
+  const observedBeginSessions = [];
+  const observedRollbackSessions = [];
+  const transactionBySession = new Map();
+  let persistUpdateCalls = 0;
+  let rollbackCalls = 0;
+  const txCoordinator = {
+    getTransaction(sessionId) {
+      return transactionBySession.get(sessionId) || null;
+    },
+    async begin(sessionId) {
+      observedBeginSessions.push(sessionId);
+      if (transactionBySession.has(sessionId)) {
+        return {
+          success: false,
+          error: QUERY_ERROR_MSG.TRANSACTION_ACTIVE,
+        };
+      }
+      transactionBySession.set(sessionId, {
+        sessionId,
+        status: TRANSACTION_STATUS.ACTIVE,
+      });
+      return {success: true};
+    },
+    async commit(sessionId) {
+      transactionBySession.delete(sessionId);
+      return {success: true};
+    },
+    async rollback(sessionId) {
+      observedRollbackSessions.push(sessionId);
+      rollbackCalls += 1;
+      if (rollbackCalls === 1) {
+        transactionBySession.set(sessionId, {
+          sessionId,
+          status: TRANSACTION_STATUS.ROLLING_BACK,
+        });
+        return {success: false, error: 'rollback failed'};
+      }
+      transactionBySession.delete(sessionId);
+      return {success: true};
+    },
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (!sql.includes('UPDATE replica_operations')) {
+          return {success: true, rows: [], changes: 1};
+        }
+        persistUpdateCalls += 1;
+        if (persistUpdateCalls === 1) {
+          return {success: false, error: 'persist failed'};
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = createTestOperation({
+      operationId: 'op-atomic-rollback-retry',
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await t.rejects(
+      coordinator.updateStep(firstAttempt, WORKFLOW_STEP.SENDING),
+      /rollback failed/i,
+      'failed rollback cleanup should surface so the next retry can resume it',
+    );
+
+    const secondAttempt = createTestOperation({
+      operationId: 'op-atomic-rollback-retry',
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await coordinator.updateStep(secondAttempt, WORKFLOW_STEP.SENDING);
+
+    t.same(
+      observedBeginSessions,
+      [expectedSessionId, expectedSessionId],
+      'retry should reuse the same transition session after rollback cleanup',
+    );
+    t.same(
+      observedRollbackSessions,
+      [expectedSessionId, expectedSessionId],
+      'retry should first finish rollback on the prior session before beginning again',
+    );
+    t.equal(
+      transactionBySession.size,
+      0,
+      'successful retry should fully clear the transition transaction state',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('executeAtomicTransition preserves the original commit failure when ' +
+  'the coordinator already cleared the session', async (t) => {
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    'op-atomic-commit-rollback-complete',
+    WORKFLOW_STEP.SENDING,
+  );
+  const observedRollbackSessions = [];
+  const transactionBySession = new Map();
+  const txCoordinator = {
+    getTransaction(sessionId) {
+      return transactionBySession.get(sessionId) || null;
+    },
+    async begin(sessionId) {
+      transactionBySession.set(sessionId, {
+        sessionId,
+        status: TRANSACTION_STATUS.ACTIVE,
+      });
+      return {success: true};
+    },
+    async commit(sessionId) {
+      transactionBySession.delete(sessionId);
+      return {
+        success: false,
+        error: 'participant prepare failed',
+      };
+    },
+    async rollback(sessionId) {
+      observedRollbackSessions.push(sessionId);
+      return {
+        success: false,
+        error: QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
+      };
+    },
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+  });
+  coordinator.initialize();
+
+  try {
+    const operation = createTestOperation({
+      operationId: 'op-atomic-commit-rollback-complete',
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await t.rejects(
+      coordinator.updateStep(operation, WORKFLOW_STEP.SENDING),
+      /participant prepare failed/i,
+      'commit failure should surface unchanged once the coordinator already ' +
+        'finished rollback cleanup',
+    );
+    t.same(
+      observedRollbackSessions,
+      [],
+      'owner should not issue a second rollback after commit already cleared ' +
+        'the session',
+    );
+    t.equal(
+      txCoordinator.getTransaction(expectedSessionId),
+      null,
+      'transition session should remain fully cleared after the failed commit',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('executeAtomicTransition authoritatively recovers a missing transition ' +
+  'session before reusing it', async (t) => {
+  const operationId = 'op-atomic-authoritative-recovery';
+  const expectedSessionId = buildExpectedTransitionSessionId(
+    operationId,
+    WORKFLOW_STEP.SENDING,
+  );
+  const authoritativeSessions = new Set([expectedSessionId]);
+  const observedReadTables = [];
+  const observedBeginSessions = [];
+  const observedRollbackSessions = [];
+  const observedPersistSessions = [];
+  const transactionBySession = new Map();
+  const gateway = {
+    async readAuthoritativeRows(tableName, _sql, params) {
+      observedReadTables.push(tableName);
+      if (tableName === 'sql_transactions') {
+        return {
+          success: true,
+          rows: authoritativeSessions.has(params[0]) ? [{
+            transaction_id: `tx:${params[0]}`,
+            session_id: params[0],
+            status: TRANSACTION_STATUS.ACTIVE,
+          }] : [],
+        };
+      }
+      if (tableName === 'sql_transaction_participants') {
+        return {
+          success: true,
+          rows: params.includes(`tx:${expectedSessionId}`) ? [{
+            transaction_id: `tx:${expectedSessionId}`,
+            partition_id: 'replica_operations-p1',
+            status: TRANSACTION_STATUS.ACTIVE,
+          }] : [],
+        };
+      }
+      return {success: true, rows: []};
+    },
+  };
+  const txCoordinator = {
+    getTransaction(sessionId) {
+      return transactionBySession.get(sessionId) || null;
+    },
+    recoverFromSystemTables(payload = {}) {
+      for (const row of payload.transactions || []) {
+        const sessionId = row.session_id || row.sessionId;
+        transactionBySession.set(sessionId, {
+          sessionId,
+          status: row.status || TRANSACTION_STATUS.FAILED,
+          recoveredAuthoritatively: true,
+        });
+      }
+    },
+    async begin(sessionId) {
+      observedBeginSessions.push(sessionId);
+      if (transactionBySession.has(sessionId)) {
+        return {
+          success: false,
+          error: QUERY_ERROR_MSG.TRANSACTION_ACTIVE,
+        };
+      }
+      transactionBySession.set(sessionId, {
+        sessionId,
+        status: TRANSACTION_STATUS.ACTIVE,
+      });
+      return {success: true};
+    },
+    async commit(sessionId) {
+      transactionBySession.delete(sessionId);
+      return {success: true};
+    },
+    async rollback(sessionId) {
+      observedRollbackSessions.push(sessionId);
+      const transaction = transactionBySession.get(sessionId) || null;
+      transactionBySession.delete(sessionId);
+      if (transaction?.recoveredAuthoritatively === true) {
+        authoritativeSessions.delete(sessionId);
+      }
+      return {success: true};
+    },
+  };
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
+    controlPlaneSystemTableGateway: gateway,
+  });
+  coordinator.repository.persistOperationUpdate = async (_operation, options = {}) => {
+    observedPersistSessions.push(options.sessionId || null);
+    if (authoritativeSessions.has(options.sessionId)) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+      );
+    }
+  };
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = createTestOperation({
+      operationId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await t.rejects(
+      coordinator.updateStep(firstAttempt, WORKFLOW_STEP.SENDING),
+      /Transaction already active on this partition/i,
+      'initial attempt should surface the contention after clearing it',
+    );
+
+    const secondAttempt = createTestOperation({
+      operationId,
+      workflowStep: WORKFLOW_STEP.PENDING,
+      status: 'pending',
+    });
+    await coordinator.updateStep(secondAttempt, WORKFLOW_STEP.SENDING);
+
+    t.same(
+      observedRollbackSessions,
+      [expectedSessionId, expectedSessionId],
+      'failed attempt should roll back both the local transaction and the ' +
+        'authoritatively recovered stale session',
+    );
+    t.same(
+      observedBeginSessions,
+      [expectedSessionId, expectedSessionId],
+      'transition should reuse the same canonical session after recovery',
+    );
+    t.same(
+      observedPersistSessions,
+      [expectedSessionId, expectedSessionId],
+      'both attempts should use the same canonical session id',
+    );
+    t.equal(
+      authoritativeSessions.size,
+      0,
+      'successful recovery should clear the authoritative stale session',
+    );
+    t.ok(
+      observedReadTables.includes('sql_transactions'),
+      'authoritative recovery should inspect sql_transactions',
+    );
+    t.ok(
+      observedReadTables.includes('sql_transaction_participants'),
+      'authoritative recovery should hydrate participant state for rollback',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('executeAtomicTransition does not rotate the transition session on ' +
+  'partition contention without stale-session evidence', async (t) => {
+  let rotateCalls = 0;
+  let recoverCalls = 0;
+  const coordinator = createMinimalCoordinator();
+  const workflowOwner = coordinator.workflowOwner;
+  coordinator.repository.persistOperationUpdate =
+    async () => {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+      );
+    };
+  workflowOwner.recoverTransitionExecutionSession =
+    async () => {
+      recoverCalls += 1;
+      return false;
+    };
+  workflowOwner.rotateTransitionExecutionAttemptAfterStaleSessionConflict =
+    () => {
+      rotateCalls += 1;
+    };
+  coordinator.initialize();
+
+  try {
+    await t.rejects(
+      coordinator.updateStep(
+        createTestOperation(),
+        WORKFLOW_STEP.SENDING,
+      ),
+      /Transaction already active on this partition/i,
+      'partition-level contention should still surface when no stale ' +
+        'same-session state can be recovered',
+    );
+
+    t.ok(
+      recoverCalls >= 1,
+      'the owner should still probe for stale same-session state before giving up',
+    );
+    t.equal(
+      rotateCalls,
+      0,
+      'generic partition contention must not rotate the canonical transition session',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('executeAtomicTransition retries the same step after a failed persist ' +
   'without idempotency poisoning', async (t) => {
@@ -572,6 +1230,181 @@ test('executeAtomicTransition retries the same step after a failed persist ' +
         ),
       true,
       'transition should become idempotent only after the successful commit',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('dispatchOperation defers retryable transition persistence failures ' +
+  'through the shared owner retry lane', async (t) => {
+  const deferredTimers = [];
+  const deliveries = [];
+  const operation = createTestOperation({
+    operationId: 'op-transition-retry-dispatch',
+    partitionId: 'control_plane_publications-p1',
+  });
+  let persistCalls = 0;
+  const coordinator = createMinimalCoordinator({
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+  coordinator.repository.queryOperationById = async () => operation;
+  coordinator.repository.queryAuthoritativeOperationById =
+    async () => operation;
+  coordinator.repository.persistOperationUpdate =
+    async (nextOperation) => {
+      persistCalls += 1;
+      if (persistCalls === 1) {
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        );
+      }
+      operation.workflowStep = nextOperation.workflowStep;
+      operation.status = nextOperation.status;
+      operation.updatedAt = nextOperation.updatedAt;
+      operation.completedAt = nextOperation.completedAt;
+      operation.errorMessage = nextOperation.errorMessage;
+      operation.replicaId = nextOperation.replicaId;
+      operation.stepsHistory = nextOperation.stepsHistory.map(
+        (entry) => ({...entry}),
+      );
+    };
+  coordinator.initialize();
+
+  try {
+    const result = await coordinator.dispatchOperation(
+      operation.operationId,
+    );
+
+    t.equal(
+      result?.success,
+      false,
+      'retryable transition contention should stop the current dispatch attempt',
+    );
+    t.equal(
+      result?.skipped,
+      true,
+      'retryable transition contention should defer rather than fail closed',
+    );
+    t.equal(
+      result?.reason,
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      'dispatch should return the canonical deferred-retry reason',
+    );
+    t.equal(
+      deliveries.length,
+      0,
+      'the shared retry lane should defer before any duplicate dispatch leaves the node',
+    );
+    t.equal(
+      deferredTimers.length,
+      1,
+      'dispatch should schedule one owner-lane retry',
+    );
+
+    await deferredTimers[0].fn();
+
+    t.equal(
+      deliveries.length,
+      1,
+      'the deferred retry should resume the dispatch on the same owner lane',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.CREATING,
+      'the resumed owner path should advance the operation after persistence recovers',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('deferred transition retry resumes a stale critical pending operation ' +
+  'instead of timing it out before the retry lane runs', async (t) => {
+  const deferredTimers = [];
+  const deliveries = [];
+  const staleNow = Date.now();
+  const operation = createTestOperation({
+    operationId: 'op-stale-transition-retry-dispatch',
+    partitionId: 'control_plane_publications-p1',
+    createdAt: staleNow - 70000,
+    updatedAt: staleNow - 65000,
+  });
+  let persistCalls = 0;
+  const coordinator = createMinimalCoordinator({
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+  coordinator.repository.queryOperationById = async () => operation;
+  coordinator.repository.queryAuthoritativeOperationById =
+    async () => operation;
+  coordinator.repository.persistOperationUpdate =
+    async (nextOperation) => {
+      persistCalls += 1;
+      if (persistCalls === 1) {
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        );
+      }
+      operation.workflowStep = nextOperation.workflowStep;
+      operation.status = nextOperation.status;
+      operation.updatedAt = nextOperation.updatedAt;
+      operation.completedAt = nextOperation.completedAt;
+      operation.errorMessage = nextOperation.errorMessage;
+      operation.replicaId = nextOperation.replicaId;
+      operation.stepsHistory = nextOperation.stepsHistory.map(
+        (entry) => ({...entry}),
+      );
+    };
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = await coordinator.dispatchOperation(
+      operation.operationId,
+    );
+
+    t.equal(firstAttempt?.reason, REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      'the initial retryable contention should defer through the shared retry lane');
+    t.equal(deferredTimers.length, 1,
+      'a deferred owner-lane retry should be armed');
+
+    await deferredTimers[0].fn();
+
+    t.equal(
+      deliveries.length,
+      1,
+      'the deferred retry should still replay dispatch for the stale critical operation',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.CREATING,
+      'the retried owner path should advance the stale operation instead of failing it closed',
+    );
+    t.not(
+      String(operation.status || '').toUpperCase(),
+      'FAILED',
+      'critical deferred retries should not collapse into terminal timeout before retry execution',
     );
   } finally {
     await coordinator.shutdown();
@@ -859,7 +1692,7 @@ test('persistNewOperation retries transient routable partition timeouts ' +
       },
     },
   });
-  coordinator.waitForOperationPersistRetry = async () => {};
+  coordinator.repository.waitForOperationPersistRetry = async () => {};
   coordinator.initialize();
 
   try {
@@ -886,7 +1719,15 @@ test('persistOperationUpdate retries transient partition transaction ' +
   );
   let executeCalls = 0;
   const observedSessions = [];
+  const txCoordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => Date.now(),
+  });
   const coordinator = createMinimalCoordinator({
+    transactionCoordinator: txCoordinator,
     sqlQueryEngine: {
       async executeQuery(sql, _params, options = {}) {
         if (!sql.includes('UPDATE replica_operations')) {
@@ -904,7 +1745,7 @@ test('persistOperationUpdate retries transient partition transaction ' +
       },
     },
   });
-  coordinator.waitForOperationPersistRetry = async () => {};
+  coordinator.repository.waitForOperationPersistRetry = async () => {};
   coordinator.initialize();
 
   try {
@@ -998,8 +1839,89 @@ test('persistOperationUpdate serializes external metadata writes with ' +
     t.equal(
       overlapAttempts,
       0,
-      'external metadata writes should share the replica_operations serialization lane with owner step transitions',
+      'external metadata writes should share the replica_operations ' +
+        'serialization lane with owner step transitions',
     );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('priority control-plane transitions bypass unrelated ordinary ' +
+  'replica_operations transition work', async (t) => {
+  let releaseFirstPersist;
+  const firstPersistEntered = new Promise((resolve) => {
+    releaseFirstPersist = resolve;
+  });
+  let firstPersistBlocking = true;
+  let activePersistCount = 0;
+  let overlapAttempts = 0;
+
+  const coordinator = createMinimalCoordinator({
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (!sql.includes('UPDATE replica_operations')) {
+          return {success: true, rows: [], changes: 1};
+        }
+
+        activePersistCount += 1;
+        if (activePersistCount > 1) {
+          overlapAttempts += 1;
+        }
+        try {
+          if (firstPersistBlocking) {
+            firstPersistBlocking = false;
+            await firstPersistEntered;
+          }
+          return {success: true, rows: [], changes: 1};
+        } finally {
+          activePersistCount -= 1;
+        }
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const ordinaryOperation = createTestOperation({
+      operationId: 'op-ordinary-metadata',
+      partitionId: 'partition-ordinary',
+      entityId: 'partition-ordinary',
+      replicaId: 'partition-ordinary-r1',
+      targetNodeId: 'node-ordinary',
+    });
+    const priorityPartitionId =
+      INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.REPLICA_OPERATIONS];
+    const priorityOperation = createTestOperation({
+      operationId: 'op-priority-recovery',
+      partitionId: priorityPartitionId,
+      entityId: priorityPartitionId,
+      replicaId: `${priorityPartitionId}-r4`,
+      targetNodeId: 'node-priority',
+    });
+
+    const ordinaryPersistPromise =
+      coordinator.persistOperationUpdate(ordinaryOperation);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const priorityTransitionPromise = coordinator.updateStep(
+      priorityOperation,
+      WORKFLOW_STEP.SENDING,
+    );
+
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    t.equal(
+      overlapAttempts,
+      1,
+      'priority control-plane transitions should not wait behind unrelated ordinary transition work',
+    );
+
+    releaseFirstPersist();
+
+    await Promise.all([ordinaryPersistPromise, priorityTransitionPromise]);
   } finally {
     await coordinator.shutdown();
   }
@@ -1295,7 +2217,9 @@ test('DurableWorkflowCoordinator transitionStep skips duplicate ' +
   'transition via idempotency', async (t) => {
   let persistCount = 0;
   const wfc = new DurableWorkflowCoordinator({
-    persistWorkflow: async () => { persistCount++; },
+    persistWorkflow: async () => {
+      persistCount++;
+    },
   });
 
   await wfc.registerWorkflow({

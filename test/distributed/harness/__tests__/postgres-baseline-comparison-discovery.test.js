@@ -3376,7 +3376,7 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
-  it('keeps discovered nodes excluded when only control-lane probes clear stale blockers after load-lane denial',
+  it('admits discovered nodes when control-lane probes clear stale blockers after load-lane denial',
     async () => {
       const loadCalls = [];
       const benchmarkTableProbeSql =
@@ -3684,14 +3684,14 @@ describe('postgres-baseline-comparison scenario', () => {
       const result = await run(cluster);
       assert.deepEqual(
         loadCalls[0],
-        ['seed-1'],
-        'sut load should keep nodes excluded when only control-lane benchmark probes clear stale local blockers',
+        ['seed-1', 'joiner-1'],
+        'sut load should admit nodes when control-lane benchmark probes clear stale local blockers',
       );
       assert.equal(
         result.details.benchmark.sutLoadDiscovery.reachableNodeIds
           .includes('joiner-1'),
-        false,
-        'diagnostics should keep control-only confirmations out of the reachable load set',
+        true,
+        'diagnostics should keep control-lane-confirmed nodes in the reachable load set',
       );
     });
 

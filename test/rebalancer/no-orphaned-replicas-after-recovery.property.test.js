@@ -69,6 +69,20 @@ function createRecoveryTestCoordinator(options = {}) {
     trackedOperations.set(op.operation_id, {...op});
   }
 
+  function mergeTrackedOperation(operationId, patch = {}) {
+    const existing = trackedOperations.get(operationId);
+    if (!existing) {
+      return null;
+    }
+    const updated = {
+      ...existing,
+      ...patch,
+      operation_id: operationId,
+    };
+    trackedOperations.set(operationId, updated);
+    return updated;
+  }
+
   // SQL engine that tracks operations via INSERT/UPDATE queries
   const sqlQueryEngine = {
     executeQuery: async (sql, params) => {
@@ -188,10 +202,46 @@ function createRecoveryTestCoordinator(options = {}) {
     },
   };
 
+  const controlPlaneSystemTableGateway = {
+    readAuthoritativeRows: async (_tableName, sql, params = []) =>
+      sqlQueryEngine.executeQuery(sql, params),
+    readRows: async (_tableName, sql, params = []) =>
+      sqlQueryEngine.executeQuery(sql, params),
+    executeQuery: async (sql, params = []) =>
+      sqlQueryEngine.executeQuery(sql, params),
+    async submitMutation(mutation) {
+      if (mutation?.tableName !== 'replica_operations') {
+        return {success: true, partitionResult: {affectedRows: 1}};
+      }
+
+      if (mutation.operation === 'insert') {
+        const row = {
+          ...mutation.row,
+          operation_id: mutation.row?.operation_id ?? mutation.row?.operationId,
+        };
+        trackedOperations.set(row.operation_id, row);
+        return {success: true, partitionResult: {affectedRows: 1}};
+      }
+
+      if (mutation.operation === 'update') {
+        const whereClause = mutation.whereClause || mutation.where || {};
+        const operationId =
+          whereClause.operation_id ?? whereClause.operationId ?? null;
+        if (operationId) {
+          mergeTrackedOperation(operationId, mutation.data || {});
+        }
+        return {success: true, partitionResult: {affectedRows: 1}};
+      }
+
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+
   const coordinator = new RebalanceCoordinator({
     nodeId: options.nodeId || 'test-node-1',
     systemTableCache: createMockCache({services}),
     cdcIntegrationService: createMockCdcService(),
+    controlPlaneSystemTableGateway,
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine,
@@ -336,6 +386,7 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
         async (opParams) => {
           const operations = opParams.map((params) => {
             let status;
+            let type = OperationType.ADD;
             switch (params.workflowStep) {
             case 'CREATING':
               status = ReplicaStatus.CREATING;
@@ -345,11 +396,12 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
               break;
             case 'STOPPING':
               status = ReplicaStatus.REMOVING;
+              type = OperationType.REMOVE;
               break;
             default:
               status = ReplicaStatus.PENDING;
             }
-            return createOperationRow({...params, status});
+            return createOperationRow({...params, type, status});
           });
 
           const {coordinator, trackedOperations} = createRecoveryTestCoordinator({
@@ -360,10 +412,17 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
           try {
             await coordinator.handleRecovery();
 
-            // Check no operations are in transitional state
+            // REMOVE operations already in STOPPING remain tracked while
+            // external removal completes; other transitional states should not.
             for (const op of trackedOperations.values()) {
               if (!TERMINAL_STATES.includes(op.status)) {
-                return false; // Found transitional state - fail
+                const trackedStoppingRemove =
+                  op.type === OperationType.REMOVE &&
+                  op.workflow_step === 'STOPPING' &&
+                  op.status === ReplicaStatus.REMOVING;
+                if (!trackedStoppingRemove) {
+                  return false;
+                }
               }
             }
             return true;
@@ -500,10 +559,10 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
             await coordinator.handleRecovery();
 
             const tracked = trackedOperations.get(params.operationId);
-            // STOPPING operations should be marked as FAILED
+            // REMOVE STOPPING remains tracked as removing
             return tracked !== null &&
-              tracked.status === ReplicaStatus.FAILED &&
-              tracked.workflow_step === 'FAILED';
+              tracked.status === ReplicaStatus.REMOVING &&
+              tracked.workflow_step === 'STOPPING';
           } finally {
             await coordinator.shutdown();
           }
@@ -570,14 +629,15 @@ test('Property 9: No Orphaned Replicas After Recovery', async (t) => {
     try {
       const result = await coordinator.handleRecovery();
 
-      t.equal(result.totalIncomplete, 2, 'Both operations found');
-      t.equal(result.markedFailed, 2, 'Both operations marked failed');
+      t.equal(result.totalIncomplete, 1, 'Only ADD-like operations remain incomplete');
+      t.equal(result.markedFailed, 1, 'Only the ADD operation is marked failed');
 
       const addOp = trackedOperations.get('add-op');
       const removeOp = trackedOperations.get('remove-op');
 
       t.equal(addOp.status, ReplicaStatus.FAILED, 'ADD op is FAILED');
-      t.equal(removeOp.status, ReplicaStatus.FAILED, 'REMOVE op is FAILED');
+      t.equal(removeOp.status, ReplicaStatus.REMOVING,
+        'REMOVE op remains removing while STOPPING is externally tracked');
     } finally {
       await coordinator.shutdown();
     }

@@ -234,6 +234,99 @@ test('table-distribution-helpers retries benchmark table bootstrap on ' +
   );
 });
 
+test('table-distribution-helpers retries retryable snapshot-read defers until ' +
+  'table distribution metadata becomes visible', async () => {
+  const snapshotCalls = [];
+  let tableLookupAttempts = 0;
+  let partitionLookupAttempts = 0;
+  let serviceLookupAttempts = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      snapshotCalls.push({
+        sql,
+        lane: options.lane,
+      });
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        tableLookupAttempts += 1;
+        if (tableLookupAttempts === 1) {
+          const error = new Error('query_admission_deferred');
+          error.retryAfterMs = 5;
+          throw error;
+        }
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-retry'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        partitionLookupAttempts += 1;
+        if (partitionLookupAttempts === 1) {
+          const error = new Error(
+            'Distributed operation failed due to participant failures',
+          );
+          error.deferRetry = true;
+          error.retryAfterMs = 5;
+          throw error;
+        }
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-retry-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        serviceLookupAttempts += 1;
+        if (serviceLookupAttempts === 1) {
+          const error = new Error('query_admission_deferred');
+          error.retryAfterMs = 5;
+          throw error;
+        }
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-retry-p1',
+              node_id: 'seed-1',
+              status: 'active',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-retry-p1',
+              node_id: 'node-2',
+              status: 'active',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(distribution.partitionCount, 1);
+  assert.equal(distribution.replicaNodeCount, 2);
+  assert.deepEqual(
+    Array.from(distribution.replicaNodeIds).sort(),
+    ['node-2', 'seed-1'],
+  );
+  assert.ok(
+    tableLookupAttempts >= 2,
+    'expected retryable table-id snapshot defers to be retried',
+  );
+  assert.ok(
+    partitionLookupAttempts >= 2,
+    'expected retryable partition snapshot failures to be retried',
+  );
+  assert.ok(
+    serviceLookupAttempts >= 2,
+    'expected retryable service snapshot defers to be retried',
+  );
+  assert.ok(
+    snapshotCalls.every((entry) => entry.lane === 'snapshot'),
+    'retryable distribution reads should stay on the snapshot lane',
+  );
+});
+
 test('table-distribution-helpers retries transaction-active bootstrap ' +
   'failures on the dedicated control lane', async () => {
   const createCalls = [];
@@ -358,6 +451,128 @@ test('table-distribution-helpers checks alternate snapshot nodes when the ' +
   );
 });
 
+test('table-distribution-helpers repairs table visibility from authoritative ' +
+  'control snapshot after retryable create timeout', async () => {
+  let repairCount = 0;
+  let tableLookupAttempts = 0;
+  let partitionLookupAttempts = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        const error = new Error(
+          'Admin API query timed out for node seed-1 on lane control after 15000ms',
+        );
+        error.retryAfterMs = 5;
+        throw error;
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        tableLookupAttempts += 1;
+        return {
+          rows: repairCount > 0 ?
+            [{table_id: 'tbl-benchmark-events-repaired'}] :
+            [],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        partitionLookupAttempts += 1;
+        return {
+          rows: repairCount > 0 ?
+            [{partition_id: 'tbl-benchmark-events-repaired-p1'}] :
+            [],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    requirePartitionVisibility: true,
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(repairCount, 1);
+  assert.equal(ensured.tableId, 'tbl-benchmark-events-repaired');
+  assert.equal(ensured.tableVisibilityRepairApplied, true);
+  assert.match(String(ensured.createTimeoutError || ''), /timed out/i);
+  assert.ok(
+    tableLookupAttempts >= 1,
+    'table bootstrap should re-check table visibility after authoritative repair',
+  );
+  assert.ok(
+    partitionLookupAttempts >= 1,
+    'table bootstrap should re-check partition visibility after authoritative repair',
+  );
+});
+
+test('table-distribution-helpers preserves pending create visibility ' +
+  'without forced repair', async () => {
+  let repairCount = 0;
+  let tableLookupAttempts = 0;
+  let partitionLookupAttempts = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        return {
+          rows: [],
+          visibilityState: 'pending_visibility',
+          authoritativeVisibilityConfirmed: true,
+        };
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        tableLookupAttempts += 1;
+        return {
+          rows: tableLookupAttempts >= 2 ?
+            [{table_id: 'tbl-benchmark-events-pending'}] :
+            [],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        partitionLookupAttempts += 1;
+        return {
+          rows: partitionLookupAttempts >= 2 ?
+            [{partition_id: 'tbl-benchmark-events-pending-p1'}] :
+            [],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    requirePartitionVisibility: true,
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(ensured.tableId, 'tbl-benchmark-events-pending');
+  assert.equal(repairCount, 0);
+  assert.equal(ensured.createVisibilityState, 'pending_visibility');
+  assert.equal(ensured.createVisibilityAuthoritativeConfirmed, true);
+  assert.equal(
+    ensured.tableVisibilityWarning,
+    'table_id_visibility_pending_after_authoritative_commit',
+  );
+  assert.ok(
+    tableLookupAttempts >= 2,
+    'pending create visibility should keep polling snapshot metadata',
+  );
+  assert.ok(
+    partitionLookupAttempts >= 2,
+    'pending create visibility should keep polling partition metadata',
+  );
+});
+
 test('table-distribution-helpers repairs empty table distribution snapshots ' +
   'from authoritative control state before giving up', async () => {
   let repairCount = 0;
@@ -410,6 +625,60 @@ test('table-distribution-helpers repairs empty table distribution snapshots ' +
   assert.deepEqual(
     Array.from(distribution.replicaNodeIds),
     ['seed-1'],
+  );
+});
+
+test('table-distribution-helpers falls back to the control lane when ' +
+  'forced snapshot repair is not locally executable on the snapshot lane',
+async () => {
+  const repairLanes = [];
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        const error = new Error(
+          'Admin API query timed out for node seed-1 on lane control after 15000ms',
+        );
+        error.retryAfterMs = 5;
+        throw error;
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairLanes.push(options.lane);
+        if (options.lane === 'snapshot') {
+          throw new Error('SQL query engine not available');
+        }
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: repairLanes.includes('control') ?
+            [{table_id: 'tbl-benchmark-events-control-repair'}] :
+            [],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: repairLanes.includes('control') ?
+            [{partition_id: 'tbl-benchmark-events-control-repair-p1'}] :
+            [],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const ensured = await ensureBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    requirePartitionVisibility: true,
+    queryNodes: [seedNode],
+  });
+
+  assert.equal(ensured.tableId, 'tbl-benchmark-events-control-repair');
+  assert.equal(ensured.tableVisibilityRepairApplied, true);
+  assert.deepEqual(
+    repairLanes,
+    ['snapshot', 'control'],
+    'forced repair should fall back to the control lane when snapshot execution is unavailable',
   );
 });
 
@@ -561,6 +830,199 @@ test('table-distribution-helpers repairs table-scoped service gaps even when ' +
   assert.ok(
     serviceQueries.every((entry) => entry.lane === 'snapshot'),
     'table-scoped service reads should stay on snapshot lane',
+  );
+});
+
+test('table-distribution-helpers prefers non-invalid alternate snapshots ' +
+  'over larger invalid follower-only topologies', async () => {
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql, _params, options = {}) {
+      if (sql.includes('control_snapshot_local(true)')) {
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-invalid-primary'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+            replica_count: 3,
+            leader_node_id: 'seed-1',
+          }],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-2',
+              status: 'active',
+              raft_role: 'follower',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-3',
+              status: 'active',
+              raft_role: 'follower',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-4',
+              status: 'active',
+              raft_role: 'follower',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-5',
+              status: 'active',
+              raft_role: 'follower',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const alternateNode = {
+    id: 'node-2',
+    async queryWithTimeout(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-invalid-primary'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-invalid-primary-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'seed-1',
+              status: 'active',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-2',
+              status: 'active',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-invalid-primary-p1',
+              node_id: 'node-3',
+              status: 'active',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const distribution = await queryTableDistribution(seedNode, {
+    tableName: 'benchmark_events',
+    queryNodes: [seedNode, alternateNode],
+  });
+
+  assert.equal(distribution.topologyState, 'opaque');
+  assert.equal(distribution.invalidPartitionCount, 0);
+  assert.equal(distribution.serviceCount, 3);
+  assert.equal(distribution.replicaNodeCount, 3);
+  assert.deepEqual(
+    Array.from(distribution.replicaNodeIds).sort(),
+    ['node-2', 'node-3', 'seed-1'],
+  );
+});
+
+test('table-distribution-helpers fails early when follower-only topology ' +
+  'flatlines without a visible leader service', async () => {
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('control_snapshot_local(true)')) {
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-leader-gap'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-leader-gap-p1',
+            replica_count: 3,
+            leader_node_id: 'seed-1',
+          }],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {
+              partition_id: 'tbl-benchmark-events-leader-gap-p1',
+              node_id: 'node-2',
+              status: 'active',
+              raft_role: 'follower',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-leader-gap-p1',
+              node_id: 'node-3',
+              status: 'active',
+              raft_role: 'follower',
+            },
+            {
+              partition_id: 'tbl-benchmark-events-leader-gap-p1',
+              node_id: 'node-4',
+              status: 'active',
+              raft_role: 'follower',
+            },
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  await assert.rejects(
+    waitForPartitionGrowthAndSpread(seedNode, {
+      tableName: 'benchmark_events',
+      timeoutMs: 80,
+      pollIntervalMs: 5,
+      topologyNoProgressTimeoutMs: 10,
+      minAdditionalPartitions: 1,
+      minDistinctReplicaNodes: 3,
+      queryNodes: [seedNode],
+    }),
+    (error) => {
+      assert.match(error.message, /invalid state/i);
+      assert.match(error.message, /failureMode=leader_service_missing/i);
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.failureMode,
+        'leader_service_missing',
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.topologyState,
+        'invalid',
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.leaderServiceMissingPartitionCount,
+        1,
+      );
+      assert.equal(
+        error.diagnostics?.partitionGrowth?.overReplicatedPartitionCount,
+        0,
+      );
+      return true;
+    },
   );
 });
 
@@ -936,6 +1398,106 @@ test('table-distribution-helpers can bootstrap partitioning load when ' +
       plan.initialNodes.map((node) => node.id),
       ['node-2', 'node-3', 'seed-1'],
       'disabled admission enforcement should bootstrap on replica-bearing nodes',
+    );
+  } finally {
+    plan.stop();
+  }
+});
+
+test('table-distribution-helpers still promotes sampled admission-ready ' +
+  'routed nodes when benchmark admission enforcement is disabled',
+async () => {
+  let admissionSampleCount = 0;
+  const clusterNodes = [
+    {id: 'seed-1'},
+    {id: 'node-2'},
+    {id: 'node-3'},
+    {id: 'node-4'},
+    {id: 'node-5'},
+    {id: 'node-6'},
+    {id: 'node-7'},
+  ];
+  const seedNode = {
+    id: 'seed-1',
+    async query(sql) {
+      if (sql.includes(TABLES_SQL_FRAGMENT)) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-1'}],
+        };
+      }
+      if (sql.includes(PARTITIONS_SQL_FRAGMENT)) {
+        return {
+          rows: [{partition_id: 'bench-p1'}],
+        };
+      }
+      if (sql.includes(SERVICES_SQL_FRAGMENT)) {
+        return {
+          rows: [
+            {partition_id: 'bench-p1', node_id: 'seed-1', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-2', status: 'active'},
+            {partition_id: 'bench-p1', node_id: 'node-3', status: 'active'},
+          ],
+        };
+      }
+      return {rows: []};
+    },
+  };
+  const cluster = {
+    _config: {
+      benchmark: {
+        replicationFactor: 3,
+        readyPollIntervalMs: 5,
+        preloadRequiredStableMs: 0,
+        enforceBenchmarkLoadAdmission: false,
+      },
+    },
+    getNodes: () => clusterNodes,
+    resolveBenchmarkReadyLoadNodes: async () => {
+      admissionSampleCount += 1;
+      if (admissionSampleCount <= 2) {
+        return [clusterNodes[1]];
+      }
+      return [
+        clusterNodes[1],
+        clusterNodes[3],
+        clusterNodes[4],
+        clusterNodes[5],
+      ];
+    },
+  };
+
+  const plan = await createPartitioningBenchmarkLoadNodePlan(
+    seedNode,
+    cluster,
+    {
+      tableName: 'benchmark_events',
+      tableId: 'tbl-benchmark-events-1',
+      requiredNodeCount: 5,
+      queryNodes: [seedNode],
+      pollIntervalMs: 5,
+      stableWindowMs: 0,
+    },
+  );
+
+  try {
+    assert.ok(
+      admissionSampleCount >= 1,
+      'disabled enforcement should still sample benchmark admission to widen load safely',
+    );
+    assert.deepEqual(
+      plan.initialNodes.map((node) => node.id),
+      ['node-2', 'node-3', 'seed-1'],
+      'disabled enforcement should still bootstrap on the current replica-bearing quorum',
+    );
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+
+    assert.deepEqual(
+      plan.nodeResolver().map((node) => node.id),
+      ['node-2', 'node-4', 'node-5', 'node-6', 'node-3'],
+      'disabled enforcement should still promote benchmark-admitted routed nodes before falling back to replica-bearing nodes',
     );
   } finally {
     plan.stop();

@@ -39,9 +39,32 @@ const OCI_POLICY_DECISION = Object.freeze({
   DENIED: 'denied',
 });
 
-// --- Wildcard constant ---
+// --- Private constants ---
 
 const WILDCARD = '*';
+const IMAGE_REF_DELIMITER = '/';
+const EMPTY_REPOSITORY = '';
+const NOT_FOUND_INDEX = -1;
+const NO_POLICY_ERRORS = 0;
+
+function buildImagePolicyResult(allowed, decision, errors) {
+  const result = {
+    allowed,
+    decision,
+  };
+  if (errors) {
+    result.errors = errors;
+  }
+  return result;
+}
+
+function buildPolicyDecision(decision, reason) {
+  const result = {decision};
+  if (reason) {
+    result.reason = reason;
+  }
+  return result;
+}
 
 /**
  * Validate registry policy structure.
@@ -64,7 +87,7 @@ function validateRegistryPolicy(policy) {
       !Array.isArray(policy[OCI_POLICY_FIELD.ALLOWED_REPOSITORIES])) {
     errors.push(OCI_POLICY_ERROR.ALLOWLIST_REQUIRED);
   }
-  if (errors.length > 0) {
+  if (errors.length > NO_POLICY_ERRORS) {
     return {valid: false, errors};
   }
   return {valid: true};
@@ -79,28 +102,27 @@ function validateRegistryPolicy(policy) {
  */
 function checkRegistryAllowed(registry, policy) {
   if (!policy) {
-    return {
-      decision: OCI_POLICY_DECISION.DENIED,
-      reason: OCI_POLICY_ERROR.DENY_BY_DEFAULT,
-    };
+    return buildPolicyDecision(
+      OCI_POLICY_DECISION.DENIED,
+      OCI_POLICY_ERROR.DENY_BY_DEFAULT,
+    );
   }
   const allowed = policy[OCI_POLICY_FIELD.ALLOWED_REGISTRIES];
   if (!Array.isArray(allowed)) {
-    return {
-      decision: OCI_POLICY_DECISION.DENIED,
-      reason: OCI_POLICY_ERROR.ALLOWLIST_REQUIRED,
-    };
+    return buildPolicyDecision(
+      OCI_POLICY_DECISION.DENIED,
+      OCI_POLICY_ERROR.ALLOWLIST_REQUIRED,
+    );
   }
-  if (allowed.includes(WILDCARD)) {
-    return {decision: OCI_POLICY_DECISION.ALLOWED};
+  const registryAllowed =
+    allowed.includes(WILDCARD) || allowed.includes(registry);
+  if (registryAllowed) {
+    return buildPolicyDecision(OCI_POLICY_DECISION.ALLOWED);
   }
-  if (allowed.includes(registry)) {
-    return {decision: OCI_POLICY_DECISION.ALLOWED};
-  }
-  return {
-    decision: OCI_POLICY_DECISION.DENIED,
-    reason: OCI_POLICY_ERROR.REGISTRY_DENIED,
-  };
+  return buildPolicyDecision(
+    OCI_POLICY_DECISION.DENIED,
+    OCI_POLICY_ERROR.REGISTRY_DENIED,
+  );
 }
 
 /**
@@ -112,33 +134,32 @@ function checkRegistryAllowed(registry, policy) {
  */
 function checkRepositoryAllowed(repository, policy) {
   if (!policy) {
-    return {
-      decision: OCI_POLICY_DECISION.DENIED,
-      reason: OCI_POLICY_ERROR.DENY_BY_DEFAULT,
-    };
+    return buildPolicyDecision(
+      OCI_POLICY_DECISION.DENIED,
+      OCI_POLICY_ERROR.DENY_BY_DEFAULT,
+    );
   }
   const repos = policy[OCI_POLICY_FIELD.ALLOWED_REPOSITORIES];
   if (!repos) {
-    return {decision: OCI_POLICY_DECISION.ALLOWED};
+    return buildPolicyDecision(OCI_POLICY_DECISION.ALLOWED);
   }
   if (!Array.isArray(repos)) {
-    return {
-      decision: OCI_POLICY_DECISION.DENIED,
-      reason: OCI_POLICY_ERROR.ALLOWLIST_REQUIRED,
-    };
+    return buildPolicyDecision(
+      OCI_POLICY_DECISION.DENIED,
+      OCI_POLICY_ERROR.ALLOWLIST_REQUIRED,
+    );
   }
-  for (const entry of repos) {
-    if (repository === entry) {
-      return {decision: OCI_POLICY_DECISION.ALLOWED};
-    }
-    if (entry.endsWith('/') && repository.startsWith(entry)) {
-      return {decision: OCI_POLICY_DECISION.ALLOWED};
-    }
+  const repositoryAllowed = repos.some((entry) =>
+    repository === entry ||
+    (entry.endsWith(IMAGE_REF_DELIMITER) && repository.startsWith(entry))
+  );
+  if (repositoryAllowed) {
+    return buildPolicyDecision(OCI_POLICY_DECISION.ALLOWED);
   }
-  return {
-    decision: OCI_POLICY_DECISION.DENIED,
-    reason: OCI_POLICY_ERROR.REPOSITORY_DENIED,
-  };
+  return buildPolicyDecision(
+    OCI_POLICY_DECISION.DENIED,
+    OCI_POLICY_ERROR.REPOSITORY_DENIED,
+  );
 }
 
 /**
@@ -150,23 +171,28 @@ function checkRepositoryAllowed(repository, policy) {
  * @return {{allowed: boolean, decision: string, errors?: string[]}}
  */
 function enforceImagePolicy(imageRef, policy) {
+  let result;
   if (!imageRef || typeof imageRef !== TYPEOF.STRING) {
-    return {
-      allowed: false,
-      decision: OCI_POLICY_DECISION.DENIED,
-      errors: [OCI_POLICY_ERROR.REF_REQUIRED],
-    };
-  }
-  if (!policy) {
-    return {
-      allowed: false,
-      decision: OCI_POLICY_DECISION.DENIED,
-      errors: [OCI_POLICY_ERROR.DENY_BY_DEFAULT],
-    };
-  }
-  const slashIdx = imageRef.indexOf('/');
-  const registry = slashIdx >= 0 ? imageRef.slice(0, slashIdx) : imageRef;
-  const repository = slashIdx >= 0 ? imageRef.slice(slashIdx + 1) : '';
+    result = buildImagePolicyResult(
+      false,
+      OCI_POLICY_DECISION.DENIED,
+      [OCI_POLICY_ERROR.REF_REQUIRED],
+    );
+  } else if (!policy) {
+    result = buildImagePolicyResult(
+      false,
+      OCI_POLICY_DECISION.DENIED,
+      [OCI_POLICY_ERROR.DENY_BY_DEFAULT],
+    );
+  } else {
+  const slashIdx = imageRef.indexOf(IMAGE_REF_DELIMITER);
+  const hasRepositoryDelimiter = slashIdx > NOT_FOUND_INDEX;
+  const registry = hasRepositoryDelimiter ?
+    imageRef.slice(0, slashIdx) :
+    imageRef;
+  const repository = hasRepositoryDelimiter ?
+    imageRef.slice(slashIdx + 1) :
+    EMPTY_REPOSITORY;
   const errors = [];
   const regResult = checkRegistryAllowed(registry, policy);
   if (regResult.decision === OCI_POLICY_DECISION.DENIED) {
@@ -176,17 +202,20 @@ function enforceImagePolicy(imageRef, policy) {
   if (repoResult.decision === OCI_POLICY_DECISION.DENIED) {
     errors.push(repoResult.reason || OCI_POLICY_ERROR.REPOSITORY_DENIED);
   }
-  if (errors.length > 0) {
-    return {
-      allowed: false,
-      decision: OCI_POLICY_DECISION.DENIED,
+  if (errors.length > NO_POLICY_ERRORS) {
+    result = buildImagePolicyResult(
+      false,
+      OCI_POLICY_DECISION.DENIED,
       errors,
-    };
+    );
+  } else {
+    result = buildImagePolicyResult(
+      true,
+      OCI_POLICY_DECISION.ALLOWED,
+    );
   }
-  return {
-    allowed: true,
-    decision: OCI_POLICY_DECISION.ALLOWED,
-  };
+  }
+  return result;
 }
 
 export {

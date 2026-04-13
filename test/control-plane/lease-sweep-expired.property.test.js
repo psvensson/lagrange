@@ -15,6 +15,9 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {STATE} from '../../src/constants/index.js';
+import {
+  createQueryBackedControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 
 function createNodeLeaseOwner(disconnectNodeDueToLeaseExpiry) {
   return {
@@ -134,6 +137,10 @@ test('Property 14: Lease sweep removes expired leases',
               })),
             systemTableCache: mockCache,
             sqlQueryEngine: mockSqlQueryEngine,
+            controlPlaneSystemTableGateway:
+              createQueryBackedControlPlaneSystemTableGateway(
+                mockSqlQueryEngine,
+              ),
             messageGroupServices: new Set([mockMgService]),
           });
           service.initialize();

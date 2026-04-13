@@ -1,6 +1,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  ControlPlanePublicationsOwner,
   createSystemMetadataOwners,
   LogsOwner,
   MessageGroupsOwner,
@@ -65,7 +69,57 @@ test('createSystemMetadataOwners wires one shared gateway and cache into every o
       t.equal(owner.getSystemTableCache(), systemTableCache,
         'owner bundle should share one injected cache handle');
     }
+});
+
+test('ControlPlanePublicationsOwner marks publication mutations as ' +
+  'critical non-deferrable writes', async (t) => {
+  const gatewayCalls = [];
+  const gateway = {
+    async upsertSystemTableRow(tableName, row, options) {
+      gatewayCalls.push({
+        tableName,
+        row,
+        options,
+      });
+      return {success: true};
+    },
+  };
+
+  const owner = new ControlPlanePublicationsOwner({
+    controlPlaneSystemTableGateway: gateway,
   });
+
+  await owner.upsertPublication({
+    publication_id: 'publication-1',
+    status: 'OPEN',
+  });
+
+  t.equal(
+    gatewayCalls.length,
+    1,
+    'publication owner should route the upsert through the gateway',
+  );
+  t.equal(
+    gatewayCalls[0]?.tableName,
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    'publication owner should target the control_plane_publications table',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.workClass,
+    'critical',
+    'publication mutations should use the critical work class',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.deliveryPriority,
+    'critical',
+    'publication mutations should keep critical delivery priority',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.allowPressureDefer,
+    false,
+    'publication mutations should not defer behind transport pressure',
+  );
+});
 
 test('System metadata owners route typed read and mutation methods through the gateway',
   async (t) => {
@@ -274,6 +328,100 @@ test('System metadata owners route typed read and mutation methods through the g
         gatewayCalls[5].method,
         'deleteSystemTableRow',
         `${ownerSpec.deleteMethod} should route through gateway deletes`,
+      );
+    }
+  });
+
+test('System metadata owners retry transient mutation failures and apply ' +
+  'primary-key upsert coalescing by default', async (t) => {
+    let upsertCallCount = 0;
+    const observedOptions = [];
+    const owner = new NodesOwner({
+      controlPlaneSystemTableGateway: {
+        async upsertSystemTableRow(_tableName, _row, options) {
+          upsertCallCount += 1;
+          observedOptions.push(options);
+          if (upsertCallCount === 1) {
+            return {
+              success: false,
+              error: 'Transaction already active on this partition',
+            };
+          }
+          return {success: true};
+        },
+      },
+      controlPlaneWriteRetrySleep: async () => {},
+      controlPlaneWriteRetryTimeoutMs: 50,
+      controlPlaneWriteRetryBaseDelayMs: 1,
+      controlPlaneWriteRetryMaxDelayMs: 1,
+    });
+
+    const result = await owner.upsertNode({
+      node_id: 'node-1',
+      status: 'active',
+    });
+
+    t.equal(result.success, true,
+      'upsert should recover after one retryable mutation failure');
+    t.equal(upsertCallCount, 2,
+      'owner writes should retry transient control-plane mutation failures');
+    t.equal(
+      observedOptions[0]?.owner,
+      'nodes-owner',
+      'owner writes should stamp the semantic owner name onto gateway mutations',
+    );
+    t.equal(
+      observedOptions[0]?.mergePolicy,
+      CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+      'full-row upserts should replace older pending writes for the same primary key',
+    );
+    t.equal(
+      observedOptions[0]?.coalescingKey,
+      'system-metadata:nodes:node-1',
+      'full-row upserts should share one stable per-row coalescing key',
+    );
+  });
+
+test('System metadata owners throw typed errors when mutation retries still fail',
+  async (t) => {
+    const owner = new NodesOwner({
+      controlPlaneSystemTableGateway: {
+        async updateSystemTableRow() {
+          return {
+            success: false,
+            error: 'Query execution failed',
+            errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+            retryAfterMs: 250,
+            deferRetry: true,
+            participantFailures: [{
+              error: 'control_plane_pressure_degraded',
+              errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+              retryAfterMs: 250,
+              deferRetry: true,
+              failedTable: TABLES.NODES,
+            }],
+          };
+        },
+      },
+      controlPlaneWriteRetrySleep: async () => {},
+      controlPlaneWriteRetryTimeoutMs: 0,
+    });
+
+    try {
+      await owner.updateNode('node-1', {status: 'active'});
+      t.fail('updateNode should throw when the gateway still returns failure');
+    } catch (error) {
+      t.equal(error.message, 'Query execution failed');
+      t.equal(error.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
+      t.equal(error.retryAfterMs, 250);
+      t.equal(error.deferRetry, true);
+      t.equal(error.tableName, TABLES.NODES);
+      t.equal(error.ownerName, 'nodes-owner');
+      t.equal(error.operation, 'update');
+      t.equal(
+        error.firstFailedParticipant?.errorCode,
+        'CONTROL_PLANE_PRESSURE_DEGRADED',
+        'typed participant failure metadata should survive the owner boundary',
       );
     }
   });

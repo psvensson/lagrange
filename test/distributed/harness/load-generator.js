@@ -152,15 +152,15 @@ function normalizeRatio(value, fallback) {
 }
 
 /**
- * Build a SQL statement for the given operation type and counter.
+ * Build one load operation descriptor for the given operation type and counter.
  * @param {string} operation - One of INSERT, SELECT, UPDATE, DELETE
  * @param {number} counter - Monotonic operation counter
  * @param {Object} [options]
  * @param {string} [options.tableName]
  * @param {string} [options.workloadProfile]
- * @returns {string} SQL statement
+ * @returns {{sql: string, acknowledgedWriteId: string|null}}
  */
-function buildSqlStatement(operation, counter, options = {}) {
+function buildLoadOperationDescriptor(operation, counter, options = {}) {
   const workloadProfile = String(
     options.workloadProfile || WORKLOAD_PROFILE_DEFAULT,
   );
@@ -180,21 +180,36 @@ function buildSqlStatement(operation, counter, options = {}) {
     const timestamp = Date.now();
     switch (operation) {
     case INSERT_OP:
-      return `INSERT OR IGNORE INTO ${tableName} ` +
-        '(event_id, payload, created_at) VALUES (' +
-        `'${eventId}', ${payload}, ${timestamp})`;
+      return {
+        sql: `INSERT OR IGNORE INTO ${tableName} ` +
+          '(event_id, payload, created_at) VALUES (' +
+          `'${eventId}', ${payload}, ${timestamp})`,
+        acknowledgedWriteId: eventId,
+      };
     case SELECT_OP:
-      return `SELECT count(*) FROM ${tableName} ` +
-        `WHERE payload = ${payload}`;
+      return {
+        sql: `SELECT count(*) FROM ${tableName} ` +
+          `WHERE payload = ${payload}`,
+        acknowledgedWriteId: null,
+      };
     case UPDATE_OP:
-      return `UPDATE ${tableName} ` +
-        `SET created_at = ${timestamp} ` +
-        `WHERE event_id = '${eventId}'`;
+      return {
+        sql: `UPDATE ${tableName} ` +
+          `SET created_at = ${timestamp} ` +
+          `WHERE event_id = '${eventId}'`,
+        acknowledgedWriteId: null,
+      };
     case DELETE_OP:
-      return `DELETE FROM ${tableName} ` +
-        `WHERE event_id = '${eventId}'`;
+      return {
+        sql: `DELETE FROM ${tableName} ` +
+          `WHERE event_id = '${eventId}'`,
+        acknowledgedWriteId: null,
+      };
     default:
-      return 'SELECT 1';
+      return {
+        sql: 'SELECT 1',
+        acknowledgedWriteId: null,
+      };
     }
   }
 
@@ -206,22 +221,37 @@ function buildSqlStatement(operation, counter, options = {}) {
   const timestamp = Date.now();
   switch (operation) {
   case INSERT_OP:
-    return `INSERT INTO ${tableName} ` +
-      '(log_id, timestamp, level, node_id, message, created_at) VALUES (' +
-      `'${logId}', ${timestamp}, '${LOG_LEVEL_INFO}', ` +
-      `'${LOAD_NODE_ID}', '${logId}', ${timestamp})`;
+    return {
+      sql: `INSERT INTO ${tableName} ` +
+        '(log_id, timestamp, level, node_id, message, created_at) VALUES (' +
+        `'${logId}', ${timestamp}, '${LOG_LEVEL_INFO}', ` +
+        `'${LOAD_NODE_ID}', '${logId}', ${timestamp})`,
+      acknowledgedWriteId: logId,
+    };
   case SELECT_OP:
-    return `SELECT * FROM ${tableName} ` +
-      `WHERE log_id = '${logId}' LIMIT 1`;
+    return {
+      sql: `SELECT * FROM ${tableName} ` +
+        `WHERE log_id = '${logId}' LIMIT 1`,
+      acknowledgedWriteId: null,
+    };
   case UPDATE_OP:
-    return `UPDATE ${tableName} ` +
-      `SET message = 'updated-${counter}' ` +
-      `WHERE log_id = '${logId}'`;
+    return {
+      sql: `UPDATE ${tableName} ` +
+        `SET message = 'updated-${counter}' ` +
+        `WHERE log_id = '${logId}'`,
+      acknowledgedWriteId: null,
+    };
   case DELETE_OP:
-    return `DELETE FROM ${tableName} ` +
-      `WHERE log_id = '${logId}'`;
+    return {
+      sql: `DELETE FROM ${tableName} ` +
+        `WHERE log_id = '${logId}'`,
+      acknowledgedWriteId: null,
+    };
   default:
-    return 'SELECT 1';
+    return {
+      sql: 'SELECT 1',
+      acknowledgedWriteId: null,
+    };
   }
 }
 
@@ -415,10 +445,10 @@ function computeMetrics(
 class LoadRun {
   /**
    * @param {Array<Object>} nodes - NodeHandle instances
-  * @param {Object} options
-  * @param {number} options.opsPerSec - Target operations per second
-  * @param {number} options.durationMs - Duration in milliseconds
-  * @param {Array<string>} options.operations - SQL operation types
+   * @param {Object} options
+   * @param {number} options.opsPerSec - Target operations per second
+   * @param {number} options.durationMs - Duration in milliseconds
+   * @param {Array<string>} options.operations - SQL operation types
    * @param {Function} [options.nodeResolver] - Synchronous resolver that
    *   can refresh the currently available node set mid-run.
    * @param {number} [options.maxInFlight] - Optional in-flight cap
@@ -430,15 +460,17 @@ class LoadRun {
    *   cooldown duration.
    * @param {number} [options.queryTimeoutMs] - Load query timeout
    *   for timeout-aware node handles.
-  * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
-  *   cap to prevent one node from monopolizing global concurrency.
-  * @param {number} [options.maxPendingQueueDepth] - Optional max
-  *   dispatch queue depth before overload rejection.
-  * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
-  *   scheduled operations when pending queue exceeds depth.
-   * @param {boolean} [options.admissionAwareScheduling] - Convert
-   *   overload into bounded flow-control rejections instead of
-   *   unbounded scheduler backlog.
+   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight cap to
+   *   prevent one node from monopolizing global concurrency.
+   * @param {number} [options.maxPendingQueueDepth] - Optional max
+   *   dispatch queue depth before overload rejection.
+   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+   *   scheduled operations when pending queue exceeds depth.
+   * @param {boolean} [options.trackAcknowledgedWrites] - Retain successful
+   *   INSERT identifiers for post-recovery visibility assertions.
+   * @param {boolean} [options.admissionAwareScheduling] - Convert overload
+   *   into bounded flow-control rejections instead of unbounded scheduler
+   *   backlog.
    * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
    *   Adaptive dispatch guardrail settings for control-plane pressure.
    */
@@ -462,6 +494,15 @@ class LoadRun {
       options.logIdPrefix.length > ZERO ?
       options.logIdPrefix :
       LOAD_LOG_ID_PREFIX;
+    this._trackAcknowledgedWrites = options.trackAcknowledgedWrites === true;
+    this._acknowledgedWriteIdColumn = this._trackAcknowledgedWrites ?
+      (this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+        'event_id' :
+        'log_id') :
+      null;
+    this._acknowledgedWriteIds = this._trackAcknowledgedWrites ? [] : null;
+    this._acknowledgedWriteIdSet =
+      this._trackAcknowledgedWrites ? new Set() : null;
     this._maxInFlight = options.maxInFlight ||
       initialAvailableNodes.length * IN_FLIGHT_PER_NODE;
     this._nodeFailureThreshold =
@@ -1026,16 +1067,24 @@ class LoadRun {
       this._queueDelaySamples.push(queueDelayMs);
       const opIndex = this._counter % this._operations.length;
       const operation = this._operations[opIndex];
-      const sql = buildSqlStatement(operation, this._counter, {
-        tableName: this._tableName,
-        workloadProfile: this._workloadProfile,
-        eventIdPrefix: this._eventIdPrefix,
-        logIdPrefix: this._logIdPrefix,
-      });
+      const operationDescriptor = buildLoadOperationDescriptor(
+        operation,
+        this._counter,
+        {
+          tableName: this._tableName,
+          workloadProfile: this._workloadProfile,
+          eventIdPrefix: this._eventIdPrefix,
+          logIdPrefix: this._logIdPrefix,
+        },
+      );
       this._counter++;
 
       this._inFlight++;
-      this._executeWithFailover(sql, operation).finally(() => {
+      this._executeWithFailover(
+        operationDescriptor.sql,
+        operation,
+        operationDescriptor,
+      ).finally(() => {
         this._inFlight = Math.max(ZERO, this._inFlight - ONE);
         if (this._schedulingStopped === true &&
             this._inFlight === ZERO) {
@@ -1189,7 +1238,7 @@ class LoadRun {
    * On failure, try the next available node.
    * @param {string} sql
    */
-  async _executeWithFailover(sql, operation) {
+  async _executeWithFailover(sql, operation, operationDescriptor = null) {
     if (this._cancelled || this._completedMetrics) {
       return;
     }
@@ -1248,6 +1297,9 @@ class LoadRun {
         const latency = Date.now() - startTs;
         this._latencies.push(latency);
         this._successCount++;
+        this._recordAcknowledgedWrite(
+          operationDescriptor?.acknowledgedWriteId || null,
+        );
         return;
       } catch (err) {
         if (this._cancelled || this._completedMetrics) {
@@ -1510,12 +1562,27 @@ class LoadRun {
     state.openUntilMs = ZERO;
   }
 
+  _recordAcknowledgedWrite(idValue) {
+    if (this._trackAcknowledgedWrites !== true) {
+      return;
+    }
+    const normalizedId = typeof idValue === 'string' &&
+      idValue.length > ZERO ?
+      idValue :
+      null;
+    if (!normalizedId || this._acknowledgedWriteIdSet.has(normalizedId)) {
+      return;
+    }
+    this._acknowledgedWriteIdSet.add(normalizedId);
+    this._acknowledgedWriteIds.push(normalizedId);
+  }
+
   _recordNodeFailure(healthKey, error) {
     const state = this._nodeHealthByKey.get(healthKey);
     if (!state) {
       return;
     }
-    if (this._isAdmissionSignalError(error)) {
+    if (this._shouldBackoffNodeAfterTransientFailure(error)) {
       state.admissionBlockedUntilMs =
         Date.now() + this._resolveAdmissionBackoffMs(state, error);
     }
@@ -1566,11 +1633,18 @@ class LoadRun {
         getControlPlaneRetryAfterMs(error),
       );
     }
+    if (isTimeoutShapedError(error)) {
+      backoffMs = Math.max(backoffMs, this._queryTimeoutMs);
+    }
     if (state?.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT &&
         this._isCircuitOpenAdmissionError(error)) {
       backoffMs = Math.max(backoffMs, this._nodeFailureCooldownMs);
     }
     return backoffMs;
+  }
+
+  _shouldBackoffNodeAfterTransientFailure(error) {
+    return this._isAdmissionSignalError(error) || isTimeoutShapedError(error);
   }
 
   _isNodeExternallyAdmissionReady(node) {
@@ -1972,6 +2046,21 @@ class LoadRun {
   }
 
   /**
+   * Return acknowledged INSERT identifiers captured during this run.
+   * @returns {{tableName: string, idColumn: string, ids: string[]}|null}
+   */
+  getAcknowledgedWrites() {
+    if (this._trackAcknowledgedWrites !== true) {
+      return null;
+    }
+    return {
+      tableName: this._tableName,
+      idColumn: this._acknowledgedWriteIdColumn,
+      ids: [...this._acknowledgedWriteIds],
+    };
+  }
+
+  /**
    * Cancel the load run early.
    */
   cancel() {
@@ -2004,15 +2093,17 @@ class LoadGenerator {
    *   cooldown duration.
    * @param {number} [options.queryTimeoutMs] - Load query timeout
    *   for timeout-aware node handles.
-  * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
-  *   cap to prevent one node from monopolizing global concurrency.
-  * @param {number} [options.maxPendingQueueDepth] - Optional max
-  *   dispatch queue depth before overload rejection.
-  * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
-  *   scheduled operations when pending queue exceeds depth.
-   * @param {boolean} [options.admissionAwareScheduling] - Convert
-   *   overload into bounded flow-control rejections instead of
-   *   unbounded scheduler backlog.
+   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight cap to
+   *   prevent one node from monopolizing global concurrency.
+   * @param {number} [options.maxPendingQueueDepth] - Optional max
+   *   dispatch queue depth before overload rejection.
+   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+   *   scheduled operations when pending queue exceeds depth.
+   * @param {boolean} [options.trackAcknowledgedWrites] - Retain successful
+   *   INSERT identifiers for post-recovery visibility assertions.
+   * @param {boolean} [options.admissionAwareScheduling] - Convert overload
+   *   into bounded flow-control rejections instead of unbounded scheduler
+   *   backlog.
    * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
    *   Optional adaptive dispatch guardrail settings.
    */
@@ -2063,6 +2154,7 @@ class LoadGenerator {
       options.maxPendingQueueDepth >= ZERO ?
         options.maxPendingQueueDepth :
         null;
+    this._trackAcknowledgedWrites = options.trackAcknowledgedWrites === true;
     this._admissionAwareScheduling =
       options.admissionAwareScheduling === true;
     this._earlyRejectOnQueueFull =
@@ -2108,6 +2200,7 @@ class LoadGenerator {
       nodeFailureCooldownMs: this._nodeFailureCooldownMs,
       queryTimeoutMs: this._queryTimeoutMs,
       admissionBackoffMs: this._admissionBackoffMs,
+      trackAcknowledgedWrites: this._trackAcknowledgedWrites,
       maxPendingQueueDepth: this._maxPendingQueueDepth,
       earlyRejectOnQueueFull: this._earlyRejectOnQueueFull,
       admissionAwareScheduling: this._admissionAwareScheduling,

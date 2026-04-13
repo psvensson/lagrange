@@ -20,7 +20,10 @@ import {DependencyError} from '../bootstrap-errors.js';
 import {
   SUBSYSTEM,
 } from '../../constants/index.js';
-import {resolveNodeWebSocketAddress} from
+import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+  resolveNodeWebSocketAddress,
+} from
   '../../transport/node-address-resolution.js';
 
 /**
@@ -59,10 +62,15 @@ function createNodeWebSocketAddressResolver() {
     if (!cache) {
       return null;
     }
-    return resolveNodeWebSocketAddress({
+    const resolution = resolveNodeWebSocketAddress({
       targetNodeId,
       systemTableCache: cache,
     });
+    if (resolution.state !==
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED) {
+      return null;
+    }
+    return resolution.address;
   };
 }
 

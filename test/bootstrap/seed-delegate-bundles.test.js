@@ -94,12 +94,16 @@ test('phaseExecution bundle contains phase-specific delegates ' +
     'phaseExecution has getServiceReconciler');
   t.equal(typeof phase.createBootstrapServiceDescriptor, 'function',
     'phaseExecution has createBootstrapServiceDescriptor');
+  t.equal(typeof phase.buildMessageGroupOwnerNotReadyError, 'function',
+    'phaseExecution has buildMessageGroupOwnerNotReadyError');
 
   // Cleanup does NOT own lifecycle manager access
   t.equal(cleanup.getServiceLifecycleManager, undefined,
     'cleanup does not have getServiceLifecycleManager');
   t.equal(cleanup.getServiceReconciler, undefined,
     'cleanup does not have getServiceReconciler');
+  t.equal(cleanup.buildMessageGroupOwnerNotReadyError, undefined,
+    'cleanup does not have buildMessageGroupOwnerNotReadyError');
   t.end();
 });
 

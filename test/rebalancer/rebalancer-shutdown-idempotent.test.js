@@ -20,7 +20,11 @@ test('UnifiedRebalancer shutdown is idempotent — no error on second call',
     rebalancer.scheduleNextCheck();
     rebalancer.recordStateChange('test_trigger');
 
-    t.ok(rebalancer.scheduledCheck, 'scheduledCheck timer is active');
+    t.equal(
+      rebalancer.scheduledCheck,
+      null,
+      'recordStateChange clears the stale scheduledCheck timer',
+    );
     t.ok(rebalancer.stabilizationTimer, 'stabilizationTimer is active');
 
     // First shutdown — clears timers, sets isShuttingDown.

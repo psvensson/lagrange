@@ -3,6 +3,67 @@ import assert from 'node:assert/strict';
 import {run} from '../../scenarios/node-join-under-load.js';
 
 describe('node-join-under-load scenario', () => {
+  it('uses cluster scenario timing overrides when explicit options are absent',
+    async () => {
+      let observedLoadDuration = null;
+
+      const cluster = {
+        _config: {
+          scenarios: {
+            nodeJoinUnderLoad: {
+              loadDuration: '15s',
+              preJoinSettleMs: 0,
+              loadReadinessStableWindowMs: 250,
+              loadReadinessStabilizationTimeoutMs: 1000,
+            },
+          },
+        },
+        waitForLoadReadinessStability: async () => {},
+        getNodes: () => [{
+          id: 'seed',
+          async queryWithTimeout(sql) {
+            if (sql.includes('FROM partitions')) {
+              return {
+                rows: [{partition_id: 'tbl-benchmark-p1'}],
+              };
+            }
+            if (sql.startsWith('SELECT table_id FROM tables WHERE table_name = ')) {
+              return {
+                rows: [{table_id: 'tbl-benchmark'}],
+              };
+            }
+            return {rows: []};
+          },
+        }],
+        waitForBenchmarkReadyLoadNodes: async () => [
+          {id: 'seed'},
+          {id: 'peer-1'},
+        ],
+        startLoad: (options = {}) => {
+          observedLoadDuration = options.duration;
+          return {
+            getMetrics: () => ({failed: 0}),
+            waitComplete: async () => ({
+              total: 10,
+              success: 10,
+              failed: 0,
+              errors: 0,
+              targetOperations: 10,
+              undispatchedOperations: 0,
+              queueDelay: {p95: 10},
+            }),
+          };
+        },
+        addNode: async () => ({id: 'joiner-2'}),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await run(cluster);
+
+      assert.equal(observedLoadDuration, '15s');
+    });
+
   it('waits for load-readiness stability before preparing benchmark table',
     async () => {
       let loadReadinessSettled = false;
@@ -780,6 +841,21 @@ describe('node-join-under-load scenario', () => {
           getControlSnapshot: async () => ({
             rows: [{
               controlPlaneDiagnostics: {
+                publicationConvergence: {
+                  publicationEpoch: 12,
+                  publicationStatus: 'ACK_PENDING',
+                  publishedActiveNodeIds: ['seed', 'joiner-1'],
+                  pendingAckNodeIds: ['joiner-3'],
+                  recoveryProtocolState: 'publication_pending',
+                  priorityRecoveryReasonCodes: [
+                    'publication_epoch_pending',
+                    'priority_partitions_not_spread',
+                  ],
+                  priorityPartitionSummary: {
+                    satisfied: false,
+                    missingPartitionIds: ['replica_operations-p1'],
+                  },
+                },
                 logsTable: {
                   pendingWriteGrowthCount: 2,
                   retainedBacklogGrowthCount: 1,
@@ -809,6 +885,21 @@ describe('node-join-under-load scenario', () => {
           assert.deepEqual(
             error.diagnostics?.controlPlaneDiagnostics,
             {
+              publicationConvergence: {
+                publicationEpoch: 12,
+                publicationStatus: 'ACK_PENDING',
+                publishedActiveNodeIds: ['seed', 'joiner-1'],
+                pendingAckNodeIds: ['joiner-3'],
+                recoveryProtocolState: 'publication_pending',
+                priorityRecoveryReasonCodes: [
+                  'publication_epoch_pending',
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  missingPartitionIds: ['replica_operations-p1'],
+                },
+              },
               logsTable: {
                 pendingWriteGrowthCount: 2,
                 retainedBacklogGrowthCount: 1,

@@ -59,7 +59,92 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'WASM dependency resolution failed',
   LOCK_VALIDATION_FAILED:
     'WASM lock validation failed',
+  UNKNOWN_LIFECYCLE_FAILURE:
+    'unknown lifecycle failure',
 });
+
+const DRIVER_ACTION = Object.freeze({
+  PREPARE: 'prepare',
+  START: 'start',
+  STOP: 'stop',
+});
+
+const DRIVER_FIELD = Object.freeze({
+  SERVICE_ID: 'serviceId',
+  SERVICE_ID_LEGACY: 'service_id',
+});
+
+const DRIVER_SEPARATOR = Object.freeze({
+  DETAIL: ': ',
+  ERROR_LIST: '; ',
+});
+
+const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
+  HOST: 'localhost',
+  PROTOCOL: 'ws',
+});
+
+const DRIVER_LENGTH = Object.freeze({
+  EMPTY: 0,
+});
+
+function buildDriverStatusResult(status, error, detailKey, detailValue) {
+  const result = {status};
+  if (error) {
+    result.error = error;
+  }
+  if (detailKey && detailValue !== undefined) {
+    result[detailKey] = detailValue;
+  }
+  return result;
+}
+
+function buildDriverLifecycleActionError(action, message, cause) {
+  return new DriverLifecycleError(
+    RUNTIME_KIND.WASM_COMPONENT,
+    action,
+    message,
+    cause ? {cause} : undefined,
+  );
+}
+
+function buildDriverServiceScopedError(baseMessage, serviceId) {
+  return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
+}
+
+function buildValidationFailureError(baseMessage, errors) {
+  return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}` +
+    `${errors.join(DRIVER_SEPARATOR.ERROR_LIST)}`;
+}
+
+function resolvePreparePolicyFailure(context, definition) {
+  if (context?.validationPipeline) {
+    const pipelineResult = context.validationPipeline(definition);
+    if (!pipelineResult.valid) {
+      return buildValidationFailureError(
+        WASM_COMPONENT_ERROR.VALIDATION_PIPELINE_FAILED,
+        pipelineResult.errors || [],
+      );
+    }
+  } else if (context?.dependencyResolver) {
+    const resolveResult = context.dependencyResolver(definition);
+    if (!resolveResult.resolved) {
+      return buildValidationFailureError(
+        WASM_COMPONENT_ERROR.DEPENDENCY_RESOLUTION_FAILED,
+        resolveResult.errors || [],
+      );
+    }
+  } else if (context?.lockValidator) {
+    const lockResult = context.lockValidator(definition);
+    if (!lockResult.valid) {
+      return buildValidationFailureError(
+        WASM_COMPONENT_ERROR.LOCK_VALIDATION_FAILED,
+        lockResult.errors || [],
+      );
+    }
+  }
+  return undefined;
+}
 
 /**
  * Wasm_Component_Driver — delegates to WasmServiceLifecycle
@@ -130,11 +215,11 @@ class WasmComponentDriver extends RuntimeDriver {
       errors.push(WASM_COMPONENT_ERROR.REF_REQUIRED);
     } else if (typeof ref !== TYPEOF.STRING) {
       errors.push(WASM_COMPONENT_ERROR.REF_MUST_BE_STRING);
-    } else if (ref.trim().length === 0) {
+    } else if (ref.trim().length === DRIVER_LENGTH.EMPTY) {
       errors.push(WASM_COMPONENT_ERROR.REF_EMPTY);
     }
 
-    if (errors.length > 0) {
+    if (errors.length > DRIVER_LENGTH.EMPTY) {
       return {valid: false, errors};
     }
     return {valid: true};
@@ -161,53 +246,26 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
-    // --- WASM policy checks (delegated to existing owners) ---
-    if (context?.validationPipeline) {
-      const pipelineResult =
-        context.validationPipeline(definition);
-      if (!pipelineResult.valid) {
-        return {
-          status: PREPARE_STATUS.FAILED,
-          error: WASM_COMPONENT_ERROR
-            .VALIDATION_PIPELINE_FAILED +
-            ': ' + (pipelineResult.errors || []).join('; '),
-        };
-      }
-    }
-
-    if (context?.dependencyResolver) {
-      const resolveResult =
-        context.dependencyResolver(definition);
-      if (!resolveResult.resolved) {
-        return {
-          status: PREPARE_STATUS.FAILED,
-          error: WASM_COMPONENT_ERROR
-            .DEPENDENCY_RESOLUTION_FAILED +
-            ': ' + (resolveResult.errors || []).join('; '),
-        };
-      }
-    }
-
-    if (context?.lockValidator) {
-      const lockResult = context.lockValidator(definition);
-      if (!lockResult.valid) {
-        return {
-          status: PREPARE_STATUS.FAILED,
-          error: WASM_COMPONENT_ERROR
-            .LOCK_VALIDATION_FAILED +
-            ': ' + (lockResult.errors || []).join('; '),
-        };
-      }
+    const preparePolicyFailure = resolvePreparePolicyFailure(
+      context,
+      definition,
+    );
+    if (preparePolicyFailure) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        preparePolicyFailure,
+      );
     }
 
     const serviceId =
-      definition.serviceId ?? definition.service_id;
+      definition[DRIVER_FIELD.SERVICE_ID] ??
+      definition[DRIVER_FIELD.SERVICE_ID_LEGACY];
 
     const wasmLifecycle = context?.wasmLifecycle;
     if (wasmLifecycle) {
       if (typeof wasmLifecycle !== TYPEOF.OBJECT) {
         throw new DriverLifecycleError(
-          this.kind, 'prepare',
+          this.kind, DRIVER_ACTION.PREPARE,
           WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
         );
       }
@@ -216,11 +274,11 @@ class WasmComponentDriver extends RuntimeDriver {
       try {
         wasmLifecycle.createReplica(definition, replicaConfig);
       } catch (cause) {
-        return {
-          status: PREPARE_STATUS.FAILED,
-          error: `${WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
-            `: ${cause.message}`,
-        };
+        return buildDriverStatusResult(
+          PREPARE_STATUS.FAILED,
+          `${WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
+            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+        );
       }
       this._lifecycles.set(serviceId, wasmLifecycle);
     }
@@ -247,26 +305,28 @@ class WasmComponentDriver extends RuntimeDriver {
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
       throw new DriverLifecycleError(
-        this.kind, 'start',
+        this.kind, DRIVER_ACTION.START,
         WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
       );
     }
 
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
+    const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
+      replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
     if (!serviceId) {
       throw new DriverLifecycleError(
-        this.kind, 'start',
+        this.kind, DRIVER_ACTION.START,
         WASM_COMPONENT_ERROR.SERVICE_ID_REQUIRED,
       );
     }
 
     if (!this._prepared.has(serviceId)) {
-      return {
-        status: START_STATUS.FAILED,
-        error: `${WASM_COMPONENT_ERROR.NOT_PREPARED}` +
-          `: '${serviceId}'`,
-      };
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        buildDriverServiceScopedError(
+          WASM_COMPONENT_ERROR.NOT_PREPARED,
+          serviceId,
+        ),
+      );
     }
 
     const lifecycle = this._lifecycles.get(serviceId);
@@ -277,18 +337,19 @@ class WasmComponentDriver extends RuntimeDriver {
         );
 
         if (!startResult) {
-          return {
-            status: START_STATUS.FAILED,
-            error: WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
-          };
+          return buildDriverStatusResult(
+            START_STATUS.FAILED,
+            WASM_COMPONENT_ERROR.START_REPLICA_NO_RESULT,
+          );
         }
 
         if (startResult.started === false) {
-          const result = {
-            status: START_STATUS.FAILED,
-            error: `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}: ` +
-              `${startResult.error || 'unknown lifecycle failure'}`,
-          };
+          const result = buildDriverStatusResult(
+            START_STATUS.FAILED,
+            `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
+              `${DRIVER_SEPARATOR.DETAIL}` +
+              `${startResult.error || WASM_COMPONENT_ERROR.UNKNOWN_LIFECYCLE_FAILURE}`,
+          );
           if (startResult.diagnostic) {
             result.diagnostic = startResult.diagnostic;
           }
@@ -301,18 +362,20 @@ class WasmComponentDriver extends RuntimeDriver {
         if (startResult && startResult.port) {
           result.endpointIntent = {
             host: replicaContext.endpointHost ??
-              replicaContext.address ?? 'localhost',
+              replicaContext.address ??
+              DRIVER_ENDPOINT_DEFAULT.HOST,
             port: startResult.port,
-            protocol: replicaContext.endpointProtocol ?? 'ws',
+            protocol: replicaContext.endpointProtocol ??
+              DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
           };
         }
         return result;
       } catch (cause) {
-        return {
-          status: START_STATUS.FAILED,
-          error: `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
-            `: ${cause.message}`,
-        };
+        return buildDriverStatusResult(
+          START_STATUS.FAILED,
+          `${WASM_COMPONENT_ERROR.START_REPLICA_FAILED}` +
+            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+        );
       }
     }
 
@@ -325,7 +388,8 @@ class WasmComponentDriver extends RuntimeDriver {
       result.endpointIntent = {
         host: replicaContext.endpointHost,
         port: replicaContext.endpointPort,
-        protocol: replicaContext.endpointProtocol ?? 'ws',
+        protocol: replicaContext.endpointProtocol ??
+          DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
       };
     }
     return result;
@@ -345,16 +409,16 @@ class WasmComponentDriver extends RuntimeDriver {
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
       throw new DriverLifecycleError(
-        this.kind, 'stop',
+        this.kind, DRIVER_ACTION.STOP,
         WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
       );
     }
 
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
+    const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
+      replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
     if (!serviceId) {
       throw new DriverLifecycleError(
-        this.kind, 'stop',
+        this.kind, DRIVER_ACTION.STOP,
         WASM_COMPONENT_ERROR.SERVICE_ID_REQUIRED,
       );
     }
@@ -365,9 +429,9 @@ class WasmComponentDriver extends RuntimeDriver {
         await lifecycle.stopReplica(serviceId);
       } catch (cause) {
         throw new DriverLifecycleError(
-          this.kind, 'stop',
+          this.kind, DRIVER_ACTION.STOP,
           `${WASM_COMPONENT_ERROR.STOP_REPLICA_FAILED}` +
-            `: ${cause.message}`,
+            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
           {cause},
         );
       }
@@ -389,52 +453,52 @@ class WasmComponentDriver extends RuntimeDriver {
    * @return {Promise<{status: string, detail?: string}>}
    */
   async health(replicaContext) {
+    let result;
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
-      return {
+      result = {
         status: HEALTH_STATUS.UNKNOWN,
         detail: WASM_COMPONENT_ERROR.REPLICA_CONTEXT_REQUIRED,
       };
-    }
-
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
-    if (!serviceId) {
-      return {
-        status: HEALTH_STATUS.UNKNOWN,
-        detail: WASM_COMPONENT_ERROR.SERVICE_ID_REQUIRED,
-      };
-    }
-
-    if (!this._prepared.has(serviceId)) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: `${WASM_COMPONENT_ERROR.NOT_PREPARED}` +
-          `: '${serviceId}'`,
-      };
-    }
-
-    if (!this._running.has(serviceId)) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: `${WASM_COMPONENT_ERROR.NOT_STARTED}` +
-          `: '${serviceId}'`,
-      };
-    }
-
-    const lifecycle = this._lifecycles.get(serviceId);
-    if (lifecycle) {
-      const replica = lifecycle.getReplica(serviceId);
-      if (!replica) {
-        return {
+    } else {
+      const serviceId = replicaContext[DRIVER_FIELD.SERVICE_ID] ??
+        replicaContext[DRIVER_FIELD.SERVICE_ID_LEGACY];
+      if (!serviceId) {
+        result = {
+          status: HEALTH_STATUS.UNKNOWN,
+          detail: WASM_COMPONENT_ERROR.SERVICE_ID_REQUIRED,
+        };
+      } else if (!this._prepared.has(serviceId)) {
+        result = {
           status: HEALTH_STATUS.UNHEALTHY,
-          detail: `${WASM_COMPONENT_ERROR.NOT_STARTED}` +
-            `: '${serviceId}'`,
+          detail: buildDriverServiceScopedError(
+            WASM_COMPONENT_ERROR.NOT_PREPARED,
+            serviceId,
+          ),
+        };
+      } else if (!this._running.has(serviceId)) {
+        result = {
+          status: HEALTH_STATUS.UNHEALTHY,
+          detail: buildDriverServiceScopedError(
+            WASM_COMPONENT_ERROR.NOT_STARTED,
+            serviceId,
+          ),
+        };
+      } else {
+        const lifecycle = this._lifecycles.get(serviceId);
+        const replica = lifecycle ? lifecycle.getReplica(serviceId) : true;
+        result = replica ? {
+          status: HEALTH_STATUS.HEALTHY,
+        } : {
+          status: HEALTH_STATUS.UNHEALTHY,
+          detail: buildDriverServiceScopedError(
+            WASM_COMPONENT_ERROR.NOT_STARTED,
+            serviceId,
+          ),
         };
       }
     }
-
-    return {status: HEALTH_STATUS.HEALTHY};
+    return result;
   }
 }
 

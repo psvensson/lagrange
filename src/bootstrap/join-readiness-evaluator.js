@@ -43,6 +43,9 @@ import {
   normalizeReplicaOperationRecord,
 } from '../rebalancer/replica-operation-liveness.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
   normalizeNodeEndpointRow,
   normalizeNodeRow,
   normalizeServiceEndpointRow,
@@ -54,8 +57,10 @@ import {
 } from './shared/startup-convergence-gate.js';
 import {
   getLocalQueryTransportReadiness,
+  isLocalQueryTransportReady,
 } from './shared/local-query-transport-readiness.js';
 import {
+  JOIN_MESH_CONNECTIVITY_REPAIR,
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
@@ -123,6 +128,8 @@ class JoinReadinessEvaluator {
     // Mutable convergence state
     this.lastCanonicalJoinRepairAtMs = NUM.ZERO;
     this.canonicalJoinRepairPromise = null;
+    this.lastMeshConnectivityRepairAtMs = NUM.ZERO;
+    this.meshConnectivityRepairPromise = null;
     this.lastClusterMeshSignature = null;
     this.lastCanonicalJoinBlockedLogAtMs = NUM.ZERO;
   }
@@ -453,6 +460,74 @@ class JoinReadinessEvaluator {
   }
 
   /**
+   * Repair mesh-connectivity discovery authority when node rows are visible
+   * but canonical websocket endpoints are missing from the propagated cache.
+   * @param {string[]|undefined|null} missingNodeIds
+   * @return {Promise<boolean>}
+   */
+  async repairMeshConnectivityAuthorityIfNeeded(missingNodeIds) {
+    const normalizedMissingNodeIds = Array.from(new Set(
+      (Array.isArray(missingNodeIds) ? missingNodeIds : [])
+        .map((nodeId) => String(nodeId || '').trim())
+        .filter((nodeId) => nodeId.length > NUM.ZERO && nodeId !== this.nodeId),
+    ));
+    if (normalizedMissingNodeIds.length === NUM.ZERO) {
+      return false;
+    }
+
+    const cdcIntegrationService = this.delegates.getCdcIntegrationService?.();
+    if (!cdcIntegrationService?.sqlQueryEngine) {
+      return false;
+    }
+
+    if (this.meshConnectivityRepairPromise) {
+      await this.meshConnectivityRepairPromise;
+      return true;
+    }
+
+    if (this.isLocalRouterBackpressured()) {
+      return false;
+    }
+
+    const now = this.now();
+    if (this.lastMeshConnectivityRepairAtMs > NUM.ZERO &&
+        now - this.lastMeshConnectivityRepairAtMs <
+          JOIN_MESH_CONNECTIVITY_REPAIR.MIN_INTERVAL_MS) {
+      return false;
+    }
+
+    this.lastMeshConnectivityRepairAtMs = now;
+    const repairPromise = this.delegates
+      .backfillPropagatedCacheTables(
+        JOIN_MESH_CONNECTIVITY_REPAIR.TABLES,
+        {
+          blocking: true,
+          preferBootstrapSnapshot: false,
+          deliveryPriority: 'critical',
+        },
+      )
+      .catch((error) => {
+        this.delegates.getLogger().warn(
+          'Mesh connectivity authority backfill failed',
+          {
+            nodeId: this.nodeId,
+            error: error.message,
+            missingNodeIds: normalizedMissingNodeIds,
+          },
+        );
+      })
+      .finally(() => {
+        if (this.meshConnectivityRepairPromise === repairPromise) {
+          this.meshConnectivityRepairPromise = null;
+        }
+      });
+
+    this.meshConnectivityRepairPromise = repairPromise;
+    await repairPromise;
+    return true;
+  }
+
+  /**
    * Determine whether the local router is currently backpressured.
    * @return {boolean}
    * @private
@@ -622,7 +697,11 @@ class JoinReadinessEvaluator {
       const readiness = getLocalQueryTransportReadiness(
         this.delegates.getMessageRouter?.() || null,
       );
-      return readiness.ready !== false;
+      if (isLocalQueryTransportReady(readiness)) {
+        return true;
+      }
+      return this.resolveJoinReadinessTargetCandidates()
+        .includes(targetAddress);
     }
 
     const messageRouter = this.delegates.getMessageRouter();
@@ -658,6 +737,11 @@ class JoinReadinessEvaluator {
           typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
         ))] :
         [];
+    }
+
+    if (typeof this.delegates.resolveControlPlaneTargetAddress !==
+        TYPEOF.FUNCTION) {
+      return [];
     }
 
     const candidates = [
@@ -711,9 +795,10 @@ class JoinReadinessEvaluator {
         const readiness = getLocalQueryTransportReadiness(
           messageRouter || null,
         );
-        connectionStates[targetAddress] = readiness.ready === false ?
-          `self:${readiness.state || 'deferred'}` :
-          'self';
+        connectionStates[targetAddress] =
+          isLocalQueryTransportReady(readiness) ?
+            'self' :
+            `self:${readiness.state || 'unknown'}`;
         continue;
       }
       if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
@@ -893,15 +978,73 @@ class JoinReadinessEvaluator {
    * @return {string[]}
    */
   getCanonicalJoinActiveNodeIds(systemTableCache) {
-    const fallbackNodeIds =
-      this.resolveBootstrapTopologySnapshotActiveNodeIds();
+    const readinessService =
+      this.delegates.getControlPlaneReadinessService?.() || null;
     if (!systemTableCache ||
         typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return fallbackNodeIds;
+      if (readinessService &&
+          typeof readinessService.getStartupAuthoritySnapshotSync ===
+            TYPEOF.FUNCTION) {
+        const startupAuthority =
+          readinessService.getStartupAuthoritySnapshotSync(
+            this.nodeId,
+            this.now(),
+          );
+        if (Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
+          return [...new Set(
+            startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
+              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            ),
+          )];
+        }
+      }
+      return [];
     }
 
     const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
     const activeNodeIds = [];
+    if (readinessService &&
+        typeof readinessService.getNodeReadinessSync === TYPEOF.FUNCTION) {
+      for (const row of nodeRows) {
+        const normalizedRow = normalizeNodeRow(row);
+        const {nodeId} = normalizedRow;
+        if (nodeId.length === NUM.ZERO) {
+          continue;
+        }
+        const readiness = readinessService.getNodeReadinessSync(
+          nodeId,
+          {
+            decisionDimension:
+              CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+          },
+        );
+        if (readiness?.dimensions?.[
+          CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_RECOVERY_ELIGIBLE
+        ] === true) {
+          activeNodeIds.push(nodeId);
+        }
+      }
+      if (activeNodeIds.length > NUM.ZERO) {
+        return activeNodeIds;
+      }
+      if (typeof readinessService.getStartupAuthoritySnapshotSync ===
+          TYPEOF.FUNCTION) {
+        const startupAuthority =
+          readinessService.getStartupAuthoritySnapshotSync(
+            this.nodeId,
+            this.now(),
+          );
+        if (Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
+          return [...new Set(
+            startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
+              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            ),
+          )];
+        }
+      }
+    }
     for (const row of nodeRows) {
       const normalizedRow = normalizeNodeRow(row);
       const {nodeId, status} = normalizedRow;
@@ -916,7 +1059,12 @@ class JoinReadinessEvaluator {
     if (activeNodeIds.length > NUM.ZERO) {
       return activeNodeIds;
     }
-    return fallbackNodeIds;
+    const bootstrapActiveNodeIds =
+      this.resolveBootstrapTopologySnapshotActiveNodeIds();
+    if (bootstrapActiveNodeIds.length > NUM.ZERO) {
+      return bootstrapActiveNodeIds;
+    }
+    return [];
   }
 
   /**
@@ -1653,6 +1801,11 @@ class JoinReadinessEvaluator {
    * @private
    */
   resolveBootstrapTopologySnapshotEpoch() {
+    const delegatedEpoch =
+      this.delegates.getBootstrapTopologySnapshotEpoch?.();
+    if (Number.isFinite(delegatedEpoch)) {
+      return Math.max(NUM.ZERO, Math.floor(delegatedEpoch));
+    }
     const topologySnapshotMeta =
       this.resolveBootstrapTopologySnapshotMeta();
     if (Number.isFinite(topologySnapshotMeta?.topologyEpoch)) {

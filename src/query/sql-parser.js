@@ -7,6 +7,7 @@
 
 import nodeSqlParser from 'node-sql-parser';
 const {Parser} = nodeSqlParser;
+import {NUM, TYPEOF} from '../constants/index.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
@@ -76,6 +77,49 @@ const EXTERNAL_TYPE = Object.freeze({
   DROP: 'drop',
 });
 
+const INSERT_MODE = Object.freeze({
+  REPLACE: 'replace',
+  IGNORE: 'ignore',
+  OR_REPLACE: 'or replace',
+  OR_IGNORE: 'or ignore',
+});
+
+const SQL_SCHEMA_KEYWORD = Object.freeze({
+  TABLE: 'table',
+  INDEX: 'index',
+  COLUMN: 'column',
+  CONSTRAINT: 'constraint',
+  PRIMARY_KEY: 'primary key',
+  UNIQUE: 'unique',
+  NOT_NULL: 'not null',
+  BTREE: 'btree',
+});
+
+const SQL_JOIN_TYPE = Object.freeze({
+  LEFT: 'LEFT',
+  RIGHT: 'RIGHT',
+  CROSS: 'CROSS',
+  INNER: 'INNER',
+});
+
+const SQL_SORT_DIRECTION = Object.freeze({
+  ASC: 'ASC',
+});
+
+const SQL_OPERATOR = Object.freeze({
+  IN: 'IN',
+  NOT_IN: 'NOT IN',
+  BETWEEN: 'BETWEEN',
+  LIKE: 'LIKE',
+  NOT_LIKE: 'NOT LIKE',
+  IS: 'IS',
+  IS_NOT: 'IS NOT',
+  IS_NULL: 'IS NULL',
+  IS_NOT_NULL: 'IS NOT NULL',
+  ILIKE: 'ILIKE',
+  NOT_ILIKE: 'NOT ILIKE',
+});
+
 /**
  * node-sql-parser expression-level AST type identifiers.
  * These are the raw type strings the external parser produces.
@@ -120,7 +164,7 @@ class SQLParser {
     this.parser = new Parser();
     this.logger = this.initLogger();
     this.positionalParams = [];
-    this.parameterCounter = 0;
+    this.parameterCounter = NUM.ZERO;
   }
 
   initLogger() {
@@ -138,7 +182,7 @@ class SQLParser {
 
   parse() {
     this.positionalParams = [];
-    this.parameterCounter = 0;
+    this.parameterCounter = NUM.ZERO;
     const trimmedSql = this.sql.trim().toUpperCase();
     if (trimmedSql === SQL_KEYWORD.BEGIN ||
         trimmedSql.startsWith(SQL_KEYWORD.BEGIN_PREFIX)) {
@@ -159,7 +203,7 @@ class SQLParser {
       const ast = this.convertAst(externalAst);
       ast.rawSql = this.sql;
       if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
-          this.positionalParams.length > 0) {
+          this.positionalParams.length > NUM.ZERO) {
         ast._paramMapping = this.positionalParams;
       }
       return ast;
@@ -179,17 +223,17 @@ class SQLParser {
    */
   createParameterNode() {
     const index = this.parameterCounter;
-    this.parameterCounter += 1;
+    this.parameterCounter += NUM.ONE;
     return {type: EXPR_TYPE.PARAMETER, index};
   }
 
   convertAst(ast) {
     // Handle array result (e.g., when SQL ends with semicolon)
     if (Array.isArray(ast)) {
-      if (ast.length === 0) {
+      if (ast.length === NUM.ZERO) {
         throw new Error(PARSER_ERROR_MSG.EMPTY_SQL_STATEMENT);
       }
-      return this.convertAst(ast[0]);
+      return this.convertAst(ast[NUM.ZERO]);
     }
 
     switch (ast.type) {
@@ -305,8 +349,8 @@ class SQLParser {
       table: tableName,
       columns,
       values,
-      orReplace: insertMode === 'replace',
-      orIgnore: insertMode === 'ignore',
+      orReplace: insertMode === INSERT_MODE.REPLACE,
+      orIgnore: insertMode === INSERT_MODE.IGNORE,
       returning: this.convertReturning(ast.returning),
     };
 
@@ -325,19 +369,19 @@ class SQLParser {
    * @private
    */
   getInsertMode(ast) {
-    if (Array.isArray(ast.or) && ast.or.length >= 2) {
-      const mode = String(ast.or[1]?.value || '').toLowerCase();
-      if (mode === 'replace' || mode === 'ignore') {
+    if (Array.isArray(ast.or) && ast.or.length >= NUM.TWO) {
+      const mode = String(ast.or[NUM.ONE]?.value || '').toLowerCase();
+      if (mode === INSERT_MODE.REPLACE || mode === INSERT_MODE.IGNORE) {
         return mode;
       }
     }
 
     const prefix = String(ast.prefix || '').toLowerCase();
-    if (prefix === 'or replace') {
-      return 'replace';
+    if (prefix === INSERT_MODE.OR_REPLACE) {
+      return INSERT_MODE.REPLACE;
     }
-    if (prefix === 'or ignore') {
-      return 'ignore';
+    if (prefix === INSERT_MODE.OR_IGNORE) {
+      return INSERT_MODE.IGNORE;
     }
     return null;
   }
@@ -380,9 +424,9 @@ class SQLParser {
     }
     const columns = returning.columns;
     // Check for RETURNING * — column is the string '*' in both modes
-    if (columns.length === 1 && columns[0].expr &&
-        columns[0].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
-        columns[0].expr.column === STAR_VALUE) {
+    if (columns.length === NUM.ONE && columns[NUM.ZERO].expr &&
+        columns[NUM.ZERO].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
+        columns[NUM.ZERO].expr.column === STAR_VALUE) {
       return STAR_VALUE;
     }
     // Extract column names — handle both PG and SQLite AST shapes
@@ -391,7 +435,7 @@ class SQLParser {
       const expr = col.expr;
       if (expr && expr.type === EXT_EXPR_TYPE.COLUMN_REF) {
         const colRef = expr.column;
-        if (typeof colRef === 'string') {
+        if (typeof colRef === TYPEOF.STRING) {
           // SQLite mode: column is a plain string
           names.push(colRef);
         } else if (colRef && colRef.expr && colRef.expr.value) {
@@ -400,7 +444,7 @@ class SQLParser {
         }
       }
     }
-    return names.length > 0 ? names : null;
+    return names.length > NUM.ZERO ? names : null;
   }
 
   convertAlter(ast) {
@@ -435,7 +479,7 @@ class SQLParser {
     if (!columnRef) {
       return null;
     }
-    if (typeof columnRef.column === 'string') {
+    if (typeof columnRef.column === TYPEOF.STRING) {
       return columnRef.column;
     }
     if (columnRef.column?.expr?.value) {
@@ -461,10 +505,10 @@ class SQLParser {
   }
 
   convertCreate(ast) {
-    if (ast.keyword === 'table') {
+    if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
       return this.convertCreateTable(ast);
     }
-    if (ast.keyword === 'index') {
+    if (ast.keyword === SQL_SCHEMA_KEYWORD.INDEX) {
       return this.convertCreateIndex(ast);
     }
     throw new Error(
@@ -479,7 +523,7 @@ class SQLParser {
     let primaryKey = null;
 
     for (const def of ast.create_definitions || []) {
-      if (def.resource === 'column') {
+      if (def.resource === SQL_SCHEMA_KEYWORD.COLUMN) {
         const column = {
           name: def.column.column,
           dataType: {
@@ -489,7 +533,7 @@ class SQLParser {
             scale: null,
           },
           primaryKey: !!def.primary_key,
-          notNull: def.nullable?.type === 'not null',
+          notNull: def.nullable?.type === SQL_SCHEMA_KEYWORD.NOT_NULL,
           unique: !!def.unique,
           defaultValue: def.default_val ? this.convertValue(def.default_val.value) : null,
         };
@@ -497,12 +541,12 @@ class SQLParser {
         if (column.primaryKey && !primaryKey) {
           primaryKey = [column.name];
         }
-      } else if (def.resource === 'constraint') {
-        if (def.constraint_type === 'primary key') {
+      } else if (def.resource === SQL_SCHEMA_KEYWORD.CONSTRAINT) {
+        if (def.constraint_type === SQL_SCHEMA_KEYWORD.PRIMARY_KEY) {
           const pkColumns = def.definition.map((d) => d.column);
           tableConstraints.push({type: 'PRIMARY_KEY', columns: pkColumns});
           primaryKey = pkColumns;
-        } else if (def.constraint_type === 'unique') {
+        } else if (def.constraint_type === SQL_SCHEMA_KEYWORD.UNIQUE) {
           const uniqueColumns = def.definition.map((d) => d.column);
           tableConstraints.push({type: 'UNIQUE', columns: uniqueColumns});
         }
@@ -525,21 +569,21 @@ class SQLParser {
       indexName: ast.index,
       tableName: ast.table.table,
       columns: ast.index_columns.map((c) => c.column),
-      unique: !!ast.index_type?.includes('unique'),
+      unique: !!ast.index_type?.includes(SQL_SCHEMA_KEYWORD.UNIQUE),
       ifNotExists: !!ast.if_not_exists,
-      indexType: 'btree',
+      indexType: SQL_SCHEMA_KEYWORD.BTREE,
     };
   }
 
   convertDrop(ast) {
-    if (ast.keyword === 'table') {
+    if (ast.keyword === SQL_SCHEMA_KEYWORD.TABLE) {
       return {
         type: AST_TYPE.DROP_TABLE,
         tableName: ast.name[0].table,
         ifExists: !!ast.if_exists,
       };
     }
-    if (ast.keyword === 'index') {
+    if (ast.keyword === SQL_SCHEMA_KEYWORD.INDEX) {
       return {
         type: AST_TYPE.DROP_INDEX,
         indexName: ast.name[0].table,
@@ -567,10 +611,10 @@ class SQLParser {
   }
 
   convertFrom(from) {
-    if (!from || from.length === 0) {
+    if (!from || from.length === NUM.ZERO) {
       return null;
     }
-    const firstTable = from[0];
+    const firstTable = from[NUM.ZERO];
 
     // Derived table: FROM (SELECT ...) AS alias
     if (firstTable.expr?.ast) {
@@ -590,11 +634,11 @@ class SQLParser {
   }
 
   convertJoins(from) {
-    if (!from || from.length <= 1) {
+    if (!from || from.length <= NUM.ONE) {
       return [];
     }
     const joins = [];
-    for (let i = 1; i < from.length; i++) {
+    for (let i = NUM.ONE; i < from.length; i++) {
       const joinDef = from[i];
       if (joinDef.join) {
         // Derived table in JOIN: joinDef.expr.ast exists
@@ -627,10 +671,10 @@ class SQLParser {
 
   normalizeJoinType(joinType) {
     const upper = joinType.toUpperCase();
-    if (upper.includes('LEFT')) return 'LEFT';
-    if (upper.includes('RIGHT')) return 'RIGHT';
-    if (upper.includes('CROSS')) return 'CROSS';
-    return 'INNER';
+    if (upper.includes(SQL_JOIN_TYPE.LEFT)) return SQL_JOIN_TYPE.LEFT;
+    if (upper.includes(SQL_JOIN_TYPE.RIGHT)) return SQL_JOIN_TYPE.RIGHT;
+    if (upper.includes(SQL_JOIN_TYPE.CROSS)) return SQL_JOIN_TYPE.CROSS;
+    return SQL_JOIN_TYPE.INNER;
   }
 
   convertGroupBy(groupBy) {
@@ -644,7 +688,7 @@ class SQLParser {
   convertOrderBy(orderBy) {
     return orderBy.map((o) => ({
       expression: this.convertExpression(o.expr),
-      direction: o.type || 'ASC',
+      direction: o.type || SQL_SORT_DIRECTION.ASC,
     }));
   }
 
@@ -653,8 +697,8 @@ class SQLParser {
       return null;
     }
     const values = limit.value;
-    const count = values[0]?.value;
-    const offset = values.length > 1 ? values[1]?.value : null;
+    const count = values[NUM.ZERO]?.value;
+    const offset = values.length > NUM.ONE ? values[NUM.ONE]?.value : null;
     return {count, offset};
   }
 
@@ -796,14 +840,14 @@ class SQLParser {
    */
   convertPgFunction(expr) {
     const nameParts = expr.name?.name || [];
-    const funcName = nameParts.length > 0
-      ? nameParts[0].value
+    const funcName = nameParts.length > NUM.ZERO
+      ? nameParts[NUM.ZERO].value
       : '';
     const argValues = expr.args?.value || [];
 
     // EXISTS is parsed as a function with a subquery argument
     if (funcName.toUpperCase() === PG_EXISTS_NAME) {
-      const subqueryArg = argValues[0];
+      const subqueryArg = argValues[NUM.ZERO];
       const innerAst = subqueryArg?.ast || subqueryArg;
       return {
         type: PG_EXPR_TYPE.EXISTS,
@@ -835,23 +879,24 @@ class SQLParser {
 
     // PG-specific: ILIKE / NOT ILIKE → LIKE with LOWER wrapping
     if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
-        (operator === 'ILIKE' || operator === 'NOT ILIKE')) {
+        (operator === SQL_OPERATOR.ILIKE ||
+          operator === SQL_OPERATOR.NOT_ILIKE)) {
       return translateIlike(expr, this.convertExpression.bind(this));
     }
 
-    if (operator === 'IN' || operator === 'NOT IN') {
+    if (operator === SQL_OPERATOR.IN || operator === SQL_OPERATOR.NOT_IN) {
       // IN subquery: right is expr_list with a single element having .ast
       if (Array.isArray(expr.right.value) &&
-          expr.right.value.length === 1 &&
-          expr.right.value[0]?.ast) {
+          expr.right.value.length === NUM.ONE &&
+          expr.right.value[NUM.ZERO]?.ast) {
         return {
           type: EXPR_TYPE.IN,
           expression: this.convertExpression(expr.left),
           subquery: {
             type: PG_EXPR_TYPE.SUBQUERY,
-            query: this.convertSelect(expr.right.value[0].ast),
+            query: this.convertSelect(expr.right.value[NUM.ZERO].ast),
           },
-          negated: operator === 'NOT IN',
+          negated: operator === SQL_OPERATOR.NOT_IN,
         };
       }
       const values = Array.isArray(expr.right.value) ?
@@ -861,32 +906,35 @@ class SQLParser {
         type: EXPR_TYPE.IN,
         expression: this.convertExpression(expr.left),
         values,
-        negated: operator === 'NOT IN',
+        negated: operator === SQL_OPERATOR.NOT_IN,
       };
     }
 
-    if (operator === 'BETWEEN') {
+    if (operator === SQL_OPERATOR.BETWEEN) {
       return {
         type: EXPR_TYPE.BETWEEN,
         expression: this.convertExpression(expr.left),
-        low: this.convertExpression(expr.right.value[0]),
-        high: this.convertExpression(expr.right.value[1]),
+        low: this.convertExpression(expr.right.value[NUM.ZERO]),
+        high: this.convertExpression(expr.right.value[NUM.ONE]),
       };
     }
 
-    if (operator === 'LIKE' || operator === 'NOT LIKE') {
+    if (operator === SQL_OPERATOR.LIKE ||
+        operator === SQL_OPERATOR.NOT_LIKE) {
       return {
         type: EXPR_TYPE.LIKE,
         expression: this.convertExpression(expr.left),
         pattern: this.convertExpression(expr.right),
-        negated: operator === 'NOT LIKE',
+        negated: operator === SQL_OPERATOR.NOT_LIKE,
       };
     }
 
-    if (operator === 'IS' || operator === 'IS NOT') {
+    if (operator === SQL_OPERATOR.IS || operator === SQL_OPERATOR.IS_NOT) {
       return {
         type: EXPR_TYPE.BINARY,
-        operator: operator === 'IS' ? 'IS NULL' : 'IS NOT NULL',
+        operator: operator === SQL_OPERATOR.IS ?
+          SQL_OPERATOR.IS_NULL :
+          SQL_OPERATOR.IS_NOT_NULL,
         left: this.convertExpression(expr.left),
         right: {type: EXPR_TYPE.LITERAL, value: null},
       };

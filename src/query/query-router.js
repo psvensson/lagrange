@@ -27,6 +27,7 @@ import {
   SERVICE_TYPE,
   TABLES,
   NUM,
+  TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
@@ -63,6 +64,8 @@ class QueryRouter {
       options.messageRouter,
       QUERY_ROUTER_ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
     );
+    this.bootstrapTopologySnapshotOwner =
+      options.bootstrapTopologySnapshotOwner || null;
 
     // Configuration with defaults (Requirements 3.3, 3.5)
     const config = ConfigurationManager.getInstance();
@@ -78,6 +81,14 @@ class QueryRouter {
 
     // Initialize logger
     this.logger = this.initLogger();
+  }
+
+  /**
+   * Set optional bootstrap topology owner used for canonical leader metadata.
+   * @param {Object|null} owner
+   */
+  setBootstrapTopologySnapshotOwner(owner) {
+    this.bootstrapTopologySnapshotOwner = owner || null;
   }
 
   /**
@@ -236,7 +247,8 @@ class QueryRouter {
    * @return {Array<Object>} Array of service candidates with address and metadata
    */
   findServiceCandidates(partitionId, preferLeader = true, options = {}) {
-    if (!this.systemCache || typeof this.systemCache.filter !== 'function') {
+    if (!this.systemCache ||
+      typeof this.systemCache.filter !== TYPEOF.FUNCTION) {
       return [];
     }
 
@@ -286,8 +298,8 @@ class QueryRouter {
     };
 
     if (preferLeader) {
-      if (typeof canonicalLeaderNodeId === 'string' &&
-          canonicalLeaderNodeId.length > NUM.ZERO) {
+      if (typeof canonicalLeaderNodeId === TYPEOF.STRING &&
+        canonicalLeaderNodeId.length > NUM.ZERO) {
         orderedServices
           .filter((service) => service?.node_id === canonicalLeaderNodeId)
           .forEach(addService);
@@ -310,7 +322,7 @@ class QueryRouter {
    * @private
    */
   resolveNodeLatencyGroupId(nodeId) {
-    if (!nodeId || typeof this.systemCache?.get !== 'function') {
+    if (!nodeId || typeof this.systemCache?.get !== TYPEOF.FUNCTION) {
       return null;
     }
     const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
@@ -326,15 +338,27 @@ class QueryRouter {
    * @private
    */
   resolveCanonicalPartitionLeaderNodeId(partitionId) {
-    if (typeof partitionId !== 'string' || partitionId.length === NUM.ZERO) {
+    if (typeof partitionId !== TYPEOF.STRING ||
+      partitionId.length === NUM.ZERO) {
       return null;
     }
 
+    if (typeof this.bootstrapTopologySnapshotOwner
+      ?.resolveCanonicalPartitionLeaderNodeId === 'function') {
+      const ownerLeaderNodeId = this.bootstrapTopologySnapshotOwner
+        .resolveCanonicalPartitionLeaderNodeId(partitionId);
+      if (typeof ownerLeaderNodeId === TYPEOF.STRING &&
+        ownerLeaderNodeId.length > NUM.ZERO) {
+        return ownerLeaderNodeId;
+      }
+    }
+
     let partitionRow = null;
-    if (typeof this.systemCache?.get === 'function') {
+    if (typeof this.systemCache?.get === TYPEOF.FUNCTION) {
       partitionRow = this.systemCache.get(TABLES.PARTITIONS, partitionId) || null;
     }
-    if (!partitionRow && typeof this.systemCache?.filter === 'function') {
+    if (!partitionRow &&
+      typeof this.systemCache?.filter === TYPEOF.FUNCTION) {
       partitionRow = (this.systemCache.filter(TABLES.PARTITIONS, (partition) => {
         return partition?.[COLUMN.PARTITION_ID] === partitionId;
       }) || [])[NUM.ZERO] || null;
@@ -345,7 +369,8 @@ class QueryRouter {
       partitionRow?.leader_node_id ||
       partitionRow?.leaderNodeId ||
       null;
-    return typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO ?
+    return typeof leaderNodeId === TYPEOF.STRING &&
+      leaderNodeId.length > NUM.ZERO ?
       leaderNodeId :
       null;
   }
@@ -360,7 +385,7 @@ class QueryRouter {
    */
   orderServicesByLatencyPreference(services, localGroupId, preferSameLatencyGroup) {
     if (!preferSameLatencyGroup || !localGroupId ||
-      typeof this.systemCache?.get !== 'function') {
+      typeof this.systemCache?.get !== TYPEOF.FUNCTION) {
       return services;
     }
 

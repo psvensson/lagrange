@@ -7,6 +7,7 @@ import {
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
+  TIME_MS,
   TYPEOF,
 } from '../constants/index.js';
 import {
@@ -43,6 +44,16 @@ import {
 import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from './control-plane-publication-merge.js';
+import {
+  resolvePriorityRecoveryActiveNodeCohort,
+  hasPriorityRecoverySpreadGap,
+} from './priority-recovery-snapshot.js';
+import {
+  unwrapRowReadResult,
+} from './owners/system-metadata-owner-base.js';
+import {
+  buildPublicationRecoveryProtocolSnapshot,
+} from './recovery-protocol-snapshot.js';
 import {ControlPlaneDiagnosticsLedger} from
   './control-plane-diagnostics-ledger.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
@@ -58,10 +69,40 @@ const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
   QUERY_TIMEOUT_MS: 1500,
   STALE_HEARTBEAT_MAX_AGE_MS: 10000,
 });
+const MEMBERSHIP_PUBLICATION_PLANNING = Object.freeze({
+  REFRESH_TIMEOUT_MS: TIME_MS.SECOND,
+});
+const MEMBERSHIP_PUBLICATION_READ_LANE = Object.freeze({
+  DIAGNOSTICS: 'diagnostics',
+  PLANNING: 'planning',
+});
+const MEMBERSHIP_PUBLICATION_READ_SCOPE = Object.freeze({
+  CLUSTER: 'cluster',
+  TARGET_NODE: 'target_node',
+});
+const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
+  SERVICE_UNAVAILABLE: 'control_plane_recovery_service_unavailable',
+  PLANNING_PROVIDER_UNAVAILABLE:
+    'control_plane_recovery_planning_provider_unavailable',
+  PLANNING_READ_FAILED: 'control_plane_recovery_planning_read_failed',
+  PLANNING_UNAVAILABLE: 'control_plane_recovery_planning_unavailable',
+  PLANNING_INCOMPLETE: 'control_plane_recovery_planning_incomplete',
+});
+const STARTUP_AUTHORITY_STATE = Object.freeze({
+  READY: 'ready',
+  RECOVERY_PENDING: 'recovery_pending',
+  SEED_LOCALLY_READY_UNPUBLISHED: 'seed_locally_ready_unpublished',
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  BLOCKED: 'blocked',
+});
 const READINESS_TRANSITION_HISTORY_LIMIT = 32;
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
 const RECOVERY_EPOCH_HISTORY_LIMIT = 8;
 const RECOVERY_EPOCH_EVENT_LIMIT = 32;
+const RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES = Object.freeze([
+  'starting',
+  'syncing',
+]);
 const READINESS_ERROR_MSG = Object.freeze({
   STORAGE_ACCOUNTING_OWNER_REQUIRED:
     'ControlPlaneReadinessService requires ' +
@@ -74,10 +115,58 @@ const MEMBERSHIP_PUBLICATION_READ_OPTIONS = Object.freeze({
   preferAuthoritativeRead: true,
   preferOwnerRpcRead: true,
   requireOwnerRpcRead: true,
+  readProfile: 'diagnostics',
   localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
   replicaFallbackConsistency:
     LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+  workClass: 'control-plane-readiness',
 });
+const MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS = Object.freeze({
+  preferAuthoritativeRead: true,
+  preferOwnerRpcRead: true,
+  requireOwnerRpcRead: false,
+  readProfile: 'planning',
+  localReadConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+  replicaFallbackConsistency:
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+  workClass: 'control-plane-planning',
+});
+
+function resolveMembershipPublicationReadOptions({
+  lane = MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS,
+  queryTimeoutMs = null,
+} = {}) {
+  const normalizedLane =
+    lane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING ?
+      MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING :
+      MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS;
+  const baseOptions = normalizedLane ===
+    MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING ?
+    MEMBERSHIP_PUBLICATION_PLANNING_READ_OPTIONS :
+    MEMBERSHIP_PUBLICATION_READ_OPTIONS;
+  const normalizedQueryTimeoutMs =
+    Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+      Math.floor(queryTimeoutMs) :
+      null;
+  return Object.freeze({
+    ...baseOptions,
+    queryTimeoutMs: normalizedQueryTimeoutMs,
+  });
+}
+
+function resolveMembershipPublicationReadLane(lane = null) {
+  if (lane === MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING) {
+    return MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING;
+  }
+  return MEMBERSHIP_PUBLICATION_READ_LANE.DIAGNOSTICS;
+}
+
+function resolveMembershipPublicationReadScope(scope = null) {
+  if (scope === MEMBERSHIP_PUBLICATION_READ_SCOPE.TARGET_NODE) {
+    return MEMBERSHIP_PUBLICATION_READ_SCOPE.TARGET_NODE;
+  }
+  return MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER;
+}
 
 function buildReason(
   code,
@@ -297,10 +386,26 @@ class ControlPlaneReadinessService {
         Math.floor(options.membershipPublicationDiagnosticsQueryTimeoutMs) :
         CONTROL_PLANE_READINESS_DEFAULT
           .MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS;
+    this.membershipPublicationPlanningSnapshotRefreshTimeoutMs =
+      Number.isFinite(
+        options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
+      ) &&
+        options.membershipPublicationPlanningSnapshotRefreshTimeoutMs >
+          NUM.ZERO ?
+        Math.floor(
+          options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
+        ) :
+        MEMBERSHIP_PUBLICATION_PLANNING.REFRESH_TIMEOUT_MS;
     this.membershipPublicationReadOptions = Object.freeze({
       ...MEMBERSHIP_PUBLICATION_READ_OPTIONS,
       queryTimeoutMs: this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
+    this.setTimeoutFn = typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.clearTimeoutFn = typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+      options.clearTimeoutFn :
+      clearTimeout;
     this.loggedMissingStorageAccountingOwner = false;
     this.loggedMissingPublicationOwner = false;
     this.readinessTransitionHistoryLimit =
@@ -1932,13 +2037,12 @@ class ControlPlaneReadinessService {
     const priorityRecoveryActive =
       this.isPriorityControlPlaneRecoveryActive(context.membershipPublication);
     if (context.routingReady !== true ||
-        context.writableControlPlaneService !== true ||
         context.publicationHealthy !== true ||
         (context.controlPlanePublished !== true && !priorityRecoveryActive)) {
       return false;
     }
     if (context.clusterMemberHealthy === true) {
-      return true;
+      return context.writableControlPlaneService === true;
     }
     return this.shouldAllowTransportBackedRecoveryGrace(context);
   }
@@ -1956,11 +2060,7 @@ class ControlPlaneReadinessService {
     }
     const priorityPartitionSummary =
       membershipPublication.priorityPartitionSummary;
-    return Boolean(
-      priorityPartitionSummary &&
-      typeof priorityPartitionSummary === TYPEOF.OBJECT &&
-      priorityPartitionSummary.satisfied === false,
-    );
+    return hasPriorityRecoverySpreadGap(priorityPartitionSummary);
   }
 
   /**
@@ -1975,15 +2075,14 @@ class ControlPlaneReadinessService {
       typeof context.nodeEvidence === TYPEOF.OBJECT ?
       context.nodeEvidence :
       null;
+    const serviceRows = Array.isArray(context.serviceRows) ?
+      context.serviceRows :
+      [];
     if (nodeEvidence?.transportConnected !== true) {
       return false;
     }
-    return this.hasRoutableService(
-      Array.isArray(context.serviceRows) ? context.serviceRows : [],
-    ) &&
-      this.hasWritableControlPlaneService(
-        Array.isArray(context.serviceRows) ? context.serviceRows : [],
-      );
+    return this.hasRoutableService(serviceRows) &&
+      this.hasRecoveryGraceControlPlaneService(serviceRows);
   }
 
   /**
@@ -2455,50 +2554,68 @@ class ControlPlaneReadinessService {
     });
   }
 
-  async getMembershipPublicationDiagnostics(nodeId, observedAt) {
+  async getMembershipPublicationDiagnostics(
+    nodeId,
+    observedAt,
+    readOptions = {},
+  ) {
     const service = this.membershipPublicationService;
     if (!service || typeof service !== TYPEOF.OBJECT) {
       return null;
     }
-    const readOptions = this.membershipPublicationReadOptions;
+    const normalizedReadOptions = resolveMembershipPublicationReadOptions({
+      lane: resolveMembershipPublicationReadLane(readOptions?.lane),
+      queryTimeoutMs:
+        Number.isFinite(readOptions?.queryTimeoutMs) &&
+        readOptions.queryTimeoutMs > NUM.ZERO ?
+        readOptions.queryTimeoutMs :
+        this.membershipPublicationDiagnosticsQueryTimeoutMs,
+    });
     let row = null;
     if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
       row = await service.getLatestPublicationForNode(
         nodeId,
-        readOptions,
+        normalizedReadOptions,
       );
     } else if (typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
       row = await service.getLatestClusterPublication(
-        readOptions,
+        normalizedReadOptions,
       );
     }
-    row = await this.refreshStalePriorityPartitionSummary(
-      row,
-      readOptions,
-    );
     return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
-  getMembershipPublicationDiagnosticsSync(nodeId, observedAt) {
-    const service = this.membershipPublicationService;
-    if (!service || typeof service !== TYPEOF.OBJECT) {
-      return null;
-    }
-    const readOptions = this.membershipPublicationReadOptions;
-    let row = null;
-    if (typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION) {
-      row = service.getLatestPublicationForNodeSync(nodeId, readOptions);
-    } else if (typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION) {
-      row = service.getLatestClusterPublicationSync(readOptions);
-    }
+  getMembershipPublicationDiagnosticsSync(
+    nodeId,
+    observedAt,
+    readOptions = {},
+  ) {
+    const row = this.getLatestMembershipPublicationRowSync(nodeId, readOptions);
     return this.buildMembershipPublicationDiagnostics(row, observedAt);
   }
 
   async getMembershipPublicationPlanningSnapshot(nodeId, observedAt) {
-    const membershipPublication = await this.getMembershipPublicationDiagnostics(
-      nodeId,
-      observedAt,
-    );
+    const service = this.membershipPublicationService;
+    if (service &&
+        typeof service.deriveClusterMembershipCandidate === TYPEOF.FUNCTION) {
+      const candidate = await service.deriveClusterMembershipCandidate({
+        disableNestedPriorityRecoveryPlanning: true,
+        publisherNodeId: nodeId || this.nodeId,
+        nowMs: observedAt,
+      });
+      if (candidate && typeof candidate === TYPEOF.OBJECT) {
+        return candidate;
+      }
+    }
+    const membershipPublication =
+      await this.getMembershipPublicationDiagnostics(
+        nodeId,
+        observedAt,
+        {
+          lane: MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING,
+          scope: MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER,
+        },
+      );
     return this.buildMembershipPublicationPlanningSnapshot({
       nodeId,
       observedAt,
@@ -2507,10 +2624,28 @@ class ControlPlaneReadinessService {
   }
 
   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
-    const membershipPublication = this.getMembershipPublicationDiagnosticsSync(
-      nodeId,
-      observedAt,
-    );
+    const service = this.membershipPublicationService;
+    if (service &&
+        typeof service.deriveClusterMembershipCandidateSync ===
+          TYPEOF.FUNCTION) {
+      const candidate = service.deriveClusterMembershipCandidateSync({
+        disableNestedPriorityRecoveryPlanning: true,
+        publisherNodeId: nodeId || this.nodeId,
+        nowMs: observedAt,
+      });
+      if (candidate && typeof candidate === TYPEOF.OBJECT) {
+        return candidate;
+      }
+    }
+    const membershipPublication =
+      this.getMembershipPublicationDiagnosticsSync(
+        nodeId,
+        observedAt,
+        {
+          lane: MEMBERSHIP_PUBLICATION_READ_LANE.PLANNING,
+          scope: MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER,
+        },
+      );
     return this.buildMembershipPublicationPlanningSnapshot({
       nodeId,
       observedAt,
@@ -2518,32 +2653,178 @@ class ControlPlaneReadinessService {
     });
   }
 
-  async refreshStalePriorityPartitionSummary(row, readOptions) {
-    const service = this.membershipPublicationService;
-    if (!row || typeof row !== TYPEOF.OBJECT ||
-        !service || typeof service !== TYPEOF.OBJECT ||
-        typeof service.reconcileClusterMembership !== TYPEOF.FUNCTION) {
-      return row;
+  /**
+   * Canonical synchronous priority-recovery planning snapshot.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Object|null}
+   */
+  getPriorityRecoveryPlanningSnapshotSync(nodeId, observedAt) {
+    return this.getMembershipPublicationPlanningSnapshotSync(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Return one synchronous owner answer for membership-publication planning.
+   * This remains distinct from the async/best-effort surface so sync callers
+   * never reconstruct planning state from diagnostics locally.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Object|null}
+   */
+  getMembershipPublicationPlanningAnswerSync(nodeId, observedAt) {
+    return this.getPriorityRecoveryPlanningAnswerSync(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Canonical synchronous priority-recovery planning answer.
+   * Sync callers must use this surface and must not locally reconstruct
+   * planning truth from fallback diagnostics.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Object|null}
+   */
+  getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt) {
+    return this.getMembershipPublicationPlanningSnapshotSync(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Return the best current planning snapshot for callers that may benefit from
+   * one bounded async freshness attempt but still need a deterministic fallback.
+   *
+   * The sync/async split remains explicit because the async diagnostics lane
+   * may request best-effort freshness while sync callers preserve deterministic,
+   * non-repairing behavior.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Promise<Object|null>}
+   */
+  async getMembershipPublicationPlanningSnapshotBestEffort(nodeId, observedAt) {
+    const syncSnapshot = this.getMembershipPublicationPlanningAnswerSync(
+      nodeId,
+      observedAt,
+    );
+    const timeoutMs =
+      this.membershipPublicationPlanningSnapshotRefreshTimeoutMs;
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+      const asyncSnapshot = await this.getMembershipPublicationPlanningSnapshot(
+        nodeId,
+        observedAt,
+      );
+      return asyncSnapshot || syncSnapshot;
     }
-    const status = String(row.status || '').toUpperCase();
-    const priorityPartitionSummary =
-      row.priorityPartitionSummary ?? row.priority_partition_summary ?? null;
-    if (status !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-        !priorityPartitionSummary ||
-        typeof priorityPartitionSummary !== TYPEOF.OBJECT ||
-        priorityPartitionSummary.satisfied !== false) {
-      return row;
+
+    let timeoutHandle = null;
+    try {
+      const asyncSnapshot = await Promise.race([
+        this.getMembershipPublicationPlanningSnapshot(
+          nodeId,
+          observedAt,
+        ),
+        new Promise((_resolve, reject) => {
+          timeoutHandle = this.setTimeoutFn(() => {
+            reject(new Error(
+              'Timed out refreshing membership publication planning snapshot ' +
+              `for ${nodeId || 'unknown'} after ${timeoutMs}ms`,
+            ));
+          }, timeoutMs);
+        }),
+      ]);
+      return asyncSnapshot || syncSnapshot;
+    } catch {
+      return syncSnapshot;
+    } finally {
+      if (timeoutHandle) {
+        this.clearTimeoutFn(timeoutHandle);
+      }
     }
-    const reconcileResult = await service.reconcileClusterMembership({
-      ...(readOptions || {}),
-      latestPublicationRow: row,
-      latestPublishedPublicationRow: row,
-    });
-    return reconcileResult?.publicationRow || row;
+  }
+
+  /**
+   * Return one best-effort owner answer for membership-publication planning.
+   * Callers should prefer this surface over sequencing sync/async reads
+   * themselves so planning degradation policy stays owner-owned.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Promise<Object|null>}
+   */
+  async getMembershipPublicationPlanningAnswerBestEffort(nodeId, observedAt) {
+    return this.getPriorityRecoveryPlanningAnswerBestEffort(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Canonical best-effort priority-recovery planning answer.
+   * Async refresh and deterministic fallback belong only in this
+   * owner-owned surface.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Promise<Object|null>}
+   */
+  async getPriorityRecoveryPlanningAnswerBestEffort(nodeId, observedAt) {
+    return this.getMembershipPublicationPlanningSnapshotBestEffort(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Canonical best-effort priority-recovery planning snapshot.
+   * Async best-effort refresh remains owner-owned.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {Promise<Object|null>}
+   */
+  async getPriorityRecoveryPlanningSnapshotBestEffort(nodeId, observedAt) {
+    return this.getMembershipPublicationPlanningSnapshotBestEffort(
+      nodeId,
+      observedAt,
+    );
+  }
+
+  /**
+   * Return the current published membership epoch using readiness-owned
+   * degradation policy instead of caller-local reconstruction.
+   *
+   * @param {string|null} nodeId
+   * @param {number|string|null} observedAt
+   * @return {number|null}
+   */
+  getCurrentPublishedMembershipEpochSync(nodeId, observedAt) {
+    const planningSnapshot = this.getMembershipPublicationPlanningAnswerSync(
+      nodeId,
+      observedAt,
+    );
+    const publishedPlanningEpoch = Number(
+      planningSnapshot?.publishedPlanningEpoch,
+    );
+    if (Number.isInteger(publishedPlanningEpoch) &&
+        publishedPlanningEpoch >= NUM.ZERO) {
+      return publishedPlanningEpoch;
+    }
+    return null;
   }
 
   buildMembershipPublicationDiagnostics(row, observedAt) {
-    if (!row || typeof row !== TYPEOF.OBJECT) {
+    const protocolSnapshot = buildPublicationRecoveryProtocolSnapshot(row);
+    if (!protocolSnapshot) {
       return null;
     }
 
@@ -2553,144 +2834,723 @@ class ControlPlaneReadinessService {
     const sourceSnapshotVersion = Number(
       row.sourceSnapshotVersion ?? row.source_snapshot_version,
     );
-    const publishedActiveNodeIdsPresent = Array.isArray(
-      row.publishedActiveNodeIds ?? row.published_active_node_ids,
-    );
     const createdAt = normalizeDiagnosticTimestampMs(
       row.createdAt ?? row.created_at ?? observedAt,
     );
     const updatedAt = normalizeDiagnosticTimestampMs(
       row.updatedAt ?? row.updated_at ?? createdAt,
     );
-    const priorityPartitionSummary =
-      row.priorityPartitionSummary ?? row.priority_partition_summary ?? null;
     return Object.freeze({
-      publicationEpoch: Number.isFinite(publicationEpoch) ? publicationEpoch : null,
+      publicationEpoch: Number.isFinite(publicationEpoch) ?
+        publicationEpoch :
+        protocolSnapshot.publicationEpoch,
       sourceSnapshotVersion:
-        Number.isFinite(sourceSnapshotVersion) ? sourceSnapshotVersion : null,
-      status: typeof row.status === TYPEOF.STRING ? row.status : null,
-      publishedActiveNodeIdsPresent,
-      publishedActiveNodeIds: publishedActiveNodeIdsPresent ?
-        Object.freeze([
-          ...(row.publishedActiveNodeIds ?? row.published_active_node_ids),
-        ]) :
-        Object.freeze([]),
-      requiredAckNodeIds: Array.isArray(
-        row.requiredAckNodeIds ?? row.required_ack_node_ids,
-      ) ?
-        Object.freeze([
-          ...(row.requiredAckNodeIds ?? row.required_ack_node_ids),
-        ]) :
-        Object.freeze([]),
-      acknowledgedNodeIds: Array.isArray(
-        row.acknowledgedNodeIds ?? row.acknowledged_node_ids,
-      ) ?
-        Object.freeze([
-          ...(row.acknowledgedNodeIds ?? row.acknowledged_node_ids),
-        ]) :
-        Object.freeze([]),
-      priorityPartitionSummary:
-        priorityPartitionSummary && typeof priorityPartitionSummary === TYPEOF.OBJECT ?
-          Object.freeze({...priorityPartitionSummary}) :
-          null,
+        Number.isFinite(sourceSnapshotVersion) ?
+          sourceSnapshotVersion :
+          protocolSnapshot.sourceSnapshotVersion,
+      status: protocolSnapshot.publicationStatus,
+      publicationObservationState:
+        protocolSnapshot.publicationObservationState,
+      publishedActiveNodeIdsPresent:
+        protocolSnapshot.publishedActiveNodeIdsPresent,
+      publishedActiveNodeIds: protocolSnapshot.publishedActiveNodeIds,
+      requiredAckNodeIds: protocolSnapshot.requiredAckNodeIds,
+      acknowledgedNodeIds: protocolSnapshot.acknowledgedNodeIds,
+      priorityPartitionSummary: protocolSnapshot.priorityPartitionSummary,
       membershipLifecycleSummary:
-        row.membershipLifecycleSummary &&
-        typeof row.membershipLifecycleSummary === TYPEOF.OBJECT ?
-          Object.freeze({...row.membershipLifecycleSummary}) :
-          row.membership_lifecycle_summary &&
-          typeof row.membership_lifecycle_summary === TYPEOF.OBJECT ?
-            Object.freeze({...row.membership_lifecycle_summary}) :
-            null,
+        protocolSnapshot.membershipLifecycleSummary,
+      projectedServingNodeIds: protocolSnapshot.projectedServingNodeIds,
+      locallyEligibleNodeIds: protocolSnapshot.locallyEligibleNodeIds,
+      recoveryEligibleIncludedNodeIds:
+        protocolSnapshot.recoveryEligibleIncludedNodeIds,
+      recoveryActiveNodeIds: protocolSnapshot.recoveryActiveNodeIds,
+      recoveryActiveNodeSource:
+        protocolSnapshot.recoveryActiveNodeSource,
+      missingPublishedRecoveryActiveNodeIds:
+        protocolSnapshot.missingPublishedRecoveryActiveNodeIds,
+      participationByNodeId: protocolSnapshot.participationByNodeId,
+      participationStateCounts: protocolSnapshot.participationStateCounts,
+      recoveryProtocolState: protocolSnapshot.recoveryProtocolState,
+      priorityRecoveryReasonCodes:
+        protocolSnapshot.priorityRecoveryReasonCodes,
       createdAt,
       updatedAt,
     });
   }
 
   buildMembershipPublicationPlanningSnapshot(context = {}) {
-    const membershipPublication =
-      context.membershipPublication &&
-      typeof context.membershipPublication === TYPEOF.OBJECT ?
-        context.membershipPublication :
-        null;
-    if (!membershipPublication) {
+    const protocolSnapshot = buildPublicationRecoveryProtocolSnapshot(
+      context.membershipPublication,
+      {
+        targetNodeId: context.nodeId,
+      },
+    );
+    if (!protocolSnapshot) {
       return null;
     }
+    return Object.freeze({
+      ...protocolSnapshot,
+      publicationObservationState:
+        protocolSnapshot.publicationObservationState,
+      priorityRecoveryActive:
+        protocolSnapshot.priorityRecoveryReasonCodes.length > NUM.ZERO,
+    });
+  }
 
-    const publicationEpoch = Number(membershipPublication.publicationEpoch);
-    const publicationStatus =
-      typeof membershipPublication.status === TYPEOF.STRING ?
-        membershipPublication.status :
-        null;
-    const publicationStatusNormalized = publicationStatus ?
-      String(publicationStatus).toUpperCase() :
-      '';
-    const publishedActiveNodeIds = normalizeNodeIdList(
-      membershipPublication.publishedActiveNodeIds,
+  buildMembershipPublicationReadOptions(readOptions = {}) {
+    return resolveMembershipPublicationReadOptions({
+      lane: resolveMembershipPublicationReadLane(readOptions?.lane),
+      queryTimeoutMs:
+        Number.isFinite(readOptions?.queryTimeoutMs) &&
+        readOptions.queryTimeoutMs > NUM.ZERO ?
+          readOptions.queryTimeoutMs :
+          this.membershipPublicationDiagnosticsQueryTimeoutMs,
+    });
+  }
+
+  getLatestMembershipPublicationRowSync(nodeId, readOptions = {}) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const normalizedReadOptions =
+      this.buildMembershipPublicationReadOptions(readOptions);
+    const normalizedScope = resolveMembershipPublicationReadScope(
+      readOptions?.scope,
     );
-    const publishedActiveNodeIdsPresent =
-      membershipPublication.publishedActiveNodeIdsPresent === true ||
-      Array.isArray(membershipPublication.publishedActiveNodeIds);
-    const targetNodeId =
-      typeof context.nodeId === TYPEOF.STRING ?
-        String(context.nodeId).trim() :
-        '';
-    const priorityPartitionSummary =
-      membershipPublication.priorityPartitionSummary &&
-      typeof membershipPublication.priorityPartitionSummary === TYPEOF.OBJECT ?
-        membershipPublication.priorityPartitionSummary :
-        null;
-    const publicationPending = publicationStatusNormalized.length > NUM.ZERO &&
-      publicationStatusNormalized !== CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
-    const publicationExcludesTargetNode = publicationStatusNormalized ===
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-      publishedActiveNodeIdsPresent &&
-      targetNodeId.length > NUM.ZERO &&
-      !publishedActiveNodeIds.includes(targetNodeId);
-    const priorityRecoveryReasonCodes = [];
-    if (publicationPending || publicationExcludesTargetNode) {
-      priorityRecoveryReasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+    if (normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
+        typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION) {
+      return service.getLatestClusterPublicationSync(normalizedReadOptions);
+    }
+    if (typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION) {
+      return service.getLatestPublicationForNodeSync(
+        nodeId,
+        normalizedReadOptions,
       );
     }
-    if (priorityPartitionSummary?.satisfied === false) {
-      priorityRecoveryReasonCodes.push(
-        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+    if (typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION) {
+      return service.getLatestClusterPublicationSync(normalizedReadOptions);
+    }
+    return null;
+  }
+
+  async getLatestMembershipPublicationRow(nodeId, readOptions = {}) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return null;
+    }
+    const normalizedReadOptions =
+      this.buildMembershipPublicationReadOptions(readOptions);
+    const normalizedScope = resolveMembershipPublicationReadScope(
+      readOptions?.scope,
+    );
+    if (normalizedScope === MEMBERSHIP_PUBLICATION_READ_SCOPE.CLUSTER &&
+        typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
+      return service.getLatestClusterPublication(normalizedReadOptions);
+    }
+    if (typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION) {
+      return service.getLatestPublicationForNode(
+        nodeId,
+        normalizedReadOptions,
       );
     }
-    const dedupedReasonCodes = Object.freeze([...new Set(
-      priorityRecoveryReasonCodes,
-    )]);
-    const publishedPlanningEpoch = publicationStatusNormalized ===
-      CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-      Number.isInteger(publicationEpoch) ?
-      publicationEpoch :
-      null;
-    let publishedMembershipIncludesTargetNode = null;
-    if (publicationStatusNormalized ===
-        CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-        targetNodeId.length > NUM.ZERO) {
-      publishedMembershipIncludesTargetNode =
-        !publicationExcludesTargetNode;
+    if (typeof service.getLatestClusterPublication === TYPEOF.FUNCTION) {
+      return service.getLatestClusterPublication(normalizedReadOptions);
     }
+    return null;
+  }
+
+  getLatestPublishedMembershipPublicationRowSync(readOptions = {}) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT ||
+        typeof service.getLatestPublishedClusterPublicationSync !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    return service.getLatestPublishedClusterPublicationSync(
+      this.buildMembershipPublicationReadOptions(readOptions),
+    );
+  }
+
+  async getLatestPublishedMembershipPublicationRow(readOptions = {}) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT ||
+        typeof service.getLatestPublishedClusterPublication !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    return service.getLatestPublishedClusterPublication(
+      this.buildMembershipPublicationReadOptions(readOptions),
+    );
+  }
+
+  buildPriorityControlPlaneRecoveryUnavailableHealth(
+    failureReason,
+    error = null,
+    context = null,
+  ) {
+    const details = {
+      failureReason,
+    };
+    if (context && typeof context === TYPEOF.OBJECT) {
+      Object.assign(details, context);
+    }
+    if (error) {
+      details.error = error?.message || String(error);
+    }
+    return Object.freeze({
+      healthy: false,
+      reasonCode: CONTROL_PLANE_READINESS_REASON
+        .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      details,
+    });
+  }
+
+  buildStartupAuthorityFailureDescriptor(failureReason) {
+    return typeof failureReason === TYPEOF.STRING &&
+      failureReason.length > NUM.ZERO ?
+      Object.freeze({
+        state: 'present',
+        reason: failureReason,
+      }) :
+      Object.freeze({
+        state: 'none',
+      });
+  }
+
+  buildStartupAuthorityPublicationDescriptor(details = {}) {
+    const observationState =
+      typeof details.publicationObservationState === TYPEOF.STRING &&
+        details.publicationObservationState.length > NUM.ZERO ?
+        details.publicationObservationState :
+        'observation_unavailable';
+    const epoch = Number.isFinite(details.publicationEpoch) ?
+      Object.freeze({
+        state: 'known',
+        value: Math.floor(details.publicationEpoch),
+      }) :
+      Object.freeze({
+        state:
+          observationState === 'unpublished' ?
+            'unpublished' :
+            'unavailable',
+      });
+    const status =
+      typeof details.publicationStatus === TYPEOF.STRING &&
+        details.publicationStatus.length > NUM.ZERO ?
+        Object.freeze({
+          state: 'known',
+          value: details.publicationStatus,
+        }) :
+        Object.freeze({
+          state:
+            observationState === 'unpublished' ?
+              'unpublished' :
+              'unavailable',
+        });
+    return Object.freeze({
+      observationState,
+      epoch,
+      status,
+    });
+  }
+
+  buildStartupAuthorityPriorityPartitionDescriptor(priorityPartitionSummary) {
+    return priorityPartitionSummary &&
+      typeof priorityPartitionSummary === TYPEOF.OBJECT ?
+      Object.freeze({
+        state: 'available',
+        summary: priorityPartitionSummary,
+      }) :
+      Object.freeze({
+        state: 'unavailable',
+      });
+  }
+
+  buildStartupAuthorityRecoveryProtocolDescriptor(recoveryProtocolState) {
+    return typeof recoveryProtocolState === TYPEOF.STRING &&
+      recoveryProtocolState.length > NUM.ZERO ?
+      Object.freeze({
+        state: 'known',
+        value: recoveryProtocolState,
+      }) :
+      Object.freeze({
+        state: 'unavailable',
+      });
+  }
+
+  buildStartupAuthorityTargetParticipationDescriptor(targetParticipation) {
+    return targetParticipation &&
+      typeof targetParticipation === TYPEOF.OBJECT ?
+      Object.freeze({
+        state: 'available',
+        participation: targetParticipation,
+      }) :
+      Object.freeze({
+        state: 'unavailable',
+      });
+  }
+
+  buildStartupAuthoritySnapshotContract(options = {}) {
+    const publication = this.buildStartupAuthorityPublicationDescriptor({
+      publicationEpoch: options.publicationEpoch,
+      publicationStatus: options.publicationStatus,
+      publicationObservationState: options.publicationObservationState,
+    });
+    const priorityPartition = this
+      .buildStartupAuthorityPriorityPartitionDescriptor(
+        options.priorityPartitionSummary,
+      );
+    const recoveryProtocol = this
+      .buildStartupAuthorityRecoveryProtocolDescriptor(
+        options.recoveryProtocolState,
+      );
+    const targetParticipationDetail = this
+      .buildStartupAuthorityTargetParticipationDescriptor(
+        options.targetParticipation,
+      );
+    const failure = this.buildStartupAuthorityFailureDescriptor(
+      options.failureReason,
+    );
 
     return Object.freeze({
-      publicationEpoch: Number.isFinite(publicationEpoch) ? publicationEpoch : null,
-      publicationStatus,
-      publicationStatusNormalized,
-      publishedActiveNodeIdsPresent,
-      publishedActiveNodeIds: Object.freeze([...publishedActiveNodeIds]),
-      priorityPartitionSummary:
-        priorityPartitionSummary && typeof priorityPartitionSummary === TYPEOF.OBJECT ?
-          Object.freeze({...priorityPartitionSummary}) :
-          null,
-      targetNodeId: targetNodeId || null,
-      publicationPending,
-      publicationExcludesTargetNode,
-      publishedMembershipIncludesTargetNode,
-      publishedPlanningEpoch,
-      priorityRecoveryActive: dedupedReasonCodes.length > NUM.ZERO,
-      priorityRecoveryReasonCodes: dedupedReasonCodes,
+      state: options.state,
+      ready: options.ready === true,
+      authorityAvailable: options.authorityAvailable === true,
+      publication,
+      priorityPartition,
+      recoveryProtocol,
+      targetParticipationDetail,
+      priorityRecoveryReasonCodes: Object.freeze(
+        Array.isArray(options.priorityRecoveryReasonCodes) ?
+          [...options.priorityRecoveryReasonCodes] :
+          [],
+      ),
+      canonicalStartupNodeIds: Object.freeze(
+        Array.isArray(options.canonicalStartupNodeIds) ?
+          [...options.canonicalStartupNodeIds] :
+          [],
+      ),
+      failure,
+      publicationObservationState: publication.observationState,
+      ...(publication.epoch.state === 'known' ?
+        {
+          publicationEpoch: publication.epoch.value,
+        } :
+        {}),
+      ...(publication.status.state === 'known' ?
+        {
+          publicationStatus: publication.status.value,
+        } :
+        {}),
+      ...(priorityPartition.state === 'available' ?
+        {
+          priorityPartitionSummary: priorityPartition.summary,
+        } :
+        {}),
+      ...(recoveryProtocol.state === 'known' ?
+        {
+          recoveryProtocolState: recoveryProtocol.value,
+        } :
+        {}),
+      ...(targetParticipationDetail.state === 'available' ?
+        {
+          targetParticipation: targetParticipationDetail.participation,
+        } :
+        {}),
+      ...(failure.state === 'present' ?
+        {
+          failureReason: failure.reason,
+        } :
+        {}),
     });
+  }
+
+  buildPriorityRecoveryHealthDetailsFromStartupAuthority(
+    startupAuthority,
+    reasonCodes = [],
+  ) {
+    return Object.freeze({
+      publication: startupAuthority.publication,
+      priorityPartition: startupAuthority.priorityPartition,
+      recoveryProtocol: startupAuthority.recoveryProtocol,
+      targetParticipationDetail: startupAuthority.targetParticipationDetail,
+      priorityRecoveryReasonCodes: Object.freeze(
+        Array.isArray(reasonCodes) ? [...reasonCodes] : [],
+      ),
+      startupAuthorityState: startupAuthority.state,
+      canonicalStartupNodeIds: startupAuthority.canonicalStartupNodeIds,
+      failure: startupAuthority.failure,
+      publicationObservationState:
+        startupAuthority.publication.observationState,
+      ...(startupAuthority.publication.epoch.state === 'known' ?
+        {
+          publicationEpoch: startupAuthority.publication.epoch.value,
+        } :
+        {}),
+      ...(startupAuthority.publication.status.state === 'known' ?
+        {
+          publicationStatus: startupAuthority.publication.status.value,
+        } :
+        {}),
+      ...(startupAuthority.priorityPartition.state === 'available' ?
+        {
+          priorityPartitionSummary:
+            startupAuthority.priorityPartition.summary,
+        } :
+        {}),
+      ...(startupAuthority.recoveryProtocol.state === 'known' ?
+        {
+          recoveryProtocolState: startupAuthority.recoveryProtocol.value,
+        } :
+        {}),
+      ...(startupAuthority.targetParticipationDetail.state === 'available' ?
+        {
+          targetParticipation:
+            startupAuthority.targetParticipationDetail.participation,
+        } :
+        {}),
+      ...(startupAuthority.failure.state === 'present' ?
+        {
+          failureReason: startupAuthority.failure.reason,
+        } :
+        {}),
+    });
+  }
+
+  buildStartupAuthorityUnavailableSnapshot(
+    failureReason,
+    error = null,
+    context = null,
+  ) {
+    const details = {
+      failureReason,
+    };
+    if (context && typeof context === TYPEOF.OBJECT) {
+      Object.assign(details, context);
+    }
+    if (error) {
+      details.error = error?.message || String(error);
+    }
+    return this.buildStartupAuthoritySnapshotContract({
+      state: STARTUP_AUTHORITY_STATE.AUTHORITY_UNAVAILABLE,
+      ready: false,
+      authorityAvailable: false,
+      publicationEpoch:
+        Number.isFinite(details.publicationEpoch) ?
+          details.publicationEpoch :
+          undefined,
+      publicationStatus:
+        typeof details.publicationStatus === TYPEOF.STRING &&
+          details.publicationStatus.length > NUM.ZERO ?
+          details.publicationStatus :
+          undefined,
+      publicationObservationState:
+        typeof details.publicationObservationState === TYPEOF.STRING &&
+          details.publicationObservationState.length > NUM.ZERO ?
+          details.publicationObservationState :
+          'observation_unavailable',
+      priorityPartitionSummary:
+        details.priorityPartitionSummary &&
+          typeof details.priorityPartitionSummary === TYPEOF.OBJECT ?
+          details.priorityPartitionSummary :
+          undefined,
+      recoveryProtocolState:
+        typeof details.recoveryProtocolState === TYPEOF.STRING &&
+          details.recoveryProtocolState.length > NUM.ZERO ?
+          details.recoveryProtocolState :
+          undefined,
+      targetParticipation:
+        details.targetParticipation &&
+          typeof details.targetParticipation === TYPEOF.OBJECT ?
+          details.targetParticipation :
+          undefined,
+      priorityRecoveryReasonCodes: [],
+      canonicalStartupNodeIds:
+        Array.isArray(details.canonicalStartupNodeIds) ?
+          [...new Set(details.canonicalStartupNodeIds
+            .filter((nodeId) =>
+              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+            ))].sort() :
+          [],
+      failureReason,
+    });
+  }
+
+  buildStartupAuthoritySnapshotFromPlanningAnswer(
+    planningSnapshot,
+  ) {
+    if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
+      );
+    }
+    const publicationStatus = planningSnapshot.publicationStatus || null;
+    const priorityPartitionSummary =
+      planningSnapshot.priorityPartitionSummary || null;
+    const canonicalStartupNodeIds = Array.isArray(
+      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
+    ) ?
+      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds :
+      [];
+    const publicationObservationState =
+      typeof planningSnapshot.publicationObservationState === TYPEOF.STRING &&
+        planningSnapshot.publicationObservationState.length > NUM.ZERO ?
+        planningSnapshot.publicationObservationState :
+        null;
+    if (publicationObservationState === 'unpublished') {
+      const priorityRecoveryReasonCodes = [...new Set(
+        (Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+          planningSnapshot.priorityRecoveryReasonCodes :
+          []).concat(
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+        ),
+      )];
+      return this.buildStartupAuthoritySnapshotContract({
+        state: STARTUP_AUTHORITY_STATE.SEED_LOCALLY_READY_UNPUBLISHED,
+        ready: false,
+        authorityAvailable: true,
+        publicationObservationState,
+        priorityPartitionSummary:
+          priorityPartitionSummary || undefined,
+        recoveryProtocolState:
+          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+            planningSnapshot.recoveryProtocolState :
+            undefined,
+        targetParticipation:
+          planningSnapshot.targetParticipation &&
+            typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+            planningSnapshot.targetParticipation :
+            undefined,
+        priorityRecoveryReasonCodes,
+        canonicalStartupNodeIds,
+      });
+    }
+    if (typeof publicationStatus !== TYPEOF.STRING ||
+        publicationStatus.length === NUM.ZERO) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE,
+        null,
+        {
+          publicationEpoch:
+            Number.isFinite(planningSnapshot.publicationEpoch) ?
+              planningSnapshot.publicationEpoch :
+              undefined,
+          publicationStatus: publicationStatus || undefined,
+          publicationObservationState,
+          canonicalStartupNodeIds,
+        },
+      );
+    }
+    if (!priorityPartitionSummary ||
+        typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE,
+        null,
+        {
+          publicationEpoch:
+            Number.isFinite(planningSnapshot.publicationEpoch) ?
+              planningSnapshot.publicationEpoch :
+              undefined,
+          publicationStatus,
+          priorityPartitionSummary,
+          recoveryProtocolState:
+            typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+              planningSnapshot.recoveryProtocolState :
+              undefined,
+          targetParticipation:
+            planningSnapshot.targetParticipation &&
+              typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+              planningSnapshot.targetParticipation :
+              undefined,
+          canonicalStartupNodeIds,
+        },
+      );
+    }
+    const targetParticipation =
+      planningSnapshot.targetParticipation &&
+        typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+        planningSnapshot.targetParticipation :
+        null;
+    const targetParticipationReasons = Array.isArray(
+      targetParticipation?.reasons,
+    ) ?
+      [...targetParticipation.reasons] :
+      [];
+    const priorityRecoveryReasonCodes = [...new Set([
+      ...(Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+        planningSnapshot.priorityRecoveryReasonCodes :
+        []),
+      ...targetParticipationReasons,
+    ])];
+    const blocked =
+      targetParticipationReasons.length > NUM.ZERO &&
+      canonicalStartupNodeIds.length === NUM.ZERO;
+    const state = blocked ?
+      STARTUP_AUTHORITY_STATE.BLOCKED :
+      (priorityRecoveryReasonCodes.length > NUM.ZERO ?
+        STARTUP_AUTHORITY_STATE.RECOVERY_PENDING :
+        STARTUP_AUTHORITY_STATE.READY);
+    return this.buildStartupAuthoritySnapshotContract({
+      state,
+      ready: state === STARTUP_AUTHORITY_STATE.READY,
+      authorityAvailable: true,
+      publicationEpoch:
+        Number.isFinite(planningSnapshot.publicationEpoch) ?
+          planningSnapshot.publicationEpoch :
+          undefined,
+      publicationStatus,
+      publicationObservationState:
+        publicationObservationState ||
+        (state === STARTUP_AUTHORITY_STATE.READY ?
+          'authoritative' :
+          'establishing'),
+      priorityPartitionSummary,
+      recoveryProtocolState:
+        typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+          planningSnapshot.recoveryProtocolState :
+          undefined,
+      targetParticipation: targetParticipation || undefined,
+      priorityRecoveryReasonCodes,
+      canonicalStartupNodeIds,
+    });
+  }
+
+  getStartupAuthoritySnapshotSync(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    try {
+      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
+      );
+    } catch (error) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  async getStartupAuthoritySnapshot(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    try {
+      return this.buildStartupAuthoritySnapshotFromPlanningAnswer(
+        await this.getPriorityRecoveryPlanningAnswerBestEffort(
+          nodeId,
+          observedAt,
+        ),
+      );
+    } catch (error) {
+      return this.buildStartupAuthorityUnavailableSnapshot(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  buildPriorityControlPlaneRecoveryHealthFromPlanningAnswer(
+    planningSnapshot,
+  ) {
+    const startupAuthority =
+      this.buildStartupAuthoritySnapshotFromPlanningAnswer(planningSnapshot);
+    if (startupAuthority.authorityAvailable !== true) {
+      const details = this.buildPriorityRecoveryHealthDetailsFromStartupAuthority(
+        startupAuthority,
+      );
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        startupAuthority.failure.state === 'present' ?
+          startupAuthority.failure.reason :
+          PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
+        null,
+        details,
+      );
+    }
+    const reasonCodes = Array.isArray(
+      startupAuthority.priorityRecoveryReasonCodes,
+    ) ?
+      [...startupAuthority.priorityRecoveryReasonCodes] :
+      [];
+    return Object.freeze({
+      healthy: startupAuthority.state === STARTUP_AUTHORITY_STATE.READY,
+      reasonCode: CONTROL_PLANE_READINESS_REASON
+        .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ...(startupAuthority.state !== STARTUP_AUTHORITY_STATE.READY ? {
+        details: this.buildPriorityRecoveryHealthDetailsFromStartupAuthority(
+          startupAuthority,
+          reasonCodes,
+        ),
+      } : {}),
+    });
+  }
+
+  getPriorityControlPlaneRecoveryHealthSync(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
+      );
+    }
+    const hasPlanningProvider =
+      typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION ||
+      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION;
+    if (!hasPlanningProvider) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
+          .PLANNING_PROVIDER_UNAVAILABLE,
+      );
+    }
+    try {
+      return this.buildPriorityControlPlaneRecoveryHealthFromPlanningAnswer(
+        this.getPriorityRecoveryPlanningAnswerSync(nodeId, observedAt),
+      );
+    } catch (error) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
+  }
+
+  async getPriorityControlPlaneRecoveryHealth(
+    nodeId = this.nodeId,
+    observedAt = this.now(),
+  ) {
+    const service = this.membershipPublicationService;
+    if (!service || typeof service !== TYPEOF.OBJECT) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.SERVICE_UNAVAILABLE,
+      );
+    }
+    const hasPlanningProvider =
+      typeof service.getLatestClusterPublication === TYPEOF.FUNCTION ||
+      typeof service.getLatestPublicationForNode === TYPEOF.FUNCTION ||
+      typeof service.getLatestClusterPublicationSync === TYPEOF.FUNCTION ||
+      typeof service.getLatestPublicationForNodeSync === TYPEOF.FUNCTION;
+    if (!hasPlanningProvider) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE
+          .PLANNING_PROVIDER_UNAVAILABLE,
+      );
+    }
+    try {
+      return this.buildPriorityControlPlaneRecoveryHealthFromPlanningAnswer(
+        await this.getPriorityRecoveryPlanningAnswerBestEffort(
+          nodeId,
+          observedAt,
+        ),
+      );
+    } catch (error) {
+      return this.buildPriorityControlPlaneRecoveryUnavailableHealth(
+        PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_READ_FAILED,
+        error,
+      );
+    }
   }
 
   getCapacitySnapshotSync(nodeId, _nodeRow) {
@@ -2814,12 +3674,12 @@ class ControlPlaneReadinessService {
         this.nodesOwner &&
         typeof this.nodesOwner.getNode === TYPEOF.FUNCTION) {
       const result = await this.nodesOwner.getNode(nodeId, options);
-      return result?.rows?.[0] || null;
+      return unwrapRowReadResult(result);
     }
     if (this.nodesOwner &&
         typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
       const result = await this.nodesOwner.getNodeFromCache(nodeId, options);
-      return result?.rows?.[0] || null;
+      return unwrapRowReadResult(result);
     }
     return this.getNodeRow(nodeId);
   }
@@ -2992,16 +3852,14 @@ class ControlPlaneReadinessService {
       return true;
     }
     if (!serviceRows.some((serviceRow) => {
-      return typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+      return this.hasAddressedService(serviceRow);
     })) {
       return true;
     }
     return serviceRows.some((serviceRow) => {
       return String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
         SERVICE_STATUS.ACTIVE &&
-        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+        this.hasAddressedService(serviceRow);
     });
   }
 
@@ -3045,35 +3903,60 @@ class ControlPlaneReadinessService {
       return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
-        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+        this.hasAddressedService(serviceRow);
     });
   }
 
+  hasRecoveryGraceControlPlaneService(serviceRows) {
+    if (this.hasWritableControlPlaneService(serviceRows)) {
+      return true;
+    }
+    // A restarted joiner can expose addressed but still-converging message-group
+    // service rows before the local replica flips ACTIVE again. Keep recovery
+    // admission open so it can finish re-registering through the owner path.
+    if (!this.hasAddressedMessageGroupServiceWithStatuses(
+      serviceRows,
+      RECOVERY_GRACE_MESSAGE_GROUP_SERVICE_STATUSES,
+    )) {
+      return false;
+    }
+    return this.hasActiveAddressedNonMessageGroupService(serviceRows);
+  }
+
   hasStartupControlPlaneWriteGrace(serviceRows) {
-    const messageGroupRows = serviceRows.filter((serviceRow) => {
-      return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
-    });
-    if (messageGroupRows.length === NUM.ZERO) {
+    if (!this.hasAddressedMessageGroupServiceWithStatuses(
+      serviceRows,
+      [SERVICE_STATUS.STOPPED],
+    )) {
       return false;
     }
+    return this.hasActiveAddressedNonMessageGroupService(serviceRows);
+  }
 
-    const hasStoppedMessageGroupRow = messageGroupRows.some((serviceRow) => {
-      return String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
-        SERVICE_STATUS.STOPPED &&
-        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
-    });
-    if (!hasStoppedMessageGroupRow) {
+  hasAddressedService(serviceRow) {
+    return typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+      serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+  }
+
+  hasAddressedMessageGroupServiceWithStatuses(serviceRows, allowedStatuses) {
+    if (!Array.isArray(allowedStatuses) || allowedStatuses.length === NUM.ZERO) {
       return false;
     }
+    return serviceRows.some((serviceRow) => {
+      return serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        allowedStatuses.includes(
+          String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase(),
+        ) &&
+        this.hasAddressedService(serviceRow);
+    });
+  }
 
+  hasActiveAddressedNonMessageGroupService(serviceRows) {
     return serviceRows.some((serviceRow) => {
       return serviceRow?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP &&
         String(serviceRow?.[COLUMN.STATUS] || '').toLowerCase() ===
           SERVICE_STATUS.ACTIVE &&
-        typeof serviceRow?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-        serviceRow[COLUMN.ADDRESS].length > NUM.ZERO;
+        this.hasAddressedService(serviceRow);
     });
   }
 
@@ -3339,7 +4222,14 @@ class ControlPlaneReadinessService {
       return false;
     }
 
-    return false;
+    const connectionState = String(
+      nodeRow?.[COLUMN.CONNECTION_STATE] || '',
+    ).toLowerCase();
+    if (connectionState !== STATE.READY) {
+      return false;
+    }
+
+    return this.isRecentHeartbeat(nodeRow);
   }
 
   /**

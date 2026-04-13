@@ -60,6 +60,8 @@ const PGWIRE_MODULE_ERROR = Object.freeze({
     'runtime config validation failed',
   BIND_FAILED:
     'TCP listener bind failed',
+  LISTENER_NOT_ACCEPTING:
+    'TCP listener is not accepting connections',
 });
 
 // --- Module state constants ---
@@ -68,6 +70,42 @@ const LISTENER_STATE = Object.freeze({
   BOUND: 'bound',
   CLOSED: 'closed',
 });
+
+const PGWIRE_EVENT = Object.freeze({
+  CONNECTION: 'connection',
+  CLOSE: 'close',
+  ERROR: 'error',
+});
+
+const PGWIRE_CONTEXT_FIELD = Object.freeze({
+  SERVICE_ID: 'serviceId',
+  SERVICE_ID_LEGACY: 'service_id',
+});
+
+const PGWIRE_RESULT_FIELD = Object.freeze({
+  ERROR: 'error',
+  DETAIL: 'detail',
+});
+
+const PGWIRE_SEPARATOR = Object.freeze({
+  DETAIL: ': ',
+  ERROR_LIST: '; ',
+});
+
+function buildStatusResult(status, detailKey, detailValueKey, detailValue) {
+  const result = {status};
+  if (detailKey && detailValue) {
+    result[detailKey] = detailValue;
+  }
+  if (detailValueKey !== undefined) {
+    result[detailValueKey] = detailValue;
+  }
+  return result;
+}
+
+function buildPgwireServiceScopedError(baseMessage, serviceId) {
+  return `${baseMessage}: '${serviceId}'`;
+}
 
 /**
  * Parse and resolve runtime config from a service definition.
@@ -79,7 +117,7 @@ const LISTENER_STATE = Object.freeze({
  */
 function resolveConfig(definition, overrides) {
   const raw = definition.runtimeConfig ??
-    definition.runtime_config ?? null;
+    definition.runtime_config;
   let parsed = {};
   if (raw && typeof raw === TYPEOF.STRING) {
     parsed = JSON.parse(raw);
@@ -123,30 +161,36 @@ class PostgresWireRuntimeModule {
    * @return {Promise<{status: string, error?: string}>}
    */
   async prepare(definition, _context) {
+    let result;
     if (!definition || typeof definition !== TYPEOF.OBJECT) {
-      return {
-        status: PREPARE_STATUS.FAILED,
-        error: PGWIRE_MODULE_ERROR.DEFINITION_REQUIRED,
-      };
+      result = buildStatusResult(
+        PREPARE_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.DEFINITION_REQUIRED,
+      );
+    } else {
+      const configStr = definition.runtimeConfig ??
+        definition.runtime_config;
+      const validation = validatePgwireRuntimeConfig(configStr);
+      if (!validation.valid) {
+        result = buildStatusResult(
+          PREPARE_STATUS.FAILED,
+          PGWIRE_RESULT_FIELD.ERROR,
+          undefined,
+          `${PGWIRE_MODULE_ERROR.CONFIG_INVALID}` +
+            `${PGWIRE_SEPARATOR.DETAIL}` +
+            `${validation.errors.join(PGWIRE_SEPARATOR.ERROR_LIST)}`,
+        );
+      } else {
+        const serviceId = definition[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
+          definition[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+        const config = resolveConfig(definition);
+        this._prepared.set(serviceId, {config, definition});
+        result = buildStatusResult(PREPARE_STATUS.READY);
+      }
     }
-
-    const configStr = definition.runtimeConfig ??
-      definition.runtime_config ?? null;
-    const validation = validatePgwireRuntimeConfig(configStr);
-    if (!validation.valid) {
-      return {
-        status: PREPARE_STATUS.FAILED,
-        error: `${PGWIRE_MODULE_ERROR.CONFIG_INVALID}: ` +
-          `${validation.errors.join('; ')}`,
-      };
-    }
-
-    const serviceId = definition.serviceId ??
-      definition.service_id;
-    const config = resolveConfig(definition);
-    this._prepared.set(serviceId, {config, definition});
-
-    return {status: PREPARE_STATUS.READY};
+    return result;
   }
 
   /**
@@ -163,30 +207,38 @@ class PostgresWireRuntimeModule {
   async start(replicaContext) {
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
-      return {
-        status: START_STATUS.FAILED,
-        error: PGWIRE_MODULE_ERROR.REPLICA_CONTEXT_REQUIRED,
-      };
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.REPLICA_CONTEXT_REQUIRED,
+      );
     }
 
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
+    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
+      replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
     if (!serviceId) {
-      return {
-        status: START_STATUS.FAILED,
-        error: PGWIRE_MODULE_ERROR.SERVICE_ID_REQUIRED,
-      };
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        PGWIRE_MODULE_ERROR.SERVICE_ID_REQUIRED,
+      );
     }
 
     if (!this._prepared.has(serviceId)) {
-      return {
-        status: START_STATUS.FAILED,
-        error: `${PGWIRE_MODULE_ERROR.NOT_PREPARED}: '${serviceId}'`,
-      };
+      return buildStatusResult(
+        START_STATUS.FAILED,
+        PGWIRE_RESULT_FIELD.ERROR,
+        undefined,
+        buildPgwireServiceScopedError(
+          PGWIRE_MODULE_ERROR.NOT_PREPARED,
+          serviceId,
+        ),
+      );
     }
 
     if (this._running.has(serviceId)) {
-      // Idempotent: return existing endpoint intent
       const state = this._running.get(serviceId);
       return {
         status: START_STATUS.RUNNING,
@@ -204,19 +256,19 @@ class PostgresWireRuntimeModule {
     const server = net.createServer();
     const connections = new Set();
 
-    server.on('connection', (socket) => {
+    server.on(PGWIRE_EVENT.CONNECTION, (socket) => {
       if (connections.size >= config.maxSessions) {
         socket.destroy();
         return;
       }
       connections.add(socket);
-      socket.on('close', () => connections.delete(socket));
+      socket.on(PGWIRE_EVENT.CLOSE, () => connections.delete(socket));
     });
 
     const boundPort = await new Promise((resolve, reject) => {
-      server.once('error', (err) => reject(err));
+      server.once(PGWIRE_EVENT.ERROR, (err) => reject(err));
       server.listen(config.port, config.host, () => {
-        server.removeAllListeners('error');
+        server.removeAllListeners(PGWIRE_EVENT.ERROR);
         const addr = server.address();
         resolve(addr.port);
       });
@@ -260,8 +312,8 @@ class PostgresWireRuntimeModule {
       return;
     }
 
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
+    const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
+      replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
     if (!serviceId) {
       return;
     }
@@ -297,45 +349,54 @@ class PostgresWireRuntimeModule {
    *   sessions?: number, maxSessions?: number}>}
    */
   async health(replicaContext) {
+    let result;
     if (!replicaContext ||
         typeof replicaContext !== TYPEOF.OBJECT) {
-      return {
-        status: HEALTH_STATUS.UNKNOWN,
-        detail: PGWIRE_MODULE_ERROR.REPLICA_CONTEXT_REQUIRED,
-      };
+      result = buildStatusResult(
+        HEALTH_STATUS.UNKNOWN,
+        PGWIRE_RESULT_FIELD.DETAIL,
+        undefined,
+        PGWIRE_MODULE_ERROR.REPLICA_CONTEXT_REQUIRED,
+      );
+    } else {
+      const serviceId = replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID] ??
+        replicaContext[PGWIRE_CONTEXT_FIELD.SERVICE_ID_LEGACY];
+      if (!serviceId) {
+        result = buildStatusResult(
+          HEALTH_STATUS.UNKNOWN,
+          PGWIRE_RESULT_FIELD.DETAIL,
+          undefined,
+          PGWIRE_MODULE_ERROR.SERVICE_ID_REQUIRED,
+        );
+      } else if (!this._running.has(serviceId)) {
+        result = buildStatusResult(
+          HEALTH_STATUS.UNHEALTHY,
+          PGWIRE_RESULT_FIELD.DETAIL,
+          undefined,
+          buildPgwireServiceScopedError(
+            PGWIRE_MODULE_ERROR.NOT_STARTED,
+            serviceId,
+          ),
+        );
+      } else {
+        const entry = this._running.get(serviceId);
+        if (!entry.server.listening) {
+          result = buildStatusResult(
+            HEALTH_STATUS.UNHEALTHY,
+            PGWIRE_RESULT_FIELD.DETAIL,
+            undefined,
+            PGWIRE_MODULE_ERROR.LISTENER_NOT_ACCEPTING,
+          );
+        } else {
+          result = {
+            status: HEALTH_STATUS.HEALTHY,
+            sessions: entry.connections.size,
+            maxSessions: entry.config.maxSessions,
+          };
+        }
+      }
     }
-
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
-    if (!serviceId) {
-      return {
-        status: HEALTH_STATUS.UNKNOWN,
-        detail: PGWIRE_MODULE_ERROR.SERVICE_ID_REQUIRED,
-      };
-    }
-
-    if (!this._running.has(serviceId)) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: `${PGWIRE_MODULE_ERROR.NOT_STARTED}: '${serviceId}'`,
-      };
-    }
-
-    const entry = this._running.get(serviceId);
-    const listening = entry.server.listening;
-
-    if (!listening) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: 'TCP listener is not accepting connections',
-      };
-    }
-
-    return {
-      status: HEALTH_STATUS.HEALTHY,
-      sessions: entry.connections.size,
-      maxSessions: entry.config.maxSessions,
-    };
+    return result;
   }
 }
 

@@ -315,6 +315,58 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
     });
 
   t.test(
+    'critical REPLACE reuses one existing add-like recovery operation ' +
+      'when authoritative entity reads miss and the planner switches target nodes',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        coordinator.repository.getOperationsByEntityAuthoritative =
+          async () => [];
+
+        const first = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'control_plane_publications-p1',
+          entityType: 'partition',
+          entityId: 'control_plane_publications-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'control_plane_publications-p1-r1',
+          enforceConcurrentOperationBudget: true,
+        });
+
+        const second = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'control_plane_publications-p1',
+          entityType: 'partition',
+          entityId: 'control_plane_publications-p1',
+          nodeId: 'node-3',
+          sourceNodeId: 'seed-node',
+          replicaId: 'control_plane_publications-p1-r2',
+          enforceConcurrentOperationBudget: true,
+        });
+
+        t.equal(
+          second.operationId,
+          first.operationId,
+          'critical partition replacement should reuse the in-flight add-like recovery operation across target-node changes',
+        );
+        t.equal(
+          coordinator.stats.operationsCreated,
+          1,
+          'critical recovery should not mint duplicate PENDING replacements when authoritative entity reads miss',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
     'terminal recent intent cache entry does not suppress create-operation recovery',
     async (t) => {
       const coordinator = createTestCoordinator({
@@ -394,6 +446,336 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           'terminal recent intent entry should be removed from cache',
         );
       } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'priority recent intent survives authoritative dedupe misses',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        nodeId: 'node-2',
+        sourceNodeId: 'seed-node',
+        replicaId: 'replica_operations-p1-r1',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'replica_operations-p1',
+      );
+      const cachedOperation = {
+        operationId: 'priority-op',
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'replica_operations-p1-r4',
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      };
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: cachedOperation,
+        expiresAt: Date.now() + 1_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      const originalArmCoordinatorCreatedOperationProgress =
+        coordinator.armCoordinatorCreatedOperationProgress;
+      let createdOperationCount = 0;
+      const rearmedOperationIds = [];
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+        };
+      };
+      coordinator.armCoordinatorCreatedOperationProgress = async (operation) => {
+        rearmedOperationIds.push(operation?.operationId || null);
+        return true;
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+        const refreshedIntent =
+          coordinator.recentOperationIntents.get(dedupeKey);
+
+        t.equal(
+          result.operationId,
+          'priority-op',
+          'priority create should reuse the cached in-flight intent when the authoritative dedupe read misses',
+        );
+        t.equal(
+          createdOperationCount,
+          0,
+          'authoritative dedupe misses should not mint a duplicate priority operation',
+        );
+        t.same(
+          rearmedOperationIds,
+          ['priority-op'],
+          'reused pending priority intent should be re-armed through the owner lane',
+        );
+        t.ok(
+          refreshedIntent?.expiresAt > Date.now() + 30_000,
+          'priority recent intent should extend its retention window under pressure',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        coordinator.armCoordinatorCreatedOperationProgress =
+          originalArmCoordinatorCreatedOperationProgress;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'authoritative duplicate pending operation is re-armed when create dedupes',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+
+      const pendingOperation = {
+        operationId: 'deduped-priority-op',
+        type: OperationType.REPLACE,
+        partitionId: 'sql_transactions-p1',
+        entityType: 'partition',
+        entityId: 'sql_transactions-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'sql_transactions-p1-r4',
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+      };
+      const originalQueryExistingInFlightOperation =
+        coordinator.queryExistingInFlightOperation;
+      const originalArmCoordinatorCreatedOperationProgress =
+        coordinator.armCoordinatorCreatedOperationProgress;
+      const rearmedOperationIds = [];
+
+      coordinator.queryExistingInFlightOperation = async () => pendingOperation;
+      coordinator.armCoordinatorCreatedOperationProgress = async (operation) => {
+        rearmedOperationIds.push(operation?.operationId || null);
+        return true;
+      };
+
+      try {
+        const result = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'sql_transactions-p1',
+          entityType: 'partition',
+          entityId: 'sql_transactions-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'sql_transactions-p1-r1',
+        });
+
+        t.equal(
+          result.operationId,
+          pendingOperation.operationId,
+          'create should return the authoritative duplicate operation',
+        );
+        t.same(
+          rearmedOperationIds,
+          [pendingOperation.operationId],
+          'deduped pending operation should be re-armed through the owner lane',
+        );
+      } finally {
+        coordinator.queryExistingInFlightOperation =
+          originalQueryExistingInFlightOperation;
+        coordinator.armCoordinatorCreatedOperationProgress =
+          originalArmCoordinatorCreatedOperationProgress;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'stale priority recent intent does not suppress fresh recovery create',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        nodeId: 'node-2',
+        sourceNodeId: 'seed-node',
+        replicaId: 'replica_operations-p1-r1',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'replica_operations-p1',
+      );
+      const staleTimestamp = Date.now() -
+        (coordinator.config.pendingTimeoutMs + 1_000);
+      const cachedOperation = {
+        operationId: 'stale-priority-op',
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'replica_operations-p1-r4',
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        createdAt: staleTimestamp,
+        updatedAt: staleTimestamp,
+      };
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: cachedOperation,
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+
+        t.equal(
+          result.operationId,
+          'replacement-op',
+          'stale priority intent should stop suppressing fresh recovery creation after its timeout window',
+        );
+        t.equal(
+          createdOperationCount,
+          1,
+          'stale priority intent should allow a fresh recovery operation to be created',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'cache-visible terminal intent must not suppress priority recovery rearm',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        nodeId: 'node-2',
+        sourceNodeId: 'seed-node',
+        replicaId: 'replica_operations-p1-r1',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'replica_operations-p1',
+      );
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: {
+          operationId: 'priority-op-terminal',
+          type: OperationType.REPLACE,
+          partitionId: 'replica_operations-p1',
+          entityType: 'partition',
+          entityId: 'replica_operations-p1',
+          sourceNodeId: 'seed-node',
+          targetNodeId: 'node-2',
+          replicaId: 'replica_operations-p1-r4',
+          status: ReplicaStatus.PENDING,
+          workflowStep: WORKFLOW_STEP.PENDING,
+        },
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const originalQueryOperationById = coordinator.queryOperationById;
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.queryOperationById = async () => ({
+        operationId: 'priority-op-terminal',
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'replica_operations-p1-r4',
+        status: ReplicaStatus.FAILED,
+        workflowStep: WORKFLOW_STEP.FAILED,
+      });
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+
+        t.equal(
+          result.operationId,
+          'replacement-op',
+          'terminal cache-visible priority intent should allow a fresh recovery create',
+        );
+        t.equal(
+          createdOperationCount,
+          1,
+          'fresh create path should run once after terminal intent pruning',
+        );
+        t.equal(
+          coordinator.recentOperationIntents.has(dedupeKey),
+          false,
+          'terminal intent should be removed from recent-intent cache',
+        );
+      } finally {
+        coordinator.queryOperationById = originalQueryOperationById;
         coordinator.repository.queryAuthoritativeOperationById =
           originalQueryAuthoritativeOperationById;
         coordinator.createOperationInternal = originalCreateOperationInternal;

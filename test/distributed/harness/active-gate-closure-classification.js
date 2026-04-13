@@ -1,3 +1,8 @@
+import {
+  hasStartupAdminClosureWitness,
+  isTimeoutShapedProbeError,
+} from './startup-readiness-evidence.js';
+
 const ZERO = 0;
 const ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 
@@ -7,6 +12,27 @@ export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
 export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_TIMEOUT = 'CL-004';
 export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_SNAPSHOT_TIMEOUT =
   'startup_active_snapshot_timeout';
+export const ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG = 'CL-006';
+export const ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG =
+  'startup_active_publication_lag';
+export const ACTIVE_GATE_CLOSURE_RECORD_ID_SOFT_SUCCESS_IDS = Object.freeze([
+  ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+  ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_SNAPSHOT_TIMEOUT,
+  ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG,
+]);
+export const ACTIVE_GATE_SOFT_SUCCESS_MODE_LOAD = 'load';
+
+export function buildActiveGateWaitPolicy({readinessMode = null, closureRecordId = null} = {}) {
+  const allowLoadSoftSuccess =
+    readinessMode === ACTIVE_GATE_SOFT_SUCCESS_MODE_LOAD &&
+    ACTIVE_GATE_CLOSURE_RECORD_ID_SOFT_SUCCESS_IDS.includes(closureRecordId);
+  return {
+    readinessMode,
+    closureRecordId,
+    allowSoftSuccess: allowLoadSoftSuccess,
+    hardFailure: !allowLoadSoftSuccess && closureRecordId !== null,
+  };
+}
 
 function normalizePublicationStatus(status) {
   if (typeof status !== 'string') {
@@ -30,15 +56,6 @@ function normalizeDistinctStringArray(values) {
   return normalizedValues;
 }
 
-function isTimeoutLikeError(message) {
-  if (typeof message !== 'string') {
-    return false;
-  }
-  const normalizedMessage = message.trim().toLowerCase();
-  return normalizedMessage.includes('timed out') ||
-    normalizedMessage.includes('timeout');
-}
-
 export function classifyActiveGateClosureWitness({
   progressSnapshot = null,
   publicationConvergence = null,
@@ -48,17 +65,21 @@ export function classifyActiveGateClosureWitness({
   const gateReasons = normalizeDistinctStringArray(
     progressSnapshot?.gateReasons || publicationConvergenceGate?.reasons,
   );
+  const hasStrongAdminWitness = hasStartupAdminClosureWitness({
+    ...progressSnapshot,
+    selectedReachabilityError: progressSnapshot?.selectedReachabilityError,
+    selectedError: progressSnapshot?.selectedError,
+  });
   const startupSnapshotTimeoutWitness =
     readinessMode === 'startup' &&
     Number.isInteger(progressSnapshot?.inactiveNodeCount) &&
     progressSnapshot.inactiveNodeCount === ZERO &&
     progressSnapshot?.snapshotCoverageComplete !== true &&
     Number.isInteger(progressSnapshot?.snapshotCoverageNodeCount) &&
-    progressSnapshot.snapshotCoverageNodeCount === ZERO &&
-    gateReasons.length === ZERO &&
-    isTimeoutLikeError(progressSnapshot?.selectedSnapshotError) &&
-    (progressSnapshot?.selectedSnapshotAdminReady === true ||
-      progressSnapshot?.selectedSnapshotReachableBy === 'admin_health');
+      progressSnapshot.snapshotCoverageNodeCount === ZERO &&
+      gateReasons.length === ZERO &&
+    isTimeoutShapedProbeError(progressSnapshot?.selectedSnapshotError) &&
+    hasStrongAdminWitness;
 
   if (startupSnapshotTimeoutWitness) {
     return {
@@ -68,18 +89,46 @@ export function classifyActiveGateClosureWitness({
     };
   }
 
+  const publicationStatus = normalizePublicationStatus(
+    progressSnapshot?.publicationStatus ||
+      publicationConvergenceGate?.publicationStatus ||
+      publicationConvergence?.publicationStatus,
+  );
+
+  const startupPublicationLagWitness =
+    readinessMode === 'startup' &&
+    Number.isInteger(progressSnapshot?.expectedNodeCount) &&
+    progressSnapshot.expectedNodeCount > ZERO &&
+    Number.isInteger(progressSnapshot?.activeNodeCount) &&
+    progressSnapshot.activeNodeCount === progressSnapshot.expectedNodeCount &&
+    Number.isInteger(progressSnapshot?.inactiveNodeCount) &&
+    progressSnapshot.inactiveNodeCount === ZERO &&
+    progressSnapshot?.snapshotCoverageComplete !== true &&
+    Number.isInteger(progressSnapshot?.snapshotCoverageNodeCount) &&
+    progressSnapshot.snapshotCoverageNodeCount > ZERO &&
+    gateReasons.length === ZERO &&
+    publicationStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
+    Number.isInteger(progressSnapshot?.pendingAckCount) &&
+    progressSnapshot.pendingAckCount === ZERO &&
+    Number.isInteger(progressSnapshot?.missingPublishedCount) &&
+    progressSnapshot.missingPublishedCount > ZERO &&
+    !isTimeoutShapedProbeError(progressSnapshot?.selectedSnapshotError) &&
+    hasStrongAdminWitness;
+
+  if (startupPublicationLagWitness) {
+    return {
+      closureRecordId: ACTIVE_GATE_CLOSURE_RECORD_ID_STARTUP_PUBLICATION_LAG,
+      closureWitnessClass:
+        ACTIVE_GATE_CLOSURE_WITNESS_CLASS_STARTUP_PUBLICATION_LAG,
+    };
+  }
+
   const onlyPrioritySpreadPending =
     gateReasons.length === 1 &&
     gateReasons[0] === 'priority_control_plane_spread_pending';
   if (!onlyPrioritySpreadPending) {
     return null;
   }
-
-  const publicationStatus = normalizePublicationStatus(
-    progressSnapshot?.publicationStatus ||
-      publicationConvergenceGate?.publicationStatus ||
-      publicationConvergence?.publicationStatus,
-  );
   if (publicationStatus !== ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED) {
     return null;
   }

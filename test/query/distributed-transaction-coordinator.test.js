@@ -93,6 +93,46 @@ test('DistributedTransactionCoordinator - rollback clears active transaction', a
   t.equal(coordinator.hasActiveTransaction('s3'), false);
 });
 
+test('DistributedTransactionCoordinator - rollback failure stays in rollback ' +
+  'lane for replay', async (t) => {
+  const calls = [];
+  let failPartition = 'p2';
+  const coordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async (_sessionId, partitionId) => {
+      calls.push(partitionId);
+      if (partitionId === failPartition) {
+        throw new Error('rollback failed');
+      }
+    },
+  });
+
+  await coordinator.begin('s3-retry');
+  await coordinator.enlistParticipants('s3-retry', ['p1', 'p2']);
+
+  const firstRollback = await coordinator.rollback('s3-retry');
+
+  t.equal(firstRollback.success, false);
+  t.equal(coordinator.hasActiveTransaction('s3-retry'), true);
+  t.equal(
+    coordinator.getTransaction('s3-retry')?.status,
+    TRANSACTION_STATUS.ROLLING_BACK,
+    'failed rollback should remain recoverable instead of becoming terminal',
+  );
+
+  failPartition = null;
+  const secondRollback = await coordinator.rollback('s3-retry');
+
+  t.equal(secondRollback.success, true);
+  t.equal(coordinator.hasActiveTransaction('s3-retry'), false);
+  t.equal(calls[0], 'p1');
+  t.ok(
+    calls.slice(1).every((partitionId) => partitionId === 'p2'),
+    'replayed rollback should only revisit the unfinished participant',
+  );
+});
+
 test(
   'DistributedTransactionCoordinator - defers recovery sweep on retryable control-plane persistence failures',
   async (t) => {

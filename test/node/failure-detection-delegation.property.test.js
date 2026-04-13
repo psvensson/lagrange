@@ -25,6 +25,8 @@ import {
 } from '../../src/node/node-constants.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {createMockMutationGateway} from
+  './failure-detector-test-helpers.js';
 
 /**
  * Methods that were removed from NodeLifecycleService as part of
@@ -256,6 +258,8 @@ test('Property 1: Failure detection delegation', async (t) => {
               nodeId: 'self-node',
               sqlQueryEngine: mockEngine,
               cdcIntegrationService: mockCDC,
+              controlPlaneSystemTableGateway:
+                createMockMutationGateway(mockEngine, mockCDC),
             });
             detector.initialize();
 
@@ -322,6 +326,8 @@ test('Property 1: Failure detection delegation', async (t) => {
               nodeId: 'self-node',
               sqlQueryEngine: mockEngine,
               cdcIntegrationService: mockCDC,
+              controlPlaneSystemTableGateway:
+                createMockMutationGateway(mockEngine, mockCDC),
             });
             detector.initialize();
 

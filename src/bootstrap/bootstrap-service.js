@@ -62,6 +62,9 @@ import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
+import {
+  StartupRuntimeSurfaceOwner,
+} from './shared/startup-runtime-surface-owner.js';
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
 import {
@@ -97,11 +100,8 @@ import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {
-  buildMessageGroupOwnerNotReadyError,
-  getBootstrapMessageGroupService,
-  resolveOperationalMessageGroupSelection,
-  resolveOperationalMessageGroupSelectionAsync,
-} from './shared/message-group-selection.js';
+  BootstrapMessageGroupSelectionOwner,
+} from './owners/bootstrap-message-group-selection-owner.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
 import {
   BootstrapNodeReadyRebalanceOwner,
@@ -237,6 +237,12 @@ class BootstrapService extends EventEmitter {
 
     // Services created during bootstrap
     this.messageGroupServices = new Map();
+    this.messageGroupSelectionOwner =
+      new BootstrapMessageGroupSelectionOwner({
+        delegates: {
+          getMessageGroupServices: () => this.messageGroupServices,
+        },
+      });
     this.partitionServices = new Map();
     this.transport = null;
     // MessageRouter for unified local/remote message routing
@@ -286,6 +292,9 @@ class BootstrapService extends EventEmitter {
       },
       get cdcIntegrationService() {
         return self.cdcIntegrationService;
+      },
+      get systemTableCache() {
+        return self.peekSystemTableCache();
       },
       get replicaHandler() {
         return self.replicaHandler;
@@ -399,6 +408,11 @@ class BootstrapService extends EventEmitter {
     this.nodeReadyRebalanceOwner = new BootstrapNodeReadyRebalanceOwner({
       delegates: {
         getLogger: () => this.logger,
+        getLocalNodeId: () => this.nodeId,
+        isBootstrapNodeReadyRebalanceActive: () =>
+          this.isShuttingDown !== true &&
+          this.phase !== BootstrapPhase.COMPLETE &&
+          this.phase !== BootstrapPhase.FAILED,
         getNodeReadyRebalanceDelayMs: () => this.nodeReadyRebalanceDelayMs,
         getPartitionServices: () => this.partitionServices,
         executeNodeReadyRebalance: (reason) => {
@@ -464,6 +478,25 @@ class BootstrapService extends EventEmitter {
             nodeId: this.nodeId,
           });
         },
+      },
+    });
+    this.runtimeSurfaceOwner = new StartupRuntimeSurfaceOwner({
+      delegates: {
+        getNodeId: () => this.nodeId,
+        getOwner: () => this,
+        getOnLocalAdminRuntimeReady: () => this.onLocalAdminRuntimeReady,
+        getLocalAdminRuntimeReadyNotified: () =>
+          this.localAdminRuntimeReadyNotified,
+        setLocalAdminRuntimeReadyNotified: (value) => {
+          this.localAdminRuntimeReadyNotified = value === true;
+        },
+        getSystemTableCache: () => this.getSystemTableCache(),
+        getCacheMutationTarget: () => this.getSystemTableCache(),
+        getMessageRouter: () => this.messageRouter,
+        getPartitionServices: () => this.partitionServices,
+        getMessageGroupServices: () => this.messageGroupServices,
+        getTablePolicyService: () => this.tablePolicyService,
+        getRebalanceCoordinator: () => this.rebalanceCoordinator,
       },
     });
     this.seedPhaseOwners = createSeedPhaseOwners(this);
@@ -623,12 +656,13 @@ class BootstrapService extends EventEmitter {
       getLeaderMessageGroupService: (options) =>
         self.getLeaderMessageGroupService(options),
       getBootstrapMessageGroupService: () =>
-        self.seedMessageGroupsPhase
-          .getBootstrapMessageGroupService(),
+        self.getBootstrapMessageGroupService(),
       resolveOperationalMessageGroupSelection: (options) =>
         self.resolveOperationalMessageGroupSelection(options),
       resolveOperationalMessageGroupSelectionAsync: (options) =>
         self.resolveOperationalMessageGroupSelectionAsync(options),
+      buildMessageGroupOwnerNotReadyError: (selection, options) =>
+        self.buildMessageGroupOwnerNotReadyError(selection, options),
 
       // -- Runtime references --
       getSystemTableCache: () => self.getSystemTableCache(),
@@ -1104,6 +1138,7 @@ class BootstrapService extends EventEmitter {
         nodeId: this.nodeId,
         durationMs: Date.now() - runtimeHandlerStartMs,
       });
+      this.openExternalTransportAdmission();
 
       // Bootstrap complete
       const currentState = this.lifecycleStateMachine.getState();
@@ -1113,6 +1148,7 @@ class BootstrapService extends EventEmitter {
         this.lifecycleStateMachine.transition(NodeState.CONNECTING);
       }
       this.phase = BootstrapPhase.COMPLETE;
+      this.clearNodeReadyRebalanceState();
       activateSteadyStateRuntimeHandoff({
         owner: this.runtimeHandoffOwner,
         activateControlPlaneBackgroundWriters: true,
@@ -1451,14 +1487,13 @@ class BootstrapService extends EventEmitter {
       if (tableName &&
           shouldAttachPartitionCdcPropagation(tableName)) {
         const subscriptionSelection =
-          await this.seedMessageGroupsPhase
-            .resolveOperationalMessageGroupSelectionAsync({
-              requiredTables: [tableName],
-            });
+          await this.resolveOperationalMessageGroupSelectionAsync({
+            requiredTables: [tableName],
+          });
         const subscriptionMessageGroupService =
           subscriptionSelection.service;
         if (!subscriptionMessageGroupService) {
-          throw buildMessageGroupOwnerNotReadyError(
+          throw this.buildMessageGroupOwnerNotReadyError(
             subscriptionSelection,
             {
               message:
@@ -1486,14 +1521,13 @@ class BootstrapService extends EventEmitter {
               replicaId: options.replicaId,
             });
             const propagationSelection =
-              await this.seedMessageGroupsPhase
-                .resolveOperationalMessageGroupSelectionAsync({
-                  requiredTables: [tableName],
-                });
+              await this.resolveOperationalMessageGroupSelectionAsync({
+                requiredTables: [tableName],
+              });
             const propagationMessageGroupService =
               propagationSelection.service;
             if (!propagationMessageGroupService) {
-              throw buildMessageGroupOwnerNotReadyError(
+              throw this.buildMessageGroupOwnerNotReadyError(
                 propagationSelection,
                 {
                   message:
@@ -1793,24 +1827,7 @@ class BootstrapService extends EventEmitter {
     this.endpointService = controlPlane.endpointService;
     this.dispatchService = controlPlane.dispatchService;
     this.rebalanceCoordinator = controlPlane.rebalanceCoordinator;
-
-    for (const mgs of this.messageGroupServices.values()) {
-      if (mgs.setTablePolicyService) {
-        mgs.setTablePolicyService(this.tablePolicyService);
-      }
-      if (mgs.setRebalanceCoordinator) {
-        mgs.setRebalanceCoordinator(this.rebalanceCoordinator);
-      }
-    }
-
-    for (const partition of this.partitionServices.values()) {
-      if (partition.setTablePolicyService) {
-        partition.setTablePolicyService(this.tablePolicyService);
-      }
-      if (partition.setRebalanceCoordinator) {
-        partition.setRebalanceCoordinator(this.rebalanceCoordinator);
-      }
-    }
+    this.runtimeSurfaceOwner.bindControlPlaneServices();
 
     this.logger.info(BootstrapLog.CONTROL_PLANE_READY, {
       nodeId: this.nodeId,
@@ -1826,19 +1843,7 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   async notifyLocalAdminRuntimeReady() {
-    if (this.localAdminRuntimeReadyNotified ||
-        typeof this.onLocalAdminRuntimeReady !== 'function') {
-      return;
-    }
-    this.localAdminRuntimeReadyNotified = true;
-    await this.onLocalAdminRuntimeReady({
-      nodeId: this.nodeId,
-      systemTableCache: this.getSystemTableCache(),
-      cacheMutationTarget: this.getSystemTableCache(),
-      messageRouter: this.messageRouter,
-      partitionServices: this.partitionServices,
-      owner: this,
-    });
+    await this.runtimeSurfaceOwner.notifyLocalAdminRuntimeReady();
   }
 
   /**
@@ -2354,6 +2359,18 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   getSystemTableCache() {
+    return assertCritical(
+      this.peekSystemTableCache(),
+      bootstrapError.SYSTEM_CACHE_MISSING,
+    );
+  }
+
+  /**
+   * Read the current runtime cache reference without forcing a hard failure.
+   * @return {Object|null}
+   * @private
+   */
+  peekSystemTableCache() {
     if (this.systemTableCache) {
       return this.systemTableCache;
     }
@@ -2363,7 +2380,7 @@ class BootstrapService extends EventEmitter {
         return svc.systemTableCache;
       }
     }
-    return assertCritical(null, bootstrapError.SYSTEM_CACHE_MISSING);
+    return null;
   }
 
   /**
@@ -2377,17 +2394,13 @@ class BootstrapService extends EventEmitter {
   }
 
   resolveOperationalMessageGroupSelection(options = {}) {
-    return resolveOperationalMessageGroupSelection(
-      this.messageGroupServices,
-      options,
-    );
+    return this.messageGroupSelectionOwner
+      .resolveOperationalMessageGroupSelection(options);
   }
 
   async resolveOperationalMessageGroupSelectionAsync(options = {}) {
-    return resolveOperationalMessageGroupSelectionAsync(
-      this.messageGroupServices,
-      options,
-    );
+    return this.messageGroupSelectionOwner
+      .resolveOperationalMessageGroupSelectionAsync(options);
   }
 
   getLeaderMessageGroupService(options = {}) {
@@ -2395,7 +2408,12 @@ class BootstrapService extends EventEmitter {
   }
 
   getBootstrapMessageGroupService() {
-    return getBootstrapMessageGroupService(this.messageGroupServices);
+    return this.messageGroupSelectionOwner.getBootstrapMessageGroupService();
+  }
+
+  buildMessageGroupOwnerNotReadyError(selection = {}, options = {}) {
+    return this.messageGroupSelectionOwner
+      .buildMessageGroupOwnerNotReadyError(selection, options);
   }
 
   /**
@@ -2591,9 +2609,7 @@ class BootstrapService extends EventEmitter {
 
     const serverAlreadyRunning = Boolean(this.messageRouter.server);
     await this.messageRouter.initialize({startServer: true});
-    if (typeof this.messageRouter.setExternalAdmissionEnabled === 'function') {
-      this.messageRouter.setExternalAdmissionEnabled(true);
-    }
+    this.openExternalTransportAdmission();
 
     if (serverAlreadyRunning) {
       this.logger.debug(BootstrapLog.WS_ALREADY_RUNNING, {
@@ -2607,6 +2623,17 @@ class BootstrapService extends EventEmitter {
       nodeId: this.nodeId,
       wsPort: wsPort,
     });
+  }
+
+  /**
+   * Open remote transport admission after seed-owned runtime handlers exist.
+   * Self-routing remains available earlier during bootstrap initialization.
+   * @return {void}
+   */
+  openExternalTransportAdmission() {
+    if (typeof this.messageRouter?.setExternalAdmissionEnabled === 'function') {
+      this.messageRouter.setExternalAdmissionEnabled(true);
+    }
   }
 
   /**

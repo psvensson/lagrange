@@ -9,10 +9,13 @@
 
 import assert from 'node:assert/strict';
 import {join, resolve} from 'node:path';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from '../harness/constants.js';
 import {runExamplesCatalog} from '../../../scripts/examples/build-upload-run.js';
 
-const PRE_KILL_SETTLE_MS = 5000;
+const PRE_KILL_SETTLE_MS = SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs;
 const POST_KILL_CONVERGENCE_TIMEOUT_MS = 60000;
 const WASM_SERVICES_QUERY =
   'SELECT * FROM services WHERE service_type = \'wasm_service\'';

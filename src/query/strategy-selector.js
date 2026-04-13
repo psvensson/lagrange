@@ -32,6 +32,78 @@ const KEY_BOUNDED_ACCESS_PATHS = new Set([
   LOOKUP_ACCESS_PATH.BOUNDED_INDEX,
 ]);
 
+const DEFAULT_STRATEGY_STATE = Object.freeze({
+  BROADCAST_THRESHOLD_MATCH: 'broadcastThresholdMatch',
+  KEY_BOUNDED_LOOKUP: 'keyBoundedLookup',
+  EMIT_SHUFFLE_FALLBACK: 'emitShuffleFallback',
+});
+
+const DEFAULT_STRATEGY_CHOICE_BY_STATE = Object.freeze({
+  [DEFAULT_STRATEGY_STATE.BROADCAST_THRESHOLD_MATCH]: Object.freeze({
+    strategy: STRATEGY.BROADCAST,
+    reason: STRATEGY_REASON.SIDE_BELOW_BROADCAST_THRESHOLD,
+  }),
+  [DEFAULT_STRATEGY_STATE.KEY_BOUNDED_LOOKUP]: Object.freeze({
+    strategy: STRATEGY.LOOKUP,
+    reason: STRATEGY_REASON.INNER_KEY_BOUNDED_LOOKUP,
+  }),
+  [DEFAULT_STRATEGY_STATE.EMIT_SHUFFLE_FALLBACK]: Object.freeze({
+    strategy: STRATEGY.EMIT_SHUFFLE,
+    reason: STRATEGY_REASON.DEFAULT_EMIT_SHUFFLE,
+  }),
+});
+
+/**
+ * Normalize default-strategy evidence into one snapshot.
+ *
+ * @param {Object} input - Strategy input descriptor.
+ * @return {{threshold: number, sideSize: number, accessPath: string|null}}
+ *   Normalized decision evidence.
+ */
+function buildDefaultStrategySnapshot(input) {
+  return {
+    threshold: input[SIF.BROADCAST_THRESHOLD_BYTES] ??
+      DEFAULT_BROADCAST_THRESHOLD_BYTES,
+    sideSize: input[SIF.SIDE_SIZE_BYTES],
+    accessPath: input[SIF.INNER_ACCESS_PATH] ?? null,
+  };
+}
+
+/**
+ * Resolve one default-strategy state from normalized evidence.
+ *
+ * @param {Object} snapshot - Default-strategy evidence.
+ * @return {string} DEFAULT_STRATEGY_STATE member.
+ */
+function resolveDefaultStrategyState(snapshot) {
+  if (snapshot.sideSize <= snapshot.threshold) {
+    return DEFAULT_STRATEGY_STATE.BROADCAST_THRESHOLD_MATCH;
+  }
+
+  if (snapshot.accessPath &&
+      KEY_BOUNDED_ACCESS_PATHS.has(snapshot.accessPath)) {
+    return DEFAULT_STRATEGY_STATE.KEY_BOUNDED_LOOKUP;
+  }
+
+  return DEFAULT_STRATEGY_STATE.EMIT_SHUFFLE_FALLBACK;
+}
+
+/**
+ * Build the canonical default-strategy choice for one state.
+ *
+ * @param {string} state - DEFAULT_STRATEGY_STATE member.
+ * @return {{strategy: string, reason: string}} Strategy choice.
+ */
+function buildDefaultStrategyChoice(state) {
+  const canonicalStrategyChoice =
+    DEFAULT_STRATEGY_CHOICE_BY_STATE[state] ||
+    DEFAULT_STRATEGY_CHOICE_BY_STATE[
+      DEFAULT_STRATEGY_STATE.EMIT_SHUFFLE_FALLBACK
+    ];
+
+  return {...canonicalStrategyChoice};
+}
+
 /**
  * Choose the default strategy without considering user hints.
  *
@@ -53,32 +125,11 @@ const KEY_BOUNDED_ACCESS_PATHS = new Set([
 function chooseDefaultStrategy(input) {
   validateInput(input);
 
-  const threshold = input[SIF.BROADCAST_THRESHOLD_BYTES] ??
-    DEFAULT_BROADCAST_THRESHOLD_BYTES;
-  const sideSize = input[SIF.SIDE_SIZE_BYTES];
-  const accessPath = input[SIF.INNER_ACCESS_PATH] ?? null;
+  const defaultStrategySnapshot = buildDefaultStrategySnapshot(input);
+  const defaultStrategyState =
+    resolveDefaultStrategyState(defaultStrategySnapshot);
 
-  // Rule 1: broadcast if side is small enough
-  if (sideSize <= threshold) {
-    return {
-      strategy: STRATEGY.BROADCAST,
-      reason: STRATEGY_REASON.SIDE_BELOW_BROADCAST_THRESHOLD,
-    };
-  }
-
-  // Rule 2: lookup if inner side has key-bounded access
-  if (accessPath && KEY_BOUNDED_ACCESS_PATHS.has(accessPath)) {
-    return {
-      strategy: STRATEGY.LOOKUP,
-      reason: STRATEGY_REASON.INNER_KEY_BOUNDED_LOOKUP,
-    };
-  }
-
-  // Rule 3: emit/shuffle as fallback
-  return {
-    strategy: STRATEGY.EMIT_SHUFFLE,
-    reason: STRATEGY_REASON.DEFAULT_EMIT_SHUFFLE,
-  };
+  return buildDefaultStrategyChoice(defaultStrategyState);
 }
 
 /**

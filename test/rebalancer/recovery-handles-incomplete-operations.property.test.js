@@ -21,6 +21,7 @@ import {
 } from '../../src/rebalancer/replica-status.js';
 import {
   createMockCache,
+  createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
   createMockMessageRouter,
 } from './test-helpers.js';
@@ -189,6 +190,8 @@ function createRecoveryTestCoordinator(options = {}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway(sqlEngine),
     transactionCoordinator: {
       begin: async () => ({success: true}),
       commit: async () => ({success: true}),

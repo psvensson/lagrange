@@ -113,9 +113,17 @@ export class LiveQueryManager {
       return;
     }
 
-    if (type === 'live_query_initial') {
+    const nextSubscriptionStatus =
+      type === 'live_query_initial' || type === 'live_query_renewed' ?
+        'active' :
+        type === 'live_query_expired' ?
+          'expired' :
+          subscription.status;
+    subscription.status = nextSubscriptionStatus;
+
+    switch (type) {
+    case 'live_query_initial':
       // Initial results received
-      subscription.status = 'active';
       subscription.partitions = partitions || [];
       subscription.initialResults = data;
       this.emitEvent('livequery:initialized', {
@@ -123,7 +131,8 @@ export class LiveQueryManager {
         data,
         partitions,
       });
-    } else if (type === 'live_query_event') {
+      break;
+    case 'live_query_event':
       // CDC event received
       // Requirements: 32.7 - Don't add events when paused
       if (!subscription.paused) {
@@ -152,14 +161,17 @@ export class LiveQueryManager {
           timestamp: event.timestamp,
         });
       }
-    } else if (type === 'live_query_expired') {
+      break;
+    case 'live_query_expired':
       // Subscription expired
-      subscription.status = 'expired';
       this.emitEvent('livequery:expired', {subscriptionId});
-    } else if (type === 'live_query_renewed') {
+      break;
+    case 'live_query_renewed':
       // Subscription renewed
-      subscription.status = 'active';
       this.emitEvent('livequery:renewed', {subscriptionId});
+      break;
+    default:
+      break;
     }
   }
 

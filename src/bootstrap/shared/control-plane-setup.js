@@ -323,6 +323,8 @@ class ControlPlaneSetup {
         systemTableCache,
         cdcIntegrationService,
         controlPlaneReadinessService,
+        replicaOperationRepository:
+          rebalanceCoordinator?.repository || null,
         controlPlanePublicationsOwner:
           systemMetadataOwners.controlPlanePublicationsOwner,
       });

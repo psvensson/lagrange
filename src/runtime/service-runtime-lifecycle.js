@@ -110,29 +110,26 @@ function resolveServiceId(definition) {
  * @return {{valid: boolean, reason?: string}}
  */
 function validateEndpointIntent(intent) {
-  if (!intent || typeof intent !== TYPEOF.OBJECT) {
-    return {valid: false, reason: 'endpoint intent must be a non-null object'};
-  }
-  const port = intent[ENDPOINT_INTENT_FIELD.PORT];
-  if (typeof port !== TYPEOF.NUMBER || !Number.isInteger(port) ||
-      port < MIN_PORT || port > MAX_PORT) {
-    return {
-      valid: false,
-      reason: `port must be an integer in [${MIN_PORT}, ${MAX_PORT}]`,
-    };
-  }
-  const host = intent[ENDPOINT_INTENT_FIELD.HOST];
-  if (host !== undefined && typeof host !== TYPEOF.STRING) {
-    return {valid: false, reason: 'host must be a string when provided'};
-  }
-  const protocol = intent[ENDPOINT_INTENT_FIELD.PROTOCOL];
-  if (protocol !== undefined && typeof protocol !== TYPEOF.STRING) {
-    return {
-      valid: false,
-      reason: 'protocol must be a string when provided',
-    };
-  }
-  return {valid: true};
+  const port = intent?.[ENDPOINT_INTENT_FIELD.PORT];
+  const host = intent?.[ENDPOINT_INTENT_FIELD.HOST];
+  const protocol = intent?.[ENDPOINT_INTENT_FIELD.PROTOCOL];
+  const invalidReason =
+    !intent || typeof intent !== TYPEOF.OBJECT ?
+      'endpoint intent must be a non-null object' :
+      typeof port !== TYPEOF.NUMBER ||
+        !Number.isInteger(port) ||
+        port < MIN_PORT ||
+        port > MAX_PORT ?
+        `port must be an integer in [${MIN_PORT}, ${MAX_PORT}]` :
+        host !== undefined && typeof host !== TYPEOF.STRING ?
+          'host must be a string when provided' :
+          protocol !== undefined && typeof protocol !== TYPEOF.STRING ?
+            'protocol must be a string when provided' :
+            '';
+
+  return invalidReason ?
+    {valid: false, reason: invalidReason} :
+    {valid: true};
 }
 
 /**

@@ -7,7 +7,11 @@
  * Requirements: 5.1, 6.1
  */
 
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  CONVERGENCE_DEFAULTS,
+  SCENARIO_TIMING_DEFAULTS,
+} from '../harness/constants.js';
+import {resolveScenarioOptions} from '../harness/scenario-config.js';
 import {
   BENCHMARK_WORKLOAD_PROFILE,
   ensureBenchmarkPartitioningTable,
@@ -16,15 +20,17 @@ import {
 
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = '60s';
-const PRE_JOIN_SETTLE_MS = 5000;
-const LOAD_READINESS_STABLE_WINDOW_MS = 5000;
+const PRE_JOIN_SETTLE_MS = SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs;
+const LOAD_READINESS_STABLE_WINDOW_MS =
+  SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs;
 const LOAD_READINESS_STABILIZATION_TIMEOUT_MS = 30000;
 const POST_JOIN_CONVERGENCE_TIMEOUT_MS = 120000;
 const POST_JOIN_ACTIVE_TIMEOUT_MS = 180000;
 const CONSISTENCY_TIMEOUT_MS = 240000;
-const CONSISTENCY_POLL_INTERVAL_MS = 500;
+const CONSISTENCY_POLL_INTERVAL_MS = 250;
 const CONSISTENCY_FORCE_REPAIR_AFTER_MS = 0;
-const BENCHMARK_LOAD_ADMISSION_REFRESH_INTERVAL_MS = 500;
+const BENCHMARK_LOAD_ADMISSION_REFRESH_INTERVAL_MS =
+  SCENARIO_TIMING_DEFAULTS.pollIntervalMs;
 const BENCHMARK_LOAD_ADMISSION_QUERY_TIMEOUT_MS = 1000;
 const BENCHMARK_LOAD_HEADROOM_RATIO = 0.75;
 const MIN_BENCHMARK_READY_LOAD_NODES = 2;
@@ -321,6 +327,11 @@ function extractRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
       Array.isArray(controlPlaneDiagnostics)) {
     return null;
   }
+  const publicationConvergence =
+    controlPlaneDiagnostics.publicationConvergence &&
+      typeof controlPlaneDiagnostics.publicationConvergence === 'object' ?
+      controlPlaneDiagnostics.publicationConvergence :
+      null;
   const logsTable = controlPlaneDiagnostics.logsTable &&
     typeof controlPlaneDiagnostics.logsTable === 'object' ?
     controlPlaneDiagnostics.logsTable :
@@ -333,10 +344,52 @@ function extractRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
     typeof controlPlaneDiagnostics.cdcReplayByPartitionId === 'object' ?
     controlPlaneDiagnostics.cdcReplayByPartitionId :
     null;
-  if (!logsTable && !cdcReplay && !cdcReplayByPartitionId) {
+  const retainedPublicationConvergence = publicationConvergence ? {
+    publicationEpoch:
+      Number.isFinite(publicationConvergence.publicationEpoch) ?
+        publicationConvergence.publicationEpoch :
+        null,
+    publicationStatus:
+      typeof publicationConvergence.publicationStatus === 'string' ?
+        publicationConvergence.publicationStatus :
+        (typeof publicationConvergence.status === 'string' ?
+          publicationConvergence.status :
+          null),
+    publishedActiveNodeIds: Array.isArray(
+      publicationConvergence.publishedActiveNodeIds,
+    ) ?
+      publicationConvergence.publishedActiveNodeIds :
+      [],
+    pendingAckNodeIds: Array.isArray(
+      publicationConvergence.pendingAckNodeIds,
+    ) ?
+      publicationConvergence.pendingAckNodeIds :
+      [],
+    recoveryProtocolState:
+      typeof publicationConvergence.recoveryProtocolState === 'string' ?
+        publicationConvergence.recoveryProtocolState :
+        null,
+    priorityRecoveryReasonCodes: Array.isArray(
+      publicationConvergence.priorityRecoveryReasonCodes,
+    ) ?
+      publicationConvergence.priorityRecoveryReasonCodes :
+      [],
+    priorityPartitionSummary:
+      publicationConvergence.priorityPartitionSummary &&
+        typeof publicationConvergence.priorityPartitionSummary === 'object' ?
+        publicationConvergence.priorityPartitionSummary :
+        null,
+  } : null;
+  if (!logsTable &&
+      !cdcReplay &&
+      !cdcReplayByPartitionId &&
+      !retainedPublicationConvergence) {
     return null;
   }
   return {
+    ...(retainedPublicationConvergence ?
+      {publicationConvergence: retainedPublicationConvergence} :
+      {}),
     ...(logsTable ? {logsTable} : {}),
     ...(cdcReplay ? {cdcReplay} : {}),
     ...(cdcReplayByPartitionId ? {cdcReplayByPartitionId} : {}),
@@ -388,90 +441,103 @@ async function buildFailureDetails(cluster, details) {
  * @param {Object} [options]
  */
 async function run(cluster, options = {}) {
-  const loadOpsPerSec = Number.isFinite(options.loadOpsPerSec) ?
-    Number(options.loadOpsPerSec) :
+  const scenarioOptions = resolveScenarioOptions(
+    options,
+    cluster,
+    'nodeJoinUnderLoad',
+  );
+  const loadOpsPerSec = Number.isFinite(scenarioOptions.loadOpsPerSec) ?
+    Number(scenarioOptions.loadOpsPerSec) :
     LOAD_OPS_PER_SEC;
-  const loadDuration = typeof options.loadDuration === 'string' &&
-    options.loadDuration.length > 0 ?
-    options.loadDuration :
+  const loadDuration = typeof scenarioOptions.loadDuration === 'string' &&
+    scenarioOptions.loadDuration.length > 0 ?
+    scenarioOptions.loadDuration :
     LOAD_DURATION;
-  const preJoinSettleMs = Number.isFinite(options.preJoinSettleMs) ?
-    Number(options.preJoinSettleMs) :
+  const preJoinSettleMs = Number.isFinite(scenarioOptions.preJoinSettleMs) ?
+    Number(scenarioOptions.preJoinSettleMs) :
     PRE_JOIN_SETTLE_MS;
   const loadReadinessStableWindowMs = Number.isFinite(
-    options.loadReadinessStableWindowMs,
+    scenarioOptions.loadReadinessStableWindowMs,
   ) ?
-    Number(options.loadReadinessStableWindowMs) :
+    Number(scenarioOptions.loadReadinessStableWindowMs) :
     LOAD_READINESS_STABLE_WINDOW_MS;
   const loadReadinessStabilizationTimeoutMs = Number.isFinite(
-    options.loadReadinessStabilizationTimeoutMs,
+    scenarioOptions.loadReadinessStabilizationTimeoutMs,
   ) ?
-    Number(options.loadReadinessStabilizationTimeoutMs) :
+    Number(scenarioOptions.loadReadinessStabilizationTimeoutMs) :
     LOAD_READINESS_STABILIZATION_TIMEOUT_MS;
   const postJoinConvergenceTimeoutMs = Number.isFinite(
-    options.postJoinConvergenceTimeoutMs,
+    scenarioOptions.postJoinConvergenceTimeoutMs,
   ) ?
-    Number(options.postJoinConvergenceTimeoutMs) :
+    Number(scenarioOptions.postJoinConvergenceTimeoutMs) :
     POST_JOIN_CONVERGENCE_TIMEOUT_MS;
   const postJoinActiveTimeoutMs = Number.isFinite(
-    options.postJoinActiveTimeoutMs,
+    scenarioOptions.postJoinActiveTimeoutMs,
   ) ?
-    Number(options.postJoinActiveTimeoutMs) :
+    Number(scenarioOptions.postJoinActiveTimeoutMs) :
     POST_JOIN_ACTIVE_TIMEOUT_MS;
-  const consistencyTimeoutMs = Number.isFinite(options.consistencyTimeoutMs) ?
-    Number(options.consistencyTimeoutMs) :
+  const consistencyTimeoutMs = Number.isFinite(
+    scenarioOptions.consistencyTimeoutMs,
+  ) ?
+    Number(scenarioOptions.consistencyTimeoutMs) :
     CONSISTENCY_TIMEOUT_MS;
   const consistencyPollIntervalMs = Number.isFinite(
-    options.consistencyPollIntervalMs,
+    scenarioOptions.consistencyPollIntervalMs,
   ) ?
-    Number(options.consistencyPollIntervalMs) :
+    Number(scenarioOptions.consistencyPollIntervalMs) :
     CONSISTENCY_POLL_INTERVAL_MS;
   const consistencyForceRepairAfterMs = Number.isFinite(
-    options.consistencyForceRepairAfterMs,
+    scenarioOptions.consistencyForceRepairAfterMs,
   ) ?
-    Number(options.consistencyForceRepairAfterMs) :
+    Number(scenarioOptions.consistencyForceRepairAfterMs) :
     CONSISTENCY_FORCE_REPAIR_AFTER_MS;
-  const maxFailedOperations = Number.isFinite(options.maxFailedOperations) ?
-    Number(options.maxFailedOperations) :
+  const maxFailedOperations = Number.isFinite(
+    scenarioOptions.maxFailedOperations,
+  ) ?
+    Number(scenarioOptions.maxFailedOperations) :
     MAX_FAILED_OPERATIONS;
-  const maxUndispatchedRatio = Number.isFinite(options.maxUndispatchedRatio) ?
-    Number(options.maxUndispatchedRatio) :
+  const maxUndispatchedRatio = Number.isFinite(
+    scenarioOptions.maxUndispatchedRatio,
+  ) ?
+    Number(scenarioOptions.maxUndispatchedRatio) :
     MAX_UNDISPATCHED_RATIO;
-  const maxQueueDelayP95Ms = Number.isFinite(options.maxQueueDelayP95Ms) ?
-    Number(options.maxQueueDelayP95Ms) :
+  const maxQueueDelayP95Ms = Number.isFinite(
+    scenarioOptions.maxQueueDelayP95Ms,
+  ) ?
+    Number(scenarioOptions.maxQueueDelayP95Ms) :
     MAX_QUEUE_DELAY_P95_MS;
   const adaptiveDispatchGuardrailEnabled =
-    options.adaptiveDispatchGuardrailEnabled === undefined ?
+    scenarioOptions.adaptiveDispatchGuardrailEnabled === undefined ?
       ADAPTIVE_DISPATCH_GUARDRAIL_ENABLED :
-      options.adaptiveDispatchGuardrailEnabled === true;
+      scenarioOptions.adaptiveDispatchGuardrailEnabled === true;
   const adaptiveDispatchGuardrailPressureSignalThreshold = Number.isFinite(
-    options.adaptiveDispatchGuardrailPressureSignalThreshold,
+    scenarioOptions.adaptiveDispatchGuardrailPressureSignalThreshold,
   ) ?
-    Number(options.adaptiveDispatchGuardrailPressureSignalThreshold) :
+    Number(scenarioOptions.adaptiveDispatchGuardrailPressureSignalThreshold) :
     ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD;
   const adaptiveDispatchGuardrailQueueDepthThreshold = Number.isFinite(
-    options.adaptiveDispatchGuardrailQueueDepthThreshold,
+    scenarioOptions.adaptiveDispatchGuardrailQueueDepthThreshold,
   ) ?
-    Number(options.adaptiveDispatchGuardrailQueueDepthThreshold) :
+    Number(scenarioOptions.adaptiveDispatchGuardrailQueueDepthThreshold) :
     ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD;
   const adaptiveDispatchGuardrailReductionStepRatio = Number.isFinite(
-    options.adaptiveDispatchGuardrailReductionStepRatio,
+    scenarioOptions.adaptiveDispatchGuardrailReductionStepRatio,
   ) ?
-    Number(options.adaptiveDispatchGuardrailReductionStepRatio) :
+    Number(scenarioOptions.adaptiveDispatchGuardrailReductionStepRatio) :
     ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO;
   const adaptiveDispatchGuardrailMinMaxInFlight = Number.isFinite(
-    options.adaptiveDispatchGuardrailMinMaxInFlight,
+    scenarioOptions.adaptiveDispatchGuardrailMinMaxInFlight,
   ) ?
-    Number(options.adaptiveDispatchGuardrailMinMaxInFlight) :
+    Number(scenarioOptions.adaptiveDispatchGuardrailMinMaxInFlight) :
     ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT;
   const adaptiveDispatchGuardrailRecoveryQuietTicks = Number.isFinite(
-    options.adaptiveDispatchGuardrailRecoveryQuietTicks,
+    scenarioOptions.adaptiveDispatchGuardrailRecoveryQuietTicks,
   ) ?
-    Number(options.adaptiveDispatchGuardrailRecoveryQuietTicks) :
+    Number(scenarioOptions.adaptiveDispatchGuardrailRecoveryQuietTicks) :
     ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS;
-  const requestedTableName = typeof options.tableName === 'string' &&
-    options.tableName.length > ZERO_FAILURES ?
-    options.tableName :
+  const requestedTableName = typeof scenarioOptions.tableName === 'string' &&
+    scenarioOptions.tableName.length > ZERO_FAILURES ?
+    scenarioOptions.tableName :
     '';
   const effectiveLoadTableName = resolvePartitioningLoadTableName(
     cluster,

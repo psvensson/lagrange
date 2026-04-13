@@ -9,6 +9,8 @@
  * multi-node benchmark runs.
  */
 
+import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+
 const BENCHMARK_TABLE = 'benchmark_events';
 const BENCHMARK_TABLE_DDL = [
   'CREATE TABLE IF NOT EXISTS benchmark_events (',
@@ -209,10 +211,13 @@ async function run(cluster) {
   if (!seedNode) {
     throw new Error('No nodes available');
   }
+  const quietWindowMs = Number.isFinite(cluster?._config?.convergence?.quietWindowMs) ?
+    Number(cluster._config.convergence.quietWindowMs) :
+    CONVERGENCE_DEFAULTS.quietWindowMs;
 
   try {
     await cluster.waitForConvergence({
-      quietWindowMs: 5000,
+      quietWindowMs,
       settleTimeoutMs: 120000,
       targetVoterCount: nodes.length,
     });

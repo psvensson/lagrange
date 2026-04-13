@@ -6,6 +6,10 @@ import {LEASE_EVENT} from '../../src/control-plane/lease-service-constants.js';
 import {INVARIANT_EVENT} from '../../src/invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../../src/invariants/invariant-catalog.js';
 import {STATE} from '../../src/constants/index.js';
+import {
+  createMockControlPlaneSystemTableGateway,
+  createQueryBackedControlPlaneSystemTableGateway,
+} from './test-helpers.js';
 
 function createNodeLeaseOwner(disconnectNodeDueToLeaseExpiry) {
   return {
@@ -36,15 +40,28 @@ test('LeaseService does not overlap periodic sweeps when a sweep is still in-fli
     let maxInFlightSweeps = 0;
     const releaseSweeps = [];
 
-    const service = new LeaseService({
-      nodeId: 'node-a',
-      nodeLeaseOwner: createNodeLeaseOwner(
-        async () => ({success: true, partitionResult: {affectedRows: 0}}),
-      ),
+  const service = new LeaseService({
+    nodeId: 'node-a',
+    nodeLeaseOwner: createNodeLeaseOwner(
+      async () => ({success: true, partitionResult: {affectedRows: 0}}),
+    ),
       systemTableCache: {
         getAll: () => [],
       },
-      sqlQueryEngine: {
+    sqlQueryEngine: {
+      executeQuery: async () => {
+        inFlightSweeps += 1;
+        maxInFlightSweeps = Math.max(maxInFlightSweeps, inFlightSweeps);
+        return new Promise((resolve) => {
+            releaseSweeps.push(() => {
+              inFlightSweeps -= 1;
+              resolve({success: true, rows: []});
+          });
+        });
+      },
+    },
+    controlPlaneSystemTableGateway:
+      createQueryBackedControlPlaneSystemTableGateway({
         executeQuery: async () => {
           inFlightSweeps += 1;
           maxInFlightSweeps = Math.max(maxInFlightSweeps, inFlightSweeps);
@@ -55,11 +72,11 @@ test('LeaseService does not overlap periodic sweeps when a sweep is still in-fli
             });
           });
         },
-      },
-      messageGroupServices: new Set([
-        {isLeaderReplica: () => true},
-      ]),
-    });
+      }),
+    messageGroupServices: new Set([
+      {isLeaderReplica: () => true},
+    ]),
+  });
     service.initialize();
     service.sweepIntervalMs = 5;
     service.start();
@@ -149,6 +166,12 @@ test('LeaseService emits sweepError when periodic sweep fails', async (t) => {
         throw new Error('synthetic sweep failure');
       },
     },
+    controlPlaneSystemTableGateway:
+      createQueryBackedControlPlaneSystemTableGateway({
+        executeQuery: async () => {
+          throw new Error('synthetic sweep failure');
+        },
+      }),
     messageGroupServices: new Set([{isLeaderReplica: () => true}]),
     setIntervalFn: (callback) => {
       const handle = {
@@ -241,6 +264,17 @@ test('LeaseService skips stale disconnect when lease was renewed after sweep sna
           }],
         }),
       },
+      controlPlaneSystemTableGateway:
+        createQueryBackedControlPlaneSystemTableGateway({
+          executeQuery: async () => ({
+            success: true,
+            rows: [{
+              ...currentNode,
+              ready_lease_expires_at: now - 1_000,
+              last_heartbeat: now - 2_000,
+            }],
+          }),
+        }),
       messageGroupServices: new Set([
         {isLeaderReplica: () => true},
       ]),
@@ -327,6 +361,24 @@ test('LeaseService sweepExpiredLeases uses injected clock for expiry decisions',
           ],
         }),
       },
+      controlPlaneSystemTableGateway:
+        createQueryBackedControlPlaneSystemTableGateway({
+          executeQuery: async () => ({
+            success: true,
+            rows: [
+              {
+                node_id: 'node-not-expired',
+                ready_lease_expires_at: 101,
+                last_heartbeat: 90,
+              },
+              {
+                node_id: 'node-expired',
+                ready_lease_expires_at: 99,
+                last_heartbeat: 90,
+              },
+            ],
+          }),
+        }),
       messageGroupServices: new Set([
         {isLeaderReplica: () => true},
       ]),
@@ -370,7 +422,7 @@ test('LeaseService sweepExpiredLeases uses injected control-plane ' +
       getAll: () => [],
     },
     controlPlaneSystemTableGateway: {
-      async readRows(tableName, sql, params) {
+      async readAuthoritativeRows(tableName, sql, params) {
         gatewayCalls.push({tableName, sql, params});
         return {
           success: true,

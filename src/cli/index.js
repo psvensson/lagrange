@@ -1288,6 +1288,7 @@ export class AdminCLI {
   updateStatus(message, color = 'white') {
     const mode = this.keyboardHandler?.getMode() || INPUT_MODE.NORMAL;
     let hints = this.helpOverlay.getStatusBarHints(this.currentView);
+    const inputBuffer = this.keyboardHandler.getInputBuffer();
 
     // Add SQL-specific hints when in SQL view
     if (this.currentView === 'sql') {
@@ -1307,15 +1308,11 @@ export class AdminCLI {
         '{cyan-fg}?{/cyan-fg}:Help';
     }
 
-    let statusContent;
-    if (mode === INPUT_MODE.FILTER) {
-      statusContent = ' {yellow-fg}Filter:{/yellow-fg} ' +
-        `${this.keyboardHandler.getInputBuffer()}_`;
-    } else if (mode === INPUT_MODE.COMMAND) {
-      statusContent = ` {yellow-fg}:{/yellow-fg}${this.keyboardHandler.getInputBuffer()}_`;
-    } else {
-      statusContent = ` {${color}-fg}${message}{/${color}-fg}  |  ${hints}`;
-    }
+    const statusContent = mode === INPUT_MODE.FILTER ?
+      ` {yellow-fg}Filter:{/yellow-fg} ${inputBuffer}_` :
+      mode === INPUT_MODE.COMMAND ?
+        ` {yellow-fg}:{/yellow-fg}${inputBuffer}_` :
+        ` {${color}-fg}${message}{/${color}-fg}  |  ${hints}`;
 
     this.statusBar.setContent(statusContent);
     this.screen.render();

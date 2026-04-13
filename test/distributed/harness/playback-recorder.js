@@ -778,6 +778,7 @@ class PlaybackRecorder {
     this._shutdownStartedAt = null;
     this._started = false;
     this._adminReadinessObserved = false;
+    this._topologySnapshotObserved = false;
   }
 
   async start(context = {}) {
@@ -832,6 +833,7 @@ class PlaybackRecorder {
     this._startedAt = Date.now();
     this._started = true;
     this._adminReadinessObserved = false;
+    this._topologySnapshotObserved = false;
     this._shutdownStartedAt = null;
 
     this.recordEvent({
@@ -1025,7 +1027,8 @@ class PlaybackRecorder {
       this._adminReadinessObserved = true;
     }
     if (snapshotNodes.length === 0) {
-      if (!this._adminReadinessObserved) {
+      if (!this._adminReadinessObserved ||
+          !this._topologySnapshotObserved) {
         return;
       }
       this._captureWarning(
@@ -1091,6 +1094,7 @@ class PlaybackRecorder {
 
       this._appendNdjson(this._snapshotsStream, snapshot);
       this._snapshotsCount++;
+      this._topologySnapshotObserved = true;
 
       if (this._previousSnapshot) {
         const events = diffTopologySnapshots(

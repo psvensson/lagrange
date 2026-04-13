@@ -32,23 +32,15 @@ import {SERVICE_PROFILE} from '../constants/service.js';
  * @return {{runtimeKind: string, runtimeRef: string|null, runtimeConfig: string|null}}
  */
 function inferRuntimeFromLegacy(row) {
-  if (row.serviceProfile === SERVICE_PROFILE.SQL_ENGINE) {
-    return {
-      runtimeKind: SQL_ENGINE_RUNTIME_KIND,
-      runtimeRef: null,
-      runtimeConfig: row.runtimeConfig ?? null,
-    };
-  }
-  if (row.handlerFunctionId) {
-    return {
-      runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-      runtimeRef: row.handlerFunctionId,
-      runtimeConfig: row.runtimeConfig ?? null,
-    };
-  }
   return {
-    runtimeKind: RUNTIME_KIND.NATIVE_JS,
-    runtimeRef: null,
+    runtimeKind: row.serviceProfile === SERVICE_PROFILE.SQL_ENGINE ?
+      SQL_ENGINE_RUNTIME_KIND :
+      row.handlerFunctionId ?
+        RUNTIME_KIND.WASM_COMPONENT :
+        RUNTIME_KIND.NATIVE_JS,
+    runtimeRef: row.serviceProfile === SERVICE_PROFILE.SQL_ENGINE ?
+      null :
+      row.handlerFunctionId || null,
     runtimeConfig: row.runtimeConfig ?? null,
   };
 }

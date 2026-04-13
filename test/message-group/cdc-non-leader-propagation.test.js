@@ -15,6 +15,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
   CDC_OPERATION,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -47,6 +50,15 @@ async function waitForCondition(predicate, timeoutMs = 1000, intervalMs = 20) {
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return predicate();
+}
+
+function seedLiveRaftPeersFromPeerAddresses(service) {
+  if (!service?.raft || !Array.isArray(service.peerAddresses)) {
+    return;
+  }
+  service.raft.nodes = service.peerAddresses
+    .filter((address) => typeof address === 'string' && address.length > 0)
+    .map((address) => ({address}));
 }
 
 beforeEach(() => {
@@ -118,6 +130,7 @@ test(
 
       // Provide peer address so buildPeerAddress can resolve the leader
       mg.peerAddresses = ['remote-node/message-group/mg-1-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
 
       // Track forwarding attempts via messageRouter.deliver
       const forwardedPayloads = [];
@@ -225,6 +238,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-retry-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-retry-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -263,6 +277,185 @@ test(
         forwardedPayloads[0].payload.timestamp,
         forwardedPayloads[1].payload.timestamp,
         'retries should preserve CDC event timestamp for deduplication',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent on non-leader MG forwards noisy control-plane metadata on background lane',
+  async (_t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = ['mg-1-r1', 'mg-1-r2'];
+      await mg.subscribeToCDC(SYSTEM_TABLE_NAME.SERVICES);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-1-r2';
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: 3,
+          writable: true,
+          configurable: true,
+        });
+      }
+      mg.resolveCDCForwardSelection = () => ({
+        strictForwarding: true,
+        strictForwardRetryAfterMs: 250,
+        targets: [{
+          serviceId: 'mg-1-r2',
+          address: 'remote-node/message-group/mg-1-r2',
+        }],
+        suppressedCount: 0,
+      });
+      mg.maybeRepairAuthoritativeForwardTopology = async () => false;
+      mg.shouldRepairForwardTopology = () => false;
+      mg.shouldSuppressForwardTarget = () => false;
+
+      const forwardedPayloads = [];
+      router.deliver = async (targetService, payload, options) => {
+        forwardedPayloads.push({targetService, payload, options});
+        return {acknowledged: true};
+      };
+
+      await mg.applyCDCEvent(
+        SYSTEM_TABLE_NAME.SERVICES,
+        CDC_OPERATION.INSERT,
+        {
+          service_id: 'svc-metadata-priority',
+          node_id: 'node-replay-priority',
+          group_id: 'mg-1',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.CONNECTED,
+        },
+      );
+
+      assert.equal(forwardedPayloads.length, 1,
+        'metadata CDC should still forward exactly once to the leader');
+      assert.equal(
+        forwardedPayloads[0].options?.deliveryPriority,
+        'background',
+        'noisy control-plane metadata CDC should use background lane',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent on non-leader MG keeps partition service CDC on the critical lane',
+  async (_t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = ['mg-1-r1', 'mg-1-r2'];
+      await mg.subscribeToCDC(SYSTEM_TABLE_NAME.SERVICES);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-1-r2';
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: 3,
+          writable: true,
+          configurable: true,
+        });
+      }
+      mg.resolveCDCForwardSelection = () => ({
+        strictForwarding: true,
+        strictForwardRetryAfterMs: 250,
+        targets: [{
+          serviceId: 'mg-1-r2',
+          address: 'remote-node/message-group/mg-1-r2',
+        }],
+        suppressedCount: 0,
+      });
+      mg.maybeRepairAuthoritativeForwardTopology = async () => false;
+      mg.shouldRepairForwardTopology = () => false;
+      mg.shouldSuppressForwardTarget = () => false;
+
+      const forwardedPayloads = [];
+      router.deliver = async (targetService, payload, options) => {
+        forwardedPayloads.push({targetService, payload, options});
+        return {acknowledged: true};
+      };
+
+      await mg.applyCDCEvent(
+        SYSTEM_TABLE_NAME.SERVICES,
+        CDC_OPERATION.INSERT,
+        {
+          service_id: 'nodes-p1-r1',
+          partition_id: 'nodes-p1',
+          node_id: 'node-control-plane',
+          group_id: 'mg-1',
+          service_type: SERVICE_TYPE.PARTITION,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.CONNECTED,
+        },
+      );
+
+      assert.equal(forwardedPayloads.length, 1,
+        'partition service CDC should still forward exactly once to the leader');
+      assert.equal(
+        forwardedPayloads[0].options?.deliveryPriority,
+        'critical',
+        'partition service CDC must stay on the critical lane for leader visibility',
       );
     } finally {
       await cleanup();
@@ -405,6 +598,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-retry-cause-id-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-retry-cause-id-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -495,6 +689,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = null;
       mg.peerAddresses = ['remote-node/message-group/mg-unknown-leader-retry-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 5;
@@ -1019,7 +1214,7 @@ test(
 );
 
 test(
-  'applyCDCEvent on non-leader MG forwards via bootstrap peer hints when cache has no leader metadata',
+  'applyCDCEvent on non-leader MG does not fall back to bootstrap peer hints for steady-state forwarding',
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
@@ -1077,18 +1272,21 @@ test(
         return {acknowledged: true, success: true};
       };
 
-      await mg.applyCDCEvent(
-        NON_SYSTEM_CDC_TABLE,
-        'INSERT',
-        {partition_id: 'p-bootstrap-peer-forward'},
-        {timestamp: '1234567890:8'},
+      await t.rejects(
+        () => mg.applyCDCEvent(
+          NON_SYSTEM_CDC_TABLE,
+          'INSERT',
+          {partition_id: 'p-bootstrap-peer-forward'},
+          {timestamp: '1234567890:8'},
+        ),
+        /leader address is unavailable|Unable to resolve unified peer address/i,
+        'steady-state forwarding should fail closed when only bootstrap peer hints remain',
       );
 
-      t.equal(forwardedPayloads.length, 1, 'should forward exactly once');
       t.equal(
-        forwardedPayloads[0]?.address,
-        'remote-node-2/message-group/mg-bootstrap-peer-forward-r2',
-        'should fall back to bootstrap peer hints when cache metadata is absent',
+        forwardedPayloads.length,
+        0,
+        'steady-state forwarding should not attempt delivery through bootstrap peer hints',
       );
     } finally {
       await cleanup();
@@ -1377,6 +1575,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-retry-exhausted-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-retry-exhausted-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -1445,6 +1644,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-nonleader-no-local-apply-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-nonleader-no-local-apply-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 1;
@@ -1579,6 +1779,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-no-handler-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-no-handler-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 1;
 
       let deliverAttempts = 0;
@@ -1876,6 +2077,7 @@ test(
       mg.peerAddresses = [
         'remote-node/message-group/mg-forward-suppress-r2',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 2;
       mg.retryInitialDelayMs = 10;
       mg.retryBackoffMultiplier = 1;
@@ -1960,6 +2162,7 @@ test(
         'remote-node-2/message-group/mg-no-connection-suppress-r2',
         'remote-node-3/message-group/mg-no-connection-suppress-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 1;
       mg.forwardTargetSuppressionMs = 1000;
 
@@ -2077,6 +2280,7 @@ test(
         'remote-node-2/message-group/mg-timeout-suppress-r2',
         'remote-node-3/message-group/mg-timeout-suppress-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 1;
       mg.forwardTargetSuppressionMs = 1000;
 
@@ -2194,6 +2398,7 @@ test(
         'remote-node-2/message-group/mg-backpressure-suppress-r2',
         'remote-node-3/message-group/mg-backpressure-suppress-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 1;
       mg.forwardTargetSuppressionMs = 1000;
 
@@ -2314,6 +2519,7 @@ test(
         'remote-node-2/message-group/mg-all-suppressed-r2',
         'remote-node-3/message-group/mg-all-suppressed-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 3;
       mg.forwardTargetSuppressionMs = 1000;
       const retryDelayAttempts = [];
@@ -2410,6 +2616,7 @@ test(
         'remote-node-2/message-group/mg-retry-suppressed-r2',
         'remote-node-3/message-group/mg-retry-suppressed-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 2;
       mg.retryInitialDelayMs = 1;
       mg.retryBackoffMultiplier = 1;
@@ -2496,6 +2703,7 @@ test(
         'stale-host/message-group/mg-enotfound-suppress-r2',
         'remote-node-3/message-group/mg-enotfound-suppress-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       mg.retryMaxAttempts = 1;
       mg.forwardTargetSuppressionMs = 1000;
 
@@ -2600,6 +2808,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-relay-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-relay-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       if (mg.raft) {
         Object.defineProperty(mg.raft, 'state', {
           value: LifeRaft.FOLLOWER,
@@ -2762,6 +2971,7 @@ test(
       mg.role = 'follower';
       mg.leaderId = 'mg-batch-relay-r2';
       mg.peerAddresses = ['remote-node/message-group/mg-batch-relay-r2'];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       if (mg.raft) {
         Object.defineProperty(mg.raft, 'state', {
           value: LifeRaft.FOLLOWER,
@@ -2859,6 +3069,7 @@ test(
         'remote-node/message-group/mg-relay-stale-r2',
         'remote-node/message-group/mg-relay-stale-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       if (mg.raft) {
         Object.defineProperty(mg.raft, 'state', {
           value: LifeRaft.FOLLOWER,
@@ -2955,6 +3166,7 @@ test(
         'remote-node/message-group/mg-relay-budget-r2',
         'remote-node/message-group/mg-relay-budget-r3',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       if (mg.raft) {
         Object.defineProperty(mg.raft, 'state', {
           value: LifeRaft.FOLLOWER,
@@ -3124,6 +3336,7 @@ test(
       mg.peerAddresses = [
         'remote-node/message-group/mg-err-bound-r2',
       ];
+      seedLiveRaftPeersFromPeerAddresses(mg);
       if (mg.raft) {
         Object.defineProperty(mg.raft, 'state', {
           value: LifeRaft.FOLLOWER,

@@ -790,31 +790,7 @@ class ServiceReconciler extends EventEmitter {
 
     try {
       await this._enforcePlacementPolicy(action, context);
-
-      if (action.type === RECONCILER_ACTION_TYPE.STOP_REPLICA) {
-        decision.result = await this._lifecycleManager.stopReplica(
-          action.replica,
-          {reason: context.reason, driftReason: action.driftReason},
-        );
-      } else if (action.type === RECONCILER_ACTION_TYPE.START_REPLICA) {
-        decision.result = await this._lifecycleManager.startReplica(
-          action.replica,
-          {reason: context.reason, driftReason: action.driftReason},
-        );
-      } else if (action.type === RECONCILER_ACTION_TYPE.CREATE_START_REPLICA) {
-        await this._lifecycleManager.createReplica(
-          {
-            ...action.definition,
-            [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]:
-              resolveReplicaId(action.replica),
-          },
-          {reason: context.reason, driftReason: action.driftReason},
-        );
-        decision.result = await this._lifecycleManager.startReplica(
-          action.replica,
-          {reason: context.reason, driftReason: action.driftReason},
-        );
-      }
+      decision.result = await this._executeLifecycleAction(action, context);
 
       decision.success = true;
     } catch (error) {
@@ -857,6 +833,44 @@ class ServiceReconciler extends EventEmitter {
       this._telemetrySink(decision);
     }
     return decision;
+  }
+
+  /**
+   * Execute one lifecycle action through the canonical action dispatcher.
+   *
+   * @param {Object} action
+   * @param {Object} context
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async _executeLifecycleAction(action, context) {
+    switch (action.type) {
+    case RECONCILER_ACTION_TYPE.STOP_REPLICA:
+      return await this._lifecycleManager.stopReplica(
+        action.replica,
+        {reason: context.reason, driftReason: action.driftReason},
+      );
+    case RECONCILER_ACTION_TYPE.START_REPLICA:
+      return await this._lifecycleManager.startReplica(
+        action.replica,
+        {reason: context.reason, driftReason: action.driftReason},
+      );
+    case RECONCILER_ACTION_TYPE.CREATE_START_REPLICA:
+      await this._lifecycleManager.createReplica(
+        {
+          ...action.definition,
+          [SERVICE_DESCRIPTOR_FIELD.REPLICA_ID]:
+            resolveReplicaId(action.replica),
+        },
+        {reason: context.reason, driftReason: action.driftReason},
+      );
+      return await this._lifecycleManager.startReplica(
+        action.replica,
+        {reason: context.reason, driftReason: action.driftReason},
+      );
+    default:
+      return null;
+    }
   }
 
   /**

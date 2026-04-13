@@ -177,6 +177,8 @@ describe('in-cluster-chaos-injection scenario', () => {
     assert.equal(resolved.actionCount, 3);
     assert.ok(Array.isArray(resolved.actionSet));
     assert.ok(resolved.actionSet.length > 0);
+    assert.equal(resolved.preChaosDelayMs, 1000);
+    assert.equal(resolved.consistencyPollIntervalMs, 250);
     assert.equal(resolved.minSuccessRate, 0.7);
   });
 

@@ -5,6 +5,9 @@
  */
 
 import {EventEmitter} from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
@@ -19,6 +22,7 @@ import {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LOG_MSG,
+  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -130,6 +134,95 @@ function createTrafficReadinessState() {
   };
 }
 
+test('PartitionService requests managed split evaluation from the local ' +
+  'leader after user-table writes', async (t) => {
+  const requests = [];
+  const service = Object.create(PartitionService.prototype);
+  Object.assign(service, {
+    isLeader: true,
+    partitionId: 'tbl-users-p1',
+    tableName: 'users',
+    managedSplitWriteActivityDebounceMs: 5000,
+    lastManagedSplitWriteActivityAtMs: 0,
+    sqlQueryEngine: {
+      partitionSplitMergeManager: {
+        requestEvaluation(context) {
+          requests.push(context);
+        },
+      },
+    },
+  });
+
+  service.requestManagedSplitEvaluationAfterWrite({
+    type: PARTITION_SERVICE_OPERATION.QUERY,
+    sql: 'INSERT INTO users (id) VALUES (?)',
+  });
+  service.requestManagedSplitEvaluationAfterWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+  });
+
+  t.same(
+    requests,
+    [{
+      reasonCode: 'write_activity',
+      tableName: 'users',
+      partitionId: 'tbl-users-p1',
+      partitionIds: ['tbl-users-p1'],
+    }],
+    'leader-local split trigger should be emitted once per debounce window',
+  );
+});
+
+test('PartitionService does not request managed split evaluation for ' +
+  'system-table writes or non-leaders', async (t) => {
+  const requests = [];
+  const nonLeaderService = Object.create(PartitionService.prototype);
+  Object.assign(nonLeaderService, {
+    isLeader: false,
+    partitionId: 'tbl-users-p1',
+    tableName: 'users',
+    managedSplitWriteActivityDebounceMs: 0,
+    lastManagedSplitWriteActivityAtMs: 0,
+    sqlQueryEngine: {
+      partitionSplitMergeManager: {
+        requestEvaluation(context) {
+          requests.push(context);
+        },
+      },
+    },
+  });
+
+  nonLeaderService.requestManagedSplitEvaluationAfterWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+  });
+
+  const systemService = Object.create(PartitionService.prototype);
+  Object.assign(systemService, {
+    isLeader: true,
+    partitionId: INITIAL_PARTITION_IDS.SERVICES,
+    tableName: SYSTEM_TABLE_NAME.SERVICES,
+    managedSplitWriteActivityDebounceMs: 0,
+    lastManagedSplitWriteActivityAtMs: 0,
+    sqlQueryEngine: {
+      partitionSplitMergeManager: {
+        requestEvaluation(context) {
+          requests.push(context);
+        },
+      },
+    },
+  });
+
+  systemService.requestManagedSplitEvaluationAfterWrite({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+  });
+
+  t.same(
+    requests,
+    [],
+    'only user-table leaders may emit split evaluation triggers',
+  );
+});
+
 test('PartitionService - constructor requires partitionId', async (t) => {
   t.throws(() => {
     new PartitionService({tableId: 'test-table', replicaId: 'r1'});
@@ -169,6 +262,77 @@ test('PartitionService - initializes with in-memory database', async (t) => {
 
   await partition.shutdown();
 });
+
+test('PartitionService - repairs legacy sql_transactions replicas by adding transaction columns',
+  async (t) => {
+    const LEGACY_SQL_TRANSACTIONS_SCHEMA = {
+      tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      columns: [
+        {name: 'transaction_id', type: 'TEXT', primaryKey: true},
+        {name: 'session_id', type: 'TEXT', notNull: true},
+        {name: 'status', type: 'TEXT', notNull: true},
+        {name: 'created_at', type: 'INTEGER', notNull: true},
+        {name: 'updated_at', type: 'INTEGER', notNull: true},
+      ],
+    };
+    const CANONICAL_SQL_TRANSACTIONS_SCHEMA = {
+      tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      columns: [
+        {name: 'transaction_id', type: 'TEXT', primaryKey: true},
+        {name: 'session_id', type: 'TEXT', notNull: true},
+        {name: 'status', type: 'TEXT', notNull: true},
+        {name: 'transaction_epoch', type: 'INTEGER'},
+        {name: 'timeout_deadline', type: 'INTEGER'},
+        {name: 'created_at', type: 'INTEGER', notNull: true},
+        {name: 'updated_at', type: 'INTEGER', notNull: true},
+      ],
+    };
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'partition-service-sql-tx-'));
+    const dbPath = path.join(tempDir, 'sql-transactions.db');
+
+    const legacyPartition = new PartitionService({
+      partitionId: 'sql_transactions-p1',
+      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      schema: LEGACY_SQL_TRANSACTIONS_SCHEMA,
+      replicaId: 'sql_transactions-p1-r1',
+      nodeId: 'node-1',
+      dbPath,
+    });
+
+    await legacyPartition.initialize();
+    await legacyPartition.shutdown();
+
+    const repairedPartition = new PartitionService({
+      partitionId: 'sql_transactions-p1',
+      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      schema: CANONICAL_SQL_TRANSACTIONS_SCHEMA,
+      replicaId: 'sql_transactions-p1-r1',
+      nodeId: 'node-1',
+      dbPath,
+    });
+
+    try {
+      await repairedPartition.initialize();
+      const columns = repairedPartition.db
+        .prepare(`PRAGMA table_info(${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS})`)
+        .all()
+        .map((column) => column.name);
+
+      t.ok(
+        columns.includes('transaction_epoch'),
+        'legacy sql_transactions replicas should add the transaction_epoch column during initialization',
+      );
+      t.ok(
+        columns.includes('timeout_deadline'),
+        'legacy sql_transactions replicas should add the timeout_deadline column during initialization',
+      );
+    } finally {
+      await repairedPartition.shutdown();
+      fs.rmSync(tempDir, {recursive: true, force: true});
+    }
+  });
 
 test('PartitionService - suppresses lifecycle logs and emits stage callbacks', async (t) => {
   const stageEvents = [];
@@ -1286,6 +1450,129 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
     await partition.shutdown();
   });
 
+test('PartitionService - includes WAL bytes in file-backed partition size',
+  async (t) => {
+    const tmpDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'partition-size-wal-'),
+    );
+    const dbPath = path.join(tmpDir, 'partition.db');
+    const partition = new PartitionService({
+      partitionId: 'test-partition-size-wal',
+      tableId: 'size_wal_test',
+      tableName: 'size_wal_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'payload', type: 'TEXT'},
+        ],
+      },
+      dbPath,
+    });
+
+    try {
+      await partition.initialize();
+      await partition.insertData('size_wal_test', {
+        id: 'row-1',
+        payload: 'x'.repeat(32768),
+      });
+      await partition.updatePartitionSize();
+
+      const dbSize = fs.statSync(dbPath).size;
+      const walPath = `${dbPath}-wal`;
+      const walSize = fs.existsSync(walPath) ? fs.statSync(walPath).size : 0;
+
+      t.ok(walSize > 0, 'test should exercise WAL-backed growth');
+      t.equal(
+        partition.getSize(),
+        dbSize + walSize,
+        'partition size should include the main DB and WAL files',
+      );
+    } finally {
+      await partition.shutdown();
+      fs.rmSync(tmpDir, {recursive: true, force: true});
+    }
+  });
+
+test('PartitionService - retries retryable partition size persistence pressure',
+  async (t) => {
+    const updates = [];
+    let attempts = 0;
+    const systemTableCache = new SystemTableCache();
+    const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
+    });
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      [COLUMN.SERVICE_ID]: 'partitions-leader',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
+    });
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+      [COLUMN.PARTITION_ID]: 'test-partition-size-retry',
+      [COLUMN.TABLE_ID]: 'size_retry_test',
+      size_bytes: 0,
+    });
+    const partition = new PartitionService({
+      partitionId: 'test-partition-size-retry',
+      tableId: 'size_retry_test',
+      tableName: 'size_retry_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'payload', type: 'TEXT'},
+        ],
+      },
+      dbPath: ':memory:',
+      cdcIntegrationService: {},
+      systemTableCache,
+    });
+
+    await partition.initialize();
+    partition.controlPlaneSystemTableGateway = {
+      async submitMutation(mutation) {
+        attempts += 1;
+        if (attempts === 1) {
+          return {
+            success: false,
+            error: 'control_plane_pressure_degraded',
+            retryAfterMs: 0,
+          };
+        }
+        updates.push(mutation);
+        return {success: true};
+      },
+    };
+
+    await partition.insertData('size_retry_test', {
+      id: 'row-1',
+      payload: 'x'.repeat(2048),
+    });
+    await partition.updatePartitionSize();
+
+    t.equal(attempts, 2,
+      'should retry one retryable size persistence failure');
+    t.equal(updates.length, 1,
+      'should eventually persist size update after retry');
+    t.equal(updates[0].tableName, TABLES.PARTITIONS);
+    t.equal(
+      updates[0].whereClause.partition_id,
+      'test-partition-size-retry',
+    );
+    t.ok(updates[0].data.size_bytes > 0);
+
+    await partition.shutdown();
+  });
+
 test('PartitionService - queues source writes during split backfill and suppresses target echoes',
   async (t) => {
     const mirroredWrites = [];
@@ -1719,50 +2006,50 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
 
 test('PartitionService - append-fail peer writes prefer target priority over ' +
   'sender address', async (t) => {
-    const deliveries = [];
-    const mockTransport = {
-      register: () => {},
-      unregister: () => {},
-      deliver: async (_address, _payload, options) => {
-        deliveries.push(options);
-        return {acknowledged: true};
-      },
-    };
+  const deliveries = [];
+  const mockTransport = {
+    register: () => {},
+    unregister: () => {},
+    deliver: async (_address, _payload, options) => {
+      deliveries.push(options);
+      return {acknowledged: true};
+    },
+  };
 
-    const partition = new PartitionService({
-      partitionId: 'tbl-bench-p1',
-      tableId: 'tbl-bench',
-      replicaId: 'tbl-bench-p1-r1',
-      replicaIds: ['tbl-bench-p1-r1', 'tbl-bench-p1-r2'],
-      peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
-      transport: mockTransport,
-      dbPath: ':memory:',
+  const partition = new PartitionService({
+    partitionId: 'tbl-bench-p1',
+    tableId: 'tbl-bench',
+    replicaId: 'tbl-bench-p1-r1',
+    replicaIds: ['tbl-bench-p1-r1', 'tbl-bench-p1-r2'],
+    peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
+    transport: mockTransport,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  try {
+    await new Promise((resolve, reject) => {
+      partition.raft.nodes[0].write({
+        type: 'append fail',
+        term: 1,
+        address: 'node-1/partition/control_plane_publications-p1-r1',
+        leader: 'node-1/partition/control_plane_publications-p1-r1',
+        state: 1,
+        last: {term: 1, index: 1},
+        data: {index: 2, term: 1},
+      }, (error) => error ? reject(error) : resolve());
     });
 
-    await partition.initialize();
-
-    try {
-      await new Promise((resolve, reject) => {
-        partition.raft.nodes[0].write({
-          type: 'append fail',
-          term: 1,
-          address: 'node-1/partition/control_plane_publications-p1-r1',
-          leader: 'node-1/partition/control_plane_publications-p1-r1',
-          state: 1,
-          last: {term: 1, index: 1},
-          data: {index: 2, term: 1},
-        }, (error) => error ? reject(error) : resolve());
-      });
-
-      t.same(
-        deliveries,
-        [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
-        'append-fail replication should follow the target partition lane',
-      );
-    } finally {
-      await partition.shutdown();
-    }
-  });
+    t.same(
+      deliveries,
+      [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
+      'append-fail replication should follow the target partition lane',
+    );
+  } finally {
+    await partition.shutdown();
+  }
+});
 
 test('PartitionService - non-critical Raft responses use background delivery',
   async (t) => {
@@ -2094,6 +2381,36 @@ test('PartitionService - emits leaderElected event for single replica', async (t
   t.equal(leaderEvent.partitionId, 'test-partition-20', 'Partition ID should match');
 
   await partition.shutdown();
+});
+
+test('PartitionService - single-replica initialization fails closed without raft change()', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-20-missing-change',
+    tableId: 'leader_event_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+  const originalMaybeInitializeRebalancer =
+    partition.maybeInitializeRebalancer.bind(partition);
+  partition.maybeInitializeRebalancer = function(...args) {
+    const result = originalMaybeInitializeRebalancer(...args);
+    if (this.raft) {
+      this.raft.change = undefined;
+    }
+    return result;
+  };
+
+  try {
+    await t.rejects(
+      partition.initialize(),
+      /single-replica leadership requires raft\.change/,
+      'single-replica initialization should fail instead of mutating local leader state without raft ownership',
+    );
+  } finally {
+    await partition.shutdown().catch(() => {});
+  }
 });
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
@@ -3839,6 +4156,124 @@ test(
       partition.learnerPromotionTimer,
       null,
       'successful overflow promotion should not reschedule',
+    );
+  },
+);
+
+test(
+  'PartitionService - priority recovery promotes replacement-owned learners even when voters are already target+2',
+  async (t) => {
+    const partitionId = `${SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS}-p1`;
+    const readinessState = createTrafficReadinessState();
+    readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+      ready: false,
+      reasons: [LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING],
+    });
+
+    const mockCache = {
+      get: (tableName, key) => {
+        if (tableName === TABLES.PARTITIONS && key === partitionId) {
+          return {
+            partition_id: partitionId,
+            replica_count: 3,
+          };
+        }
+        return null;
+      },
+      filter: (tableName, predicate) => {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: partitionId,
+            replica_count: 3,
+          }].filter(predicate);
+        }
+        if (tableName === TABLES.SERVICES) {
+          const services = [
+            {
+              service_id: 'replica-1',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+            },
+            {
+              service_id: 'replica-2',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-3',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-4',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-5',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-6',
+              partition_id: partitionId,
+              service_type: SERVICE_TYPE.PARTITION,
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'learner',
+            },
+          ];
+          return services.filter(predicate);
+        }
+        if (tableName === TABLES.REPLICA_OPERATIONS) {
+          const operations = [{
+            operation_id: 'op-replace-6',
+            type: OperationType.REPLACE,
+            partition_id: partitionId,
+            target_node_id: 'node-6',
+            status: ReplicaStatus.SYNCING,
+          }];
+          return operations.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId,
+      tableId: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      replicaId: 'replica-6',
+      replicaIds: ['replica-6'],
+      nodeId: 'node-6',
+      dbPath: ':memory:',
+      isJoiningExistingGroup: false,
+      bootstrapReadinessState: readinessState,
+      systemTableCache: mockCache,
+    });
+
+    partition.role = RaftRole.LEARNER;
+    partition.leaderId = 'replica-1';
+
+    partition.checkLearnerPromotion();
+
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'priority recovery should not deadlock when replacement-owned learners must promote above target to unblock removals',
+    );
+    t.equal(
+      partition.learnerPromotionTimer,
+      null,
+      'successful bounded overflow promotion should not reschedule',
     );
   },
 );

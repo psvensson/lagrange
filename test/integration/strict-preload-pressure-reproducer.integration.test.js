@@ -133,7 +133,7 @@ function createLoadGeneratorFactory() {
 
 function createPressureCluster(options = {}) {
   const quietModeEnabled = options.quietModeEnabled === true;
-  let preflightAdmitted = false;
+  let serviceDiscoveryCallCount = ZERO;
 
   function createNodeHandle(nodeId, role) {
     return {
@@ -145,9 +145,6 @@ function createPressureCluster(options = {}) {
           return {rows: [{value: 1}]};
         }
         if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
-          if (!preflightAdmitted) {
-            preflightAdmitted = true;
-          }
           return {rows: [{count: 0}]};
         }
         if (statement.includes('FROM replica_operations') &&
@@ -180,12 +177,14 @@ function createPressureCluster(options = {}) {
         }
         if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
             statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
-          if (!preflightAdmitted) {
+          const isInitialDiscoveryCall = serviceDiscoveryCallCount === ZERO;
+          serviceDiscoveryCallCount += 1;
+          if (quietModeEnabled) {
             return {
               rows: [buildServiceDiscoverySnapshot(this.id)],
             };
           }
-          if (quietModeEnabled) {
+          if (isInitialDiscoveryCall) {
             return {
               rows: [buildServiceDiscoverySnapshot(this.id)],
             };
@@ -231,6 +230,7 @@ function createPressureCluster(options = {}) {
         quiescentTimeoutMs: 140,
         quiescentPollIntervalMs: 5,
         quiescentStableWindowMs: 0,
+        quiescentNoProgressTimeoutMs: 200,
       },
       nodeClient: {
         channelPolicies: {

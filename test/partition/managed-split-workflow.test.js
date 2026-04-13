@@ -21,6 +21,9 @@ import {
   STORAGE_ADMISSION_OPERATION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from '../../src/rebalancer/storage-admission-constants.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+} from '../../src/control-plane/timeout-budget.js';
 
 function createAdmissionResult(overrides = {}) {
   return {
@@ -627,16 +630,24 @@ test('ManagedSplitWorkflow uses source-routable nodes when active target ' +
   t.same(
     provisionCalls.map((context) => ({
       targetNodeIds: context.targetNodeIds,
+      admissionTargetNodeIds:
+        context.admissionConvergence?.candidateTargetNodeIds,
+      admittedTargetNodeIds:
+        context.admissionConvergence?.admittedTargetNodeIds,
       routingReadinessDimension: context.routingReadinessDimension,
     })),
     [
       {
         targetNodeIds: ['node-a', 'node-b'],
+        admissionTargetNodeIds: ['node-a', 'node-b'],
+        admittedTargetNodeIds: ['node-a', 'node-b'],
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       },
       {
         targetNodeIds: ['node-a', 'node-b'],
+        admissionTargetNodeIds: ['node-a', 'node-b'],
+        admittedTargetNodeIds: ['node-a', 'node-b'],
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       },
@@ -1246,6 +1257,65 @@ test('ManagedSplitWorkflow defers retryable post-admission provisioning ' +
   );
 });
 
+test('ManagedSplitWorkflow defers timeout-classified post-admission ' +
+  'provisioning failures instead of persisting terminal failed state',
+async (t) => {
+  const {
+    workflow,
+    updateCalls,
+  } = buildWorkflow({
+    provisionInitialTablePartition: async ({partitionId}) => {
+      if (partitionId !== 'users-p-right') {
+        return;
+      }
+      const error = new Error(
+        'Timed out waiting for routable partition service for partition ' +
+        partitionId,
+      );
+      error.timeoutClassification = {
+        classification:
+          TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+      };
+      throw error;
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, false);
+  t.equal(result.state, PARTITION_TRANSITION_STATE.DEFERRED);
+  t.notOk(
+    updateCalls.find((entry) =>
+      entry.data.partition_transition_state ===
+        PARTITION_TRANSITION_STATE.FAILED,
+    ),
+    'retryable provisioning timeouts must not persist terminal failed state',
+  );
+  const deferredUpdate = updateCalls.find((entry) =>
+    entry.data.partition_transition_state ===
+      PARTITION_TRANSITION_STATE.DEFERRED,
+  );
+  t.ok(
+    deferredUpdate,
+    'retryable provisioning timeouts should persist deferred state',
+  );
+  const deferredMetadata = JSON.parse(
+    deferredUpdate.data.partition_transition_metadata,
+  );
+  t.equal(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.FAILURE
+    ].classification,
+    'split_child_provisioning_deferred',
+  );
+  t.equal(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.FAILURE
+    ].decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+  );
+});
+
 test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
   'on deferred retries instead of rebuilding a new split plan', async (t) => {
   const existingWorkflowId = 'split-tbl-users-users-p1-v2';
@@ -1347,6 +1417,120 @@ test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
     provisionCalls.map((call) => call.partitionId),
     ['users-p-left', 'users-p-right'],
     'retry should provision the persisted split child IDs',
+  );
+});
+
+test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
+  'on retryable failed execution transitions', async (t) => {
+  const existingWorkflowId = 'split-tbl-users-users-p1-v2';
+  const existingTransition = {
+    state: PARTITION_TRANSITION_STATE.FAILED,
+    metadata: {
+      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID]:
+        existingWorkflowId,
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 2,
+      [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: 'm',
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
+        'users-p-left',
+        'users-p-right',
+      ],
+      [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
+        classification: 'split_execution_failure',
+        message:
+          'Timed out waiting for routable partition service for partition ' +
+          'users-p-right',
+        timeoutClassification: {
+          classification:
+            TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+        },
+      },
+    },
+  };
+  const sourcePartition = {
+    partition_id: 'users-p1',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: null,
+    partition_key_end: null,
+    partition_version: 1,
+    replica_count: 3,
+    leader_node_id: 'node-a',
+    size_bytes: 128,
+  };
+  const leftPartition = {
+    partition_id: 'users-p-left',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: null,
+    partition_key_end: 'm',
+    partition_version: 2,
+    replica_count: 3,
+    leader_node_id: null,
+    size_bytes: 0,
+  };
+  const rightPartition = {
+    partition_id: 'users-p-right',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: 'm',
+    partition_key_end: null,
+    partition_version: 2,
+    replica_count: 3,
+    leader_node_id: null,
+    size_bytes: 0,
+  };
+  const insertCalls = [];
+  const {
+    workflow,
+    provisionCalls,
+  } = buildWorkflow({
+    getPartitionInfo: (partitionId) => {
+      switch (partitionId) {
+      case 'users-p1':
+        return sourcePartition;
+      case 'users-p-left':
+        return leftPartition;
+      case 'users-p-right':
+        return rightPartition;
+      default:
+        return null;
+      }
+    },
+    getTableInfo: () => ({
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key: 'id',
+      active_partition_version: 1,
+      partition_transition_state: PARTITION_TRANSITION_STATE.FAILED,
+      partition_transition_metadata: JSON.stringify(existingTransition.metadata),
+    }),
+    parsePartitionTransition: () => existingTransition,
+    buildManagedSplitPlan: async () => {
+      t.fail('retryable failed execution should reuse persisted split plan metadata');
+    },
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {success: true, affectedRows: 1};
+      },
+      async insertSystemTableRow(tableName, row) {
+        insertCalls.push({tableName, row});
+        return {success: true};
+      },
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, true);
+  t.equal(
+    insertCalls.length,
+    0,
+    'retryable failed execution should not reinsert child partition metadata when rows already exist',
+  );
+  t.same(
+    provisionCalls.map((call) => call.partitionId),
+    ['users-p-left', 'users-p-right'],
+    'retryable failed execution should provision the persisted split child IDs',
   );
 });
 

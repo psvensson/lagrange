@@ -237,14 +237,11 @@ class CallbackExecutionHost {
     }
 
     // 5. Determine aggregate state
-    let state;
-    if (wasCancelled) {
-      state = STAGE_STATE.CANCELLED;
-    } else if (hasFailure) {
-      state = STAGE_STATE.FAILED;
-    } else {
-      state = STAGE_STATE.COMPLETED;
-    }
+    const state = wasCancelled ?
+      STAGE_STATE.CANCELLED :
+      hasFailure ?
+        STAGE_STATE.FAILED :
+        STAGE_STATE.COMPLETED;
 
     const stageResult = {
       partitionResults,

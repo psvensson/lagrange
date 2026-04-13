@@ -2,25 +2,29 @@ import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
-function createMockSystemCache() {
+function createMockSystemCache(tableName = SYSTEM_TABLE_NAME.SERVICES) {
+  const primaryKey = tableName === SYSTEM_TABLE_NAME.LOGS ?
+    'log_id' :
+    'service_id';
+  const partitionId = `${tableName}-p1`;
   const tables = [{
-    table_name: SYSTEM_TABLE_NAME.SERVICES,
-    primaryKey: 'service_id',
+    table_name: tableName,
+    primaryKey,
   }];
   const partitions = [{
-    partition_id: 'services-p1',
-    table_name: SYSTEM_TABLE_NAME.SERVICES,
+    partition_id: partitionId,
+    table_name: tableName,
     partition_key_start: null,
     partition_key_end: null,
     leader_node_id: 'test-node',
   }];
   const services = [{
-    service_id: 'services-p1',
+    service_id: partitionId,
     service_type: 'partition',
-    partition_id: 'services-p1',
+    partition_id: partitionId,
     node_id: 'test-node',
     raft_role: 'leader',
-    address: 'test-node/partition/services-p1',
+    address: `test-node/partition/${partitionId}`,
     status: 'active',
   }];
 
@@ -94,7 +98,7 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
     });
 
     const result = await engine.executeQuery(
-      "SELECT * FROM services WHERE service_type = 'partition'",
+      'SELECT * FROM services WHERE service_type = \'partition\'',
     );
 
     t.equal(result.success, true, 'should succeed from local authoritative rows');
@@ -147,16 +151,58 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     });
 
     const result = await engine.executeQuery(
-      "SELECT * FROM services WHERE service_type = 'partition'",
+      'SELECT * FROM services WHERE service_type = \'partition\'',
     );
 
     t.equal(result.success, true, 'shared authoritative view should satisfy the read');
     t.equal(authoritativeReads.length, 1, 'SQL fast path should delegate to the shared read owner');
     t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.SERVICES);
     t.equal(authoritativeReads[0].options.allowSqlFallback, false);
-    t.equal(deliveries.length, 0, 'shared authoritative reads should still bypass routed delivery');
+    t.equal(deliveries.length, 0,
+      'shared authoritative reads should still bypass routed delivery');
     t.equal(result.rows.length, 1);
   });
+
+test('SQLQueryEngine - bounded system-table primary-key lookups confirm ' +
+  'empty local reads through the owner lane', async (t) => {
+  const authoritativeReads = [];
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache(SYSTEM_TABLE_NAME.LOGS),
+    authoritativeControlPlaneView: {
+      async readRows(tableName, sql, params, options) {
+        authoritativeReads.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{ack_id: 'log-1'}],
+          rowCount: 1,
+          source: 'owner_rpc_lane',
+        };
+      },
+    },
+  });
+
+  const result = await engine.executeQuery(
+    'SELECT log_id AS ack_id FROM logs WHERE log_id IN (\'log-1\', \'log-2\')',
+  );
+
+  t.equal(result.success, true,
+    'bounded system-table lookup should still succeed');
+  t.equal(authoritativeReads.length, 1,
+    'bounded lookup should route through the authoritative read owner');
+  t.equal(authoritativeReads[0].tableName, SYSTEM_TABLE_NAME.LOGS);
+  t.equal(
+    authoritativeReads[0].options.confirmEmptyLocalReadWithOwnerRpc,
+    true,
+    'bounded primary-key lookups should confirm empty local reads via owner RPC',
+  );
+  t.equal(
+    authoritativeReads[0].options.replicaFallbackConsistency,
+    'any_replica',
+    'bounded primary-key lookups should still allow local replica reads first',
+  );
+  t.same(result.rows, [{ack_id: 'log-1'}],
+    'bounded lookup should return the authoritative rows');
+});
 
 test('SQLQueryEngine - routed system-table queries default to critical delivery priority',
   async (t) => {
@@ -177,11 +223,12 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
     });
 
     const result = await engine.executeQuery(
-      "SELECT * FROM services WHERE service_type = 'partition'",
+      'SELECT * FROM services WHERE service_type = \'partition\'',
     );
 
     t.equal(result.success, true, 'routed system-table query should succeed');
-    t.equal(deliveries.length > 0, true, 'system-table query should route through the message router');
+    t.equal(deliveries.length > 0, true,
+      'system-table query should route through the message router');
     t.equal(
       deliveries[0]?.options?.deliveryPriority,
       'critical',

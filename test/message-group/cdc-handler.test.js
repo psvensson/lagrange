@@ -460,6 +460,53 @@ test(
   },
 );
 
+test(
+  'CDCHandler - interleaved events for different keys do not trigger out-of-order warnings',
+  async (t) => {
+    const handler = new CDCHandler(cache, {bufferSize: 10});
+    handler.initialize();
+    handler.subscribe('nodes');
+
+    const warnings = [];
+    handler.logger = {
+      debug() {},
+      error() {},
+      warn(message, metadata) {
+        warnings.push({message, metadata});
+      },
+    };
+
+    const olderTimestamp = hlcClock.now().toString();
+    const newerTimestamp = hlcClock.now().toString();
+
+    handler.applyImmediate({
+      tableName: 'nodes',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {id: 'node-a', status: 'active'},
+      timestamp: newerTimestamp,
+    });
+    handler.applyImmediate({
+      tableName: 'nodes',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {id: 'node-b', status: 'active'},
+      timestamp: olderTimestamp,
+    });
+
+    t.equal(
+      warnings.length,
+      0,
+      'different-row CDC interleaving should not be logged as out-of-order churn',
+    );
+    t.equal(
+      handler.getLastAppliedTimestamp('nodes'),
+      newerTimestamp,
+      'table-level high-water mark should still remain monotonic',
+    );
+
+    handler.shutdown();
+  },
+);
+
 test('CDCHandler - auto-flush when buffer full', async (t) => {
   const handler = new CDCHandler(cache, {bufferSize: 2});
   handler.initialize();

@@ -1,6 +1,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import os from 'os';
 import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+  parseAddressPartsResult,
   resolveAdvertisedWebSocketAddress,
   resolveNodeWebSocketAddress,
 } from '../../src/transport/node-address-resolution.js';
@@ -20,7 +24,9 @@ test('resolveAdvertisedWebSocketAddress preserves explicit websocket address',
     );
   });
 
-test('resolveAdvertisedWebSocketAddress prefers routable local interface for wildcard-bound hostname nodes',
+test(
+  'resolveAdvertisedWebSocketAddress prefers routable local interface for ' +
+    'wildcard-bound hostname nodes',
   async (t) => {
     const originalNetworkInterfaces = os.networkInterfaces;
     os.networkInterfaces = () => ({
@@ -47,6 +53,30 @@ test('resolveAdvertisedWebSocketAddress prefers routable local interface for wil
     } finally {
       os.networkInterfaces = originalNetworkInterfaces;
     }
+  },
+);
+
+test('parseAddressPartsResult keeps websocket protocol, host, and port for URLs',
+  async (t) => {
+    t.same(
+      parseAddressPartsResult('ws://[2001:db8::1]:8082'),
+      {
+        state: 'parsed',
+        host: {
+          state: 'present',
+          value: '2001:db8::1',
+        },
+        port: {
+          state: 'present',
+          value: 8082,
+        },
+        protocol: {
+          state: 'present',
+          value: 'ws:',
+        },
+      },
+      'parsed websocket URLs should preserve protocol, host, and port',
+    );
   });
 
 test('resolveNodeWebSocketAddress uses authoritative node_endpoints rows',
@@ -69,9 +99,15 @@ test('resolveNodeWebSocketAddress uses authoritative node_endpoints rows',
       },
     });
 
-    t.equal(
+    t.same(
       resolvedAddress,
-      'ws://172.20.0.11:8082',
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+        address: 'ws://172.20.0.11:8082',
+        source:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE
+            .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS,
+      },
       'node_endpoints snapshot should be the canonical peer websocket authority',
     );
   });
@@ -90,9 +126,14 @@ test('resolveNodeWebSocketAddress returns null without canonical websocket metad
       },
     });
 
-    t.equal(
+    t.same(
       resolvedAddress,
-      null,
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.UNAVAILABLE,
+        reason:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON
+            .CANONICAL_METADATA_MISSING,
+      },
       'node_address alone should not be treated as peer websocket authority',
     );
   });
@@ -120,9 +161,13 @@ test('resolveNodeWebSocketAddress reads canonical websocket metadata from cache'
       },
     });
 
-    t.equal(
+    t.same(
       resolvedAddress,
-      'ws://172.20.0.12:8082',
+      {
+        state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
+        address: 'ws://172.20.0.12:8082',
+        source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.CACHE_NODE_ENDPOINTS,
+      },
       'cache-backed node_endpoints rows should resolve peer websocket addresses',
     );
   });

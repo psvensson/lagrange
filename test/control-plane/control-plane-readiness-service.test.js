@@ -448,6 +448,61 @@ test('ControlPlaneReadinessService uses injected owners for async shared metadat
     t.equal(cacheFilterCalls, 0, 'async owner path should not use cache.filter');
   });
 
+test('ControlPlaneReadinessService accepts single-row owner reads that return ' +
+  'plain rows instead of envelopes', async (t) => {
+    const nodeRow = createActiveNode('node-1');
+    const serviceRow = createMessageGroupService('node-1');
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-1',
+      systemTableCache: {
+        get() {
+          throw new Error('direct cache get should not be used');
+        },
+        getAll() {
+          throw new Error('direct cache getAll should not be used');
+        },
+        filter() {
+          throw new Error('direct cache filter should not be used');
+        },
+        onCacheChange() {},
+      },
+      nodesOwner: {
+        async getNode(_nodeId) {
+          return nodeRow;
+        },
+      },
+      servicesOwner: {
+        async listServices() {
+          return {
+            success: true,
+            rows: [serviceRow],
+          };
+        },
+      },
+      storageAccountingService: createAccountingService({
+        'node-1': {
+          nodeId: 'node-1',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness('node-1', {
+      allowAuthoritativeRefresh: true,
+    });
+
+    t.equal(readiness.dimensions.routingReady, true);
+    t.equal(readiness.dimensions.controlPlaneWritable, true);
+  });
+
 test('ControlPlaneReadinessService reuses one owner-key evaluation for ' +
   'concurrent readiness reads', async (t) => {
   let releaseCapacityRead;
@@ -3083,11 +3138,13 @@ test('ControlPlaneReadinessService clears priority control-plane recovery mode a
 
 test('ControlPlaneReadinessService exposes a normalized membership publication planning snapshot',
   (t) => {
+    let planningPublicationReadOptions = null;
     const readinessService = new ControlPlaneReadinessService({
       nodeId: 'node-planning-snapshot',
       systemTableCache: createCache(),
       membershipPublicationService: {
-        getLatestPublicationForNodeSync() {
+        getLatestPublicationForNodeSync(_nodeId, options = {}) {
+          planningPublicationReadOptions = options;
           return {
             publicationEpoch: 21,
             status: 'PUBLISHED',
@@ -3114,10 +3171,307 @@ test('ControlPlaneReadinessService exposes a normalized membership publication p
     t.equal(snapshot?.publicationExcludesTargetNode, false);
     t.equal(snapshot?.publishedMembershipIncludesTargetNode, true);
     t.equal(snapshot?.publishedPlanningEpoch, 21);
+    t.equal(
+      snapshot?.recoveryProtocolState,
+      'priority_spread_pending',
+      'planning snapshots should surface the shared recovery protocol phase',
+    );
+    t.match(
+      snapshot?.targetParticipation,
+      {
+        nodeId: 'node-planning-snapshot',
+        state: 'published_active',
+      },
+      'planning snapshots should expose the target node participation state',
+    );
+    t.equal(
+      planningPublicationReadOptions?.preferAuthoritativeRead,
+      true,
+      'planning snapshots should use authoritative reads for membership publication',
+    );
+    t.equal(
+      planningPublicationReadOptions?.preferOwnerRpcRead,
+      true,
+      'planning snapshots should prefer owner-rpc membership publication reads',
+    );
+    t.equal(
+      planningPublicationReadOptions?.requireOwnerRpcRead,
+      false,
+      'planning snapshots should degrade to cache followers when owner-rpc becomes unavailable',
+    );
+    t.equal(
+      planningPublicationReadOptions?.localReadConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+      'planning snapshots should keep local leader for the baseline read',
+    );
+    t.equal(
+      planningPublicationReadOptions?.replicaFallbackConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      'planning snapshots should fallback to any replica when needed',
+    );
+    t.equal(
+      planningPublicationReadOptions?.workClass,
+      'control-plane-planning',
+      'planning snapshot reads should be tagged for planning work class',
+    );
+    t.equal(
+      planningPublicationReadOptions?.queryTimeoutMs,
+      NUM.THOUSAND,
+      'planning snapshots should use the readiness-bound membership read timeout',
+    );
     t.same(
       snapshot?.priorityRecoveryReasonCodes,
       [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD],
       'planning snapshot should preserve shared publication-recovery reasons',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService prefers the async planning snapshot when it arrives within the best-effort budget',
+  async (t) => {
+    let planningPublicationReadOptions = null;
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-best-effort-async',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        async getLatestPublicationForNode(_nodeId, options = {}) {
+          planningPublicationReadOptions = options;
+          return {
+            publicationEpoch: 22,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-best-effort-async'],
+          };
+        },
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 21,
+            status: 'PUBLISHED',
+            createdAt: 1100,
+            publishedActiveNodeIds: ['node-best-effort-async'],
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const snapshot =
+      await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+        'node-best-effort-async',
+        1500,
+      );
+
+    t.equal(
+      snapshot?.publishedPlanningEpoch,
+      22,
+      'best-effort planning should use the fresher async owner snapshot when it is available',
+    );
+    t.equal(
+      planningPublicationReadOptions?.preferAuthoritativeRead,
+      true,
+      'best-effort planning reads should preserve the authoritative read preference for planning',
+    );
+    t.equal(
+      planningPublicationReadOptions?.preferOwnerRpcRead,
+      true,
+      'best-effort planning reads should prefer owner-RPC access for freshness',
+    );
+    t.equal(
+      planningPublicationReadOptions?.requireOwnerRpcRead,
+      false,
+      'best-effort planning reads should tolerate owner fallback when the owner path is not fully available',
+    );
+    t.equal(
+      planningPublicationReadOptions?.localReadConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+      'best-effort planning reads should read from local leaders where available',
+    );
+    t.equal(
+      planningPublicationReadOptions?.replicaFallbackConsistency,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      'best-effort planning reads should allow any-replica fallback when the leader path is unavailable',
+    );
+    t.equal(
+      planningPublicationReadOptions?.workClass,
+      'control-plane-planning',
+      'best-effort planning reads should be labeled with the planning work class',
+    );
+    t.equal(
+      planningPublicationReadOptions?.queryTimeoutMs,
+      NUM.THOUSAND,
+      'best-effort planning reads should use the readiness planning budget for owner read timeout',
+    );
+  });
+
+test('ControlPlaneReadinessService falls back to the sync planning snapshot when the best-effort refresh times out',
+  async (t) => {
+    const timeoutHandle = {id: 'planning-timeout'};
+    let clearedHandle = null;
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-best-effort-timeout',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        async getLatestPublicationForNode() {
+          return new Promise(() => {});
+        },
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 23,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-best-effort-timeout'],
+          };
+        },
+      },
+      membershipPublicationPlanningSnapshotRefreshTimeoutMs: 5,
+      setTimeoutFn(fn) {
+        fn();
+        return timeoutHandle;
+      },
+      clearTimeoutFn(handle) {
+        clearedHandle = handle;
+      },
+      now: () => 1500,
+    });
+
+    const snapshot =
+      await readinessService.getMembershipPublicationPlanningSnapshotBestEffort(
+        'node-best-effort-timeout',
+        1500,
+      );
+
+    t.equal(
+      snapshot?.publishedPlanningEpoch,
+      23,
+      'best-effort planning should fall back to the sync snapshot when async repair stalls',
+    );
+    t.equal(
+      clearedHandle,
+      timeoutHandle,
+      'best-effort planning should clear the timeout handle after the owner fallback resolves',
+    );
+  });
+
+  test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer sync surface',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-sync-contract',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 33,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-priority-sync-contract'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+            },
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const answer =
+      readinessService.getPriorityRecoveryPlanningAnswerSync(
+        'node-priority-sync-contract',
+        1500,
+      );
+
+    t.equal(
+      answer?.publishedPlanningEpoch,
+      33,
+      'canonical sync planning answer should stay on the owner surface',
+    );
+    t.equal(
+      answer?.recoveryProtocolState,
+      'steady_published',
+      'canonical sync planning answer should preserve recovery protocol visibility',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService exposes canonical priority-recovery planning answer best-effort surface',
+  async (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-priority-best-effort-contract',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        async getLatestPublicationForNode() {
+          return {
+            publicationEpoch: 34,
+            status: 'PUBLISHED',
+            createdAt: 1450,
+            publishedActiveNodeIds: ['node-priority-best-effort-contract'],
+          };
+        },
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 31,
+            status: 'PUBLISHED',
+            createdAt: 1100,
+            publishedActiveNodeIds: ['node-priority-best-effort-contract'],
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const answer =
+      await readinessService.getPriorityRecoveryPlanningAnswerBestEffort(
+        'node-priority-best-effort-contract',
+        1500,
+      );
+
+    t.equal(
+      answer?.publishedPlanningEpoch,
+      34,
+      'canonical best-effort planning answer should prefer refreshed owner snapshots',
+    );
+  });
+
+test('ControlPlaneReadinessService exposes a readiness-owned current published membership epoch',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-current-epoch',
+      systemTableCache: createCache(),
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync() {
+          return {
+            publicationEpoch: 24,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: ['node-current-epoch'],
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    t.equal(
+      readinessService.getCurrentPublishedMembershipEpochSync(
+        'node-current-epoch',
+        1500,
+      ),
+      24,
+      'published membership epoch should come from the readiness-owned planning surface',
+    );
+
+    readinessService.getMembershipPublicationPlanningSnapshotSync = () => null;
+    readinessService.getMembershipPublicationDiagnosticsSync = () => ({
+      publicationEpoch: 25,
+      status: 'PUBLISHED',
+    });
+
+    t.equal(
+      readinessService.getCurrentPublishedMembershipEpochSync(
+        'node-current-epoch',
+        1500,
+      ),
+      null,
+      'owner-owned epoch reads should fail closed when the planning answer is unavailable',
     );
     t.end();
   });
@@ -3171,13 +3525,13 @@ test('ControlPlaneReadinessService preserves source snapshot version in membersh
     t.end();
   });
 
-test('ControlPlaneReadinessService refreshes stale published priority summaries before reporting recovery mode',
+test('ControlPlaneReadinessService reports stale published priority summaries without enqueueing reconcile from the read path',
   async (t) => {
     const cache = createCache({
       nodes: [createActiveNode('node-priority-refresh')],
       services: [createMessageGroupService('node-priority-refresh')],
     });
-    let reconcileOptions = null;
+    const queueEnqueues = [];
     const stalePublication = {
       publicationEpoch: 17,
       status: 'PUBLISHED',
@@ -3208,17 +3562,8 @@ test('ControlPlaneReadinessService refreshes stale published priority summaries 
         async getLatestPublicationForNode() {
           return stalePublication;
         },
-        async reconcileClusterMembership(options = {}) {
-          reconcileOptions = options;
-          return {
-            publicationRow: {
-              ...stalePublication,
-              priorityPartitionSummary: {
-                satisfied: true,
-                missingPartitionIds: [],
-              },
-            },
-          };
+        enqueueClusterMembershipReconcile(reason, context) {
+          queueEnqueues.push({reason, context});
         },
       },
       now: () => 1500,
@@ -3228,17 +3573,15 @@ test('ControlPlaneReadinessService refreshes stale published priority summaries 
       'node-priority-refresh',
     );
 
-    t.equal(readiness.priorityControlPlaneRecovery.active, false);
-    t.same(readiness.priorityControlPlaneRecovery.reasonCodes, []);
-    t.equal(
-      reconcileOptions?.preferAuthoritativeRead,
-      true,
-      'stale published priority summaries should reconcile authoritatively',
+    t.equal(readiness.priorityControlPlaneRecovery.active, true);
+    t.same(
+      readiness.priorityControlPlaneRecovery.reasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD],
     );
     t.equal(
-      reconcileOptions?.latestPublicationRow,
-      stalePublication,
-      'reconcile should reuse the currently published row as the baseline',
+      queueEnqueues.length,
+      0,
+      'readiness reads should no longer enqueue reconcile from stale publication observation',
     );
     t.end();
   });
@@ -4303,6 +4646,141 @@ async (t) => {
   t.end();
 });
 
+test('transport-connected startup node remains recovery-eligible when the ' +
+  'message-group row is still syncing but active partition routing is already ' +
+  'available', async (t) => {
+  const now = 210000;
+  const joiningNodeId = 'node-restarting-syncing';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(joiningNodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 1000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+    }],
+    services: [
+      {
+        ...createMessageGroupService(joiningNodeId),
+        [COLUMN.STATUS]: 'syncing',
+      },
+      createPartitionService(joiningNodeId, 'sql_write_operations-p1-r2'),
+    ],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [joiningNodeId]: {
+        nodeId: joiningNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(joiningNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'startup recovery should still respect stale membership evidence');
+  t.equal(readiness.dimensions.routingReady, true,
+    'active partition routing should stay available while the message-group row converges');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'ordinary control-plane writes must stay closed until active message-group service returns');
+  t.equal(readiness.dimensions.repairEligible, false,
+    'repair admission should stay closed until membership evidence recovers');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'recovery admission should stay open so the syncing message-group row can finish its handoff');
+  t.end();
+});
+
+test('priority recovery keeps a transport-connected active node recovery-eligible ' +
+  'when only routed partition service evidence remains visible', async (t) => {
+  const now = 215000;
+  const joiningNodeId = 'node-priority-recovery-partition-only';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(joiningNodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 1000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 5000,
+    }],
+    services: [
+      createPartitionService(
+        joiningNodeId,
+        'control_plane_publications-p1-r3',
+      ),
+    ],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [joiningNodeId]: {
+        nodeId: joiningNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    membershipPublicationService: {
+      getLatestPublicationForNode(targetNodeId) {
+        if (targetNodeId !== joiningNodeId) {
+          return null;
+        }
+        return {
+          publicationEpoch: 41,
+          status: 'ACK_PENDING',
+          publishedActiveNodeIds: ['seed-node'],
+          requiredAckNodeIds: ['seed-node', joiningNodeId],
+          acknowledgedNodeIds: ['seed-node'],
+          priorityPartitionSummary: {
+            satisfied: false,
+          },
+        };
+      },
+    },
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(joiningNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'priority recovery should still respect stale membership evidence');
+  t.equal(readiness.dimensions.routingReady, true,
+    'active partition routing should remain visible while publication converges');
+  t.equal(readiness.dimensions.controlPlaneWritable, false,
+    'partition-only evidence must not reopen ordinary control-plane writes');
+  t.equal(readiness.dimensions.repairEligible, false,
+    'partition-only priority recovery must not reopen steady-state repair eligibility');
+  t.equal(readiness.dimensions.controlPlaneRecoveryEligible, true,
+    'priority recovery should not fail closed when transport and routed partition service evidence remain live');
+  t.end();
+});
+
 test('isClusterMemberHealthy returns false for transport-connected node ' +
   'with an explicit no-ready-lease watermark ' +
   '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
@@ -4401,6 +4879,56 @@ async (t) => {
     'even with recent heartbeat');
   t.equal(readiness.dimensions.serveEligible, false,
     'transport-disconnected node must not be serve-eligible');
+  t.end();
+});
+
+test('isClusterMemberHealthy returns true for transport-connected ready ' +
+  'node with expired lease but recent heartbeat ' +
+  '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
+  'verifies stale-ready heartbeat grace)', async (t) => {
+  const now = 120000;
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode('node-cache-lag-remote'),
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 5000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 2000,
+    }],
+    services: [createMessageGroupService('node-cache-lag-remote')],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'node-cache-lag-remote': {
+        nodeId: 'node-cache-lag-remote',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness('node-cache-lag-remote');
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, true,
+    'transport-connected node should stay cluster-member-healthy while heartbeat evidence is still fresh');
+  t.equal(readiness.dimensions.controlPlaneWritable, true,
+    'transport-connected node with fresh heartbeat grace should keep control-plane writes admitted');
+  t.equal(readiness.dimensions.serveEligible, true,
+    'transport-connected node with fresh heartbeat grace should stay serve-eligible');
   t.end();
 });
 

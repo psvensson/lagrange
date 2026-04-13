@@ -22,7 +22,10 @@
 
 import {createHash} from 'node:crypto';
 import {SQLParser} from './sql-parser.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  getSchemaByTableName,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {isPriorityControlPlanePartition} from
   '../bootstrap/system-partition-classification.js';
 import {PartitionResolver} from './partition-resolver.js';
@@ -75,6 +78,7 @@ import {executeStage} from './call-stage.js';
 import {executePlan} from './call-plan.js';
 import {ExecutionContext} from './execution-context.js';
 import {BudgetEnforcer} from './budget-enforcer.js';
+import {resolveBootstrapLeaderSelection} from './bootstrap-leader-selection.js';
 import {CancellationToken} from './cancellation-token.js';
 import {LineageTracker} from './lineage-tracker.js';
 import {DEFAULT_SNAPSHOT_MODE} from './runtime-constants.js';
@@ -102,10 +106,14 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../cdc/cdc-integration-service.js';
 import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
   createControlPlaneRuntimeBundle,
@@ -123,8 +131,13 @@ import {
   PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
-  RETRYABLE_PARTITION_TRANSITION_STATES,
 } from '../partition/partition-constants.js';
+import {
+  isRetryableManagedSplitTransition,
+} from '../partition/managed-split-retry-policy.js';
+import {
+  ManagedSplitTopologyAdapter,
+} from '../partition/managed-split-topology-adapter.js';
 import {ManagedSplitWorkflow} from '../partition/managed-split-workflow.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from '../partition/partition-service-constants.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
@@ -280,6 +293,8 @@ class SQLQueryEngine {
     this.queryExecutor = new QueryExecutor({
       messageRouter: this.messageRouter,
       systemCache: this.systemCache,
+      bootstrapTopologySnapshotOwner:
+        options.bootstrapTopologySnapshotOwner || null,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
       defaultRoutingReadinessDimension:
         this.defaultRoutingReadinessDimension,
@@ -383,68 +398,9 @@ class SQLQueryEngine {
     this.managedSplitWorkflow = this.managedSplitWorkflow ||
       new ManagedSplitWorkflow({
         nodeId: this.nodeId,
-        getCDCIntegrationService: () => this.cdcIntegrationService,
-        getPartitionInfo: (partitionId) => this.getPartitionInfo(partitionId),
-        getTableInfo: (tableNameOrId) => this.getTableInfo(tableNameOrId),
-        listTableInfos: () => this.systemCache?.getAll(TABLES.TABLES) || [],
-        parsePartitionTransition: (tableInfo) =>
-          this.parsePartitionTransition(tableInfo),
-        isLocalManagedSplitLeader: (partitionInfo) =>
-          this.isLocalManagedSplitLeader(partitionInfo),
-        resolveActivePartitionVersion: (tableInfo) =>
-          this.resolveActivePartitionVersion(tableInfo),
-        buildManagedSplitPlan: (...args) => this.buildManagedSplitPlan(...args),
-        resolveProvisionTargetNodeIds: (replicaCount) =>
-          this.resolveProvisionTargetNodeIds(replicaCount),
-        getRoutablePartitionServiceNodeIds: (partitionId) =>
-          this.getRoutablePartitionServiceNodeIds(
-            partitionId,
-            CONTROL_PLANE_READINESS_DIMENSION
-              .CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          ),
-        isCriticalSystemPartition: (partitionId) =>
-          this.rebalanceCoordinator?.isCriticalSystemPartition(partitionId) ===
-          true,
-        captureTopologySnapshot: (context) =>
-          this.captureManagedSplitTopologySnapshot(context),
-        calculateQuorumReplicaCount: (replicaCount) =>
-          this.calculateQuorumReplicaCount(replicaCount),
-        storageAdmissionService:
-          this.rebalanceCoordinator?.storageAdmissionService || null,
-        messageRouter: this.messageRouter,
-        createExecutionTimeoutBudget: () =>
-          this.createControlPlaneTimeoutBudget(
-            this.tablePartitionProvisioningTimeoutMs,
-          ),
-        estimateSplitAdmissionBytes: (partitionInfo, tableInfo) =>
-          this.estimateSplitAdmissionBytes(partitionInfo, tableInfo),
-        waitForTablePartitionMetadata: (
-          tableId,
-          partitionId,
-          timeoutBudget,
-        ) =>
-          this.waitForTablePartitionMetadata(
-            tableId,
-            partitionId,
-            timeoutBudget,
-          ),
-        probeInitialTablePartitionProvisioning: (context) =>
-          this.probeInitialTablePartitionProvisioning(context),
-        provisionInitialTablePartition: (context) =>
-          this.provisionInitialTablePartition(context),
-        startSplitReplicationOnSourcePartition: (
-          partitionId,
-          tableId,
-          tableName,
-          transitionMetadata,
-        ) => this.startSplitReplicationOnSourcePartition(
-          partitionId,
-          tableId,
-          tableName,
-          transitionMetadata,
-        ),
-        logger: this.logger,
-        transactionCoordinator: this.transactionCoordinator,
+        topologyAdapter: new ManagedSplitTopologyAdapter({
+          sqlQueryEngine: this,
+        }),
       });
 
     // Configuration
@@ -1393,9 +1349,14 @@ class SQLQueryEngine {
 
 
   /**
-   * Request one managed split evaluation after successful non-system writes.
-   * Uses manager-level debouncing and adds a per-table throttle to avoid
-   * scheduling evaluations for every statement under sustained write load.
+   * Track write activity for managed split diagnostics and request local
+   * evaluation only for partitions this node actually owns.
+   *
+   * Leader-local partition services are the authoritative trigger source for
+   * write-driven split evaluation. The SQL coordinator only keeps lightweight
+   * diagnostics here and may opportunistically request evaluation when it also
+   * owns one of the target partitions.
+   *
    * @param {string} tableName - Target table name.
    * @param {Object} writePlan - Distributed write plan.
    * @param {Object} writeResult - Distributed write execution result.
@@ -1412,22 +1373,66 @@ class SQLQueryEngine {
     }
 
     const nowMs = Date.now();
+    const lastEvaluationState =
+      this.lastWriteSplitEvaluationByTable.get(tableName) || null;
     const lastRequestedAtMs =
-      this.lastWriteSplitEvaluationByTable.get(tableName) || 0;
+      typeof lastEvaluationState === 'number' ?
+        lastEvaluationState :
+        Number(lastEvaluationState?.requestedAtMs || 0);
     if ((nowMs - lastRequestedAtMs) <
       WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS) {
       return;
     }
-    this.lastWriteSplitEvaluationByTable.set(tableName, nowMs);
 
     const partitionIds = writePlan?.partitionStatements instanceof Map ?
       Array.from(writePlan.partitionStatements.keys()) :
       [];
+    const localLeaderPartitionIds =
+      this.resolveLocalManagedSplitEvaluationPartitionIds(partitionIds);
+    this.lastWriteSplitEvaluationByTable.set(tableName, {
+      requestedAtMs: nowMs,
+      partitionIds,
+      localLeaderPartitionIds,
+    });
+
+    if (localLeaderPartitionIds.length === 0) {
+      return;
+    }
+
     manager.requestEvaluation({
       reasonCode: 'write_activity',
       tableName,
-      partitionIds,
+      partitionIds: localLeaderPartitionIds,
     });
+  }
+
+  /**
+   * Resolve the subset of requested partitions this node may evaluate for
+   * managed split ownership.
+   * @param {string[]} partitionIds
+   * @return {string[]}
+   * @private
+   */
+  resolveLocalManagedSplitEvaluationPartitionIds(partitionIds = []) {
+    const requestedPartitionIdSet = new Set(
+      partitionIds
+        .map((partitionId) => String(partitionId || ''))
+        .filter(Boolean),
+    );
+    if (requestedPartitionIdSet.size === 0) {
+      return [];
+    }
+
+    const localPartitionIds = [];
+    for (const partition of this.listManagedSplitPartitions()) {
+      const partitionId =
+        partition?.partition_id ?? partition?.partitionId ?? null;
+      if (!partitionId || !requestedPartitionIdSet.has(partitionId)) {
+        continue;
+      }
+      localPartitionIds.push(partitionId);
+    }
+    return localPartitionIds;
   }
 
   /**
@@ -1614,15 +1619,19 @@ class SQLQueryEngine {
         // Metrics logging must not propagate to callers
       }
 
+      const failureResult = this.buildCaughtQueryExecutionFailure(
+        error,
+      );
       this.logger.error(QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
         sql: sql.substring(0, 100),
-        error: error.message,
+        error: failureResult.error,
+        errorCode: failureResult.errorCode || null,
+        retryAfterMs: Number.isFinite(failureResult.retryAfterMs) ?
+          failureResult.retryAfterMs :
+          null,
+        deferRetry: failureResult.deferRetry === true,
       });
-      return {
-        success: false,
-        error: error.message,
-        errorCode: this.getErrorCode(error),
-      };
+      return failureResult;
     }
   }
 
@@ -1772,6 +1781,8 @@ class SQLQueryEngine {
    *   replica cohort required before provisioning can continue.
    * @param {string[]} [context.targetNodeIds] - Explicit provisioning target
    *   nodes for split child bootstrapping.
+   * @param {Object} [context.admissionConvergence] - Optional previously
+   *   probed admission result to reuse for explicit target cohorts.
    * @param {string} [context.routingReadinessDimension] - Optional routing
    *   readiness dimension used while waiting for bootstrap quorum visibility.
    * @return {Promise<void>}
@@ -1838,14 +1849,23 @@ class SQLQueryEngine {
         targetReplicaCount,
         provisionTargetDiagnostics,
       );
-    let admissionConvergence = null;
+    let admissionConvergence =
+      context?.admissionConvergence &&
+        typeof context.admissionConvergence === 'object' ?
+        context.admissionConvergence :
+        null;
 
     const routableNodeIds = this.getRoutablePartitionServiceNodeIds(
       partitionId,
       routingReadinessDimension,
     );
     if (routableNodeIds.length >= minimumRoutableReplicaCount) {
-      return;
+      return {
+        requestedReplicaCount,
+        resolvedReplicaCount: targetReplicaCount,
+        minimumRoutableReplicaCount,
+        routableReplicaCount: routableNodeIds.length,
+      };
     }
 
     if (explicitTargetNodeIds.length === 0 &&
@@ -2047,6 +2067,8 @@ class SQLQueryEngine {
           entityType: SERVICE_TYPE.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
+          skipProvisioningAdmissionRecheck:
+            precheckedTargetNodeIds.has(targetNodeId),
           controlPlaneMutationWorkClass:
             CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
           // Initial partition provisioning executes these operations inline
@@ -2118,25 +2140,25 @@ class SQLQueryEngine {
           },
         );
       } else {
-      await this.abortProvisioningPlanningOperations(
-        partitionId,
-        createdPlanningOperations,
-        QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
-      );
-      this.throwProvisioningInsufficientTargets({
-        partitionId,
-        targetReplicaCount,
-        minimumRoutableReplicaCount,
-        candidateTargetNodeIds: provisionTargetNodeIds,
-        existingRoutableNodeIds: [...routableNodeIdSet],
-        plannedTargetNodeIds: plannedOperations.map((operation) =>
-          operation?.targetNodeId || operation?.nodeId || null,
-        ).filter((nodeId) =>
-          typeof nodeId === 'string' && nodeId.length > 0,
-        ),
-        rejectedTargetNodePlans,
-        maximumProvisionableReplicaCount,
-      });
+        await this.abortProvisioningPlanningOperations(
+          partitionId,
+          createdPlanningOperations,
+          QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH,
+        );
+        this.throwProvisioningInsufficientTargets({
+          partitionId,
+          targetReplicaCount,
+          minimumRoutableReplicaCount,
+          candidateTargetNodeIds: provisionTargetNodeIds,
+          existingRoutableNodeIds: [...routableNodeIdSet],
+          plannedTargetNodeIds: plannedOperations.map((operation) =>
+            operation?.targetNodeId || operation?.nodeId || null,
+          ).filter((nodeId) =>
+            typeof nodeId === 'string' && nodeId.length > 0,
+          ),
+          rejectedTargetNodePlans,
+          maximumProvisionableReplicaCount,
+        });
       }
     }
 
@@ -2173,8 +2195,8 @@ class SQLQueryEngine {
         operation.stepsHistory.length > 0 &&
         operation.stepsHistory[0] &&
         typeof operation.stepsHistory[0] === 'object' ?
-          operation.stepsHistory[0] :
-          null;
+        operation.stepsHistory[0] :
+        null;
       if (initialStepEntry) {
         initialStepEntry[OPERATION_METADATA_KEY.REPLICA_IDS] =
           bootstrapTopology.replicaIds;
@@ -2280,6 +2302,16 @@ class SQLQueryEngine {
         routingReadinessDimension,
       },
     );
+    const finalRoutableNodeIds = this.getRoutablePartitionServiceNodeIds(
+      partitionId,
+      routingReadinessDimension,
+    );
+    return {
+      requestedReplicaCount,
+      resolvedReplicaCount: targetReplicaCount,
+      minimumRoutableReplicaCount,
+      routableReplicaCount: finalRoutableNodeIds.length,
+    };
   }
 
   /**
@@ -2663,9 +2695,7 @@ class SQLQueryEngine {
       }
       const transition = this.parsePartitionTransition(table);
       if (transition &&
-          !RETRYABLE_PARTITION_TRANSITION_STATES.has(
-            String(transition.state || ''),
-          )) {
+          !isRetryableManagedSplitTransition(transition)) {
         blockedTableIds.add(tableId);
         continue;
       }
@@ -3415,7 +3445,12 @@ class SQLQueryEngine {
    * @private
    */
   getAuthoritativeRoutingOverlayPartition(partitionId) {
-    return this.authoritativeRoutingOverlayEntries.get(partitionId)?.partition || null;
+    const overlayState = this.getAuthoritativeRoutingOverlayEntryState(
+      partitionId,
+    );
+    return overlayState.partitionState === 'available' ?
+      overlayState.partition :
+      null;
   }
 
   /**
@@ -3425,7 +3460,42 @@ class SQLQueryEngine {
    * @private
    */
   getAuthoritativeRoutingOverlayServices(partitionId) {
-    return this.authoritativeRoutingOverlayEntries.get(partitionId)?.services || [];
+    return this.getAuthoritativeRoutingOverlayEntryState(
+      partitionId,
+    ).services;
+  }
+
+  /**
+   * Resolve one explicit authoritative overlay entry state.
+   * @param {string} partitionId
+   * @return {Object}
+   * @private
+   */
+  getAuthoritativeRoutingOverlayEntryState(partitionId) {
+    const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
+    if (!entry || typeof entry !== 'object') {
+      return Object.freeze({
+        state: 'missing',
+        partitionState: 'unavailable',
+        services: Object.freeze([]),
+      });
+    }
+    const services = Object.freeze(
+      Array.isArray(entry.services) ? entry.services : [],
+    );
+    if (entry.partition && typeof entry.partition === 'object') {
+      return Object.freeze({
+        state: 'available',
+        partitionState: 'available',
+        partition: entry.partition,
+        services,
+      });
+    }
+    return Object.freeze({
+      state: 'available',
+      partitionState: 'unavailable',
+      services,
+    });
   }
 
   /**
@@ -3466,7 +3536,8 @@ class SQLQueryEngine {
       ),
       authoritativeControlPlaneView.readRows(
         TABLES.SERVICES,
-        `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.PARTITION_ID} = ? AND ${COLUMN.SERVICE_TYPE} = ?`,
+        `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.PARTITION_ID} = ? ` +
+          `AND ${COLUMN.SERVICE_TYPE} = ?`,
         [partitionId, SERVICE_TYPE.PARTITION],
         {
           allowSqlFallback: false,
@@ -3634,27 +3705,17 @@ class SQLQueryEngine {
       return false;
     }
 
-    const leaderServices = routableServices.filter((service) =>
-      String(service?.raft_role || '').toLowerCase() === 'leader',
-    );
     const hintedLeaderNodeId = String(
       options?.bootstrapLeaderNodeId ||
       options?.partitionMetadata?.leader_node_id ||
       options?.partitionMetadata?.leaderNodeId ||
       '',
     );
-    const chosenLeaderService = leaderServices.length === 1 ?
-      leaderServices[0] :
-      (routableServices.length === 1 ?
-        routableServices[0] :
-        (hintedLeaderNodeId.length > 0 ?
-          (routableServices.find((service) => {
-            const nodeId = service?.node_id || service?.nodeId || null;
-            return nodeId === hintedLeaderNodeId;
-          }) || null) :
-          null));
-    const leaderNodeId =
-      chosenLeaderService?.node_id || chosenLeaderService?.nodeId || null;
+    const leaderSelection = resolveBootstrapLeaderSelection({
+      services: routableServices,
+      hintedLeaderNodeId,
+    });
+    const leaderNodeId = leaderSelection.leaderNodeId;
     if (typeof leaderNodeId !== 'string' || leaderNodeId.length === 0) {
       return false;
     }
@@ -3790,7 +3851,9 @@ class SQLQueryEngine {
     const overlayPartition = {
       partition_id: partitionId,
       table_name: tableName,
-      leader_node_id: serviceRows[0]?.node_id || null,
+      leader_node_id: resolveBootstrapLeaderSelection({
+        services: serviceRows,
+      }).leaderNodeId,
       created_at: nowMs,
       updated_at: nowMs,
     };
@@ -3810,14 +3873,35 @@ class SQLQueryEngine {
    * @private
    */
   getBootstrapRoutingOverlayEntry(partitionId) {
-    const entry = this.bootstrapRoutingOverlayEntries.get(partitionId) || null;
-    if (!entry) {
-      return null;
+    const entryState = this.getBootstrapRoutingOverlayEntryState(partitionId);
+    return entryState.state === 'available' ?
+      entryState.entry :
+      null;
+  }
+
+  /**
+   * Resolve one explicit bootstrap overlay entry state.
+   * @param {string} partitionId
+   * @return {Object}
+   * @private
+   */
+  getBootstrapRoutingOverlayEntryState(partitionId) {
+    const entry = this.bootstrapRoutingOverlayEntries.get(partitionId);
+    if (!entry || typeof entry !== 'object') {
+      return Object.freeze({
+        state: 'missing',
+        partitionState: 'unavailable',
+        services: Object.freeze([]),
+      });
     }
 
     if (entry.expiresAtMs <= this.nowFn()) {
       this.bootstrapRoutingOverlayEntries.delete(partitionId);
-      return null;
+      return Object.freeze({
+        state: 'expired',
+        partitionState: 'unavailable',
+        services: Object.freeze([]),
+      });
     }
 
     const cachedPartition = this.getCachedPartitionRecord(partitionId);
@@ -3828,10 +3912,31 @@ class SQLQueryEngine {
     if (typeof cachedLeaderNodeId === 'string' &&
         cachedLeaderNodeId.length > 0) {
       this.bootstrapRoutingOverlayEntries.delete(partitionId);
-      return null;
+      return Object.freeze({
+        state: 'superseded',
+        partitionState: 'unavailable',
+        services: Object.freeze([]),
+      });
     }
 
-    return entry;
+    const services = Object.freeze(
+      Array.isArray(entry.services) ? entry.services : [],
+    );
+    if (entry.partition && typeof entry.partition === 'object') {
+      return Object.freeze({
+        state: 'available',
+        partitionState: 'available',
+        partition: entry.partition,
+        services,
+        entry,
+      });
+    }
+    return Object.freeze({
+      state: 'available',
+      partitionState: 'unavailable',
+      services,
+      entry,
+    });
   }
 
   /**
@@ -3841,7 +3946,10 @@ class SQLQueryEngine {
    * @private
    */
   getBootstrapRoutingOverlayPartition(partitionId) {
-    return this.getBootstrapRoutingOverlayEntry(partitionId)?.partition || null;
+    const entryState = this.getBootstrapRoutingOverlayEntryState(partitionId);
+    return entryState.partitionState === 'available' ?
+      entryState.partition :
+      null;
   }
 
   /**
@@ -3851,8 +3959,7 @@ class SQLQueryEngine {
    * @private
    */
   getBootstrapRoutingOverlayServices(partitionId) {
-    const entry = this.getBootstrapRoutingOverlayEntry(partitionId);
-    return Array.isArray(entry?.services) ? entry.services : [];
+    return this.getBootstrapRoutingOverlayEntryState(partitionId).services;
   }
 
   /**
@@ -3872,8 +3979,11 @@ class SQLQueryEngine {
 
     const partitions = [];
     for (const partitionId of this.bootstrapRoutingOverlayEntries.keys()) {
-      const entry = this.getBootstrapRoutingOverlayEntry(partitionId);
-      const partition = entry?.partition || null;
+      const entryState = this.getBootstrapRoutingOverlayEntryState(partitionId);
+      if (entryState.partitionState !== 'available') {
+        continue;
+      }
+      const partition = entryState.partition;
       if (!this.partitionMatchesTableRef(partition, tableRef) ||
           !this.isPartitionVisibleForRouting(
             partition,
@@ -4532,8 +4642,8 @@ class SQLQueryEngine {
   captureManagedSplitTopologySnapshot(options = {}) {
     const requiredReplicaCount = Number.isInteger(options.requiredReplicaCount) &&
       options.requiredReplicaCount > 0 ?
-        options.requiredReplicaCount :
-        1;
+      options.requiredReplicaCount :
+      1;
     const provisionTargetDiagnostics = this.resolveProvisionTargetNodeDiagnostics(
       requiredReplicaCount,
     );
@@ -4876,6 +4986,8 @@ class SQLQueryEngine {
       return null;
     }
 
+    const confirmEmptyLocalReadWithOwnerRpc =
+      this.shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast);
     const localResult = await authoritativeControlPlaneView.readRows(
       tableName,
       rawSql,
@@ -4883,6 +4995,9 @@ class SQLQueryEngine {
       {
         allowSqlFallback: false,
         queryTimeoutMs: queryOptions?.timeoutMs,
+        confirmEmptyLocalReadWithOwnerRpc,
+        replicaFallbackConsistency:
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
       },
     );
     if (!localResult?.success) {
@@ -4906,6 +5021,115 @@ class SQLQueryEngine {
         mergeDurationMs: 0,
       },
     };
+  }
+
+  /**
+   * Determine whether one system-table read should confirm empty local rows
+   * through the authoritative owner lane before accepting the result.
+   * @param {string} tableName
+   * @param {Object} ast
+   * @return {boolean}
+   * @private
+   */
+  shouldConfirmEmptyAuthoritativeSystemTableRead(tableName, ast) {
+    const primaryKeyColumns = this.getSystemTablePrimaryKeyColumns(tableName);
+    if (primaryKeyColumns.length !== 1) {
+      return false;
+    }
+    const primaryKeyColumn = primaryKeyColumns[0];
+    const tableAlias = ast?.from?.alias || null;
+    const whereClause = ast?.where || null;
+    if (!whereClause || typeof whereClause !== 'object') {
+      return false;
+    }
+    if (whereClause.type === 'binary' && whereClause.operator === '=') {
+      return this.isSystemTablePrimaryKeyColumnReference(
+        whereClause.left,
+        tableName,
+        tableAlias,
+        primaryKeyColumn,
+      ) && this.isBoundSystemTableLookupValue(whereClause.right);
+    }
+    if (whereClause.type === 'in' && whereClause.negated !== true) {
+      return this.isSystemTablePrimaryKeyColumnReference(
+        whereClause.expression,
+        tableName,
+        tableAlias,
+        primaryKeyColumn,
+      ) &&
+        Array.isArray(whereClause.values) &&
+        whereClause.values.length > 0 &&
+        whereClause.values.every((value) =>
+          this.isBoundSystemTableLookupValue(value),
+        );
+    }
+    return false;
+  }
+
+  /**
+   * Resolve primary-key columns from the canonical system-table schema.
+   * @param {string} tableName
+   * @return {string[]}
+   * @private
+   */
+  getSystemTablePrimaryKeyColumns(tableName) {
+    const schema = getSchemaByTableName(tableName);
+    if (!schema) {
+      return [];
+    }
+    if (Array.isArray(schema.primaryKey) && schema.primaryKey.length > 0) {
+      return schema.primaryKey
+        .filter((columnName) =>
+          typeof columnName === 'string' && columnName.length > 0,
+        );
+    }
+    if (!Array.isArray(schema.columns)) {
+      return [];
+    }
+    return schema.columns
+      .filter((column) => column?.primaryKey === true)
+      .map((column) => column.name)
+      .filter((columnName) =>
+        typeof columnName === 'string' && columnName.length > 0,
+      );
+  }
+
+  /**
+   * Check whether one lookup expression is a literal or a bound parameter.
+   * @param {Object|null} expression
+   * @return {boolean}
+   * @private
+   */
+  isBoundSystemTableLookupValue(expression) {
+    return expression?.type === 'literal' || expression?.type === 'parameter';
+  }
+
+  /**
+   * Check whether one expression references the expected system-table primary
+   * key column.
+   * @param {Object|null} expression
+   * @param {string} tableName
+   * @param {string|null} tableAlias
+   * @param {string} primaryKeyColumn
+   * @return {boolean}
+   * @private
+   */
+  isSystemTablePrimaryKeyColumnReference(
+    expression,
+    tableName,
+    tableAlias,
+    primaryKeyColumn,
+  ) {
+    if (!expression || expression.type !== 'column_ref') {
+      return false;
+    }
+    if (expression.column !== primaryKeyColumn) {
+      return false;
+    }
+    return expression.table === null ||
+      expression.table === undefined ||
+      expression.table === tableName ||
+      expression.table === tableAlias;
   }
 
   /**
@@ -5052,11 +5276,6 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
-      this.fireNonTransactionalWriteStart(
-        writePlan,
-        QUERY_AST_TYPE.INSERT,
-      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_INSERT, {
@@ -5212,11 +5431,6 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
-      this.fireNonTransactionalWriteStart(
-        writePlan,
-        QUERY_AST_TYPE.UPDATE,
-      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_UPDATE, {
@@ -5371,11 +5585,6 @@ class SQLQueryEngine {
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
-    } else if (!WRITE_TRACKING_EXCLUDED_TABLES.has(tableName)) {
-      this.fireNonTransactionalWriteStart(
-        writePlan,
-        QUERY_AST_TYPE.DELETE,
-      );
     }
 
     this.logger.debug(QUERY_LOG_MSG.ROUTING_DELETE, {
@@ -5604,6 +5813,34 @@ class SQLQueryEngine {
   }
 
   /**
+   * Build canonical mutation options for distributed transaction metadata.
+   * Transaction state writes are durable-control-plane metadata and must not
+   * fail on read-model cache lag under pressure.
+   *
+   * @param {string} tableName
+   * @param {Object} [options={}]
+   * @param {string|null} [options.coalescingKey]
+   * @param {string} [options.workClass]
+   * @return {Object}
+   * @private
+   */
+  buildDistributedTransactionMutationOptions(tableName, options = {}) {
+    const mutationOptions = {
+      workClass: options?.workClass || PRESSURE_WORK_CLASS.CRITICAL,
+      deliveryPriority: this.resolveRoutedDeliveryPriority(tableName),
+      skipCacheWait: true,
+      mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+    };
+    const coalescingKey = typeof options?.coalescingKey === 'string' ?
+      options.coalescingKey :
+      '';
+    if (coalescingKey.length > 0) {
+      mutationOptions.coalescingKey = coalescingKey;
+    }
+    return mutationOptions;
+  }
+
+  /**
    * Persist one distributed transaction row.
    * @param {Object} record - Transaction persistence payload.
    * @return {Promise<void>}
@@ -5613,11 +5850,12 @@ class SQLQueryEngine {
     if (!this.canPersistDistributedTransactionState()) {
       return;
     }
+    const transactionId = String(record?.transactionId || '').trim();
     await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_TRANSACTIONS,
       row: {
-        transaction_id: record.transactionId,
+        transaction_id: transactionId,
         session_id: record.sessionId,
         status: record.status,
         transaction_epoch: record.transactionEpoch,
@@ -5625,15 +5863,19 @@ class SQLQueryEngine {
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    }, {
-      // Durable transaction state must bypass interactive admission pressure,
-      // but it still stays on the background transport lane so replica and
-      // topology settlement keep the reserved critical queue capacity.
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
-      deliveryPriority: this.resolveRoutedDeliveryPriority(
-        TABLES.SQL_TRANSACTIONS,
-      ),
-    });
+    }, this.buildDistributedTransactionMutationOptions(
+      TABLES.SQL_TRANSACTIONS,
+      {
+        // Durable transaction state must bypass interactive admission
+        // pressure, but it still stays on the background transport lane so
+        // replica and topology settlement keep the reserved critical queue
+        // capacity.
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        coalescingKey: transactionId.length > 0 ?
+          `sql-transaction:${transactionId}` :
+          null,
+      },
+    ));
   }
 
   /**
@@ -5646,24 +5888,29 @@ class SQLQueryEngine {
     if (!this.canPersistDistributedTransactionState()) {
       return;
     }
+    const participantId = String(record?.participantId || '').trim();
+    const transactionId = String(record?.transactionId || '').trim();
     await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
       row: {
-        participant_id: record.participantId,
-        transaction_id: record.transactionId,
+        participant_id: participantId,
+        transaction_id: transactionId,
         partition_id: record.partitionId,
         status: record.status,
         last_error: record.lastError,
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    }, {
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
-      deliveryPriority: this.resolveRoutedDeliveryPriority(
-        TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      ),
-    });
+    }, this.buildDistributedTransactionMutationOptions(
+      TABLES.SQL_TRANSACTION_PARTICIPANTS,
+      {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        coalescingKey: participantId.length > 0 ?
+          `sql-transaction-participant:${participantId}` :
+          null,
+      },
+    ));
   }
 
   /**
@@ -5676,12 +5923,14 @@ class SQLQueryEngine {
     if (!this.canPersistDistributedTransactionState()) {
       return;
     }
+    const operationId = String(record?.operationId || '').trim();
+    const transactionId = String(record?.transactionId || '').trim();
     await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.SQL_WRITE_OPERATIONS,
       row: {
-        operation_id: record.operationId,
-        transaction_id: record.transactionId || null,
+        operation_id: operationId,
+        transaction_id: transactionId || null,
         statement_type: record.statementType,
         status: record.status,
         idempotency_key: record.idempotencyKey,
@@ -5692,12 +5941,15 @@ class SQLQueryEngine {
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    }, {
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      deliveryPriority: this.resolveRoutedDeliveryPriority(
-        TABLES.SQL_WRITE_OPERATIONS,
-      ),
-    });
+    }, this.buildDistributedTransactionMutationOptions(
+      TABLES.SQL_WRITE_OPERATIONS,
+      {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        coalescingKey: operationId.length > 0 ?
+          `sql-write-operation:${operationId}` :
+          null,
+      },
+    ));
   }
 
   /**
@@ -5708,60 +5960,25 @@ class SQLQueryEngine {
    * @private
    */
   /**
-   * Fire-and-forget: persist a non-transactional write operation row.
-   * Non-transactional write tracking is observability-only and is not
-   * required for correctness (recovery only reads sql_write_operations
-   * when active sql_transactions exist). Blocking the write critical
-   * path on this persistence triples write latency because each
-   * upsert routes through full SQL + Raft + CDC cache wait.
-   * @param {Object} writePlan - DistributedWritePlan.
-   * @param {string} statementType - SQL AST statement type.
-   * @private
-   */
-  fireNonTransactionalWriteStart(writePlan, statementType) {
-    const now = Date.now();
-    this.persistDistributedWriteOperationRow({
-      operationId: writePlan.operationId,
-      transactionId: null,
-      statementType,
-      status: WRITE_OPERATION_STATUS.PENDING,
-      idempotencyKey: writePlan.idempotencyKey,
-      payloadHash: this.createWriteOperationPayloadHash(
-        writePlan,
-        statementType,
-      ),
-      partitionIds: Array.from(writePlan.partitionStatements.keys()),
-      retryCount: 0,
-      lastError: null,
-      createdAt: now,
-      updatedAt: now,
-    }).catch((error) => {
-      this.logger.warn(QUERY_LOG_MSG.WRITE_OP_PERSIST_FAILED, {
-        operationId: writePlan.operationId,
-        statementType,
-        status: WRITE_OPERATION_STATUS.PENDING,
-        error: error.message,
-      });
-    });
-  }
-
-  /**
-   * Fire-and-forget: persist the final state for a non-transactional
-   * distributed write. See fireNonTransactionalWriteStart for rationale.
+   * Fire-and-forget: persist only failed non-transactional distributed writes.
+   * Successful non-transactional writes are not used by recovery and would
+   * otherwise convert high-throughput user traffic into extra control-plane
+   * replication on sql_write_operations.
    * @param {Object} writePlan - DistributedWritePlan.
    * @param {string} statementType - SQL AST statement type.
    * @param {Object} result - Write result.
    * @private
    */
   fireNonTransactionalWriteResult(writePlan, statementType, result) {
+    if (result?.success === true) {
+      return;
+    }
     const now = Date.now();
     this.persistDistributedWriteOperationRow({
       operationId: writePlan.operationId,
       transactionId: null,
       statementType,
-      status: result.success === true ?
-        WRITE_OPERATION_STATUS.SUCCEEDED :
-        WRITE_OPERATION_STATUS.FAILED,
+      status: WRITE_OPERATION_STATUS.FAILED,
       idempotencyKey: writePlan.idempotencyKey,
       payloadHash: this.createWriteOperationPayloadHash(
         writePlan,
@@ -5769,16 +5986,14 @@ class SQLQueryEngine {
       ),
       partitionIds: Array.from(writePlan.partitionStatements.keys()),
       retryCount: this.resolveWriteResultRetryCount(result),
-      lastError: result.success === true ? null : result.error,
+      lastError: result?.error || null,
       createdAt: now,
       updatedAt: now,
     }).catch((error) => {
       this.logger.warn(QUERY_LOG_MSG.WRITE_OP_PERSIST_FAILED, {
         operationId: writePlan.operationId,
         statementType,
-        status: result.success === true ?
-          WRITE_OPERATION_STATUS.SUCCEEDED :
-          WRITE_OPERATION_STATUS.FAILED,
+        status: WRITE_OPERATION_STATUS.FAILED,
         error: error.message,
       });
     });
@@ -6426,6 +6641,14 @@ class SQLQueryEngine {
    * @private
    */
   getErrorCode(error) {
+    if (typeof error?.errorCode === 'string' &&
+        error.errorCode.length > 0) {
+      return error.errorCode;
+    }
+    if (typeof error?.code === 'string' &&
+        error.code.length > 0) {
+      return error.code;
+    }
     const message = error.message.toLowerCase();
 
     if (message.includes('parse') || message.includes('syntax')) {
@@ -6439,6 +6662,78 @@ class SQLQueryEngine {
     }
 
     return QUERY_ERROR_CODE.INTERNAL_ERROR;
+  }
+
+  /**
+   * Preserve structured retry metadata when execution surfaces a typed error
+   * from a lower layer instead of returning a normalized result object.
+   * @param {Error|Object} error
+   * @return {Object}
+   * @private
+   */
+  buildCaughtQueryExecutionFailure(error) {
+    const result = {
+      success: false,
+      error: error?.message || 'Query execution failed',
+      errorCode: this.getErrorCode(error),
+    };
+    if (error?.deferRetry === true) {
+      result.deferRetry = true;
+    }
+    if (Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > 0) {
+      result.retryAfterMs = Math.floor(error.retryAfterMs);
+    }
+    if (typeof error?.pressureAction === 'string' &&
+        error.pressureAction.length > 0) {
+      result.pressureAction = error.pressureAction;
+    }
+    if (typeof error?.pressureReason === 'string' &&
+        error.pressureReason.length > 0) {
+      result.pressureReason = error.pressureReason;
+    }
+    if (error?.pressureSummary &&
+        typeof error.pressureSummary === 'object') {
+      result.pressureSummary = {...error.pressureSummary};
+    }
+    if (Array.isArray(error?.participantFailures)) {
+      result.participantFailures = error.participantFailures
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => ({...entry}));
+    }
+    if (error?.firstFailedParticipant &&
+        typeof error.firstFailedParticipant === 'object') {
+      result.firstFailedParticipant = {
+        ...error.firstFailedParticipant,
+      };
+    } else if (Array.isArray(result.participantFailures) &&
+        result.participantFailures.length > 0) {
+      result.firstFailedParticipant = result.participantFailures[0];
+    }
+    if (typeof error?.reasonCode === 'string' &&
+        error.reasonCode.length > 0) {
+      result.reasonCode = error.reasonCode;
+    }
+    if (typeof error?.participationKind === 'string' &&
+        error.participationKind.length > 0) {
+      result.participationKind = error.participationKind;
+    }
+    if (typeof error?.tableName === 'string' &&
+        error.tableName.length > 0) {
+      result.tableName = error.tableName;
+    }
+    if (typeof error?.failedTable === 'string' &&
+        error.failedTable.length > 0) {
+      result.failedTable = error.failedTable;
+    }
+    if (typeof error?.outcome === 'string' &&
+        error.outcome.length > 0) {
+      result.outcome = error.outcome;
+    }
+    if (typeof error?.backpressured === 'boolean') {
+      result.backpressured = error.backpressured;
+    }
+    return result;
   }
 
   /**

@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {
+  resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
 } from '../harness/scenario-config.js';
 const ZERO = 0;
@@ -31,6 +32,11 @@ function sleep(delayMs) {
  * @return {Promise<Object>}
  */
 async function run(cluster, options = {}) {
+  const scenarioOptions = resolveScenarioOptions(
+    options,
+    cluster,
+    'seedRestartUnderLoad',
+  );
   const {
     loadOpsPerSec,
     loadDuration,
@@ -42,7 +48,7 @@ async function run(cluster, options = {}) {
     convergenceTimeoutMs,
     consistencyTimeoutMs,
     minSuccessRate,
-  } = resolveSeedRestartUnderLoadScenarioConfig(options);
+  } = resolveSeedRestartUnderLoadScenarioConfig(scenarioOptions);
 
   const nodes = cluster.getNodes();
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];

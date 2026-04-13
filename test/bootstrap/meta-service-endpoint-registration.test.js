@@ -90,4 +90,17 @@ describe('meta-service-endpoint-registration', () => {
       new RegExp(META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_PORT_REQUIRED),
     );
   });
+
+  it('fails when endpoint address would otherwise fall back to nodeId', async () => {
+    await assert.rejects(
+      registerBuiltInMetaServiceEndpoints({
+        upsertRow: async () => {},
+        nodeId: 'node-1',
+        wsPort: 18080,
+      }),
+      new RegExp(
+        META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_ADDRESS_REQUIRED,
+      ),
+    );
+  });
 });

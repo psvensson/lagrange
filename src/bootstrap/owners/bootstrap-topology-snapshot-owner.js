@@ -98,6 +98,119 @@ class BootstrapTopologySnapshotOwner {
     return envelope;
   }
 
+  resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta = null) {
+    if (topologySnapshotMeta && typeof topologySnapshotMeta === TYPEOF.OBJECT) {
+      return topologySnapshotMeta;
+    }
+    return this.buildBootstrapTopologySnapshotEnvelope().topologySnapshotMeta ||
+      null;
+  }
+
+  resolveBootstrapTopologySnapshotActiveNodeIds(topologySnapshotMeta = null) {
+    const resolvedMeta =
+      this.resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta);
+    if (!Array.isArray(resolvedMeta?.activeNodeIds)) {
+      return [];
+    }
+    return [...new Set(resolvedMeta.activeNodeIds.filter((nodeId) =>
+      typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+    ))];
+  }
+
+  resolveBootstrapTopologySnapshotEpoch(topologySnapshotMeta = null) {
+    const resolvedMeta =
+      this.resolveBootstrapTopologySnapshotMeta(topologySnapshotMeta);
+    if (Number.isFinite(resolvedMeta?.topologyEpoch)) {
+      return Math.max(NUM.ZERO, Math.floor(resolvedMeta.topologyEpoch));
+    }
+    const currentEpoch = this.getCurrentEpoch();
+    if (Number.isFinite(currentEpoch?.epoch)) {
+      return Math.max(NUM.ZERO, Math.floor(currentEpoch.epoch));
+    }
+    return null;
+  }
+
+  getBootstrapPartitionSnapshotRow(partitionId) {
+    if (typeof partitionId !== TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    const partitionRows =
+      this.getBootstrapAuthoritativeTableRows(TABLES.PARTITIONS);
+    return partitionRows.find((row) => {
+      return row?.[COLUMN.PARTITION_ID] === partitionId ||
+        row?.partition_id === partitionId ||
+        row?.partitionId === partitionId;
+    }) || null;
+  }
+
+  resolveCanonicalPartitionLeaderNodeId(partitionId) {
+    const partition =
+      this.getBootstrapPartitionSnapshotRow(partitionId);
+    const leaderNodeId =
+      partition?.[COLUMN.LEADER_NODE_ID] ??
+      partition?.leader_node_id ??
+      partition?.leaderNodeId ??
+      null;
+    return typeof leaderNodeId === TYPEOF.STRING &&
+      leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId :
+      null;
+  }
+
+  isBootstrapRoutingGraceWindow(partition) {
+    if (!partition) {
+      return false;
+    }
+    const createdAt =
+      partition?.[COLUMN.CREATED_AT] ??
+      partition?.created_at ??
+      partition?.createdAt ??
+      null;
+    const updatedAt =
+      partition?.[COLUMN.UPDATED_AT] ??
+      partition?.updated_at ??
+      partition?.updatedAt ??
+      null;
+    return Number.isFinite(createdAt) &&
+      Number.isFinite(updatedAt) &&
+      createdAt === updatedAt;
+  }
+
+  isFreshPartitionBootstrapWindow(partitionOrId) {
+    const partition =
+      partitionOrId && typeof partitionOrId === TYPEOF.OBJECT ?
+        partitionOrId :
+        this.getBootstrapPartitionSnapshotRow(partitionOrId);
+    if (!this.isBootstrapRoutingGraceWindow(partition)) {
+      return false;
+    }
+    return this.resolveCanonicalPartitionLeaderNodeId(
+      partition?.[COLUMN.PARTITION_ID] ??
+      partition?.partition_id ??
+      partition?.partitionId ??
+      null,
+    ) === null;
+  }
+
+  getFreshBootstrapLeaderServices(partitionId, services = []) {
+    const partition =
+      this.getBootstrapPartitionSnapshotRow(partitionId);
+    if (!this.isFreshPartitionBootstrapWindow(partition)) {
+      return [];
+    }
+
+    const leaderServices = services.filter((service) =>
+      String(service?.raft_role || '').toLowerCase() ===
+        String(RAFT_ROLE.LEADER).toLowerCase(),
+    );
+    if (leaderServices.length === NUM.ONE) {
+      return leaderServices;
+    }
+
+    return services.length === NUM.ONE ? [services[NUM.ZERO]] : [];
+  }
+
   resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows = []) {
     const localRowSets = this.queryLocalAuthoritativePartitionRowSets(tableName);
     if (localRowSets.length === NUM.ZERO) {

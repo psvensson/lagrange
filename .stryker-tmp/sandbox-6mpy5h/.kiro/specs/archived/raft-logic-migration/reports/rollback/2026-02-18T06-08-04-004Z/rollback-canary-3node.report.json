@@ -1,0 +1,337 @@
+{
+  "timestamp": "2026-02-18T06:11:13.609Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 164666
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 0,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "rolling-restart",
+        "similarityKey": "rolling-restart|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 164666,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "rolling-restart",
+      "passed": false,
+      "duration": 164666,
+      "clusterSize": 3,
+      "startedAt": "2026-02-18T06:08:28.009Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Cannot assert consistency: fewer than 2 reachable nodes (found 1). Reachability: 139cbb6c-e88d-4eef-8589-b75a374de66f[reachable,source=bootstrap_health,error=none], bb4e7634-9cc6-4966-8ff8-0a3adbfc5389[unreachable,source=unknown,error=Admin API query failed for node bb4e7634-9cc6-4966-8ff8-0a3adbfc5389: connect EHOSTUNREACH 172.19.0.3:8081], 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc[unreachable,source=unknown,error=Admin API query failed for node 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc: connect EHOSTUNREACH 172.19.0.4:8081]",
+      "stackTrace": "Error: Cannot assert consistency: fewer than 2 reachable nodes (found 1). Reachability: 139cbb6c-e88d-4eef-8589-b75a374de66f[reachable,source=bootstrap_health,error=none], bb4e7634-9cc6-4966-8ff8-0a3adbfc5389[unreachable,source=unknown,error=Admin API query failed for node bb4e7634-9cc6-4966-8ff8-0a3adbfc5389: connect EHOSTUNREACH 172.19.0.3:8081], 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc[unreachable,source=unknown,error=Admin API query failed for node 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc: connect EHOSTUNREACH 172.19.0.4:8081]\n    at assertConsistency (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:768:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/rolling-restart.js:72:3)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:800:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1317:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "rolling-restart",
+        "startedAt": 1771394908010,
+        "endedAt": 1771395073606,
+        "durationMs": 165596,
+        "files": {
+          "events": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/events.ndjson",
+          "samples": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/samples.ndjson",
+          "snapshots": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/snapshots.ndjson",
+          "manifest": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/playback-manifest.json",
+          "viewer": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/playback-viewer.html"
+        },
+        "counts": {
+          "events": 223,
+          "samples": 474,
+          "snapshots": 11
+        },
+        "warnings": [
+          {
+            "code": "query-node-unavailable",
+            "message": "No admin-ready reachable node available for topology snapshot query",
+            "timestamp": 1771395011238,
+            "details": {
+              "reachability": [
+                {
+                  "nodeId": "139cbb6c-e88d-4eef-8589-b75a374de66f",
+                  "timestamp": 1771394941016,
+                  "reachable": true,
+                  "adminReady": false,
+                  "reachableBy": "bootstrap_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.19.0.2:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": "http://172.19.0.2:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "bb4e7634-9cc6-4966-8ff8-0a3adbfc5389",
+                  "timestamp": 1771394941017,
+                  "reachable": false,
+                  "adminReady": false,
+                  "reachableBy": null,
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.3:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.3:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": "Admin API query failed for node bb4e7634-9cc6-4966-8ff8-0a3adbfc5389: connect EHOSTUNREACH 172.19.0.3:8081",
+                    "url": null,
+                    "endpoint": "ws://172.19.0.3:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": "Admin API query failed for node bb4e7634-9cc6-4966-8ff8-0a3adbfc5389: connect EHOSTUNREACH 172.19.0.3:8081",
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": "Admin API query failed for node bb4e7634-9cc6-4966-8ff8-0a3adbfc5389: connect EHOSTUNREACH 172.19.0.3:8081"
+                },
+                {
+                  "nodeId": "15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc",
+                  "timestamp": 1771394977443,
+                  "reachable": false,
+                  "adminReady": false,
+                  "reachableBy": null,
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.4:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.19.0.4:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": "Admin API query failed for node 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc: connect EHOSTUNREACH 172.19.0.4:8081",
+                    "url": null,
+                    "endpoint": "ws://172.19.0.4:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": "Admin API query failed for node 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc: connect EHOSTUNREACH 172.19.0.4:8081",
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": "Admin API query failed for node 15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc: connect EHOSTUNREACH 172.19.0.4:8081"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": true,
+        "leakDetected": false,
+        "sampleCount": 474,
+        "nodeCount": 3,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [
+          {
+            "nodeId": "139cbb6c-e88d-4eef-8589-b75a374de66f",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 164,
+            "postWarmupSampleCount": 131,
+            "analysisWindowMs": 130020,
+            "slopeBytesPerMin": 5059827.167637661,
+            "growthBytes": -218787840,
+            "growthPercent": -100,
+            "positiveDeltaRatio": 0.5461538461538461,
+            "maxMemoryUsageBytes": 242724864,
+            "maxMemoryUsagePercent": 22.605514526367188
+          },
+          {
+            "nodeId": "15268bc2-bc28-4b31-9fbd-1d4fdfd5cddc",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 155,
+            "postWarmupSampleCount": 122,
+            "analysisWindowMs": 121136,
+            "slopeBytesPerMin": 0,
+            "growthBytes": 0,
+            "growthPercent": null,
+            "positiveDeltaRatio": 0,
+            "maxMemoryUsageBytes": 0,
+            "maxMemoryUsagePercent": null
+          },
+          {
+            "nodeId": "bb4e7634-9cc6-4966-8ff8-0a3adbfc5389",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 155,
+            "postWarmupSampleCount": 124,
+            "analysisWindowMs": 123139,
+            "slopeBytesPerMin": 0,
+            "growthBytes": 0,
+            "growthPercent": null,
+            "positiveDeltaRatio": 0,
+            "maxMemoryUsageBytes": 0,
+            "maxMemoryUsagePercent": null
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.kiro/specs/raft-logic-migration/reports/rollback/2026-02-18T06-08-04-004Z/.playback/rollback-canary-3node/rolling-restart/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": true,
+        "leakDetected": false,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "passed": true,
+        "error": null
+      },
+      "performanceDiagnostics": null,
+      "details": null,
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-three-node.json",
+    "scenarioFilter": "rolling-restart"
+  }
+}

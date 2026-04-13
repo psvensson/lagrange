@@ -9,11 +9,62 @@ import {ControlPlaneDiagnosticsLedger} from
 import {OperationLane} from '../workflow/operation-lane.js';
 
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
+const EMPTY_STRING = '';
+const EMPTY_LEDGER_ENTRIES = Object.freeze([]);
+const EMPTY_REPAIR_ROWS = Object.freeze([]);
+const DEFAULT_REPAIR_COOLDOWN_MS = 5000;
+const DEFAULT_REPAIR_FAILURE_COOLDOWN_MS = 30000;
+const DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS = 15000;
+const DEFAULT_REPAIR_QUERY_TIMEOUT_MS = 1500;
+const DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS = 30000;
+const REPAIR_STAGE = Object.freeze({
+  SCHEDULED: 'scheduled',
+  COOLDOWN_SKIPPED: 'cooldown_skipped',
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+});
+const REPAIR_LANE_NAME = 'control-plane-readiness-repair';
+const REPAIR_CAUSE_PREFIX = 'readiness-authoritative-cache-repair:';
+const AUTHORITATIVE_REPAIR_STATE = Object.freeze({
+  VIEW_UNAVAILABLE: 'view_unavailable',
+  SNAPSHOT_UNAVAILABLE: 'snapshot_unavailable',
+  REPAIRED: 'repaired',
+  UNCHANGED: 'unchanged',
+});
+const AUTHORITATIVE_ROW_OBSERVATION = Object.freeze({
+  OBSERVED: 'observed',
+  UNAVAILABLE: 'unavailable',
+});
+const REPAIR_OUTCOME_FAILED = 'failed';
+const REPAIR_OUTCOME_REPAIRED = 'repaired';
+const REPAIR_OUTCOME_UNCHANGED = 'unchanged';
+const REPAIR_FAILED_LOG_MESSAGE = 'Authoritative readiness repair failed';
+const REPAIR_APPLIED_LOG_MESSAGE =
+  'Repaired readiness cache from authoritative node/service rows';
+const REPAIR_REQUIRED_DEPENDENCY_ERROR_PREFIX =
+  'AuthoritativeNodeEvidenceReconciler requires ';
+const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY =
+  'controlPlaneSystemTableGateway';
+const UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX =
+  'Unknown authoritative node repair state: ';
 
 function normalizePositiveInteger(value, fallback = NUM.ZERO) {
   return Number.isFinite(value) && value > NUM.ZERO ?
     Math.floor(value) :
     fallback;
+}
+
+function buildRepairOutcome(options = {}) {
+  return {
+    repaired: options.repaired === true,
+    outcome: options.outcome || REPAIR_OUTCOME_UNCHANGED,
+    nodeRowCount: Number.isFinite(options.nodeRowCount) ?
+      options.nodeRowCount :
+      NUM.ZERO,
+    serviceRowCount: Number.isFinite(options.serviceRowCount) ?
+      options.serviceRowCount :
+      NUM.ZERO,
+  };
 }
 
 class AuthoritativeNodeEvidenceReconciler {
@@ -75,27 +126,27 @@ class AuthoritativeNodeEvidenceReconciler {
     this.authoritativeReadinessRepairCooldownMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairCooldownMs,
-        5000,
+        DEFAULT_REPAIR_COOLDOWN_MS,
       );
     this.authoritativeReadinessRepairFailureCooldownMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairFailureCooldownMs,
-        30000,
+        DEFAULT_REPAIR_FAILURE_COOLDOWN_MS,
       );
     this.authoritativeReadinessRepairNoChangeCooldownMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairNoChangeCooldownMs,
-        15000,
+        DEFAULT_REPAIR_NO_CHANGE_COOLDOWN_MS,
       );
     this.authoritativeReadinessRepairQueryTimeoutMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairQueryTimeoutMs,
-        1500,
+        DEFAULT_REPAIR_QUERY_TIMEOUT_MS,
       );
     this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs =
       normalizePositiveInteger(
         options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
-        30000,
+        DEFAULT_REPAIR_STALE_HEARTBEAT_MAX_AGE_MS,
       );
     this.lastRepairAtMsByKey = new Map();
     this.lastRepairCooldownMsByKey = new Map();
@@ -112,7 +163,7 @@ class AuthoritativeNodeEvidenceReconciler {
     this.repairLane =
       options.authoritativeReadinessRepairLane ||
       new OperationLane({
-        name: 'control-plane-readiness-repair',
+        name: REPAIR_LANE_NAME,
         workflowCoordinator: options.workflowCoordinator,
       });
   }
@@ -170,11 +221,11 @@ class AuthoritativeNodeEvidenceReconciler {
   getLedgerEntries(options = {}) {
     return this.repairLedger ?
       this.repairLedger.getEntries(options) :
-      Object.freeze([]);
+      EMPTY_LEDGER_ENTRIES;
   }
 
   buildRepairKey(nodeId, _options = {}) {
-    return String(nodeId || '');
+    return String(nodeId || EMPTY_STRING);
   }
 
   shouldBypassCooldown(options = {}) {
@@ -253,7 +304,7 @@ class AuthoritativeNodeEvidenceReconciler {
     this.recordRepair({
       nodeId,
       repairKey,
-      stage: 'scheduled',
+      stage: REPAIR_STAGE.SCHEDULED,
       allowAuthoritativeRefresh: options.allowAuthoritativeRefresh === true,
       requireFreshOnIneligible: options.requireFreshOnIneligible === true,
       decisionDimension: this.resolveDecisionDimension(options),
@@ -272,7 +323,7 @@ class AuthoritativeNodeEvidenceReconciler {
           this.recordRepair({
             nodeId,
             repairKey,
-            stage: 'cooldown_skipped',
+            stage: REPAIR_STAGE.COOLDOWN_SKIPPED,
             decisionDimension: this.resolveDecisionDimension(options),
             cooldownMs,
             lastRepairAtMs: lastRepairAt,
@@ -291,7 +342,7 @@ class AuthoritativeNodeEvidenceReconciler {
           this.recordRepair({
             nodeId,
             repairKey,
-            stage: 'completed',
+            stage: REPAIR_STAGE.COMPLETED,
             decisionDimension: this.resolveDecisionDimension(options),
             outcome: normalizedRepairResult.outcome,
             repaired: normalizedRepairResult.repaired === true,
@@ -307,14 +358,14 @@ class AuthoritativeNodeEvidenceReconciler {
           this.recordRepair({
             nodeId,
             repairKey,
-            stage: 'failed',
+            stage: REPAIR_STAGE.FAILED,
             decisionDimension: this.resolveDecisionDimension(options),
             repaired: false,
-            outcome: 'failed',
+            outcome: REPAIR_OUTCOME_FAILED,
             error: error?.message || String(error),
           });
           this.logger.warn(
-            'Authoritative readiness repair failed',
+            REPAIR_FAILED_LOG_MESSAGE,
             {
               nodeId,
               error: error?.message || String(error),
@@ -329,109 +380,150 @@ class AuthoritativeNodeEvidenceReconciler {
   }
 
   async repairNodeEvidence(nodeId, _options = {}) {
-    const causeId = `readiness-authoritative-cache-repair:${nodeId}:${Date.now()}`;
+    const repairContext = await this.collectRepairNodeEvidenceContext(nodeId);
+    return this.buildRepairNodeEvidenceOutcome(nodeId, repairContext);
+  }
+
+  async collectRepairNodeEvidenceContext(nodeId) {
+    const causeId = `${REPAIR_CAUSE_PREFIX}${nodeId}:${Date.now()}`;
     const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
     if (!authoritativeControlPlaneView) {
       return {
-        repaired: false,
-        outcome: 'failed',
+        state: AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE,
+        repairedRowCount: NUM.ZERO,
+        nodeRowCount: NUM.ZERO,
+        serviceRowCount: NUM.ZERO,
       };
     }
+
     const snapshot = await authoritativeControlPlaneView.readNodeSnapshot(
       nodeId,
       {
         queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
       },
     );
-    const nodeRows = snapshot.tables.nodes.success ? snapshot.nodeRows : null;
+    const nodeRowObservation =
+      snapshot?.tables?.nodes?.success === true ?
+        AUTHORITATIVE_ROW_OBSERVATION.OBSERVED :
+        AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
+    const serviceRowObservation =
+      snapshot?.tables?.services?.success === true ?
+        AUTHORITATIVE_ROW_OBSERVATION.OBSERVED :
+        AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
+    const nodeRows =
+      nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED &&
+        Array.isArray(snapshot?.nodeRows) ?
+        snapshot.nodeRows :
+        EMPTY_REPAIR_ROWS;
     const serviceRows =
-      snapshot.tables.services.success ? snapshot.serviceRows : null;
-
-    if (!nodeRows && !serviceRows) {
-      return {
-        repaired: false,
-        outcome: 'failed',
-        nodeRowCount: NUM.ZERO,
-        serviceRowCount: NUM.ZERO,
-      };
-    }
-
+      serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED &&
+        Array.isArray(snapshot?.serviceRows) ?
+        snapshot.serviceRows :
+        EMPTY_REPAIR_ROWS;
+    const nodeRowCount = nodeRows.length;
+    const serviceRowCount = serviceRows.length;
+    const snapshotUnavailable =
+      nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE &&
+      serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
     let repairedRowCount = NUM.ZERO;
-    const cachedNodeRow = await this.readNodeRow(nodeId);
-    const cachedServiceRows = await this.readNodeServiceRows(nodeId);
-    if (nodeRows) {
-      repairedRowCount += await this.applyAuthoritativeRows(
-        TABLES.NODES,
-        nodeRows,
-        cachedNodeRow ? [cachedNodeRow] : [],
-        causeId,
-      );
-    }
-    if (serviceRows) {
-      repairedRowCount += await this.applyAuthoritativeRows(
-        TABLES.SERVICES,
-        serviceRows,
-        cachedServiceRows,
-        causeId,
-      );
+
+    if (!snapshotUnavailable) {
+      const cachedNodeRow = await this.readNodeRow(nodeId);
+      const cachedServiceRows = await this.readNodeServiceRows(nodeId);
+      if (nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED) {
+        repairedRowCount += await this.applyAuthoritativeRows(
+          TABLES.NODES,
+          nodeRows,
+          cachedNodeRow ? [cachedNodeRow] : EMPTY_REPAIR_ROWS,
+          causeId,
+        );
+      }
+      if (serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED) {
+        repairedRowCount += await this.applyAuthoritativeRows(
+          TABLES.SERVICES,
+          serviceRows,
+          cachedServiceRows,
+          causeId,
+        );
+      }
     }
 
-    if (repairedRowCount > NUM.ZERO) {
-      this.logger.warn(
-        'Repaired readiness cache from authoritative node/service rows',
-        {
-          nodeId,
-          repairedRowCount,
-          repairedNodeRowCount: Array.isArray(nodeRows) ? nodeRows.length : 0,
-          repairedServiceRowCount:
-            Array.isArray(serviceRows) ? serviceRows.length : 0,
-        },
-      );
-      return {
-        repaired: true,
-        outcome: 'repaired',
-        nodeRowCount: Array.isArray(nodeRows) ? nodeRows.length : NUM.ZERO,
-        serviceRowCount:
-          Array.isArray(serviceRows) ? serviceRows.length : NUM.ZERO,
-      };
-    }
+    const repairState = snapshotUnavailable ?
+      AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE :
+      repairedRowCount > NUM.ZERO ?
+        AUTHORITATIVE_REPAIR_STATE.REPAIRED :
+        AUTHORITATIVE_REPAIR_STATE.UNCHANGED;
 
     return {
-      repaired: false,
-      outcome: 'unchanged',
-      nodeRowCount: Array.isArray(nodeRows) ? nodeRows.length : NUM.ZERO,
-      serviceRowCount:
-        Array.isArray(serviceRows) ? serviceRows.length : NUM.ZERO,
+      state: repairState,
+      repairedRowCount,
+      nodeRowCount,
+      serviceRowCount,
     };
+  }
+
+  buildRepairNodeEvidenceOutcome(nodeId, repairContext = {}) {
+    switch (repairContext.state) {
+      case AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE:
+      case AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE:
+        return buildRepairOutcome({outcome: REPAIR_OUTCOME_FAILED});
+      case AUTHORITATIVE_REPAIR_STATE.REPAIRED:
+        this.logger.warn(
+          REPAIR_APPLIED_LOG_MESSAGE,
+          {
+            nodeId,
+            repairedRowCount: repairContext.repairedRowCount,
+            repairedNodeRowCount: repairContext.nodeRowCount,
+            repairedServiceRowCount: repairContext.serviceRowCount,
+          },
+        );
+        return buildRepairOutcome({
+          repaired: true,
+          outcome: REPAIR_OUTCOME_REPAIRED,
+          nodeRowCount: repairContext.nodeRowCount,
+          serviceRowCount: repairContext.serviceRowCount,
+        });
+      case AUTHORITATIVE_REPAIR_STATE.UNCHANGED:
+        return buildRepairOutcome({
+          outcome: REPAIR_OUTCOME_UNCHANGED,
+          nodeRowCount: repairContext.nodeRowCount,
+          serviceRowCount: repairContext.serviceRowCount,
+        });
+      default:
+        throw new Error(
+          UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX +
+          String(repairContext.state),
+        );
+    }
   }
 
   normalizeRepairResult(repairResult) {
     if (repairResult && typeof repairResult === TYPEOF.OBJECT) {
-      return {
+      return buildRepairOutcome({
         repaired: repairResult.repaired === true,
-        outcome: String(repairResult.outcome || 'unchanged'),
+        outcome: String(repairResult.outcome || REPAIR_OUTCOME_UNCHANGED),
         nodeRowCount: Number.isFinite(repairResult.nodeRowCount) ?
           repairResult.nodeRowCount :
           NUM.ZERO,
         serviceRowCount: Number.isFinite(repairResult.serviceRowCount) ?
           repairResult.serviceRowCount :
           NUM.ZERO,
-      };
+      });
     }
-    return {
+    return buildRepairOutcome({
       repaired: repairResult === true,
-      outcome: repairResult === true ? 'repaired' : 'unchanged',
-      nodeRowCount: NUM.ZERO,
-      serviceRowCount: NUM.ZERO,
-    };
+      outcome: repairResult === true ?
+        REPAIR_OUTCOME_REPAIRED :
+        REPAIR_OUTCOME_UNCHANGED,
+    });
   }
 
   resolveCooldownMs(repairResult) {
     if (repairResult?.repaired === true ||
-        repairResult?.outcome === 'repaired') {
+        repairResult?.outcome === REPAIR_OUTCOME_REPAIRED) {
       return this.authoritativeReadinessRepairCooldownMs;
     }
-    if (repairResult?.outcome === 'failed') {
+    if (repairResult?.outcome === REPAIR_OUTCOME_FAILED) {
       return this.authoritativeReadinessRepairFailureCooldownMs;
     }
     return this.authoritativeReadinessRepairNoChangeCooldownMs;
@@ -455,8 +547,8 @@ class AuthoritativeNodeEvidenceReconciler {
   getControlPlaneSystemTableGateway() {
     return assertCritical(
       this.controlPlaneSystemTableGateway,
-      'AuthoritativeNodeEvidenceReconciler requires ' +
-        'controlPlaneSystemTableGateway',
+      REPAIR_REQUIRED_DEPENDENCY_ERROR_PREFIX +
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY,
     );
   }
 }

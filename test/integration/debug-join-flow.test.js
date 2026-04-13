@@ -13,6 +13,7 @@ import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
+  waitFor,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
 import {SERVICE_TYPE, TABLES, NUM} from '../../src/constants/index.js';
@@ -44,7 +45,7 @@ function createInProcHttpPost(seedApi) {
   };
 }
 
-test('Debug join flow', {timeout: 30000}, async (t) => {
+test('Debug join flow', {timeout: 20000}, async (t) => {
   initializeTestEnvironment();
 
   const seedNodeId = '550e8400-e29b-41d4-a716-446655440099';
@@ -62,6 +63,7 @@ test('Debug join flow', {timeout: 30000}, async (t) => {
   let bootstrapResult;
   let seedApi;
   let joiningService;
+  const phases = [];
 
   try {
     bootstrapResult = await bootstrapService.bootstrap();
@@ -157,12 +159,14 @@ test('Debug join flow', {timeout: 30000}, async (t) => {
         leadershipWaitInitialDelayMs: 5,
         leadershipWaitMaxDelayMs: 50,
         replicaStaggerDelayMs: 20,
+        joinRegistrationMaxAttempts: 1,
       },
       httpPost,
     });
 
     // Add event listeners to track progress
     joiningService.on(BOOTSTRAP_EVENT.PHASE_START, (data) => {
+      phases.push(data.phase);
       console.log('DEBUG: Phase started:', data.phase);
     });
     joiningService.on(BOOTSTRAP_EVENT.PHASE_COMPLETE, (data) => {
@@ -173,10 +177,44 @@ test('Debug join flow', {timeout: 30000}, async (t) => {
     });
 
     console.log('DEBUG: Starting join...');
-    const joinResult = await joiningService.join();
+    const joinPromise = joiningService.join().catch((error) => ({
+      success: false,
+      error: error.message,
+    }));
+    const reachedQueryingState = await waitFor(() => {
+      return phases.includes('querying_state');
+    }, 5000);
+    t.equal(reachedQueryingState, true, 'join should reach querying_state');
+
+    const joinResult = await Promise.race([
+      joinPromise,
+      new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            success: false,
+            error: 'join did not finish within debug budget',
+          });
+        }, 1000);
+      }),
+    ]);
     console.log('DEBUG: Join result:', joinResult.success, joinResult.error);
 
-    t.equal(joinResult.success, true, 'node join should succeed');
+    t.equal(joinResult.success, true,
+      'debug harness should complete the repaired registration flow');
+
+    const joinedNodesResult = await sqlQueryEngine.executeQuery(
+      'SELECT * FROM nodes',
+    );
+    const joinedNodeRecord = Array.isArray(joinedNodesResult.rows) ?
+      joinedNodesResult.rows.find((row) => row.node_id === joiningNodeId) :
+      null;
+
+    t.equal(joinedNodesResult.success, true,
+      'seed query should succeed after the join completes');
+    t.ok(
+      joinedNodeRecord,
+      'joined node should be visible from the seed nodes view after registration',
+    );
   } catch (error) {
     console.log('DEBUG: Error during test:', error.message);
     console.log('DEBUG: Error stack:', error.stack);

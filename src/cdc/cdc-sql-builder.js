@@ -18,6 +18,28 @@ import {
   CDC_SQL,
 } from './cdc-constants.js';
 
+const DEFAULT_VALUE_NORMALIZATION_STATE = Object.freeze({
+  NULL: 'null',
+  UNDEFINED: 'undefined',
+  VALUE: 'value',
+});
+
+const TABLE_NAME_EXTRACTION_STATE = Object.freeze({
+  FOUND: 'found',
+  INVALID_INPUT: 'invalid_input',
+  NOT_FOUND: 'not_found',
+});
+
+function materializeNormalizedDefaultValue(result) {
+  if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.VALUE) {
+    return result.value;
+  }
+  if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.NULL) {
+    return null;
+  }
+  return undefined;
+}
+
 /**
  * CDCSqlBuilder provides SQL building utilities for CDC operations.
  *
@@ -122,29 +144,59 @@ class CDCSqlBuilder {
   }
 
   /**
-   * Normalize schema default values (strip quotes, parse numbers).
+   * Normalize one schema default into an explicit result contract.
    * @param {string|number|null} value - Default value.
-   * @return {string|number|null} Normalized default.
+   * @return {Object} Explicit normalization result.
    */
   normalizeDefaultValue(value) {
-    if (value === undefined || value === null) {
-      return value;
+    return this.normalizeDefaultValueResult(value);
+  }
+
+  /**
+   * Normalize one default value into an explicit result state.
+   * @param {string|number|null} value
+   * @return {Object}
+   */
+  normalizeDefaultValueResult(value) {
+    if (value === undefined) {
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.UNDEFINED,
+      });
+    }
+    if (value === null) {
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.NULL,
+      });
     }
     if (typeof value !== TYPEOF.STRING) {
-      return value;
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
+        value,
+      });
     }
     const trimmed = value.trim();
     if ((trimmed.startsWith('\'') && trimmed.endsWith('\'')) ||
         (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
-      return trimmed.slice(NUM.ONE, NUM.NEGATIVE_ONE);
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
+        value: trimmed.slice(NUM.ONE, NUM.NEGATIVE_ONE),
+      });
     }
     if (trimmed.toLowerCase() === 'null') {
-      return null;
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.NULL,
+      });
     }
     if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-      return Number(trimmed);
+      return Object.freeze({
+        state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
+        value: Number(trimmed),
+      });
     }
-    return trimmed;
+    return Object.freeze({
+      state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
+      value: trimmed,
+    });
   }
 
   /**
@@ -160,47 +212,80 @@ class CDCSqlBuilder {
       if (column.defaultValue === undefined) {
         continue;
       }
-      rowData[column.name] = this.normalizeDefaultValue(column.defaultValue);
+      const normalizedDefault =
+        this.normalizeDefaultValueResult(column.defaultValue);
+      if (normalizedDefault.state ===
+          DEFAULT_VALUE_NORMALIZATION_STATE.UNDEFINED) {
+        continue;
+      }
+      rowData[column.name] =
+        materializeNormalizedDefaultValue(normalizedDefault);
     }
   }
 
   /**
    * Extract table name from SQL statement.
-   * Supports INSERT INTO, UPDATE, DELETE FROM, and INSERT OR REPLACE INTO.
+   * Supports INSERT INTO, UPDATE, DELETE FROM, and SQLite
+   * INSERT OR <modifier> INTO statements.
    *
    * @param {string} sql - SQL query string.
-   * @return {string|null} Table name or null if not found.
+   * @return {Object} Explicit table-name extraction result.
    */
   extractTableNameFromSQL(sql) {
+    return this.extractTableNameResult(sql);
+  }
+
+  /**
+   * Extract table name from SQL statement into an explicit result state.
+   * @param {string} sql
+   * @return {Object}
+   */
+  extractTableNameResult(sql) {
     if (!sql || typeof sql !== TYPEOF.STRING) {
-      return null;
+      return Object.freeze({
+        state: TABLE_NAME_EXTRACTION_STATE.INVALID_INPUT,
+      });
     }
 
-    // INSERT INTO table_name or INSERT OR REPLACE INTO table_name
-    let match = sql.match(/INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+(\w+)/i);
+    // INSERT INTO table_name or INSERT OR <modifier> INTO table_name
+    let match = sql.match(/INSERT\s+(?:OR\s+\w+\s+)?INTO\s+(\w+)/i);
     if (match) {
-      return match[NUM.ONE];
+      return Object.freeze({
+        state: TABLE_NAME_EXTRACTION_STATE.FOUND,
+        tableName: match[NUM.ONE],
+      });
     }
 
     // UPDATE table_name SET
     match = sql.match(/UPDATE\s+(\w+)\s+SET/i);
     if (match) {
-      return match[NUM.ONE];
+      return Object.freeze({
+        state: TABLE_NAME_EXTRACTION_STATE.FOUND,
+        tableName: match[NUM.ONE],
+      });
     }
 
     // DELETE FROM table_name
     match = sql.match(/DELETE\s+FROM\s+(\w+)/i);
     if (match) {
-      return match[NUM.ONE];
+      return Object.freeze({
+        state: TABLE_NAME_EXTRACTION_STATE.FOUND,
+        tableName: match[NUM.ONE],
+      });
     }
 
     // SELECT FROM table_name (for completeness, though not used in bootstrap)
     match = sql.match(/FROM\s+(\w+)/i);
     if (match) {
-      return match[NUM.ONE];
+      return Object.freeze({
+        state: TABLE_NAME_EXTRACTION_STATE.FOUND,
+        tableName: match[NUM.ONE],
+      });
     }
 
-    return null;
+    return Object.freeze({
+      state: TABLE_NAME_EXTRACTION_STATE.NOT_FOUND,
+    });
   }
 }
 

@@ -57,6 +57,11 @@ const BACKGROUND_PERSISTENCE_STATES = new Set([
   ReplicaState.SYNCING,
   ReplicaState.REMOVING,
 ]);
+const CLEARS_CANONICAL_PARTITION_LEADER_STATES = new Set([
+  ReplicaState.REMOVING,
+  ReplicaState.REMOVED,
+  ReplicaState.FAILED,
+]);
 
 /**
  * ReplicaStateMachine - Central state machine for replica lifecycle.
@@ -475,6 +480,37 @@ class ReplicaStateMachine extends EventEmitter {
 
       throw error;
     }
+  }
+
+  async _clearCanonicalPartitionLeaderIfNeeded(replicaState) {
+    if (!replicaState ||
+        replicaState.serviceType !== SERVICE_TYPE.PARTITION ||
+        !CLEARS_CANONICAL_PARTITION_LEADER_STATES.has(replicaState.state) ||
+        typeof replicaState.partitionId !== TYPEOF.STRING ||
+        replicaState.partitionId.length === 0 ||
+        typeof replicaState.nodeId !== TYPEOF.STRING ||
+        replicaState.nodeId.length === 0) {
+      return;
+    }
+
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.PARTITIONS,
+      whereClause: {
+        partition_id: replicaState.partitionId,
+        leader_node_id: replicaState.nodeId,
+      },
+      data: {
+        leader_node_id: null,
+        updated_at: replicaState.stateEnteredAt,
+      },
+    }, {
+      allowCoalescing: true,
+      coalescingKey: `partitions:leader:${replicaState.partitionId}`,
+      deliveryPriority: 'critical',
+      workClass: 'critical',
+      skipCacheWait: true,
+    });
   }
 
   /**

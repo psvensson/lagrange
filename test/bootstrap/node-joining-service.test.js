@@ -1151,6 +1151,50 @@ test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with 
     t.ok(retryDelays[0] > 30, 'should apply positive jitter on top of retry hint');
   });
 
+test('NodeJoiningService - exhausted retryable seed-contact timeouts preserve ' +
+  'auto-resume hints', async (t) => {
+  initializeTestEnvironment();
+
+  let currentNow = 0;
+  const retryDelays = [];
+  const service = new NodeJoiningService({
+    nodeId: '550e8400-e29b-41d4-a716-446655440109',
+    nodeAddress: 'ws://localhost:9090',
+    seedNodeAddress: 'http://localhost:8080',
+    now: () => currentNow,
+    sleep: async (delayMs) => {
+      retryDelays.push(delayMs);
+      currentNow += delayMs;
+    },
+    config: {
+      httpTimeoutMs: 10,
+      leadershipWaitTimeoutMs: 20,
+      leadershipWaitInitialDelayMs: 5,
+      leadershipWaitMaxDelayMs: 5,
+      leadershipWaitBackoffMultiplier: 1,
+      leadershipWaitJitterRatio: 0,
+    },
+    httpPost: async () => {
+      currentNow += 10;
+      throw new Error('Request timeout after 10ms');
+    },
+  });
+
+  const error = await t.rejects(
+    service.phaseContactSeed(),
+    'retryable timeout exhaustion should still throw',
+  );
+
+  t.equal(
+    error?.message,
+    'Failed to contact seed node: Request timeout after 10ms',
+    'retryable timeout exhaustion should keep the contact-seed context',
+  );
+  t.equal(error?.deferRetry, true, 'retryable timeout exhaustion should preserve retryability');
+  t.equal(error?.retryAfterMs, 10, 'retryable timeout exhaustion should preserve retry delay hints');
+  t.same(retryDelays, [10], 'phase should make one bounded retry before surfacing exhaustion');
+});
+
 test('NodeJoiningService - treats bootstrap validation/conflict failures as terminal',
   async (t) => {
     initializeTestEnvironment();
@@ -1641,7 +1685,63 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
 });
 
 test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
-  'local ingress when no remote target is reachable', async (t) => {
+  'optimistic remote authoritative ingress even when the mesh connection is ' +
+  'not yet established', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-ready-heartbeat-optimistic-remote',
+    nodeAddress: 'ws://localhost:909412',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r2',
+      peerAddresses: [
+        'seed-node-1/message-group/mg-1-r1',
+      ],
+    },
+  };
+  const deliveries = [];
+  service.messageRouter = {
+    getConnectionState(nodeId) {
+      return nodeId === 'joining-node-ready-heartbeat-optimistic-remote' ?
+        'connected' :
+        'disconnected';
+    },
+    async deliver(targetAddress, message) {
+      deliveries.push({targetAddress, state: message.state});
+      return {acknowledged: true};
+    },
+  };
+  service.messageGroupServices.set('mg-1-r2', {
+    groupId: 'mg-1',
+    unifiedAddress:
+      'joining-node-ready-heartbeat-optimistic-remote/message-group/mg-1-r2',
+    isLeaderReplica: () => false,
+    getLeaderId: () => 'mg-1-r1',
+    isMetadataIngressReady: () => true,
+  });
+
+  await service.sendControlPlaneNodeStateUpdate({
+    state: STATE.READY,
+    heartbeatAt: Date.now(),
+  });
+
+  t.same(deliveries, [
+    {
+      targetAddress: 'seed-node-1/message-group/mg-1-r1',
+      state: STATE.READY,
+    },
+  ], 'READY heartbeats should still try remote authoritative ingress before local self-target when transport delivery can reconnect on demand');
+});
+
+test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
+  'local ingress when optimistic remote delivery fails', async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
@@ -1670,6 +1770,12 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
     },
     async deliver(targetAddress, message) {
       deliveries.push({targetAddress, state: message.state});
+      if (targetAddress === 'seed-node-1/message-group/mg-1-r1') {
+        return {
+          acknowledged: false,
+          error: 'No connection to node seed-node-1',
+        };
+      }
       return {acknowledged: true};
     },
   };
@@ -1689,11 +1795,15 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
 
   t.same(deliveries, [
     {
+      targetAddress: 'seed-node-1/message-group/mg-1-r1',
+      state: STATE.READY,
+    },
+    {
       targetAddress:
         'joining-node-ready-heartbeat-local-fallback/message-group/mg-1-r2',
       state: STATE.READY,
     },
-  ], 'READY heartbeats should retain local fallback when no remote ingress is reachable');
+  ], 'READY heartbeats should retain local fallback after a retryable remote delivery failure');
 });
 
 test('NodeJoiningService - query transport selection uses initialized local ' +
@@ -1850,7 +1960,7 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
 
     const deliveries = [];
     service.controlPlaneKernelIngress = {
-      resolveTargetCandidates: () => [
+      resolveNodeStateUpdateTargetCandidates: () => [
         'stale-node/message-group/mg-1-r9',
         'seed-node-1/message-group/mg-1-r3',
       ],
@@ -1947,6 +2057,62 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
     );
   });
 
+test('NodeJoiningService - retries CONNECTED NODE_STATE_UPDATE once on the same target after a deferred transport failure',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-same-target-retry',
+      nodeAddress: 'ws://localhost:909551',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+      },
+    };
+
+    const deliveries = [];
+    const sleepCalls = [];
+    service.sleep = async (delayMs) => {
+      sleepCalls.push(delayMs);
+    };
+    service.controlPlaneKernelIngress = {
+      resolveNodeStateUpdateTargetCandidates: () => [
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+      invalidateTarget() {},
+      noteSuccessfulTarget() {},
+    };
+    service.messageRouter = {
+      async deliver(targetAddress) {
+        deliveries.push(targetAddress);
+        if (deliveries.length === 1) {
+          return {
+            acknowledged: false,
+            error: 'Connection to node seed-node-1 closed',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 25,
+          };
+        }
+        return {acknowledged: true};
+      },
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.CONNECTED});
+
+    t.same(deliveries, [
+      'seed-node-1/message-group/mg-1-r3',
+      'seed-node-1/message-group/mg-1-r3',
+    ], 'connected publication should retry the same authoritative target once after a deferred transport failure');
+    t.same(sleepCalls, [25],
+      'same-target retry should honor the deferred retry-after hint');
+  });
+
 test('NodeJoiningService - prefers live local control-plane ingress over a stale confirmed remote lease',
   async (t) => {
     initializeTestEnvironment();
@@ -2029,7 +2195,7 @@ test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport fai
 
     const deliveries = [];
     service.controlPlaneKernelIngress = {
-      resolveTargetCandidates: () => [
+      resolveNodeStateUpdateTargetCandidates: () => [
         'seed-node-2/message-group/mg-1-r4',
         'seed-node-1/message-group/mg-1-r3',
       ],
@@ -2305,9 +2471,10 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     );
 
     const callOrder = [];
-    service.resolveControlPlaneTargetAddressCandidates = () => [
+    service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
+      () => [
       'seed-node/message-group/mg-1-r1',
-    ];
+      ];
     service.messageRouter = {
       nodeConnections: new Map([
         ['seed-node', {state: 'connected'}],
@@ -2436,9 +2603,10 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     }
 
     const callOrder = [];
-    service.resolveControlPlaneTargetAddressCandidates = () => [
+    service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
+      () => [
       'seed-node/message-group/mg-1-r1',
-    ];
+      ];
     service.messageRouter = {
       nodeConnections: new Map([
         ['seed-node', {state: 'connected'}],
@@ -2503,9 +2671,10 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
     }
 
     const callOrder = [];
-    service.resolveControlPlaneTargetAddressCandidates = () => [
+    service.controlPlaneKernelIngress.resolveNodeStateUpdateTargetCandidates =
+      () => [
       'seed-node/message-group/mg-1-r1',
-    ];
+      ];
     service.messageRouter = {
       nodeConnections: new Map([
         ['seed-node', {state: 'connected'}],
@@ -3467,6 +3636,90 @@ test('NodeJoiningService - auto-resumes retryable join failures in the same proc
       'auto-resume should rerun the failed membership checkpoint',
     );
   });
+
+test('NodeJoiningService - resets STOPPED lifecycle before retryable resume attempts',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-lifecycle-reset-1',
+      nodeAddress: 'ws://localhost:9001',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.lifecycleStateMachine.transition('connecting');
+    service.lifecycleStateMachine.transition('stopped');
+    service.phase = JoiningPhase.FAILED;
+    service._completedJoinPhases = [JoiningPhase.CONTACTING_SEED];
+
+    service.resetLifecycleStateForRetryableResumeAttempt(2);
+
+    t.equal(
+      service.lifecycleStateMachine.getState(),
+      'starting',
+      'retryable resume should reinitialize lifecycle from STARTING',
+    );
+    t.equal(
+      service.getPhase(),
+      JoiningPhase.NOT_STARTED,
+      'retryable resume should reset join phase before next attempt',
+    );
+    t.equal(
+      service._completedJoinPhases.length,
+      0,
+      'retryable resume should clear deferred completed sub-phases',
+    );
+    t.equal(
+      service.lifecycleStateMachine.transition('connecting'),
+      true,
+      'reinitialized lifecycle should allow CONNECTING transition',
+    );
+  });
+
+test('NodeJoiningService - retryable auto-resume budget covers one full ' +
+  'contact-seed retry window', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-auto-resume-budget-1',
+    nodeAddress: 'ws://localhost:9099',
+    seedNodeAddress: 'http://localhost:8080',
+    config: {
+      autoResumeRetryableFailures: true,
+      leadershipWaitTimeoutMs: 240000,
+      httpTimeoutMs: 60000,
+    },
+  });
+
+  const policy = service.resolveRetryableJoinResumePolicy();
+  t.equal(
+    policy.maxElapsedMs,
+    300000,
+    'resume budget should allow one full seed-contact retry window plus the in-flight HTTP timeout',
+  );
+
+  service.startTime = 0;
+  service.now = () => 240668;
+  const retryableSeedTimeout = new Error(
+    'Failed to contact seed node: Request timeout after 60000ms',
+  );
+  retryableSeedTimeout.deferRetry = true;
+  retryableSeedTimeout.retryAfterMs = 5000;
+
+  t.equal(
+    service.shouldAutoResumeRetryableJoinFailure(
+      retryableSeedTimeout,
+      {
+        phase: 'contacting_seed',
+        error: 'Failed to contact seed node: Request timeout after 60000ms',
+      },
+      1,
+      policy,
+    ),
+    true,
+    'one full contact-seed timeout window should not exhaust auto-resume before a retry can begin',
+  );
+});
 
 test(
   'NodeJoiningService - does not transition READY when canonical join readiness has ' +
@@ -5577,6 +5830,133 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
       t.notOk(
         subscribedTables.includes(TABLES.LOGS),
         'non-propagated tables must not join the default cache-sync subscriptions',
+      );
+    } finally {
+      ReplicaHandlerSetup.create = originalReplicaHandlerCreate;
+      NodeService.getInstance = originalGetNodeService;
+      PartitionService.prototype.initialize = originalInitialize;
+      PartitionService.prototype.subscribeToCDCWithHandshake =
+        originalSubscribeToCDCWithHandshake;
+    }
+  });
+
+test('NodeJoiningService - CDC propagation reuses captured ingress when operational selection churns',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-cdc-propagation-fallback',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const cache = new SystemTableCache();
+    let capturedCreatePartitionService = null;
+    let capturedSubscriber = null;
+    let propagatedMessageGroupService = null;
+    let propagatedEvent = null;
+    const originalReplicaHandlerCreate = ReplicaHandlerSetup.create;
+    const originalGetNodeService = NodeService.getInstance;
+    const originalInitialize = PartitionService.prototype.initialize;
+    const originalSubscribeToCDCWithHandshake =
+      PartitionService.prototype.subscribeToCDCWithHandshake;
+
+    try {
+      service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
+      service.transport = {unregister() {}};
+      service.systemCacheHydrated = true;
+      service.tablePolicyService = {};
+      service.rebalanceCoordinator = {};
+      const preferredMessageGroupService = {
+        groupId: 'mg-preferred',
+        initialized: true,
+        isLeaderReplica: () => false,
+        getMetadataIngressReadiness: () => ({
+          ready: false,
+          reason: 'operational message-group ingress not ready',
+          retryAfterMs: 25,
+        }),
+        resolveMetadataIngressForwardSelection: async () => ({
+          localIngress: true,
+          strictForwardRetryAfterMs: 25,
+          targets: [],
+          suppressedCount: 0,
+        }),
+        subscribeToCDC: async () => {},
+      };
+      service.messageGroupServices = new Map([
+        ['mg-preferred', preferredMessageGroupService],
+      ]);
+      service.createCdcIntegrationService = () => ({
+        updateSystemTableRow: async () => true,
+        upsertSystemTableRow: async () => true,
+      });
+      service.propagatePartitionCDCEvent = async (messageGroupService, cdcEvent) => {
+        propagatedMessageGroupService = messageGroupService;
+        propagatedEvent = cdcEvent;
+      };
+
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      PartitionService.prototype.initialize = async function() {};
+      PartitionService.prototype.subscribeToCDCWithHandshake =
+        async function(subscriber, options = {}) {
+          capturedSubscriber = subscriber;
+          return {
+            subscriberId: options.subscriberId || 'sub-1',
+            subscriptionEpoch: 1,
+            catchup: {
+              mode: 'none',
+              bufferedEventsReplayed: 0,
+            },
+          };
+        };
+
+      ReplicaHandlerSetup.create = ({createPartitionService}) => {
+        capturedCreatePartitionService = createPartitionService;
+        return {
+          replicaHandler: {},
+          replicaStateMachine: {},
+        };
+      };
+
+      service.initializeReplicaHandler();
+
+      await capturedCreatePartitionService({
+        partitionId: `${TABLES.SQL_TRANSACTIONS}-p1`,
+        tableId: TABLES.SQL_TRANSACTIONS,
+        tableName: TABLES.SQL_TRANSACTIONS,
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: `${TABLES.SQL_TRANSACTIONS}-r1`,
+        replicaIds: [`${TABLES.SQL_TRANSACTIONS}-r1`],
+        peerAddresses: [],
+        nodeId: 'test-node-join-cdc-propagation-fallback',
+        isJoiningExistingGroup: true,
+      });
+
+      service.messageGroupServices = new Map();
+
+      const cdcEvent = {
+        tableName: TABLES.SQL_TRANSACTIONS,
+        operation: 'UPSERT',
+        data: {transaction_id: 'tx-1'},
+      };
+      await capturedSubscriber(cdcEvent);
+
+      t.equal(
+        propagatedMessageGroupService,
+        preferredMessageGroupService,
+        'join CDC propagation should reuse the captured ingress when operational selection temporarily loses the service',
+      );
+      t.same(
+        propagatedEvent,
+        cdcEvent,
+        'join CDC propagation should forward the original CDC event through the captured ingress',
       );
     } finally {
       ReplicaHandlerSetup.create = originalReplicaHandlerCreate;

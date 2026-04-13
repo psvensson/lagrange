@@ -296,47 +296,37 @@ class OciContainerDriver extends RuntimeDriver {
    */
   async health(replicaContext) {
     const gate = this._checkFeatureGate();
-    if (!gate.enabled) {
-      return {
+    const serviceId = replicaContext?.serviceId ??
+      replicaContext?.service_id;
+    const healthOutcome = !gate.enabled ?
+      {
         status: HEALTH_STATUS.UNKNOWN,
         detail: OCI_DRIVER_ERROR.FEATURE_GATE_DISABLED,
-      };
-    }
+      } :
+      !replicaContext ||
+        typeof replicaContext !== TYPEOF.OBJECT ?
+        {
+          status: HEALTH_STATUS.UNKNOWN,
+          detail: OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
+        } :
+        !serviceId ?
+          {
+            status: HEALTH_STATUS.UNKNOWN,
+            detail: OCI_DRIVER_ERROR.SERVICE_ID_REQUIRED,
+          } :
+          !this._prepared.has(serviceId) ?
+            {
+              status: HEALTH_STATUS.UNHEALTHY,
+              detail: `${OCI_DRIVER_ERROR.NOT_PREPARED}: '${serviceId}'`,
+            } :
+            !this._running.has(serviceId) ?
+              {
+                status: HEALTH_STATUS.UNHEALTHY,
+                detail: `${OCI_DRIVER_ERROR.NOT_STARTED}: '${serviceId}'`,
+              } :
+              {status: HEALTH_STATUS.HEALTHY};
 
-    if (!replicaContext ||
-        typeof replicaContext !== TYPEOF.OBJECT) {
-      return {
-        status: HEALTH_STATUS.UNKNOWN,
-        detail: OCI_DRIVER_ERROR.REPLICA_CONTEXT_REQUIRED,
-      };
-    }
-
-    const serviceId = replicaContext.serviceId ??
-      replicaContext.service_id;
-    if (!serviceId) {
-      return {
-        status: HEALTH_STATUS.UNKNOWN,
-        detail: OCI_DRIVER_ERROR.SERVICE_ID_REQUIRED,
-      };
-    }
-
-    if (!this._prepared.has(serviceId)) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: `${OCI_DRIVER_ERROR.NOT_PREPARED}` +
-          `: '${serviceId}'`,
-      };
-    }
-
-    if (!this._running.has(serviceId)) {
-      return {
-        status: HEALTH_STATUS.UNHEALTHY,
-        detail: `${OCI_DRIVER_ERROR.NOT_STARTED}` +
-          `: '${serviceId}'`,
-      };
-    }
-
-    return {status: HEALTH_STATUS.HEALTHY};
+    return healthOutcome;
   }
 }
 

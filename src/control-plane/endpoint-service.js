@@ -17,6 +17,9 @@ import {
   createSystemMetadataOwnerRequiredError,
 } from './system-metadata-access-error.js';
 import {
+  unwrapRowReadResult,
+} from './owners/system-metadata-owner-base.js';
+import {
   ENDPOINT_SUBSYSTEM,
   ENDPOINT_SVC_ERROR_MSG,
   ENDPOINT_SVC_EVENT,
@@ -86,10 +89,11 @@ class EndpointService extends EventEmitter {
     );
 
     const now = Date.now();
-    const queryResult = await this.serviceEndpointsOwner.getEndpoint(
+    const existing = unwrapRowReadResult(
+      await this.serviceEndpointsOwner.getEndpoint(
       endpointData.endpointId,
+      ),
     );
-    const existing = queryResult.rows?.[0] || null;
 
     let result;
     if (existing) {
@@ -165,8 +169,9 @@ class EndpointService extends EventEmitter {
    * @return {Promise<Object|null>} Endpoint data or null.
    */
   async getEndpoint(endpointId) {
-    const result = await this.serviceEndpointsOwner.getEndpoint(endpointId);
-    return result.rows?.[0] || null;
+    return unwrapRowReadResult(
+      await this.serviceEndpointsOwner.getEndpoint(endpointId),
+    );
   }
 
   /**

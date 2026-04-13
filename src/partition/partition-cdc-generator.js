@@ -4,7 +4,7 @@
  * Requirements: 6.2, 6.4, 6.6
  */
 
-import {CDC_OPERATION, NUM, SQL} from '../constants/index.js';
+import {CDC_OPERATION, NUM, SQL, TYPEOF} from '../constants/index.js';
 import {STRING} from '../constants/strings.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -275,8 +275,9 @@ class PartitionCDCGenerator {
     let tableName = entry.tableName || this.tableName;
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
       const extractedName = this.extractTableNameFromSQL(entry.sql);
-      if (extractedName) {
-        tableName = extractedName;
+      if (extractedName.state ===
+          PARTITION_SERVICE_VALUE.CDC_TABLE_NAME_EXTRACTION_STATE_FOUND) {
+        tableName = extractedName.tableName;
       }
     }
     return tableName;
@@ -285,19 +286,24 @@ class PartitionCDCGenerator {
   /**
    * Extract table name from SQL statement.
    * @param {string} sql - SQL statement.
-   * @return {string|null} Table name or null.
+   * @return {Object} Explicit table-name extraction result.
    * @private
    */
   extractTableNameFromSQL(sql) {
     const tableMatch = sql.match(
-      /(?:UPDATE|INSERT\s+(?:OR\s+REPLACE\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
+      /(?:UPDATE|INSERT\s+(?:OR\s+\w+\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
     );
     if (tableMatch) {
       const tableName = tableMatch[NUM.ONE];
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_TABLE_NAME, {tableName});
-      return tableName;
+      return Object.freeze({
+        state: PARTITION_SERVICE_VALUE.CDC_TABLE_NAME_EXTRACTION_STATE_FOUND,
+        tableName,
+      });
     }
-    return null;
+    return Object.freeze({
+      state: PARTITION_SERVICE_VALUE.CDC_TABLE_NAME_EXTRACTION_STATE_NOT_FOUND,
+    });
   }
 
   /**
@@ -772,7 +778,7 @@ class PartitionCDCGenerator {
   fetchUpdatedRow(tableName, whereClause) {
     if (!this.db ||
       !whereClause ||
-      typeof whereClause !== 'object' ||
+      typeof whereClause !== TYPEOF.OBJECT ||
       Object.keys(whereClause).length === NUM.ZERO) {
       return null;
     }

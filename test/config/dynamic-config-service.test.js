@@ -15,16 +15,34 @@ import {CONFIG_KEY} from '../../src/config/config-constants.js';
 /**
  * Create a mock CDC integration service.
  */
-function createMockCDCService() {
+function createMockCDCService(options = {}) {
   const insertedRows = [];
   const updatedRows = [];
+  const knownPrimaryKeys = new Set(
+    Array.isArray(options?.existingPrimaryKeys) ?
+      options.existingPrimaryKeys :
+      [],
+  );
 
   return {
     insertedRows,
     updatedRows,
-    async insertSystemTableRow(tableName, data) {
-      insertedRows.push({tableName, data});
-      return {success: true};
+    async insertSystemTableRow(tableName, data, options = {}) {
+      insertedRows.push({tableName, data, options});
+      const primaryKey =
+        data?.config_key ||
+        data?.node_id ||
+        data?.service_id ||
+        data?.log_id ||
+        null;
+      if (primaryKey && options?.ignoreExisting === true &&
+          knownPrimaryKeys.has(primaryKey)) {
+        return {success: true, affectedRows: 0};
+      }
+      if (primaryKey) {
+        knownPrimaryKeys.add(primaryKey);
+      }
+      return {success: true, affectedRows: 1};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       updatedRows.push({tableName, whereClause, data});
@@ -510,7 +528,9 @@ test('DynamicConfigService seedConfiguration', async (t) => {
 
 test('DynamicConfigService seedConfiguration skips existing',
   async (t) => {
-    const mockCDC = createMockCDCService();
+    const mockCDC = createMockCDCService({
+      existingPrimaryKeys: ['logging.level'],
+    });
     const mockEngine = createMockSqlEngine({
       'logging.level': {
         config_key: 'logging.level',
@@ -591,6 +611,36 @@ test('DynamicConfigService seedConfiguration bootstrap fast path skips reads',
       mockCDC.insertedRows.length,
       Object.keys(CONFIG_DEFINITIONS).length,
       'should write directly through CDC for each definition',
+    );
+  });
+
+test('DynamicConfigService seedConfiguration fast path remains idempotent',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const service = new DynamicConfigService({
+      cdcIntegrationService: mockCDC,
+      nodeId: 'test-node',
+    });
+    await service.initialize();
+
+    await service.seedConfiguration('system', {
+      skipExistingCheck: true,
+      useDirectCdcMutations: true,
+    });
+    const secondResult = await service.seedConfiguration('system', {
+      skipExistingCheck: true,
+      useDirectCdcMutations: true,
+    });
+
+    t.equal(
+      secondResult.seeded.length,
+      0,
+      'replayed bootstrap seeding should not insert duplicates',
+    );
+    t.equal(
+      secondResult.skipped.length,
+      Object.keys(CONFIG_DEFINITIONS).length,
+      'replayed bootstrap seeding should classify existing keys as skipped',
     );
   });
 

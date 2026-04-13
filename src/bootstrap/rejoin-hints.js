@@ -18,6 +18,41 @@ const STARTUP_MODE_JOIN = 'join';
 const STARTUP_MODE_SEED = 'seed';
 const STARTUP_MODE_FAIL = 'fail';
 const SQLITE_TABLE_TYPE = 'table';
+const EMPTY_STRING = '';
+const MULTI_NODE_CLUSTER_THRESHOLD = 1;
+const RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER = 2;
+const UTF8_ENCODING = 'utf8';
+const JSON_INDENT_SPACES = 2;
+const JSON_LINE_SUFFIX = '\n';
+const AUTO_REJOIN_REQUIRED_ERROR_CODE = 'AUTO_REJOIN_REQUIRED';
+const REJOIN_SOURCE = Object.freeze({
+  NONE: 'none',
+  REJOIN_HINTS: 'rejoin_hints',
+  DURABLE_NODES_TABLE: 'durable_nodes_table',
+});
+const PEER_ADDRESS_STATE = Object.freeze({
+  SELECTED: 'selected',
+  UNAVAILABLE: 'unavailable',
+});
+const AUTO_REJOIN_DECISION_STATE = Object.freeze({
+  IDENTITY_MISMATCH: 'identity_mismatch',
+  DURABLE_SEED: 'durable_seed',
+  JOIN_PROBED_PEER: 'join_probed_peer',
+  JOIN_RECOVERED_PEER: 'join_recovered_peer',
+  PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
+  FRESH_SEED: 'fresh_seed',
+});
+const IDENTITY_MISMATCH_ERROR_MESSAGE =
+  'Persistent cluster state belongs to a different node identity; ' +
+  'refusing to start with mismatched data directory';
+const DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE =
+  'Persistent multi-node cluster state was detected but no rejoin peer ' +
+  'address could be recovered; refusing to bootstrap a fresh seed over ' +
+  'existing durable state';
+const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
+  'Failed to persist cluster rejoin hints';
+const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
+  'Unknown auto-rejoin startup decision state: ';
 const SQL_TABLE_EXISTS =
   'SELECT 1 AS present FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1';
 const SQL_SELECT_NODES =
@@ -86,7 +121,8 @@ function normalizePeerAddresses(peerAddresses, nodeId, nodeAddress) {
 
 function deriveRequiresPeerRejoin(options = {}) {
   return normalizeNodeRole(options.nodeRole) === REJOIN_ROLE_JOINER ||
-    parseClusterNodeCount(options.clusterNodeCount) > 1 ||
+    parseClusterNodeCount(options.clusterNodeCount) >
+      MULTI_NODE_CLUSTER_THRESHOLD ||
     normalizePeerAddresses(options.peerAddresses).length > NUM.ZERO;
 }
 
@@ -137,7 +173,9 @@ function buildBootstrapRejoinHintsSnapshot(options = {}) {
   );
   const clusterNodeCount = Math.max(
     parseClusterNodeCount(options.clusterNodeCount),
-    peerAddresses.length > NUM.ZERO ? NUM.ZERO + 2 : NUM.ZERO,
+    peerAddresses.length > NUM.ZERO ?
+      RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER :
+      NUM.ZERO,
   );
 
   return {
@@ -175,8 +213,8 @@ async function persistRejoinHintsSnapshot(dataDir, snapshot) {
     `${process.pid}.${rejoinHintsTempSequence++}`;
   await writeFile(
     tempPath,
-    JSON.stringify(snapshot, null, 2) + '\n',
-    'utf8',
+    JSON.stringify(snapshot, null, JSON_INDENT_SPACES) + JSON_LINE_SUFFIX,
+    UTF8_ENCODING,
   );
   await rename(tempPath, hintsPath);
   return snapshot;
@@ -194,7 +232,7 @@ async function readRejoinHints(dataDir) {
   }
 
   try {
-    const raw = await readFile(hintsPath, 'utf8');
+    const raw = await readFile(hintsPath, UTF8_ENCODING);
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === TYPEOF.OBJECT ? parsed : null;
   } catch (_error) {
@@ -238,7 +276,7 @@ async function listNodesReplicaDbPaths(dataDir) {
   const dbPaths = [];
   for (const entry of partitionEntries) {
     if (!entry?.isDirectory?.() ||
-        !String(entry.name || '').startsWith(NODES_PARTITION_PREFIX)) {
+        !String(entry.name || EMPTY_STRING).startsWith(NODES_PARTITION_PREFIX)) {
       continue;
     }
     const partitionDir = join(partitionsDir, entry.name);
@@ -250,7 +288,7 @@ async function listNodesReplicaDbPaths(dataDir) {
     }
     for (const replicaEntry of replicaEntries) {
       if (!replicaEntry?.isFile?.() ||
-          !String(replicaEntry.name || '').endsWith(SQLITE_DB_SUFFIX)) {
+          !String(replicaEntry.name || EMPTY_STRING).endsWith(SQLITE_DB_SUFFIX)) {
         continue;
       }
       const dbPath = join(partitionDir, replicaEntry.name);
@@ -360,7 +398,35 @@ function choosePreferredPeerAddress(peerAddresses, preferredPeerAddresses) {
   return peerAddresses[NUM.ZERO] || null;
 }
 
-async function resolveAutoRejoinStartupDecision(options = {}) {
+async function probeRecoverablePeerAddress(peerAddresses, probePeerAddress) {
+  if (typeof probePeerAddress !== TYPEOF.FUNCTION) {
+    return null;
+  }
+  for (const peerAddress of peerAddresses) {
+    if (await probePeerAddress(peerAddress)) {
+      return peerAddress;
+    }
+  }
+  return null;
+}
+
+function resolveDurableStartupSource(context = {}) {
+  if (context.hintsIdentityMatched) {
+    return REJOIN_SOURCE.REJOIN_HINTS;
+  }
+  if (context.durableSnapshot?.hasDurableNodesTable) {
+    return REJOIN_SOURCE.DURABLE_NODES_TABLE;
+  }
+  return REJOIN_SOURCE.NONE;
+}
+
+function resolveDurableJoinSource(context = {}) {
+  return context.hintPeerAddresses.includes(context.selectedPeerAddress) ?
+    REJOIN_SOURCE.REJOIN_HINTS :
+    REJOIN_SOURCE.DURABLE_NODES_TABLE;
+}
+
+async function collectAutoRejoinDecisionContext(options = {}) {
   const hints = await readRejoinHints(options.dataDir);
   const hintsIdentityMatched = hintsMatchLocalIdentity(
     hints,
@@ -384,114 +450,159 @@ async function resolveAutoRejoinStartupDecision(options = {}) {
     options.nodeAddress,
   );
   const clusterNodeCount = Math.max(
-    hintsIdentityMatched ? parseClusterNodeCount(hints?.clusterNodeCount) : NUM.ZERO,
+    hintsIdentityMatched ?
+      parseClusterNodeCount(hints?.clusterNodeCount) :
+      NUM.ZERO,
     durableSnapshot.clusterNodeCount,
   );
   const localNodeRole = hintsIdentityMatched ?
     normalizeNodeRole(hints?.localNodeRole) :
     null;
-
-  if (durableSnapshot.identityMismatch) {
-    return {
-      mode: STARTUP_MODE_FAIL,
-      peerAddress: null,
-      source: 'durable_nodes_table',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: true,
-      error:
-        'Persistent cluster state belongs to a different node identity; ' +
-        'refusing to start with mismatched data directory',
-    };
-  }
-
-  if (localNodeRole === REJOIN_ROLE_SEED) {
-    return {
-      mode: STARTUP_MODE_SEED,
-      peerAddress: null,
-      source: hintsIdentityMatched ?
-        'rejoin_hints' :
-        (durableSnapshot.hasDurableNodesTable ?
-          'durable_nodes_table' :
-          'none'),
-      startupMode: STARTUP_JOIN_MODE.SEED,
-      durableStateDetected:
-        hintsIdentityMatched ||
-        durableSnapshot.hasDurableNodesTable ||
-        clusterNodeCount > NUM.ZERO,
-      identityMismatch: false,
-    };
-  }
-
-  if (peerAddresses.length > NUM.ZERO) {
-    if (typeof options.probePeerAddress === TYPEOF.FUNCTION) {
-      for (const peerAddress of peerAddresses) {
-        if (await options.probePeerAddress(peerAddress)) {
-          return {
-            mode: STARTUP_MODE_JOIN,
-            peerAddress,
-            source: hintPeerAddresses.includes(peerAddress) ?
-              'rejoin_hints' :
-              'durable_nodes_table',
-            startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-            durableStateDetected: true,
-            identityMismatch: false,
-          };
-        }
-      }
-    }
-
-    return {
-      mode: STARTUP_MODE_JOIN,
-      peerAddress: choosePreferredPeerAddress(peerAddresses, hintPeerAddresses),
-      source: hintPeerAddresses.length > NUM.ZERO ?
-        'rejoin_hints' :
-        'durable_nodes_table',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-    };
-  }
-
-  if (deriveRequiresPeerRejoin({
-    nodeRole: localNodeRole,
-    clusterNodeCount,
+  const selectedPeerAddress = await probeRecoverablePeerAddress(
     peerAddresses,
-  })) {
-    return {
-      mode: STARTUP_MODE_FAIL,
-      peerAddress: null,
-      source: durableSnapshot.hasDurableNodesTable ?
-        'durable_nodes_table' :
-        'rejoin_hints',
-      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
-      durableStateDetected: true,
-      identityMismatch: false,
-      error:
-        'Persistent multi-node cluster state was detected but no rejoin peer ' +
-        'address could be recovered; refusing to bootstrap a fresh seed over ' +
-        'existing durable state',
-    };
-  }
+    options.probePeerAddress,
+  );
+  const preferredPeerAddress = choosePreferredPeerAddress(
+    peerAddresses,
+    hintPeerAddresses,
+  );
+  const durableStateDetected = hintsIdentityMatched ||
+    durableSnapshot.hasDurableNodesTable ||
+    clusterNodeCount > NUM.ZERO;
 
   return {
-    mode: STARTUP_MODE_SEED,
-    peerAddress: null,
-    source: 'none',
-    startupMode: STARTUP_JOIN_MODE.SEED,
-    durableStateDetected: false,
-    identityMismatch: false,
+    durableSnapshot,
+    hintsIdentityMatched,
+    hintPeerAddresses,
+    peerAddresses,
+    clusterNodeCount,
+    localNodeRole,
+    selectedPeerAddress,
+    preferredPeerAddress,
+    durableStateDetected,
+    requiresPeerRejoin: deriveRequiresPeerRejoin({
+      nodeRole: localNodeRole,
+      clusterNodeCount,
+      peerAddresses,
+    }),
   };
+}
+
+function resolveAutoRejoinDecisionState(context = {}) {
+  if (context.durableSnapshot.identityMismatch) {
+    return AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH;
+  }
+  if (context.localNodeRole === REJOIN_ROLE_SEED) {
+    return AUTO_REJOIN_DECISION_STATE.DURABLE_SEED;
+  }
+  if (context.selectedPeerAddress) {
+    return AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER;
+  }
+  if (context.peerAddresses.length > NUM.ZERO) {
+    return AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER;
+  }
+  if (context.requiresPeerRejoin) {
+    return AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING;
+  }
+  return AUTO_REJOIN_DECISION_STATE.FRESH_SEED;
+}
+
+function buildAutoRejoinStartupDecision(context = {}, state) {
+  switch (state) {
+    case AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH:
+      return {
+        state,
+        mode: STARTUP_MODE_FAIL,
+        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+        peerAddress: null,
+        source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        durableStateDetected: true,
+        identityMismatch: true,
+        error: IDENTITY_MISMATCH_ERROR_MESSAGE,
+      };
+    case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
+      return {
+        state,
+        mode: STARTUP_MODE_SEED,
+        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+        peerAddress: null,
+        source: resolveDurableStartupSource(context),
+        startupMode: STARTUP_JOIN_MODE.SEED,
+        durableStateDetected: context.durableStateDetected,
+        identityMismatch: false,
+      };
+    case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
+      return {
+        state,
+        mode: STARTUP_MODE_JOIN,
+        peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+        peerAddress: context.selectedPeerAddress,
+        source: resolveDurableJoinSource(context),
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        durableStateDetected: true,
+        identityMismatch: false,
+      };
+    case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
+      return {
+        state,
+        mode: STARTUP_MODE_JOIN,
+        peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+        peerAddress: context.preferredPeerAddress,
+        source: context.hintPeerAddresses.length > NUM.ZERO ?
+          REJOIN_SOURCE.REJOIN_HINTS :
+          REJOIN_SOURCE.DURABLE_NODES_TABLE,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        durableStateDetected: true,
+        identityMismatch: false,
+      };
+    case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
+      return {
+        state,
+        mode: STARTUP_MODE_FAIL,
+        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+        peerAddress: null,
+        source: context.durableSnapshot.hasDurableNodesTable ?
+          REJOIN_SOURCE.DURABLE_NODES_TABLE :
+          REJOIN_SOURCE.REJOIN_HINTS,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        durableStateDetected: true,
+        identityMismatch: false,
+        error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
+      };
+    case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
+      return {
+        state,
+        mode: STARTUP_MODE_SEED,
+        peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+        peerAddress: null,
+        source: REJOIN_SOURCE.NONE,
+        startupMode: STARTUP_JOIN_MODE.SEED,
+        durableStateDetected: false,
+        identityMismatch: false,
+      };
+    default:
+      throw new Error(
+        UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX + String(state),
+      );
+  }
+}
+
+async function resolveAutoRejoinStartupDecision(options = {}) {
+  const decisionContext = await collectAutoRejoinDecisionContext(options);
+  const decisionState = resolveAutoRejoinDecisionState(decisionContext);
+  return buildAutoRejoinStartupDecision(decisionContext, decisionState);
 }
 
 async function resolveAutoRejoinPeerAddress(options = {}) {
   const decision = await resolveAutoRejoinStartupDecision(options);
   if (decision.mode === STARTUP_MODE_FAIL) {
     const error = new Error(decision.error);
-    error.code = 'AUTO_REJOIN_REQUIRED';
+    error.code = AUTO_REJOIN_REQUIRED_ERROR_CODE;
     throw error;
   }
-  return decision.mode === STARTUP_MODE_JOIN ?
+  return decision.mode === STARTUP_MODE_JOIN &&
+    decision.peerAddressState === PEER_ADDRESS_STATE.SELECTED ?
     decision.peerAddress :
     null;
 }
@@ -571,7 +682,7 @@ class RejoinHintsPersistenceService {
       }
       return snapshot;
     } catch (error) {
-      this.logger.warn?.('Failed to persist cluster rejoin hints', {
+      this.logger.warn?.(REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE, {
         nodeId: this.nodeId,
         dataDir: this.dataDir,
         error: error.message,

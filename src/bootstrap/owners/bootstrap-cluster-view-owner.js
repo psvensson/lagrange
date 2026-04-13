@@ -11,9 +11,18 @@ import {
   resolveCanonicalActiveNodeIds,
 } from '../../control-plane/active-node-projection.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../control-plane/control-plane-readiness-constants.js';
+import {
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';
+
+function canTreatSeedAsBootstrapReady(readiness) {
+  return !!readiness &&
+    typeof readiness === TYPEOF.OBJECT &&
+    readiness.ready === true;
+}
 
 class BootstrapClusterViewOwner {
   constructor(options = {}) {
@@ -49,6 +58,29 @@ class BootstrapClusterViewOwner {
     return this.delegates.getEpochManager?.() || null;
   }
 
+  getStartupAuthorityReadyNodeIds(seedNodeId, observedAt = Date.now()) {
+    const readinessService = this.getControlPlaneReadinessService();
+    if (!readinessService ||
+        typeof readinessService.getStartupAuthoritySnapshotSync !==
+          TYPEOF.FUNCTION) {
+      return [];
+    }
+    try {
+      const startupAuthority =
+        readinessService.getStartupAuthoritySnapshotSync(
+          seedNodeId,
+          observedAt,
+        );
+      return Array.isArray(startupAuthority?.canonicalStartupNodeIds) ?
+        [...new Set(startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
+          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        ))] :
+        [];
+    } catch (_error) {
+      return [];
+    }
+  }
+
   getReadyNodes(options = {}) {
     const systemTableCache = assertCritical(
       this.getSystemTableCache(),
@@ -60,9 +92,9 @@ class BootstrapClusterViewOwner {
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
     const readinessService = this.getControlPlaneReadinessService();
     const readinessByNodeId = {};
+    const candidateNodeIds = new Set();
     if (readinessService &&
         typeof readinessService.getNodeReadinessSync === TYPEOF.FUNCTION) {
-      const candidateNodeIds = new Set();
       for (const nodeRow of nodeRows) {
         const nodeId = nodeRow?.node_id || nodeRow?.nodeId || null;
         if (nodeId) {
@@ -97,10 +129,24 @@ class BootstrapClusterViewOwner {
       readinessByNodeId,
     });
 
+    const seedNodeId = this.getSeedNodeId();
+    const startupAuthorityReadyNodeIds =
+      options.requirePublishedMembership === true ?
+        [] :
+        this.getStartupAuthorityReadyNodeIds(seedNodeId);
+    if (startupAuthorityReadyNodeIds.length > NUM.ZERO) {
+      const filteredReadyNodeIds = startupAuthorityReadyNodeIds.filter((nodeId) =>
+        candidateNodeIds.size === NUM.ZERO || candidateNodeIds.has(nodeId),
+      );
+      if (filteredReadyNodeIds.length > NUM.ZERO) {
+        return filteredReadyNodeIds;
+      }
+    }
     if (options.requirePublishedMembership !== true &&
-        this.getSeedNodeId() &&
-        !readyNodes.includes(this.getSeedNodeId())) {
-      readyNodes.push(this.getSeedNodeId());
+        seedNodeId &&
+        !readyNodes.includes(seedNodeId) &&
+        canTreatSeedAsBootstrapReady(readinessByNodeId[seedNodeId])) {
+      readyNodes.push(seedNodeId);
     }
 
     return readyNodes;

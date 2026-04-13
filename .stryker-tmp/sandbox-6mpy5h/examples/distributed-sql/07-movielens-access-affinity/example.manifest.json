@@ -1,0 +1,13 @@
+{
+  "id": "07-movielens-access-affinity",
+  "title": "MovieLens access-affinity reduceByKey",
+  "level": "intermediate",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "runtimeKind": "native_js",
+  "callbackExport": "run",
+  "select": "SELECT movie_id, rating FROM ratings",
+  "params": [],
+  "required": false,
+  "expectedFile": "expected.json"
+}

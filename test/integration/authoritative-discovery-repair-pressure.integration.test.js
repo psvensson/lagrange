@@ -134,8 +134,8 @@ test('authoritative discovery repair preserves participant attribution under con
       'repair should execute through the canonical gateway authoritative read path');
     t.equal(
       cdcReads[0]?.options?.queryOptions?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'gateway should preserve repair-eligible routing for authoritative reads',
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'gateway should preserve control-plane recovery routing for authoritative reads',
     );
     t.equal(logger.entries.warn.length, 1, 'repair should emit one bounded warning');
     t.same(

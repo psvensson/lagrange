@@ -15,9 +15,6 @@ import {TablePolicyService} from '../../policy/table-policy-service.js';
 import {assertCritical} from '../../utils/assert.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {
-  buildMessageGroupOwnerNotReadyError,
-} from '../shared/message-group-selection.js';
-import {
   subscribeToSystemTableCacheChanges,
   waitForStartupConvergence,
 } from '../shared/startup-convergence-gate.js';
@@ -622,17 +619,13 @@ class SeedCacheHydrationPhase {
               );
             }
 
-            const propagationSelection =
-              await (
-                d.resolveOperationalMessageGroupSelectionAsync ?
-                  d.resolveOperationalMessageGroupSelectionAsync({
-                    requiredTables: [tableName],
-                  }) :
-                  d.resolveOperationalMessageGroupSelection({
-                    requiredTables: [tableName],
-                  })
+            const propagationMgs =
+              await this.resolveCdcPropagationMessageGroup(
+                messageGroup,
+                {
+                  requiredTables: [tableName],
+                },
               );
-            const propagationMgs = propagationSelection.service;
             if (propagationMgs) {
               await d.propagatePartitionCDCEvent(
                 propagationMgs, cdcEvent,
@@ -642,7 +635,18 @@ class SeedCacheHydrationPhase {
                 d.applyCurrentEpochFromCache();
               }
             } else {
-              throw buildMessageGroupOwnerNotReadyError(
+              const propagationSelection =
+                await (
+                  d.resolveOperationalMessageGroupSelectionAsync ?
+                    d.resolveOperationalMessageGroupSelectionAsync({
+                      requiredTables: [tableName],
+                      preferredService: messageGroup,
+                    }) :
+                    d.resolveOperationalMessageGroupSelection({
+                      requiredTables: [tableName],
+                    })
+                );
+              throw d.buildMessageGroupOwnerNotReadyError(
                 propagationSelection,
                 {
                   message:
@@ -843,17 +847,26 @@ class SeedCacheHydrationPhase {
   /**
    * Resolve the message-group service for CDC propagation.
    * @param {Object|null} preferredMessageGroupService
-   * @return {Object|null}
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Promise<Object|null>}
    */
-  resolveCdcPropagationMessageGroup(
+  async resolveCdcPropagationMessageGroup(
     preferredMessageGroupService,
+    options = {},
   ) {
     const d = this.delegates;
-    const leaderMgs = d.getLeaderMessageGroupService();
-    if (leaderMgs) {
-      return leaderMgs;
+    if (typeof d.resolveOperationalMessageGroupSelectionAsync === 'function') {
+      const selection = await d.resolveOperationalMessageGroupSelectionAsync({
+        requiredTables: Array.isArray(options.requiredTables) ?
+          options.requiredTables :
+          [],
+        preferredService: preferredMessageGroupService,
+      });
+      return selection.service || null;
     }
-    return null;
+    const leaderMgs = d.getLeaderMessageGroupService();
+    return leaderMgs || null;
   }
 
   /**

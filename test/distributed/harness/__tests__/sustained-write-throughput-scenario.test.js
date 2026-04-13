@@ -6,8 +6,8 @@ describe('sustained-write-throughput scenario', () => {
   it('waits for load readiness before measuring throughput', async () => {
     const calls = [];
     const cluster = {
-      waitForLoadReadinessStability: async () => {
-        calls.push('waitForLoadReadinessStability');
+      waitForLoadReadinessStability: async (options) => {
+        calls.push(['waitForLoadReadinessStability', options]);
       },
       startLoad: (options) => {
         calls.push(['startLoad', options]);
@@ -43,12 +43,14 @@ describe('sustained-write-throughput scenario', () => {
 
     const result = await run(cluster);
 
-    assert.deepEqual(calls[0], 'waitForLoadReadinessStability');
+    assert.equal(calls[0][0], 'waitForLoadReadinessStability');
+    assert.equal(calls[0][1].stableWindowMs, 1000);
     assert.equal(calls[1][0], 'startLoad');
     assert.equal(calls[2][0], 'waitForAllActive');
     assert.equal(calls[3][0], 'waitForConvergence');
     assert.equal(calls[4][0], 'waitForConsistencyConvergence');
     assert.equal(calls[4][1].forceRepairAfterMs, 0);
+    assert.equal(calls[4][1].pollIntervalMs, 250);
     assert.equal(result.loadMetrics.total, 24);
     assert.equal(result.successRate, 1);
   });

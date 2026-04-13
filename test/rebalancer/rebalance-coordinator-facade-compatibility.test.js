@@ -49,6 +49,13 @@ function createFacadeCoordinator(overrides = {}) {
       calls.repository.push(['persistOperationUpdate', operation, options]);
       return undefined;
     },
+    async runReplicaOperationTransitionExclusive(executionFactory, options) {
+      calls.repository.push([
+        'runReplicaOperationTransitionExclusive',
+        options,
+      ]);
+      return executionFactory();
+    },
     async getAllOperations() {
       calls.repository.push(['getAllOperations']);
       return [{operationId: 'op-a'}];
@@ -206,10 +213,16 @@ test('RebalanceCoordinator facade delegates repository contract methods',
       'queryOperationById',
       'queryExistingInFlightOperation',
       'persistNewOperation',
+      'runReplicaOperationTransitionExclusive',
       'persistOperationUpdate',
       'getAllOperations',
       'getOperationsByEntity',
     ]);
+    t.same(
+      calls.repository[3][1],
+      {operation: {operationId: 'op-2'}},
+      'persistOperationUpdate should route through the repository transition lane with the operation context',
+    );
   });
 
 test('RebalanceCoordinator facade delegates workflow contract methods',

@@ -66,6 +66,29 @@ function resolvePartitionStartupConfig(partial = {}) {
   return Object.keys(normalized).length > ZERO ? normalized : null;
 }
 
+function resolveScenarioOverridesConfig(partial = {}) {
+  if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
+    return null;
+  }
+
+  const normalized = {};
+  for (const [scenarioName, scenarioConfig] of Object.entries(partial)) {
+    if (typeof scenarioName !== 'string' || scenarioName.length <= ZERO) {
+      continue;
+    }
+    if (!scenarioConfig ||
+        typeof scenarioConfig !== 'object' ||
+        Array.isArray(scenarioConfig)) {
+      continue;
+    }
+    normalized[scenarioName] = {
+      ...scenarioConfig,
+    };
+  }
+
+  return Object.keys(normalized).length > ZERO ? normalized : null;
+}
+
 /**
  * Merge a partial configuration object with sensible defaults.
  * Missing fields are filled from constants.js.
@@ -76,6 +99,7 @@ function resolvePartitionStartupConfig(partial = {}) {
 function mergeWithDefaults(partial = {}) {
   const docker = partial.docker || {};
   const partition = resolvePartitionStartupConfig(partial.partition);
+  const scenarioOverrides = resolveScenarioOverridesConfig(partial.scenarios);
   const parsedDockerBinds = Array.isArray(docker.binds) ?
     docker.binds.filter((entry) =>
       typeof entry === 'string' && entry.length > 0) :
@@ -185,6 +209,7 @@ function mergeWithDefaults(partial = {}) {
       ...(partial.deterministicDebug || {}),
     },
     ...(partition ? {partition} : {}),
+    ...(scenarioOverrides ? {scenarios: scenarioOverrides} : {}),
     raftProvider:
       partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),

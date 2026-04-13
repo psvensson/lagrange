@@ -332,7 +332,7 @@ test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => 
   assert.equal(upsertCalls[0].options.deliveryPriority, 'critical');
   assert.equal(
     upsertCalls[0].options.routingReadinessDimension,
-    'repairEligible',
+    'controlPlaneRecoveryEligible',
   );
   teardown();
   t.end();

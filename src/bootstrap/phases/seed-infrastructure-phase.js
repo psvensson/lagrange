@@ -11,6 +11,9 @@ import {v4 as uuidv4} from 'uuid';
 import {ConfigurationManager} from '../../config/configuration-manager.js';
 import {NodeService} from '../../node/node-service.js';
 import {MessageRouterSetup} from '../shared/message-router-setup.js';
+import {
+  StartupServiceLifecycleOwner,
+} from '../shared/startup-service-lifecycle-owner.js';
 import {assertCritical} from '../../utils/assert.js';
 import {
   BOOTSTRAP_ERROR,
@@ -24,13 +27,6 @@ import {
   TYPEOF,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
-import {
-  MessageGroupServiceAdapter,
-  PartitionServiceAdapter,
-  RuntimeServiceAdapter,
-  ServiceLifecycleManager,
-  ServiceReconciler,
-} from '../../service/index.js';
 import {
   ControlPlaneMessageType,
   getControlPlaneMessageRequiredTables,
@@ -82,6 +78,59 @@ class SeedInfrastructurePhase {
    */
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.startupServiceLifecycleOwner =
+      new StartupServiceLifecycleOwner({
+        delegates: {
+          getNodeId: () => this.delegates.getNodeId(),
+          getPhase: () => this.delegates.getPhase(),
+          getServiceLifecycleManager: () =>
+            this.delegates.getServiceLifecycleManager(),
+          setServiceLifecycleManager: (value) =>
+            this.delegates.setServiceLifecycleManager(value),
+          getServiceReconciler: () =>
+            this.delegates.getServiceReconciler(),
+          setServiceReconciler: (value) =>
+            this.delegates.setServiceReconciler(value),
+          createMessageGroupReplica: (context) =>
+            this.delegates.createBootstrapMessageGroupReplica(context),
+          startMessageGroupReplica: (replicaHandle, context) =>
+            this.delegates.startBootstrapMessageGroupReplica(
+              replicaHandle,
+              context,
+            ),
+          stopMessageGroupReplica: (replicaHandle, context) =>
+            this.delegates.stopBootstrapMessageGroupReplica(
+              replicaHandle,
+              context,
+            ),
+          createPartitionReplica: (context) =>
+            this.delegates.createBootstrapPartitionReplica(context),
+          startPartitionReplica: (replicaHandle, context) =>
+            this.delegates.startBootstrapPartitionReplica(
+              replicaHandle,
+              context,
+            ),
+          stopPartitionReplica: (replicaHandle, context) =>
+            this.delegates.stopBootstrapPartitionReplica(
+              replicaHandle,
+              context,
+            ),
+          getServiceRuntimeLifecycle: () =>
+            this.delegates.getServiceRuntimeLifecycle(),
+          readDesiredState: () =>
+            [...this.delegates.getBootstrapDesiredServiceDefinitions()
+              .values()],
+          readActualState: async () => this.buildBootstrapActualStateRows(),
+          getCheckIntervalMs: () => BOOTSTRAP_UNIFIED_RECONCILE.CHECK_INTERVAL_MS,
+          getMaxConcurrentServiceActions: () =>
+            this.delegates.getConfig().maxConcurrentServiceActions,
+          clearDesiredState: () => {
+            this.delegates.getBootstrapDesiredServiceDefinitions().clear();
+            this.delegates.getBootstrapReplicaOptionsByServiceId().clear();
+          },
+        },
+        reconcilerRequiredError: RECONCILER_INIT_REQUIRED,
+      });
   }
 
   /**
@@ -177,53 +226,7 @@ class SeedInfrastructurePhase {
    * @return {Promise<void>}
    */
   async initializeUnifiedLifecycleOwners() {
-    const d = this.delegates;
-    if (d.getServiceLifecycleManager() && d.getServiceReconciler()) {
-      return;
-    }
-
-    const serviceLifecycleManager = new ServiceLifecycleManager();
-    serviceLifecycleManager.registerAdapter(
-      new MessageGroupServiceAdapter({
-        createReplica: (context) =>
-          d.createBootstrapMessageGroupReplica(context),
-        startReplica: (replicaHandle, context) =>
-          d.startBootstrapMessageGroupReplica(replicaHandle, context),
-        stopReplica: (replicaHandle, context) =>
-          d.stopBootstrapMessageGroupReplica(replicaHandle, context),
-      }),
-    );
-    serviceLifecycleManager.registerAdapter(
-      new PartitionServiceAdapter({
-        createReplica: (context) =>
-          d.createBootstrapPartitionReplica(context),
-        startReplica: (replicaHandle, context) =>
-          d.startBootstrapPartitionReplica(replicaHandle, context),
-        stopReplica: (replicaHandle, context) =>
-          d.stopBootstrapPartitionReplica(replicaHandle, context),
-      }),
-    );
-    serviceLifecycleManager.registerAdapter(
-      new RuntimeServiceAdapter({
-        serviceRuntimeLifecycle: d.getServiceRuntimeLifecycle(),
-      }),
-    );
-    d.setServiceLifecycleManager(serviceLifecycleManager);
-
-    const config = d.getConfig();
-    const serviceReconciler = new ServiceReconciler({
-      lifecycleManager: serviceLifecycleManager,
-      desiredStateReader: async () =>
-        [...d.getBootstrapDesiredServiceDefinitions().values()],
-      actualStateReader: async () =>
-        this.buildBootstrapActualStateRows(),
-      checkIntervalMs: BOOTSTRAP_UNIFIED_RECONCILE.CHECK_INTERVAL_MS,
-      maxConcurrentServiceActions:
-        config.maxConcurrentServiceActions,
-    });
-
-    await serviceReconciler.start();
-    d.setServiceReconciler(serviceReconciler);
+    await this.startupServiceLifecycleOwner.ensureOwners();
   }
 
   /**
@@ -232,16 +235,7 @@ class SeedInfrastructurePhase {
    * @return {Promise<void>}
    */
   async triggerBootstrapReconciler(reason) {
-    const d = this.delegates;
-    const serviceReconciler = d.getServiceReconciler();
-    assertCritical(
-      serviceReconciler,
-      RECONCILER_INIT_REQUIRED,
-    );
-    await serviceReconciler.trigger(reason, {
-      nodeId: d.getNodeId(),
-      phase: d.getPhase(),
-    });
+    await this.startupServiceLifecycleOwner.triggerReconciler(reason);
   }
 
   /**
@@ -250,15 +244,7 @@ class SeedInfrastructurePhase {
    * @return {void}
    */
   stopUnifiedLifecycleOwners() {
-    const d = this.delegates;
-    const serviceReconciler = d.getServiceReconciler();
-    if (serviceReconciler) {
-      serviceReconciler.stop();
-      d.setServiceReconciler(null);
-    }
-    d.setServiceLifecycleManager(null);
-    d.getBootstrapDesiredServiceDefinitions().clear();
-    d.getBootstrapReplicaOptionsByServiceId().clear();
+    this.startupServiceLifecycleOwner.stopOwners();
   }
 
   /**

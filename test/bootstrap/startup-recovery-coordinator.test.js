@@ -150,4 +150,62 @@ describe('StartupRecoveryCoordinator', () => {
     assert.equal(result.recoveryStage, STARTUP_RECOVERY_STAGE.BLOCKED);
     assert.equal(result.recoveryBlocked, true);
   });
+
+  it('propagates shared recovery protocol details into startup recovery diagnostics', () => {
+    const coordinator = new StartupRecoveryCoordinator({
+      readinessState: {
+        evaluate() {
+          return {
+            ready: false,
+            phase: 'CONTROL_READY',
+            reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+          };
+        },
+      },
+    });
+
+    const result = coordinator.evaluate({
+      partitionId: 'replica_operations-p1',
+      priorityRecoveryHealth: {
+        healthy: false,
+        details: {
+          recoveryProtocolState: 'publication_pending',
+          priorityRecoveryReasonCodes: [
+            'publication_epoch_pending',
+            'priority_partitions_not_spread',
+          ],
+          targetParticipation: {
+            nodeId: 'seed-1',
+            state: 'published_active',
+            publishedActive: true,
+            recoveryActive: true,
+          },
+        },
+      },
+    });
+
+    assert.equal(result.recoveryProtocolState, 'publication_pending');
+    assert.deepEqual(result.priorityRecoveryReasonCodes, [
+      'publication_epoch_pending',
+      'priority_partitions_not_spread',
+    ]);
+    assert.deepEqual(result.targetParticipation, {
+      nodeId: 'seed-1',
+      state: 'published_active',
+      recoverySource: null,
+      durable: false,
+      publishedActive: true,
+      recoveryActive: true,
+      projectedServing: false,
+      locallyEligible: false,
+      suspectedOrTransitioning: false,
+      reasons: [],
+    });
+    assert.deepEqual(result.startupAuthorityFailure, {
+      state: 'none',
+    });
+    assert.deepEqual(result.startupAuthorityPublication, {
+      observationState: 'observation_unavailable',
+    });
+  });
 });

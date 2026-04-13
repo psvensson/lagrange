@@ -408,56 +408,58 @@ export class CDCStreamHandler {
    */
   getStatusBarInfo() {
     const stats = this.getStats();
-
-    let statusText;
-    let statusColor;
-
-    switch (this.status) {
-    case 'connected':
-      statusText = 'CDC: Connected';
-      statusColor = 'green';
-      break;
-    case 'paused':
-      statusText = 'CDC: Paused (stale)';
-      statusColor = 'yellow';
-      break;
-    case 'disconnected':
-      statusText = 'CDC: Disconnected';
-      statusColor = 'red';
-      break;
-    case 'error':
-      statusText = 'CDC: Error';
-      statusColor = 'red';
-      break;
-    default:
-      statusText = 'CDC: Unknown';
-      statusColor = 'gray';
-    }
+    const baseStatusInfo = (() => {
+      switch (this.status) {
+      case 'connected':
+        return {
+          text: 'CDC: Connected',
+          color: 'green',
+        };
+      case 'paused':
+        return {
+          text: 'CDC: Paused (stale)',
+          color: 'yellow',
+        };
+      case 'disconnected':
+        return {
+          text: 'CDC: Disconnected',
+          color: 'red',
+        };
+      case 'error':
+        return {
+          text: 'CDC: Error',
+          color: 'red',
+        };
+      default:
+        return {
+          text: 'CDC: Unknown',
+          color: 'gray',
+        };
+      }
+    })();
+    const statusSegments = [baseStatusInfo.text];
 
     // Add rate info if connected
     if (this.status === 'connected') {
-      statusText += ` | ${stats.eventsPerSecond.toFixed(1)} evt/s`;
+      statusSegments.push(`${stats.eventsPerSecond.toFixed(1)} evt/s`);
     }
 
     // Add lag info if significant
     if (stats.lag > 1000) {
-      statusText += ` | Lag: ${Math.round(stats.lag / 1000)}s`;
-      if (stats.lag > 5000) {
-        statusColor = 'yellow';
-      }
+      statusSegments.push(`Lag: ${Math.round(stats.lag / 1000)}s`);
     }
 
     // Add last update time
     if (stats.lastEventTime) {
       const secondsAgo = Math.round((Date.now() - stats.lastEventTime) / 1000);
       if (secondsAgo > 0) {
-        statusText += ` | Last: ${secondsAgo}s ago`;
+        statusSegments.push(`Last: ${secondsAgo}s ago`);
       }
     }
 
     return {
-      text: statusText,
-      color: statusColor,
+      text: statusSegments.join(' | '),
+      color: stats.lag > 5000 ? 'yellow' : baseStatusInfo.color,
       status: this.status,
       paused: this.paused,
       stats,

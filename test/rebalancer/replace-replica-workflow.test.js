@@ -212,6 +212,129 @@ test('REPLACE replica workflow', async (t) => {
     });
 
   await t.test(
+    'critical dispatch defers retryable control-plane failures instead of ' +
+      'failing terminally',
+    async (t) => {
+      const deliveries = [];
+      const deferredTimers = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          if (deliveries.length === 1) {
+            return {
+              acknowledged: false,
+              error: {
+                message: 'control_plane_pressure_degraded',
+                retryAfterMs: 10,
+              },
+            };
+          }
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        setTimeoutFn(fn, delayMs) {
+          const handle = {fn, delayMs};
+          deferredTimers.push(handle);
+          return handle;
+        },
+        clearTimeoutFn() {},
+        cacheData: {
+          services: [
+            {
+              service_id: 'replica_operations-p1-r1',
+              replica_id: 'replica_operations-p1-r1',
+              service_type: 'partition',
+              partition_id: 'replica_operations-p1',
+              node_id: 'seed-node',
+              status: 'active',
+              address: 'seed-node/partition/replica_operations-p1-r1',
+            },
+            {
+              service_id: 'replica_operations-p1-r2',
+              replica_id: 'replica_operations-p1-r2',
+              service_type: 'partition',
+              partition_id: 'replica_operations-p1',
+              node_id: 'node-3',
+              status: 'active',
+              address: 'node-3/partition/replica_operations-p1-r2',
+            },
+          ],
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.ADD,
+          partitionId: 'replica_operations-p1',
+          entityType: 'partition',
+          entityId: 'replica_operations-p1',
+          nodeId: 'node-2',
+        });
+
+        const firstAttempt = await coordinator.executeOperation(operation);
+        t.equal(
+          firstAttempt.reason,
+          'deferred_retry_pending',
+          'retryable critical dispatch failures should defer instead of failing',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.SENDING,
+          'the in-flight operation should remain dispatchable',
+        );
+        t.equal(deliveries.length, 1, 'first dispatch attempt should execute');
+        t.equal(
+          deferredTimers.length,
+          1,
+          'a bounded deferred retry should be armed',
+        );
+
+        const persistedBeforeRetry =
+          await coordinator.queryOperationById(operation.operationId);
+        t.equal(
+          persistedBeforeRetry.workflowStep,
+          WORKFLOW_STEP.SENDING,
+          'the persisted row should remain in SENDING while retry is pending',
+        );
+        t.equal(
+          persistedBeforeRetry.status,
+          ReplicaStatus.PENDING,
+          'the persisted row should not be marked failed on a retryable error',
+        );
+
+        await deferredTimers[0].fn();
+        for (let attempt = 0; attempt < 10 && deliveries.length < 2; attempt++) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        const persistedAfterRetry =
+          await coordinator.queryOperationById(operation.operationId);
+        t.equal(deliveries.length, 2, 'deferred retry should replay dispatch');
+        t.equal(
+          persistedAfterRetry.workflowStep,
+          WORKFLOW_STEP.CREATING,
+          'successful retry should advance the same operation',
+        );
+        t.equal(
+          persistedAfterRetry.status,
+          ReplicaStatus.CREATING,
+          'successful retry should keep the existing operation alive',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
     'REPLACE reconciliation dispatches source removal while owner key is already held',
     async (t) => {
       const deliveries = [];
@@ -335,6 +458,186 @@ test('REPLACE replica workflow', async (t) => {
           'reconciliation should treat ACTIVE replay as observed progress');
         t.equal(deliveries.length, 0,
           'idempotent ACTIVE replays should not redispatch source removal');
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'REPLACE reconciliation replays source removal from authoritative ACTIVE state when local sync row is stale',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.ACTIVE}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
+        coordinator.operationWorkflowCoordinator
+          .markTransitionCommitted(
+            operation.operationId,
+            WORKFLOW_STEP.ACTIVE,
+          );
+
+        const authoritativeActiveOperation = {
+          ...operation,
+          workflowStep: WORKFLOW_STEP.ACTIVE,
+          status: ReplicaStatus.ACTIVE,
+        };
+        coordinator.repository.queryAuthoritativeOperationById =
+          async () => authoritativeActiveOperation;
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(progressed, true,
+          'reconciliation should treat stale syncing state as observed progress');
+        t.equal(deliveries.length, 1,
+          'authoritative ACTIVE replay should redispatch source removal');
+        t.equal(
+          deliveries[0]?.payload?.type,
+          ReplicaOperationMessageType.REMOVE_REPLICA,
+          'authoritative replay should issue source removal for REPLACE',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.STOPPING,
+          'authoritative ACTIVE replay should advance the durable row into STOPPING',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'REPLACE reconciliation does not rewind a more advanced cached terminal state',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        sqlQueryResults: {
+          'FROM services WHERE service_id = ?': {
+            success: true,
+            rows: [{status: ReplicaStatus.ACTIVE}],
+            affectedRows: 1,
+          },
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'users-p1',
+          entityType: 'partition',
+          entityId: 'users-p1',
+          nodeId: 'node-2',
+          sourceNodeId: 'seed-node',
+          replicaId: 'users-p1-r1',
+        });
+
+        operation.replicaId = 'users-p1-r2';
+        operation.workflowStep = WORKFLOW_STEP.SYNCING;
+        operation.status = ReplicaStatus.SYNCING;
+
+        coordinator.repository.getReplicaOperationRowFromCache =
+          () => ({
+            operation_id: operation.operationId,
+            type: OperationType.REPLACE,
+            partition_id: operation.partitionId,
+            entity_type: operation.entityType,
+            entity_id: operation.entityId,
+            source_node_id: operation.sourceNodeId,
+            target_node_id: operation.targetNodeId,
+            replica_id: operation.replicaId,
+            source_replica_id: 'users-p1-r1',
+            status: ReplicaStatus.REMOVED,
+            workflow_step: WORKFLOW_STEP.REMOVED,
+            created_at: operation.createdAt,
+            updated_at: operation.createdAt + 1000,
+            completed_at: operation.createdAt + 1000,
+            error_message: null,
+            steps_history: JSON.stringify([
+              ...(Array.isArray(operation.stepsHistory) ?
+                operation.stepsHistory : []),
+              {
+                step: WORKFLOW_STEP.REMOVED,
+                timestamp: operation.createdAt + 1000,
+                previousStep: WORKFLOW_STEP.STOPPING,
+                reason: 'operation_completed',
+                ownerKey: operation.operationId,
+              },
+            ]),
+          });
+        coordinator.repository.queryAuthoritativeOperationById =
+          async () => ({
+            ...operation,
+            sourceReplicaId: 'users-p1-r1',
+            workflowStep: WORKFLOW_STEP.ACTIVE,
+            status: ReplicaStatus.ACTIVE,
+          });
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(progressed, true,
+          'reconciliation should accept observed terminal progress');
+        t.equal(deliveries.length, 0,
+          'terminal cached progress should not redispatch source removal');
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.REMOVED,
+          'reconciliation should keep the more advanced terminal step',
+        );
+        t.equal(
+          operation.status,
+          ReplicaStatus.REMOVED,
+          'reconciliation should keep the more advanced terminal status',
+        );
       } finally {
         await coordinator.shutdown();
       }
@@ -793,6 +1096,157 @@ test('REPLACE replica workflow', async (t) => {
             null,
           null,
           'critical REPLACE should not fail on the expected learner promotion window',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
+  await t.test(
+    'critical REPLACE keeps ACTIVE ownership on the target while source removal remains deferred',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload, options) {
+          deliveries.push({target, payload, options});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      };
+      const coordinator = createTestCoordinator({
+        nodeId: 'node-d',
+        enableTimeouts: false,
+        messageRouter,
+        cacheData: {
+          nodes: [
+            {
+              node_id: 'node-a',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-b',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-c',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+            {
+              node_id: 'node-d',
+              status: 'active',
+              connection_state: 'ready',
+              ready_lease_expires_at: Date.now() + 60000,
+            },
+          ],
+          services: [
+            {
+              service_id: 'control_plane_publications-p1-r1',
+              replica_id: 'control_plane_publications-p1-r1',
+              service_type: 'partition',
+              partition_id: 'control_plane_publications-p1',
+              node_id: 'node-a',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'leader',
+              address: 'node-a/partition/control_plane_publications-p1-r1',
+            },
+            {
+              service_id: 'control_plane_publications-p1-r2',
+              replica_id: 'control_plane_publications-p1-r2',
+              service_type: 'partition',
+              partition_id: 'control_plane_publications-p1',
+              node_id: 'node-b',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-b/partition/control_plane_publications-p1-r2',
+            },
+            {
+              service_id: 'control_plane_publications-p1-r3',
+              replica_id: 'control_plane_publications-p1-r3',
+              service_type: 'partition',
+              partition_id: 'control_plane_publications-p1',
+              node_id: 'node-c',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-c/partition/control_plane_publications-p1-r3',
+            },
+            {
+              service_id: 'control_plane_publications-p1-r4',
+              replica_id: 'control_plane_publications-p1-r4',
+              service_type: 'partition',
+              partition_id: 'control_plane_publications-p1',
+              node_id: 'node-d',
+              status: ReplicaStatus.ACTIVE,
+              raft_role: 'follower',
+              address: 'node-d/partition/control_plane_publications-p1-r4',
+            },
+          ],
+        },
+      });
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.REPLACE,
+          partitionId: 'control_plane_publications-p1',
+          entityType: 'partition',
+          entityId: 'control_plane_publications-p1',
+          nodeId: 'node-d',
+          sourceNodeId: 'node-a',
+          replicaId: 'control_plane_publications-p1-r1',
+        });
+
+        operation.replicaId = 'control_plane_publications-p1-r4';
+        operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+        operation.status = ReplicaStatus.ACTIVE;
+        operation.updatedAt = Date.now();
+        operation.stepsHistory.push({
+          step: WORKFLOW_STEP.ACTIVE,
+          timestamp: operation.updatedAt,
+          previousStep: WORKFLOW_STEP.SYNCING,
+        });
+
+        const progressed =
+          await coordinator.reconcileOperationProgress(operation);
+
+        t.equal(
+          progressed,
+          true,
+          'critical ACTIVE REPLACE should continue from the target owner',
+        );
+        t.equal(
+          deliveries.length,
+          0,
+          'target owner should keep source removal deferred without dispatching immediately',
+        );
+        t.equal(
+          deliveries[0]?.target,
+          undefined,
+          'no retiring-source dispatch should be emitted while deferred',
+        );
+        t.equal(
+          deliveries[0]?.payload?.type,
+          undefined,
+          'no remove-source payload should be emitted while deferred',
+        );
+        t.equal(
+          deliveries[0]?.payload?.replicaId,
+          undefined,
+          'the original replica is not retired until source removal dispatch actually proceeds',
+        );
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.ACTIVE,
+          'critical ACTIVE REPLACE remains on the ACTIVE phase while source removal is deferred',
         );
       } finally {
         await coordinator.shutdown();

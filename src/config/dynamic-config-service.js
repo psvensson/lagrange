@@ -10,6 +10,7 @@ import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
@@ -115,8 +116,9 @@ class DynamicConfigService extends EventEmitter {
    * Requirements: 30.2, 30.9
    * @param {string} updatedBy - Identity of who is seeding (e.g., 'system').
    * @param {Object} [options={}] - Seeding options.
-   * @param {boolean} [options.skipExistingCheck=false] - Skip per-key existence
-   *   reads when a caller already proved the config table is empty.
+   * @param {boolean} [options.skipExistingCheck=false] - Legacy compatibility
+   *   flag. Seeding now uses idempotent insert-if-absent writes, so per-key
+   *   existence reads are no longer required.
    * @param {boolean} [options.useDirectCdcMutations=false] - Write directly
    *   through the CDC integration service instead of the control-plane gateway.
    * @return {Promise<Object>} Seeding result.
@@ -132,18 +134,9 @@ class DynamicConfigService extends EventEmitter {
     const seeded = [];
     const skipped = [];
     const now = Date.now();
-    const skipExistingCheck = options?.skipExistingCheck === true;
     const useDirectCdcMutations = options?.useDirectCdcMutations === true;
 
     for (const [key, definition] of Object.entries(CONFIG_DEFINITIONS)) {
-      if (!skipExistingCheck) {
-        const existing = await this.getConfigFromTable(key);
-        if (existing) {
-          skipped.push(key);
-          continue;
-        }
-      }
-
       // Check for environment variable override
       const envKey = this.keyToEnvVar(key);
       const envValue = process.env[envKey];
@@ -171,23 +164,30 @@ class DynamicConfigService extends EventEmitter {
       const writeOptions = {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
         deliveryPriority: 'critical',
+        ignoreExisting: true,
       };
 
+      let mutationResult = null;
       if (useDirectCdcMutations) {
-        await this.cdcIntegrationService.insertSystemTableRow(
+        mutationResult = await this.cdcIntegrationService.insertSystemTableRow(
           SYSTEM_TABLE_NAME.CONFIG,
           row,
           writeOptions,
         );
       } else {
-        await this.getControlPlaneSystemTableGateway().submitMutation({
-          operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
-          tableName: SYSTEM_TABLE_NAME.CONFIG,
-          row,
-        }, writeOptions);
+        mutationResult = await this.getControlPlaneSystemTableGateway()
+          .insertSystemTableRow(
+            SYSTEM_TABLE_NAME.CONFIG,
+            row,
+            writeOptions,
+          );
       }
 
-      seeded.push(key);
+      if (this.didConfigSeedInsertApply(mutationResult)) {
+        seeded.push(key);
+      } else {
+        skipped.push(key);
+      }
     }
 
     this.logger.info(CONFIG_LOG_MSG.SEEDING_COMPLETE, {
@@ -196,6 +196,27 @@ class DynamicConfigService extends EventEmitter {
     });
 
     return {seeded, skipped};
+  }
+
+  /**
+   * Classify one config seed write as inserted vs already-present.
+   * @param {Object|null} mutationResult
+   * @return {boolean}
+   * @private
+   */
+  didConfigSeedInsertApply(mutationResult) {
+    const affectedRows = Number(
+      mutationResult?.partitionResult?.affectedRows ??
+      mutationResult?.affectedRows,
+    );
+    if (Number.isFinite(affectedRows)) {
+      return affectedRows > NUM.ZERO;
+    }
+
+    return mutationResult?.outcome !== CONTROL_PLANE_MUTATION_OUTCOME.NO_OP &&
+      mutationResult?.outcome !==
+        CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED &&
+      mutationResult?.success !== false;
   }
 
 

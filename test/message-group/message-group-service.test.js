@@ -1871,7 +1871,7 @@ test('MessageGroupService - buildPeerAddress follows cache updates after relocat
 });
 
 test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
-  'on hint fallback', async (t) => {
+  'only when bootstrap hints are explicitly allowed', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
     const peerId = 'mg-1-r2';
@@ -1895,15 +1895,20 @@ test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
       }
     };
 
-    t.equal(
-      service.buildPeerAddress(peerId),
-      hintAddress,
-      'should use bootstrap hint when cache location is missing',
+    t.throws(
+      () => service.buildPeerAddress(peerId),
+      /Unable to resolve unified peer address/,
+      'generic peer resolution should fail closed when only bootstrap hints remain',
     );
     t.equal(
-      service.buildPeerAddress(peerId),
+      service.buildPeerAddress(peerId, {allowBootstrapHints: true}),
       hintAddress,
-      'repeated fallback should still resolve via bootstrap hint',
+      'explicit join-time resolution may still use the bootstrap hint bridge',
+    );
+    t.equal(
+      service.buildPeerAddress(peerId, {allowBootstrapHints: true}),
+      hintAddress,
+      'repeated explicit fallback should still resolve via bootstrap hint',
     );
     t.equal(warningLogs.length, 1, 'should emit fallback diagnostics only once per peer');
     t.equal(
@@ -1915,6 +1920,53 @@ test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
     await cleanup();
   }
 });
+
+test(
+  'MessageGroupService - buildPeerAddress prefers live raft peer addresses before bootstrap hints',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const peerId = 'mg-1-r2';
+      const liveAddress = `peer-node-a/message-group/${peerId}`;
+      const hintAddress = `seed-node/message-group/${peerId}`;
+      const warningLogs = [];
+
+      const service = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        replicaIds: ['mg-1-r1', 'mg-1-r2'],
+        peerAddresses: [hintAddress],
+        transport: router,
+      });
+
+      service.raft = {
+        nodes: [{address: liveAddress}],
+      };
+
+      const originalWarn = service.logger.warn?.bind(service.logger);
+      service.logger.warn = (msg, fields) => {
+        warningLogs.push({msg, fields});
+        if (originalWarn) {
+          return originalWarn(msg, fields);
+        }
+      };
+
+      t.equal(
+        service.buildPeerAddress(peerId),
+        liveAddress,
+        'runtime peer location should win before bootstrap hints are considered',
+      );
+      t.equal(
+        warningLogs.length,
+        0,
+        'live raft peer resolution should not emit bootstrap fallback diagnostics',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
 
 test(
   'MessageGroupService - cache reconciliation refreshes moved peers and joins new replicas',
@@ -2862,6 +2914,102 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata',
       t.equal(service.pendingMessages.size, 0,
         'deferred direct-only query failure should not retain pending envelopes');
     }
+  });
+
+test('MessageGroupService - QUERY payload preserves deferred retry metadata from thrown transport errors',
+  async (t) => {
+    let deliverCalls = 0;
+    const transport = {
+      async deliver() {
+        deliverCalls += 1;
+        const error = new Error('Connection to node seed closed');
+        error.code = 'ROUTER_CONNECTION_CLOSED';
+        error.deferRetry = true;
+        error.retryAfterMs = 300;
+        throw error;
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-query-deferred-throw',
+      replicaId: 'mg-query-deferred-throw-r1',
+      nodeId: 'node-query-deferred-throw',
+      transport,
+    });
+
+    service.initialized = true;
+    service.retryMaxAttempts = 4;
+    service.sleep = async () => {};
+
+    try {
+      await service.sendMessage('node-x/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+      t.fail('query delivery should reject when thrown transport error defers');
+    } catch (error) {
+      t.equal(deliverCalls, 1,
+        'query message should not multiply direct retries on thrown deferred errors');
+      t.equal(error?.code, 'ROUTER_CONNECTION_CLOSED',
+        'thrown deferred errors should preserve the transport error code');
+      t.equal(error?.deferRetry, true,
+        'thrown deferred errors should preserve defer-retry hints');
+      t.equal(error?.retryAfterMs, 300,
+        'thrown deferred errors should preserve retryAfterMs for upstream owners');
+      t.equal(service.pendingMessages.size, 0,
+        'thrown deferred query failure should not retain pending envelopes');
+    }
+  });
+
+test('MessageGroupService - QUERY payload forwards transport delivery options',
+  async (t) => {
+    const capturedOptions = [];
+    const transport = {
+      async deliver(_targetService, _message, options) {
+        capturedOptions.push(options);
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [],
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-query-delivery-options',
+      replicaId: 'mg-query-delivery-options-r1',
+      nodeId: 'node-query-delivery-options',
+      transport,
+    });
+
+    service.initialized = true;
+    service.persistToRaftLog = async () => ({success: true});
+
+    const result = await service.sendMessage('seed-node/partition/services-p1-r1', {
+      type: 'QUERY',
+      sql: 'SELECT 1',
+      params: [],
+    }, {
+      transportDeliveryOptions: {
+        timeoutMs: 4321,
+      },
+    });
+
+    t.equal(result.acknowledged, true,
+      'query delivery should still succeed');
+    t.equal(capturedOptions.length, 1,
+      'query delivery should perform one direct transport attempt');
+    t.equal(capturedOptions[0]?.timeoutMs, 4321,
+      'query delivery should forward timeoutMs to the underlying transport');
+    t.equal(capturedOptions[0]?.deliveryPriority, 'critical',
+      'query delivery should preserve critical delivery priority for control-plane targets');
   });
 
 test('MessageGroupService - idempotent control-plane payloads use direct-only delivery',

@@ -20,6 +20,9 @@ import {
   discoverScenarios,
   filterScenarios,
 } from './harness/scenario-discovery.js';
+import {
+  selectCanonicalScenariosForConfig,
+} from './harness/scenario-registry.js';
 import {createCluster} from './harness/cluster.js';
 import {DockerProvider} from './harness/docker-provider.js';
 import {
@@ -2177,7 +2180,7 @@ async function main() {
   const allScenarios = await discoverScenarios();
   const scenarios = args.scenario ?
     filterScenarios(allScenarios, args.scenario) :
-    allScenarios;
+    selectCanonicalScenariosForConfig(allScenarios, args.config);
 
   if (args.verbose) {
     process.stdout.write(

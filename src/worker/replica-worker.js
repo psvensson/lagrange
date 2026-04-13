@@ -17,6 +17,29 @@ import {
 import {PartitionWorkerService} from './partition-worker-service.js';
 import {MessageGroupWorkerService} from './message-group-worker-service.js';
 
+const REPLICA_OPERATION_STATUS = Object.freeze({
+  CREATED: 'created',
+  STOPPED: 'stopped',
+});
+
+const REPLICA_HEALTH_CHECK_STATE = Object.freeze({
+  MISSING: 'missing',
+  NOT_READY: 'not_ready',
+  STATS_FAILED: 'stats_failed',
+  HEALTHY: 'healthy',
+});
+
+const REPLICA_HEALTH_CHECK_ERROR_MSG = Object.freeze({
+  NOT_READY: 'Replica worker service not ready',
+});
+
+const REPLICA_WORKER_LOG_MSG = Object.freeze({
+  STARTUP_CLEANUP_FAILED:
+    'Failed to clean up worker replica after startup failure',
+});
+
+const EMPTY_HEALTH_STATS = Object.freeze({});
+
 /**
  * Active replicas in this worker process.
  * @type {Map<string, PartitionWorkerService|MessageGroupWorkerService>}
@@ -34,6 +57,99 @@ const logger = {
   warn: (...args) => console.warn(`[Worker ${threadId}]`, ...args),
   error: (...args) => console.error(`[Worker ${threadId}]`, ...args),
 };
+
+function buildReplicaCreationResult(replicaId) {
+  return {
+    workerId: threadId,
+    replicaId,
+    status: REPLICA_OPERATION_STATUS.CREATED,
+  };
+}
+
+function buildReplicaStopResult(replicaId) {
+  return {
+    replicaId,
+    status: REPLICA_OPERATION_STATUS.STOPPED,
+  };
+}
+
+async function cleanupReplicaCreationFailure(service, replicaId) {
+  if (!service || service.initialized !== true) {
+    return;
+  }
+
+  try {
+    await service.stop();
+  } catch (error) {
+    logger.warn(REPLICA_WORKER_LOG_MSG.STARTUP_CLEANUP_FAILED, {
+      replicaId,
+      threadId,
+      error: error.message,
+    });
+  }
+}
+
+function observeReplicaStats(service) {
+  if (typeof service.getStats !== 'function') {
+    return {
+      state: REPLICA_HEALTH_CHECK_STATE.HEALTHY,
+      stats: EMPTY_HEALTH_STATS,
+      error: null,
+    };
+  }
+
+  try {
+    return {
+      state: REPLICA_HEALTH_CHECK_STATE.HEALTHY,
+      stats: service.getStats(),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      state: REPLICA_HEALTH_CHECK_STATE.STATS_FAILED,
+      stats: EMPTY_HEALTH_STATS,
+      error: error.message,
+    };
+  }
+}
+
+function normalizeReplicaHealthSnapshot(replicaId, service) {
+  if (!service) {
+    return {
+      replicaId,
+      state: REPLICA_HEALTH_CHECK_STATE.MISSING,
+      stats: EMPTY_HEALTH_STATS,
+      error: WORKER_ERROR_MSG.REPLICA_NOT_FOUND,
+    };
+  }
+
+  if (service.initialized !== true || service.started !== true) {
+    return {
+      replicaId,
+      state: REPLICA_HEALTH_CHECK_STATE.NOT_READY,
+      stats: EMPTY_HEALTH_STATS,
+      error: REPLICA_HEALTH_CHECK_ERROR_MSG.NOT_READY,
+    };
+  }
+
+  const statsObservation = observeReplicaStats(service);
+
+  return {
+    replicaId,
+    state: statsObservation.state,
+    stats: statsObservation.stats,
+    error: statsObservation.error,
+  };
+}
+
+function buildHealthCheckResult(snapshot) {
+  return {
+    healthy: snapshot.state === REPLICA_HEALTH_CHECK_STATE.HEALTHY,
+    replicaId: snapshot.replicaId,
+    error: snapshot.error,
+    stats: snapshot.stats,
+  };
+}
 
 /**
  * Create a partition replica in this worker process.
@@ -63,18 +179,19 @@ async function createPartitionReplica(options) {
     logger,
   });
 
-  // Call initialize() which creates messageBridge and then calls onInitialize()
-  await service.initialize();
+  try {
+    await service.initialize();
+    await service.start();
+  } catch (error) {
+    await cleanupReplicaCreationFailure(service, replicaId);
+    throw error;
+  }
 
   replicas.set(replicaId, service);
 
   logger.info('Partition replica created', {replicaId, threadId});
 
-  return {
-    workerId: threadId,
-    replicaId,
-    status: 'created',
-  };
+  return buildReplicaCreationResult(replicaId);
 }
 
 /**
@@ -101,18 +218,19 @@ async function createMessageGroupReplica(options) {
     logger,
   });
 
-  // Call initialize() which creates messageBridge and then calls onInitialize()
-  await service.initialize();
+  try {
+    await service.initialize();
+    await service.start();
+  } catch (error) {
+    await cleanupReplicaCreationFailure(service, replicaId);
+    throw error;
+  }
 
   replicas.set(replicaId, service);
 
   logger.info('Message group replica created', {replicaId, threadId});
 
-  return {
-    workerId: threadId,
-    replicaId,
-    status: 'created',
-  };
+  return buildReplicaCreationResult(replicaId);
 }
 
 /**
@@ -129,15 +247,12 @@ async function stopReplica(replicaId) {
 
   logger.info('Stopping replica', {replicaId, threadId});
 
-  await service.onStop();
+  await service.stop();
   replicas.delete(replicaId);
 
   logger.info('Replica stopped', {replicaId, threadId});
 
-  return {
-    replicaId,
-    status: 'stopped',
-  };
+  return buildReplicaStopResult(replicaId);
 }
 
 /**
@@ -163,20 +278,11 @@ async function deliverMessage(replicaId, message) {
  */
 async function healthCheck(replicaId) {
   const service = replicas.get(replicaId);
-
-  if (!service) {
-    return {
-      healthy: false,
-      replicaId,
-      error: WORKER_ERROR_MSG.REPLICA_NOT_FOUND,
-    };
-  }
-
-  return {
-    healthy: service.initialized,
+  const healthSnapshot = normalizeReplicaHealthSnapshot(
     replicaId,
-    stats: service.getStats ? service.getStats() : null,
-  };
+    service,
+  );
+  return buildHealthCheckResult(healthSnapshot);
 }
 
 /**

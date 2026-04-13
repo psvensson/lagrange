@@ -13,7 +13,7 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/node-joining-service.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
-  'cdc/cdc-integration-service.js': 2,
+  'cdc/cdc-integration-service.js': 1,
   'control-plane/control-plane-system-table-gateway.js': 2,
   'message-group/cdc-handler.js': 1,
 });

@@ -230,6 +230,14 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_FAILED: 'Operation failed',
   OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
+  OPERATION_DISPATCH_RETRY_DEFERRED:
+    'Deferred retryable replica operation dispatch failure',
+  OPERATION_DISPATCH_RETRY_FAILED:
+    'Deferred replica operation dispatch retry failed',
+  OPERATION_TRANSITION_RETRY_DEFERRED:
+    'Deferred retryable replica operation transition failure',
+  OPERATION_TRANSITION_RETRY_FAILED:
+    'Deferred replica operation transition retry failed',
   OPERATION_TIMED_OUT: 'Operation timed out',
   SKIP_PERSIST_NO_CDC: 'CDC integration service not available, skipping persistence',
   PERSIST_FAILED: 'Failed to persist operation',
@@ -383,6 +391,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   LOCAL_MUTATION_UNHEALTHY: 'local_mutation_unhealthy',
   OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
   OPERATION_OWNED_BY_ANOTHER_NODE: 'operation_owned_by_another_node',
+  DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
 });

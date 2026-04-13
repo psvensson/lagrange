@@ -480,6 +480,37 @@ test('MovePlanner capacity gating', async (t) => {
       );
     });
 
+  await t.test('critical admission mode no longer falls back to local priority partition detection',
+    async (t) => {
+      const calls = [];
+      const planner = new MovePlanner({
+        entityId: 'control_plane_publications-p1',
+        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+        moveStateProvider: makeMoveStateProvider([
+          {node_id: 'n1', cpu_usage_percent: 10},
+        ]),
+        storageAdmissionService: {
+          async checkAdd(options = {}) {
+            calls.push({...options});
+            return allowResult();
+          },
+        },
+        accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
+      });
+      planner.isControlPlanePriorityPartition = () => true;
+
+      await planner.calculateTargetState([], {
+        targetReplicaCount: NUM.ONE,
+        placementConstraints: {considerCpuLoad: true},
+      });
+
+      t.equal(
+        calls[0]?.isCritical,
+        false,
+        'without the provider contract, MovePlanner should not infer critical admission from a second local detector',
+      );
+    });
+
   // --- Message group capacity gating ---
 
   await t.test('message group placement filters by capacity',

@@ -390,3 +390,129 @@ test('ControlPlaneKernelIngress - excludes disconnected bootstrap ingress candid
       'disconnected ingress should not be returned as a runtime delivery candidate',
     );
   });
+
+test('ControlPlaneKernelIngress - can retain disconnected bootstrap ingress ' +
+  'candidates when optimistic delivery is allowed', async (t) => {
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-5b',
+    getBootstrapResponse: () => ({
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r3',
+          'seed-node-2/message-group/mg-1-r4',
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState(nodeId) {
+        return nodeId === 'seed-node-2' ? 'connected' : 'disconnected';
+      },
+    }),
+  });
+
+  t.same(
+    ingress.resolveTargetCandidates({
+      allowBootstrapHints: true,
+      allowDisconnectedTargets: true,
+    }),
+    [
+      'seed-node-1/message-group/mg-1-r3',
+      'seed-node-2/message-group/mg-1-r4',
+    ],
+    'optimistic delivery should keep disconnected remote ingress candidates ' +
+      'available ahead of local fallback',
+  );
+});
+
+test('ControlPlaneKernelIngress - READY heartbeats prefer remote ingress before local self target',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-ready-1',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.MOVE_REPLICA,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r1',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState() {
+          return 'connected';
+        },
+      }),
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r2', {
+          groupId: 'mg-1',
+          unifiedAddress: 'joining-node-ready-1/message-group/mg-1-r2',
+          isLeaderReplica: () => false,
+          isMetadataIngressReady: () => true,
+        }],
+      ]),
+    });
+
+    t.same(
+      ingress.resolveNodeStateUpdateTargetCandidates({
+        state: 'ready',
+        heartbeatAt: Date.now(),
+        allowBootstrapHints: true,
+        localTargetMode: 'any_replica',
+      }),
+      [
+        'seed-node-1/message-group/mg-1-r1',
+        'joining-node-ready-1/message-group/mg-1-r2',
+      ],
+      'READY heartbeat routing should prioritize remote authoritative ingress before the local self target',
+    );
+  });
+
+test('ControlPlaneKernelIngress - READY heartbeats can keep optimistic remote ingress ahead of local fallback',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-ready-2',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.MOVE_REPLICA,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r1',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState(nodeId) {
+          return nodeId === 'joining-node-ready-2' ?
+            'connected' :
+            'disconnected';
+        },
+      }),
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r2', {
+          groupId: 'mg-1',
+          unifiedAddress: 'joining-node-ready-2/message-group/mg-1-r2',
+          isLeaderReplica: () => false,
+          isMetadataIngressReady: () => true,
+        }],
+      ]),
+    });
+
+    t.same(
+      ingress.resolveNodeStateUpdateTargetCandidates({
+        state: 'ready',
+        heartbeatAt: Date.now(),
+        allowBootstrapHints: true,
+        localTargetMode: 'any_replica',
+      }),
+      [
+        'seed-node-1/message-group/mg-1-r1',
+        'joining-node-ready-2/message-group/mg-1-r2',
+      ],
+      'READY heartbeat routing should still expose optimistic remote ingress before falling back to local self delivery',
+    );
+  });

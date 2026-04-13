@@ -106,7 +106,9 @@ describe('PgWireStartupSafetyGate', () => {
       const result = gate.checkControlPlaneReady();
 
       assert.strictEqual(result.ready, true);
-      assert.strictEqual(result.reason, null);
+      assert.strictEqual(result.state, 'ready');
+      assert.strictEqual(result.reason, 'ready');
+      assert.strictEqual(result.blockingDependency, 'none');
     });
   });
 

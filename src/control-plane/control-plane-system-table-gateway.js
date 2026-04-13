@@ -9,7 +9,10 @@ import {
 } from './pressure-governor.js';
 import {ControlPlaneDiagnosticsLedger} from
   './control-plane-diagnostics-ledger.js';
-import {buildControlPlaneQueryOptions} from './timeout-budget.js';
+import {
+  buildControlPlaneQueryOptions,
+  getRemainingBudgetMs,
+} from './timeout-budget.js';
 import {
   CDC_OPERATION,
   METRICS_LOG_TAG,
@@ -24,9 +27,82 @@ import {
 import {getSystemCachePrimaryKeyFieldOrFallback} from
   '../cache/system-cache-key-descriptor.js';
 import {canonicalizeSystemTableRow} from './system-row-normalizers.js';
+const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL = Object.freeze({
+  ACTIVE: "active",
+  ALLOWCOALESCING: "allowCoalescing",
+  ALLOWPENDINGVISIBILITY: "allowPendingVisibility",
+  ALLOWPRESSUREDEFER: "allowPressureDefer",
+  ALLOWPRESSUREDEGRADE: "allowPressureDegrade",
+  ALLOWSQLFALLBACK: "allowSqlFallback",
+  CANCELLATIONTOKEN: "cancellationToken",
+  COALESCINGKEY: "coalescingKey",
+  CONTROL_DASH_PLANE_COLON_READ: "control-plane:read",
+  CONTROL_DASH_PLANE_DASH_MUTATION: "control-plane-mutation",
+  CONTROL_DASH_PLANE_DASH_QUERY: "control-plane-query",
+  CONTROL_DASH_PLANE_DASH_READ: "control-plane-read",
+  CONTROL_PLANE_MUTATION_TRACKING_SATURATED: "control_plane_mutation_tracking_saturated",
+  CRITICAL: "critical",
+  DELETE: "delete",
+  DELIVERYPRIORITY: "deliveryPriority",
+  EXPECTEDCACHEFIELDS: "expectedCacheFields",
+  FALLBACKPHASE: "fallbackPhase",
+  IGNOREEXISTING: "ignoreExisting",
+  INSERT: "insert",
+  LOCAL_PARTITION_REPLICA: "local_partition_replica",
+  MAXOBSERVEDMUTATIONLATENCYMS: "maxObservedMutationLatencyMs",
+  MAXOBSERVEDREADLATENCYMS: "maxObservedReadLatencyMs",
+  MERGEPOLICY: "mergePolicy",
+  MINIMUMCACHEFIELDS: "minimumCacheFields",
+  MUTATION: "mutation",
+  MUTATIONOUTCOMECOUNTS: "mutationOutcomeCounts",
+  MUTATIONREPLACEPENDINGQUEUEDCOUNT: "mutationReplacePendingQueuedCount",
+  MUTATIONREPLACEPENDINGSUPERSEDEDCOUNT: "mutationReplacePendingSupersededCount",
+  MUTATIONTRACKINGREJECTEDCOUNT: "mutationTrackingRejectedCount",
+  ONE: 1,
+  OWNER_RPC_LANE: "owner_rpc_lane",
+  PARTITION: "partition",
+  PHASESCOPE: "phaseScope",
+  PREFERAUTHORITATIVEREAD: "preferAuthoritativeRead",
+  PREFEROWNERRPCREAD: "preferOwnerRpcRead",
+  PRESSURERETRYAFTERMS: "pressureRetryAfterMs",
+  QUERY: "query",
+  READ: "read",
+  READOUTCOMECOUNTS: "readOutcomeCounts",
+  REQUIREAUTHORITATIVE: "requireAuthoritative",
+  REQUIREOWNERRPCREAD: "requireOwnerRpcRead",
+  ROUTER_QUERY_TRANSPORT_NOT_READY: "ROUTER_QUERY_TRANSPORT_NOT_READY",
+  ROUTINGREADINESSDIMENSION: "routingReadinessDimension",
+  SELECT: "select",
+  SESSIONID: "sessionId",
+  SKIPCACHEWAIT: "skipCacheWait",
+  SYSTEM_TABLE_CACHE_UNAVAILABLE: "system_table_cache_unavailable",
+  TIMEOUTBUDGET: "timeoutBudget",
+  UNKNOWN: "unknown",
+  UPDATE: "update",
+  VISIBLE: "visible",
+  WORKCLASS: "workClass",
+  WRITE: "write",
+  ZERO: 0,
+});
+
 
 const CONTROL_PLANE_LOCAL_READ_CONSISTENCY = 'local_leader';
 const CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY = 'any_replica';
+
+const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR = Object.freeze({
+  AUTHORITATIVE_READ_OWNER_UNAVAILABLE:
+    'authoritative_read_owner_unavailable',
+  BOOTSTRAP_SNAPSHOT_PHASE_SCOPE_REQUIRED:
+    'bootstrap_snapshot_phase_scope_required',
+  BOOTSTRAP_SNAPSHOT_UNAVAILABLE:
+    'bootstrap_snapshot_unavailable',
+  SQL_QUERY_ENGINE_UNAVAILABLE:
+    'sql_query_engine_unavailable',
+});
+
+const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE = Object.freeze({
+  SQL_QUERY_ENGINE: 'sql_query_engine',
+});
 const CONTROL_PLANE_OPERATION_LEDGER_LIMIT = 256;
 const CONTROL_PLANE_READ_STRATEGY = Object.freeze({
   CACHE: 'cache',
@@ -34,6 +110,12 @@ const CONTROL_PLANE_READ_STRATEGY = Object.freeze({
   AUTHORITATIVE_REQUIRED: 'authoritative_required',
   OWNER_LOCAL_NON_PROPAGATED: 'owner_local_non_propagated',
   BOOTSTRAP_SNAPSHOT: 'bootstrap_snapshot',
+});
+const CONTROL_PLANE_READ_PROFILE = Object.freeze({
+  DIAGNOSTICS: 'diagnostics',
+  PLANNING: 'planning',
+  REPAIR_REQUIRED: 'repair_required',
+  TABLE_LIFECYCLE: 'table_lifecycle',
 });
 const CONTROL_PLANE_PHASE_SCOPE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
@@ -52,6 +134,7 @@ const CONTROL_PLANE_READ_OUTCOME = Object.freeze({
 const CONTROL_PLANE_MUTATION_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   NO_OP: 'no_op',
+  PENDING_VISIBILITY: 'pending_visibility',
   DEFERRED: 'deferred',
   REJECTED: 'rejected',
   OWNER_NOT_READY: 'owner_not_ready',
@@ -161,8 +244,8 @@ function extractSystemTableNameFromSql(sql) {
     /^\s*delete\s+from\s+([a-zA-Z_][\w]*)/i,
   ]) {
     const match = normalizedSql.match(matcher);
-    if (match?.[1]) {
-      return normalizeSystemTableName(match[1]);
+    if (match?.[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ONE]) {
+      return normalizeSystemTableName(match[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ONE]);
     }
   }
   return null;
@@ -250,17 +333,233 @@ function normalizeReadStrategy(value) {
   return null;
 }
 
+function normalizeReadProfile(value) {
+  if (value === CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS) {
+    return CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS;
+  }
+  if (value === CONTROL_PLANE_READ_PROFILE.PLANNING) {
+    return CONTROL_PLANE_READ_PROFILE.PLANNING;
+  }
+  if (value === CONTROL_PLANE_READ_PROFILE.REPAIR_REQUIRED) {
+    return CONTROL_PLANE_READ_PROFILE.REPAIR_REQUIRED;
+  }
+  if (value === CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE) {
+    return CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE;
+  }
+  return null;
+}
+
+function resolveReadStrategyForProfile(readProfile) {
+  if (readProfile === CONTROL_PLANE_READ_PROFILE.PLANNING) {
+    return CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE;
+  }
+  if (readProfile === CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS ||
+      readProfile === CONTROL_PLANE_READ_PROFILE.REPAIR_REQUIRED ||
+      readProfile === CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE) {
+    return CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED;
+  }
+  return null;
+}
+
+function applyProfileDefault(options, key, value) {
+  if (typeof options?.[key] !== TYPEOF.UNDEFINED) {
+    return options;
+  }
+  return {
+    ...options,
+    [key]: value,
+  };
+}
+
+function resolveMutationCompletionState(result = {}) {
+  if (typeof result?.completionState === TYPEOF.STRING &&
+      result.completionState.length > NUM.ZERO) {
+    return result.completionState;
+  }
+  if (typeof result?.visibilityState === TYPEOF.STRING &&
+      result.visibilityState !== CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE) {
+    return CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY;
+  }
+  if (result?.success === false) {
+    return result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
+      CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
+      (
+        result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
+          CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
+          CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
+      );
+  }
+  const affectedRows = Number(
+    result?.partitionResult?.affectedRows ?? result?.affectedRows,
+  );
+  return Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO ?
+    CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED :
+    CONTROL_PLANE_MUTATION_OUTCOME.APPLIED;
+}
+
+function resolveReadProfileOptions(options = {}) {
+  const readProfile = normalizeReadProfile(
+    options?.readProfile || options?.profile,
+  );
+  if (!readProfile) {
+    return options;
+  }
+
+  let resolvedOptions = {
+    ...options,
+    readProfile,
+  };
+  switch (readProfile) {
+    case CONTROL_PLANE_READ_PROFILE.DIAGNOSTICS:
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFEROWNERRPCREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREOWNERRPCREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWSQLFALLBACK,
+        false,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTINGREADINESSDIMENSION,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+      break;
+    case CONTROL_PLANE_READ_PROFILE.PLANNING:
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFERAUTHORITATIVEREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFEROWNERRPCREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREOWNERRPCREAD,
+        false,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWSQLFALLBACK,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTINGREADINESSDIMENSION,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      );
+      break;
+    case CONTROL_PLANE_READ_PROFILE.REPAIR_REQUIRED:
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFEROWNERRPCREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREOWNERRPCREAD,
+        false,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWSQLFALLBACK,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEGRADE,
+        false,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CRITICAL,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WORKCLASS,
+        PRESSURE_WORK_CLASS.CRITICAL,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTINGREADINESSDIMENSION,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+      break;
+    case CONTROL_PLANE_READ_PROFILE.TABLE_LIFECYCLE:
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFERAUTHORITATIVEREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PREFEROWNERRPCREAD,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREOWNERRPCREAD,
+        false,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.REQUIREAUTHORITATIVE,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWSQLFALLBACK,
+        true,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CRITICAL,
+      );
+      resolvedOptions = applyProfileDefault(
+        resolvedOptions,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTINGREADINESSDIMENSION,
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      );
+      break;
+    default:
+      break;
+  }
+  return resolvedOptions;
+}
+
 function extractSqlOperationKind(sql) {
   if (typeof sql !== TYPEOF.STRING) {
     return CONTROL_PLANE_SQL_OPERATION.UNKNOWN;
   }
   const normalizedSql = sql.trim().toLowerCase();
-  if (normalizedSql.startsWith('select')) {
+  if (normalizedSql.startsWith(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SELECT)) {
     return CONTROL_PLANE_SQL_OPERATION.READ;
   }
-  if (normalizedSql.startsWith('insert') ||
-      normalizedSql.startsWith('update') ||
-      normalizedSql.startsWith('delete')) {
+  if (normalizedSql.startsWith(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.INSERT) ||
+      normalizedSql.startsWith(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UPDATE) ||
+      normalizedSql.startsWith(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELETE)) {
     return CONTROL_PLANE_SQL_OPERATION.WRITE;
   }
   return CONTROL_PLANE_SQL_OPERATION.UNKNOWN;
@@ -498,7 +797,7 @@ class ControlPlaneSystemTableGateway {
         tableName,
         mutationCount: NUM.ZERO,
         outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-        error: 'system_table_cache_unavailable',
+        error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SYSTEM_TABLE_CACHE_UNAVAILABLE,
       };
     }
 
@@ -685,7 +984,7 @@ class ControlPlaneSystemTableGateway {
           SYSTEM_TABLE_NAME.SERVICES,
           (row) => {
             return row?.partition_id === partitionId &&
-              row?.service_type === 'partition';
+              row?.service_type === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PARTITION;
           },
         ) || [];
       }
@@ -710,7 +1009,7 @@ class ControlPlaneSystemTableGateway {
         Number.isFinite(routingSnapshot?.routableServiceCount) ?
           routingSnapshot.routableServiceCount :
           serviceRows.filter((row) =>
-            row?.status === 'active' &&
+            row?.status === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ACTIVE &&
             typeof row?.address === TYPEOF.STRING &&
             row.address.length > NUM.ZERO,
           ).length,
@@ -774,24 +1073,25 @@ class ControlPlaneSystemTableGateway {
       localReadHit:
         result?.localReadHit === true ||
         systemTableDiagnostics.localReadHit === true ||
-        result?.source === 'local_partition_replica',
+        result?.source === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.LOCAL_PARTITION_REPLICA,
       localReplicaFallbackHit:
         result?.localReplicaFallbackHit === true ||
         systemTableDiagnostics.localReplicaFallbackHit === true,
       routedToNode:
         systemTableDiagnostics.routedToNode ||
         (
-          result?.source === 'sql_query_engine' ||
-          result?.source === 'owner_rpc_lane' ||
-          options?.operationClass === 'mutation' ||
-          options?.operationClass === 'query' ?
+          result?.source ===
+            CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE ||
+          result?.source === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.OWNER_RPC_LANE ||
+          options?.operationClass === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION ||
+          options?.operationClass === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY ?
             leaderNodeId :
             null
         ),
       deniedByReadiness:
         systemTableDiagnostics.deniedByReadiness === true ||
         fallbackDiagnostics.deniedByReadiness === true ||
-        result?.errorCode === 'ROUTER_QUERY_TRANSPORT_NOT_READY' ||
+        result?.errorCode === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTER_QUERY_TRANSPORT_NOT_READY ||
         (result?.success === false && result?.deferRetry === true),
       leaderNodeId,
       serviceRowCount:
@@ -861,13 +1161,13 @@ class ControlPlaneSystemTableGateway {
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     };
     if (typeof options?.sessionId === TYPEOF.STRING &&
-        options.sessionId.length > 0) {
+        options.sessionId.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
       queryOptions.sessionId = options.sessionId;
     }
     if (options?.cancellationToken) {
       queryOptions.cancellationToken = options.cancellationToken;
     }
-    queryOptions = copyOption(queryOptions, options, 'deliveryPriority');
+    queryOptions = copyOption(queryOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY);
     return queryOptions;
   }
 
@@ -887,21 +1187,36 @@ class ControlPlaneSystemTableGateway {
       options?.timeoutMs;
     if (Number.isFinite(queryTimeoutMs)) {
       writeOptions.queryTimeoutMs = queryTimeoutMs;
+    } else if (options?.timeoutBudget &&
+      typeof options.timeoutBudget === TYPEOF.OBJECT) {
+      const remainingBudgetMs = getRemainingBudgetMs(
+        options.timeoutBudget,
+        {now: this.now},
+      );
+      if (remainingBudgetMs > NUM.ZERO) {
+        writeOptions.queryTimeoutMs = Math.max(
+          NUM.ONE,
+          Math.floor(remainingBudgetMs),
+        );
+      }
     }
-    writeOptions = copyOption(writeOptions, options, 'cancellationToken');
-    writeOptions = copyOption(writeOptions, options, 'skipCacheWait');
-    writeOptions = copyOption(writeOptions, options, 'expectedCacheFields');
-    writeOptions = copyOption(writeOptions, options, 'minimumCacheFields');
-    writeOptions = copyOption(writeOptions, options, 'fallbackPhase');
-    writeOptions = copyOption(writeOptions, options, 'sessionId');
-    writeOptions = copyOption(writeOptions, options, 'deliveryPriority');
-    writeOptions = copyOption(writeOptions, options, 'workClass');
-    writeOptions = copyOption(writeOptions, options, 'allowPressureDefer');
-    writeOptions = copyOption(writeOptions, options, 'pressureRetryAfterMs');
-    writeOptions = copyOption(writeOptions, options, 'coalescingKey');
-    writeOptions = copyOption(writeOptions, options, 'allowCoalescing');
-    writeOptions = copyOption(writeOptions, options, 'mergePolicy');
-    writeOptions = copyOption(writeOptions, options, 'phaseScope');
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CANCELLATIONTOKEN);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.TIMEOUTBUDGET);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SKIPCACHEWAIT);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPENDINGVISIBILITY);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.EXPECTEDCACHEFIELDS);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MINIMUMCACHEFIELDS);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.FALLBACKPHASE);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SESSIONID);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WORKCLASS);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IGNOREEXISTING);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWPRESSUREDEFER);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PRESSURERETRYAFTERMS);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.COALESCINGKEY);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ALLOWCOALESCING);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MERGEPOLICY);
+    writeOptions = copyOption(writeOptions, options, CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.PHASESCOPE);
     return writeOptions;
   }
 
@@ -1019,7 +1334,7 @@ class ControlPlaneSystemTableGateway {
     if (typeof this.gatewayMetrics?.[metricName] !== TYPEOF.NUMBER) {
       return;
     }
-    this.gatewayMetrics[metricName] += 1;
+    this.gatewayMetrics[metricName] += CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ONE;
   }
 
   /**
@@ -1126,14 +1441,15 @@ class ControlPlaneSystemTableGateway {
     const outcome = typeof result?.outcome === TYPEOF.STRING ?
       result.outcome :
       CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
-    this.incrementGatewayOutcomeMetric('readOutcomeCounts', outcome);
-    this.recordGatewayLatency('maxObservedReadLatencyMs', latencyMs);
+    this.incrementGatewayOutcomeMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READOUTCOMECOUNTS, outcome);
+    this.recordGatewayLatency(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MAXOBSERVEDREADLATENCYMS, latencyMs);
     this.emitGatewayMetric(METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_READ, {
       nodeId: this.nodeId,
       owner: context.owner || null,
       tableName: context.tableName || null,
       outcome,
       strategy: result?.strategyUsed || context.strategy || null,
+      readProfile: context.readProfile || null,
       workClass: context.workClass || null,
       coalescingKey: context.coalescingKey || null,
       latencyMs,
@@ -1176,8 +1492,8 @@ class ControlPlaneSystemTableGateway {
     const outcome = typeof result?.outcome === TYPEOF.STRING ?
       result.outcome :
       CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
-    this.incrementGatewayOutcomeMetric('mutationOutcomeCounts', outcome);
-    this.recordGatewayLatency('maxObservedMutationLatencyMs', latencyMs);
+    this.incrementGatewayOutcomeMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONOUTCOMECOUNTS, outcome);
+    this.recordGatewayLatency(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MAXOBSERVEDMUTATIONLATENCYMS, latencyMs);
     this.emitGatewayMetric(METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_MUTATION, {
       nodeId: this.nodeId,
       owner: context.owner || null,
@@ -1223,7 +1539,7 @@ class ControlPlaneSystemTableGateway {
   buildTrackingSaturatedMutationResult(result = {}) {
     return {
       success: false,
-      error: 'control_plane_mutation_tracking_saturated',
+      error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_PLANE_MUTATION_TRACKING_SATURATED,
       errorCode: CONTROL_PLANE_GATEWAY_ERROR_CODE.MUTATION_TRACKING_SATURATED,
       outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
       ...result,
@@ -1306,7 +1622,7 @@ class ControlPlaneSystemTableGateway {
       }
       return {
         requestKey: stableSerialize({
-          kind: 'control-plane-mutation',
+          kind: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_DASH_MUTATION,
           tableName: mutation?.tableName || null,
           operation: mutation?.operation || null,
           row: mutation?.row || null,
@@ -1314,6 +1630,7 @@ class ControlPlaneSystemTableGateway {
           data: mutation?.data || null,
           workClass: options?.workClass || null,
           deliveryPriority: options?.deliveryPriority || null,
+          ignoreExisting: options?.ignoreExisting === true,
           allowPressureDefer: options?.allowPressureDefer === true,
           routingReadinessDimension:
             options?.routingReadinessDimension ||
@@ -1326,7 +1643,7 @@ class ControlPlaneSystemTableGateway {
     if (mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT) {
       return {
         requestKey: stableSerialize({
-          kind: 'control-plane-mutation',
+          kind: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_DASH_MUTATION,
           explicitKey,
           tableName: mutation?.tableName || null,
           operation: mutation?.operation || null,
@@ -1335,6 +1652,7 @@ class ControlPlaneSystemTableGateway {
           data: mutation?.data || null,
           workClass: options?.workClass || null,
           deliveryPriority: options?.deliveryPriority || null,
+          ignoreExisting: options?.ignoreExisting === true,
           allowPressureDefer: options?.allowPressureDefer === true,
           routingReadinessDimension:
             options?.routingReadinessDimension ||
@@ -1345,7 +1663,7 @@ class ControlPlaneSystemTableGateway {
       };
     }
     return {
-      requestKey: `control-plane:mutation:${mutation?.tableName || 'unknown'}:` +
+      requestKey: `control-plane:mutation:${mutation?.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:` +
         `${explicitKey}`,
       mergePolicy,
     };
@@ -1376,7 +1694,7 @@ class ControlPlaneSystemTableGateway {
     if (!this.inFlightMutationRequestsByKey.has(requestKey) &&
         this.inFlightMutationRequestsByKey.size >=
           this.gatewayLimits.maxTrackedMutationRequests) {
-      this.incrementGatewayMetric('mutationTrackingRejectedCount');
+      this.incrementGatewayMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONTRACKINGREJECTEDCOUNT);
       const saturatedResult = this.buildTrackingSaturatedMutationResult({
         requestKey,
       });
@@ -1436,7 +1754,7 @@ class ControlPlaneSystemTableGateway {
 
     const existingPending = this.pendingReplaceMutationRequestsByKey.get(requestKey);
     if (existingPending) {
-      this.incrementGatewayMetric('mutationReplacePendingSupersededCount');
+      this.incrementGatewayMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONREPLACEPENDINGSUPERSEDEDCOUNT);
       existingPending.deferred.resolve(
         this.buildSupersededMutationResult(requestKey),
       );
@@ -1445,7 +1763,7 @@ class ControlPlaneSystemTableGateway {
     if (!existingPending &&
         this.pendingReplaceMutationRequestsByKey.size >=
           this.gatewayLimits.maxPendingReplaceMutationRequests) {
-      this.incrementGatewayMetric('mutationTrackingRejectedCount');
+      this.incrementGatewayMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONTRACKINGREJECTEDCOUNT);
       return Promise.resolve(this.buildTrackingSaturatedMutationResult({
         requestKey,
       }));
@@ -1456,7 +1774,7 @@ class ControlPlaneSystemTableGateway {
       deferred,
       executionFactory,
     });
-    this.incrementGatewayMetric('mutationReplacePendingQueuedCount');
+    this.incrementGatewayMetric(CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONREPLACEPENDINGQUEUEDCOUNT);
     this.recordGatewayRetentionSnapshot();
     return deferred.promise;
   }
@@ -1471,8 +1789,8 @@ class ControlPlaneSystemTableGateway {
     return this.getPressureGovernor().evaluate({
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       resourceKeys: [
-        'control-plane:read',
-        `control-plane:table:${tableName || 'unknown'}`,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_READ,
+        `control-plane:table:${tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}`,
       ],
       allowDegrade: options?.allowPressureDegrade !== false,
       allowDefer: options?.allowPressureDefer === true,
@@ -1491,14 +1809,15 @@ class ControlPlaneSystemTableGateway {
   buildReadRequestKey(tableName, sql, params = [], options = {}) {
     const explicitKey = normalizeCoalescingToken(options?.coalescingKey);
     if (explicitKey) {
-      return `control-plane:read:${tableName || 'unknown'}:${explicitKey}`;
+      return `control-plane:read:${tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:${explicitKey}`;
     }
     if (options?.allowCoalescing === false) {
       return null;
     }
     return stableSerialize({
-      kind: 'control-plane-read',
+      kind: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_DASH_READ,
       tableName: tableName || null,
+      readProfile: options?.readProfile || null,
       strategy: options?.strategy || null,
       sql: sql || null,
       params: Array.isArray(params) ? params : [],
@@ -1555,7 +1874,7 @@ class ControlPlaneSystemTableGateway {
   buildExecuteQueryKey(descriptor, sql, params = [], options = {}) {
     const explicitKey = normalizeCoalescingToken(options?.coalescingKey);
     if (explicitKey) {
-      return `control-plane:query:${descriptor.tableName || 'unknown'}:` +
+      return `control-plane:query:${descriptor.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:` +
         `${descriptor.operationKind}:${explicitKey}`;
     }
     if (options?.allowCoalescing === false) {
@@ -1565,7 +1884,7 @@ class ControlPlaneSystemTableGateway {
       return null;
     }
     return stableSerialize({
-      kind: 'control-plane-query',
+      kind: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_DASH_QUERY,
       tableName: descriptor.tableName || null,
       operationKind: descriptor.operationKind,
       sql: sql || null,
@@ -1606,8 +1925,8 @@ class ControlPlaneSystemTableGateway {
           PRESSURE_WORK_CLASS.CRITICAL :
           PRESSURE_WORK_CLASS.INTERACTIVE),
       resourceKeys: [
-        `control-plane:${isWrite ? 'write' : 'read'}`,
-        `control-plane:table:${descriptor.tableName || 'unknown'}`,
+        `control-plane:${isWrite ? CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WRITE : CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ}`,
+        `control-plane:table:${descriptor.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}`,
       ],
       allowDegrade:
         isWrite ?
@@ -1803,10 +2122,10 @@ class ControlPlaneSystemTableGateway {
       },
     );
     this.recordControlPlaneOperation({
-      operationClass: 'query',
+      operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY,
       tableName: descriptor.tableName || null,
       sqlOperation: descriptor.sqlOperation || null,
-      strategy: 'sql_query_engine',
+      strategy: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
       routingReadinessDimension:
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -1820,7 +2139,7 @@ class ControlPlaneSystemTableGateway {
         result,
         {
           ...options,
-          operationClass: 'query',
+          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY,
         },
       ),
       sessionId:
@@ -1878,10 +2197,15 @@ class ControlPlaneSystemTableGateway {
    * @return {Promise<Object>}
    */
   async readRows(tableName, sql, params = [], options = {}) {
+    const readProfile = normalizeReadProfile(
+      options?.readProfile || options?.profile,
+    );
+    const profileStrategy = resolveReadStrategyForProfile(readProfile);
     const cdcIntegrationService = this.resolveCdcIntegrationService();
     const strategy = normalizeReadStrategy(
       options?.strategy ||
       options?.readStrategy ||
+      profileStrategy ||
       (
         options?.bootstrapSnapshotRows ||
         typeof options?.readBootstrapSnapshot === TYPEOF.FUNCTION ?
@@ -1913,7 +2237,10 @@ class ControlPlaneSystemTableGateway {
       readBootstrapSnapshot: options?.readBootstrapSnapshot,
       bootstrapSnapshotRows: options?.bootstrapSnapshotRows,
       phaseScope: normalizePhaseScope(options?.phaseScope),
-    }, options);
+    }, {
+      ...options,
+      readProfile,
+    });
   }
 
   /**
@@ -1929,8 +2256,9 @@ class ControlPlaneSystemTableGateway {
     const strategy = normalizeReadStrategy(readIntent?.strategy);
     const sql = readIntent?.sql || null;
     const params = Array.isArray(readIntent?.params) ? readIntent.params : [];
+    const profiledOptions = resolveReadProfileOptions(options);
     const mergedOptions = {
-      ...options,
+      ...profiledOptions,
       strategy,
     };
     const requestKey = this.buildReadRequestKey(
@@ -1944,6 +2272,7 @@ class ControlPlaneSystemTableGateway {
       owner: readIntent?.owner || options?.owner || null,
       tableName,
       strategy,
+      readProfile: mergedOptions?.readProfile || null,
       workClass: mergedOptions?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       coalescingKey: normalizeCoalescingToken(mergedOptions?.coalescingKey),
     };
@@ -2007,7 +2336,7 @@ class ControlPlaneSystemTableGateway {
         },
       );
       this.recordControlPlaneOperation({
-        operationClass: 'read',
+        operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ,
         tableName,
         strategy,
         routingReadinessDimension:
@@ -2028,7 +2357,7 @@ class ControlPlaneSystemTableGateway {
       return result;
     } catch (error) {
       this.recordControlPlaneOperation({
-        operationClass: 'read',
+        operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ,
         tableName,
         strategy,
         routingReadinessDimension:
@@ -2230,7 +2559,7 @@ class ControlPlaneSystemTableGateway {
           },
         );
         this.recordControlPlaneOperation({
-          operationClass: 'mutation',
+          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
           tableName,
           mutationOperation: operation,
           routingReadinessDimension:
@@ -2246,14 +2575,14 @@ class ControlPlaneSystemTableGateway {
           error: result?.success === false ? (result?.error || null) : null,
           ...this.buildOperationLedgerDiagnostics(tableName, result, {
             ...writeOptions,
-            operationClass: 'mutation',
+            operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
           }),
         });
         this.recordMutationTelemetry(telemetryContext, result);
         return result;
       } catch (error) {
         this.recordControlPlaneOperation({
-          operationClass: 'mutation',
+          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
           tableName,
           mutationOperation: operation,
           routingReadinessDimension:
@@ -2267,7 +2596,7 @@ class ControlPlaneSystemTableGateway {
           error: error?.message || String(error),
           ...this.buildOperationLedgerDiagnostics(tableName, error, {
             ...writeOptions,
-            operationClass: 'mutation',
+            operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
           }),
         });
         this.recordMutationTelemetry(telemetryContext, {
@@ -2282,7 +2611,7 @@ class ControlPlaneSystemTableGateway {
     try {
       const result = await executionFactory();
       this.recordControlPlaneOperation({
-        operationClass: 'mutation',
+        operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         tableName,
         mutationOperation: operation,
         routingReadinessDimension:
@@ -2298,14 +2627,14 @@ class ControlPlaneSystemTableGateway {
         error: result?.success === false ? (result?.error || null) : null,
         ...this.buildOperationLedgerDiagnostics(tableName, result, {
           ...writeOptions,
-          operationClass: 'mutation',
+          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         }),
       });
       this.recordMutationTelemetry(telemetryContext, result);
       return result;
     } catch (error) {
       this.recordControlPlaneOperation({
-        operationClass: 'mutation',
+        operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         tableName,
         mutationOperation: operation,
         routingReadinessDimension:
@@ -2319,7 +2648,7 @@ class ControlPlaneSystemTableGateway {
         error: error?.message || String(error),
         ...this.buildOperationLedgerDiagnostics(tableName, error, {
           ...writeOptions,
-          operationClass: 'mutation',
+          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
         }),
       });
       this.recordMutationTelemetry(telemetryContext, {
@@ -2353,7 +2682,7 @@ class ControlPlaneSystemTableGateway {
         rows: [],
         outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
         strategyUsed: CONTROL_PLANE_READ_STRATEGY.CACHE,
-        error: 'system_table_cache_unavailable',
+        error: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.SYSTEM_TABLE_CACHE_UNAVAILABLE,
       };
     }
 
@@ -2386,21 +2715,184 @@ class ControlPlaneSystemTableGateway {
    * @return {Promise<Object>}
    * @private
    */
+  buildGatewayReadResult(
+    baseResult,
+    tableName,
+    strategyUsed,
+    outcome,
+    extra = {},
+  ) {
+    return {
+      ...baseResult,
+      tableName,
+      rows: Array.isArray(baseResult?.rows) ?
+        baseResult.rows :
+        [],
+      outcome,
+      strategyUsed,
+      ...extra,
+    };
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {string} strategyUsed
+   * @param {string} outcome
+   * @param {string} error
+   * @return {Object}
+   * @private
+   */
+  buildUnavailableGatewayReadResult(
+    tableName,
+    strategyUsed,
+    outcome,
+    error,
+  ) {
+    return {
+      success: false,
+      tableName,
+      rows: [],
+      outcome,
+      strategyUsed,
+      error,
+    };
+  }
+
+  /**
+   * @param {string} strategy
+   * @return {string}
+   * @private
+   */
+  resolveAuthoritativeReadFailureOutcome(strategy) {
+    return strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
+      CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED :
+      CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
+  }
+
+  /**
+   * @param {Object} result
+   * @return {{outcome: string, completionState: string}}
+   * @private
+   */
+  resolveNormalizedMutationState(result) {
+    const affectedRows = Number(
+      result?.partitionResult?.affectedRows ?? result?.affectedRows,
+    );
+    if (result?.outcome) {
+      return {
+        outcome: result.outcome,
+        completionState: resolveMutationCompletionState(result),
+      };
+    } else if (result?.success === false) {
+      return {
+        outcome:
+          result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
+            CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
+            (
+              result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
+                CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
+                CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
+            ),
+        completionState: resolveMutationCompletionState(result),
+      };
+    } else if (typeof result?.visibilityState === TYPEOF.STRING &&
+        result.visibilityState !== CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE) {
+      return {
+        outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+        completionState:
+          CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+      };
+    } else if (Number.isFinite(affectedRows) &&
+        affectedRows <= NUM.ZERO) {
+      return {
+        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+        completionState:
+          CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+      };
+    }
+    return {
+      outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+      completionState: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+    };
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {Array<Object>} rows
+   * @return {Object}
+   * @private
+   */
+  buildBootstrapSnapshotSuccessResult(tableName, rows) {
+    return {
+      success: true,
+      tableName,
+      rows,
+      rowCount: rows.length,
+      outcome: CONTROL_PLANE_READ_OUTCOME.BOOTSTRAP_SNAPSHOT,
+      strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
+    };
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {string} error
+   * @return {Object}
+   * @private
+   */
+  buildBootstrapSnapshotFailureResult(tableName, error) {
+    return this.buildUnavailableGatewayReadResult(
+      tableName,
+      CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
+      CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+      error,
+    );
+  }
+
+  /**
+   * @param {string} tableName
+   * @param {string|null} sql
+   * @param {Array<*>} params
+   * @param {string} strategy
+   * @param {Object} options
+   * @return {Promise<Object>}
+   * @private
+   */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
+    const allowSqlFallback = options?.allowSqlFallback === true;
     if (typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
       TYPEOF.FUNCTION) {
-      return {
-        success: false,
+      if (allowSqlFallback &&
+          strategy !== CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED) {
+        const sqlQueryEngine = this.resolveSqlQueryEngine();
+        if (typeof sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION) {
+          const result = await sqlQueryEngine.executeQuery(
+            sql,
+            params,
+            this.buildQueryOptions(options),
+          );
+          return this.buildGatewayReadResult(
+            result,
+            tableName,
+            strategy,
+            result?.success === true ?
+              CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+              CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+            {
+              source:
+                CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
+              usedSqlFallback: true,
+            },
+          );
+        }
+      }
+      return this.buildUnavailableGatewayReadResult(
         tableName,
-        rows: [],
-        outcome:
-          strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
-            CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED :
-            CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        strategyUsed: strategy,
-        error: 'authoritative_read_owner_unavailable',
-      };
+        strategy,
+        this.resolveAuthoritativeReadFailureOutcome(strategy),
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR
+          .AUTHORITATIVE_READ_OWNER_UNAVAILABLE,
+      );
     }
 
     const authoritativeResult =
@@ -2423,22 +2915,14 @@ class ControlPlaneSystemTableGateway {
         },
       );
 
-    return {
-      ...authoritativeResult,
+    return this.buildGatewayReadResult(
+      authoritativeResult,
       tableName,
-      rows: Array.isArray(authoritativeResult?.rows) ?
-        authoritativeResult.rows :
-        [],
-      outcome:
-        authoritativeResult?.success === true ?
-          CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
-          (
-            strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
-              CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED :
-              CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY
-          ),
-      strategyUsed: strategy,
-    };
+      strategy,
+      authoritativeResult?.success === true ?
+        CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+        this.resolveAuthoritativeReadFailureOutcome(strategy),
+    );
   }
 
   /**
@@ -2472,52 +2956,47 @@ class ControlPlaneSystemTableGateway {
             queryOptions: this.buildQueryOptions(options),
           },
         );
-      return {
-        ...authoritativeResult,
+      return this.buildGatewayReadResult(
+        authoritativeResult,
         tableName,
-        rows: Array.isArray(authoritativeResult?.rows) ?
-          authoritativeResult.rows :
-          [],
-        rowCount: Number.isFinite(authoritativeResult?.rowCount) ?
-          authoritativeResult.rowCount :
-          (
-            Array.isArray(authoritativeResult?.rows) ?
-              authoritativeResult.rows.length :
-              NUM.ZERO
-          ),
-        outcome:
-          authoritativeResult?.success === true ?
-            CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED :
-            CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        strategyUsed: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-      };
+        CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+        authoritativeResult?.success === true ?
+          CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED :
+          CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+        {
+          rowCount: Number.isFinite(authoritativeResult?.rowCount) ?
+            authoritativeResult.rowCount :
+            (
+              Array.isArray(authoritativeResult?.rows) ?
+                authoritativeResult.rows.length :
+                NUM.ZERO
+            ),
+        },
+      );
     }
     const sqlQueryEngine = this.resolveSqlQueryEngine();
     if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
-      return {
-        success: false,
+      return this.buildUnavailableGatewayReadResult(
         tableName,
-        rows: [],
-        outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        strategyUsed: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-        error: 'sql_query_engine_unavailable',
-      };
+        CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR
+          .SQL_QUERY_ENGINE_UNAVAILABLE,
+      );
     }
     const result = await sqlQueryEngine.executeQuery(
       sql,
       params,
       this.buildQueryOptions(options),
     );
-    return {
-      ...result,
+    return this.buildGatewayReadResult(
+      result,
       tableName,
-      rows: Array.isArray(result?.rows) ? result.rows : [],
-      outcome:
-        result?.success === false ?
-          CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY :
-          CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
-      strategyUsed: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-    };
+      CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+      result?.success === false ?
+        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY :
+        CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
+    );
   }
 
   /**
@@ -2532,44 +3011,28 @@ class ControlPlaneSystemTableGateway {
       readIntent?.phaseScope || options?.phaseScope,
     );
     if (!phaseScope) {
-      return {
-        success: false,
+      return this.buildBootstrapSnapshotFailureResult(
         tableName,
-        rows: [],
-        outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
-        error: 'bootstrap_snapshot_phase_scope_required',
-      };
-    }
-    if (typeof readIntent?.readBootstrapSnapshot === TYPEOF.FUNCTION) {
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR
+          .BOOTSTRAP_SNAPSHOT_PHASE_SCOPE_REQUIRED,
+      );
+    } else if (typeof readIntent?.readBootstrapSnapshot === TYPEOF.FUNCTION) {
       const rows = await readIntent.readBootstrapSnapshot(readIntent, options);
-      return {
-        success: true,
+      return this.buildBootstrapSnapshotSuccessResult(
         tableName,
-        rows: Array.isArray(rows) ? rows : [],
-        rowCount: Array.isArray(rows) ? rows.length : NUM.ZERO,
-        outcome: CONTROL_PLANE_READ_OUTCOME.BOOTSTRAP_SNAPSHOT,
-        strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
-      };
-    }
-    if (!Array.isArray(readIntent?.bootstrapSnapshotRows)) {
-      return {
-        success: false,
+        Array.isArray(rows) ? rows : [],
+      );
+    } else if (!Array.isArray(readIntent?.bootstrapSnapshotRows)) {
+      return this.buildBootstrapSnapshotFailureResult(
         tableName,
-        rows: [],
-        outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-        strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
-        error: 'bootstrap_snapshot_unavailable',
-      };
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR
+          .BOOTSTRAP_SNAPSHOT_UNAVAILABLE,
+      );
     }
-    return {
-      success: true,
+    return this.buildBootstrapSnapshotSuccessResult(
       tableName,
-      rows: readIntent.bootstrapSnapshotRows,
-      rowCount: readIntent.bootstrapSnapshotRows.length,
-      outcome: CONTROL_PLANE_READ_OUTCOME.BOOTSTRAP_SNAPSHOT,
-      strategyUsed: CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT,
-    };
+      readIntent.bootstrapSnapshotRows,
+    );
   }
 
   /**
@@ -2578,34 +3041,12 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   normalizeMutationResult(result) {
-    if (result?.outcome) {
-      return result;
-    }
-    if (result?.success === false) {
-      return {
-        ...result,
-        outcome:
-          result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
-            CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
-            (
-              result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
-                CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
-                CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
-            ),
-      };
-    }
-    const affectedRows = Number(
-      result?.partitionResult?.affectedRows ?? result?.affectedRows,
-    );
-    if (Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO) {
-      return {
-        ...result,
-        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
-      };
-    }
+    const normalizedState =
+      this.resolveNormalizedMutationState(result);
     return {
       ...result,
-      outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+      outcome: normalizedState.outcome,
+      completionState: normalizedState.completionState,
     };
   }
 }
@@ -2654,10 +3095,12 @@ export {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
+  CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_OUTCOME,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   ControlPlaneSystemTableGateway,
   readAuthoritativeControlPlaneRows,
   readProjectionControlPlaneRows,
+  resolveReadProfileOptions,
 };

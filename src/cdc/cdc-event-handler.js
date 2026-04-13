@@ -25,7 +25,10 @@ import {
   CDC_SOURCE,
   CDC_SUBSYSTEM,
 } from './cdc-constants.js';
-import {resolveNodeWebSocketAddress} from
+import {
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
+  resolveNodeWebSocketAddress,
+} from
   '../transport/node-address-resolution.js';
 
 /**
@@ -62,6 +65,47 @@ const CONSTRUCTOR_ERROR_NODE_ID =
   'CDCEventHandler requires nodeId';
 const CONSTRUCTOR_ERROR_EVENT_CONTEXT =
   'CDCEventHandler requires eventContext';
+const CDC_EVENT_HANDLER_ERROR = Object.freeze({
+  MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS:
+    'Missing canonical node_endpoints websocket address',
+});
+
+function buildNodeStateCDCResult(options = {}) {
+  const result = {
+    processed: options.processed !== false,
+    nodeId: options.nodeId,
+    oldState: Object.hasOwn(options, 'oldState') ? options.oldState : null,
+    newState: Object.hasOwn(options, 'newState') ? options.newState : null,
+    stateChanged: options.stateChanged === true,
+    staleEventIgnored: options.staleEventIgnored === true,
+  };
+  if (Number.isFinite(options.eventTimestamp)) {
+    result.eventTimestamp = options.eventTimestamp;
+  }
+  if (Number.isFinite(options.lastTimestamp)) {
+    result.lastTimestamp = options.lastTimestamp;
+  }
+  return result;
+}
+
+function buildNodeJoinedCDCResult(options = {}) {
+  const result = {
+    processed: options.processed === true,
+    nodeId: options.nodeId,
+    connected: options.connected === true,
+    skipped: options.skipped === true,
+  };
+  if (options.reason) {
+    result.reason = options.reason;
+  }
+  if (options.error) {
+    result.error = options.error;
+  }
+  if (options.wsAddress) {
+    result.wsAddress = options.wsAddress;
+  }
+  return result;
+}
 
 class CDCEventHandler {
   /**
@@ -307,7 +351,7 @@ class CDCEventHandler {
           eventTimestamp,
           lastTimestamp,
         });
-        return {
+        return buildNodeStateCDCResult({
           processed: true,
           nodeId,
           oldState,
@@ -316,7 +360,7 @@ class CDCEventHandler {
           staleEventIgnored: true,
           eventTimestamp,
           lastTimestamp,
-        };
+        });
       }
       this._nodeStateEventTimestamps.set(nodeId, eventTimestamp);
     }
@@ -330,13 +374,13 @@ class CDCEventHandler {
         nodeId,
         state: newState,
       });
-      return {
+      return buildNodeStateCDCResult({
         processed: true,
         nodeId,
         oldState,
         newState,
         stateChanged: false,
-      };
+      });
     }
 
     // Increment stats
@@ -401,13 +445,13 @@ class CDCEventHandler {
       });
     }
 
-    return {
+    return buildNodeStateCDCResult({
       processed: true,
       nodeId,
       oldState,
       newState,
       stateChanged: true,
-    };
+    });
   }
 
   /**
@@ -469,13 +513,13 @@ class CDCEventHandler {
         nodeId: this.nodeId,
         targetNodeId,
       });
-      return {
+      return buildNodeJoinedCDCResult({
         processed: true,
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
         reason: CDC_SKIP_REASON.SELF,
-      };
+      });
     }
 
     // Skip if no message router is set
@@ -496,16 +540,16 @@ class CDCEventHandler {
         nodeId: this.nodeId,
         targetNodeId,
       });
-      return {
+      return buildNodeJoinedCDCResult({
         processed: true,
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
         reason: CDC_SKIP_REASON.ALREADY_CONNECTED,
-      };
+      });
     }
 
-    const wsAddress =
+    const wsAddressResolution =
       (typeof this.eventContext.resolveNodeWebSocketAddress ===
         TYPEOF.FUNCTION ?
         this.eventContext.resolveNodeWebSocketAddress(
@@ -516,19 +560,25 @@ class CDCEventHandler {
           systemTableCache: this.eventContext?._service?.systemTableCache ||
             null,
         }));
-    if (!wsAddress) {
+    if (wsAddressResolution.state !==
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED) {
       this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
         nodeId: this.nodeId,
         targetNodeId,
         nodeAddress,
-        error: 'Missing canonical node_endpoints websocket address',
+        error:
+          CDC_EVENT_HANDLER_ERROR
+            .MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
       });
-      return {
+      return buildNodeJoinedCDCResult({
         processed: false,
         nodeId: targetNodeId,
-        error: 'Missing canonical node_endpoints websocket address',
-      };
+        error:
+          CDC_EVENT_HANDLER_ERROR
+            .MISSING_CANONICAL_NODE_ENDPOINTS_WEBSOCKET_ADDRESS,
+      });
     }
+    const wsAddress = wsAddressResolution.address;
 
     this.logger.info(CDC_LOG_MSG.NEW_NODE_DETECTED, {
       nodeId: this.nodeId,
@@ -554,12 +604,12 @@ class CDCEventHandler {
         source: CDC_SOURCE.CDC,
       });
 
-      return {
+      return buildNodeJoinedCDCResult({
         processed: true,
         nodeId: targetNodeId,
         connected: true,
         wsAddress,
-      };
+      });
     } catch (connectError) {
       // Log but don't fail - the node might be temporarily unavailable
       // Raft will handle retries and leader election
@@ -569,11 +619,11 @@ class CDCEventHandler {
         wsAddress,
         error: connectError.message,
       });
-      return {
+      return buildNodeJoinedCDCResult({
         processed: false,
         nodeId: targetNodeId,
         error: connectError.message,
-      };
+      });
     }
   }
 

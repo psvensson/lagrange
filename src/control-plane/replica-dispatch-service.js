@@ -20,6 +20,10 @@ import {
   ControlPlaneReadinessService,
 } from './control-plane-readiness-service.js';
 import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from './control-plane-error-classification.js';
+import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
 import {
@@ -64,12 +68,72 @@ import {
 } from './replica-dispatch-service-constants.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 import {
-  CONTROL_PLANE_PUBLICATION_STATUS,
-} from './control-plane-publication-merge.js';
+  unwrapRowReadResult,
+} from './owners/system-metadata-owner-base.js';
+import {
+  shouldUseAuthoritativePriorityRecoveryRediscovery,
+} from './priority-recovery-snapshot.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
   '../workflow/reconcile-queue-constants.js';
+const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
+  AUTHORITATIVE: "authoritative",
+  AUTHORITATIVE_PRIORITY_RECOVERY_RETRY: "authoritative_priority_recovery_retry",
+  BACKGROUND: "background",
+  CLOSED: "closed",
+  CONNECTION_TO_NODE: "Connection to node",
+  CONTROL_PLANE_READINESS_REFRESH_TIMEOUT: "CONTROL_PLANE_READINESS_REFRESH_TIMEOUT",
+  COORDINATOR_DOT_EVENT: "coordinator.event",
+  CRITICAL: "critical",
+  DEFERRED_RETRY_PENDING: "deferred_retry_pending",
+  DELETE: "DELETE",
+  DISPATCH_UNSUCCESSFUL: "dispatch_unsuccessful",
+  DUPLICATE_READY_TRIGGER: "duplicate_ready_trigger",
+  EMPTY_STRING: "",
+  ERROR: "error",
+  FAILED_TO_FORWARD_WRITE_TO_LEADER: "Failed to forward write to leader",
+  FOUR: 4,
+  MEMBERSHIP_PUBLICATION_OWNER_DISPATCH_RETRY: "membership_publication_owner_dispatch_retry",
+  MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE: "message-group ingress readiness unavailable",
+  MESSAGE_TIMEOUT: "Message timeout",
+  NO_CONNECTION_TO_NODE: "No connection to node",
+  NODE_ROW_MISSING: "NODE_ROW_MISSING",
+  NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED: "NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED",
+  QUERY_ROUTING_FAILED: "Query routing failed",
+  REPLICADISPATCHSERVICE_REQUIRES_CONTROLPLANESYSTEMTABLEGATEWAY: "ReplicaDispatchService requires controlPlaneSystemTableGateway",
+  SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK: "SELECT * FROM nodes WHERE node_id = ?",
+  SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK: "SELECT * FROM replica_operations WHERE operation_id = ?",
+  STALE_AGAINST_EXISTING_ROW: "stale_against_existing_row",
+  STALE_OR_DUPLICATE_ENQUEUE: "stale_or_duplicate_enqueue",
+  TARGET_NODE_NOT_READY: "target_node_not_ready",
+  THIRTY_ONE: 31,
+  UNKNOWN: "unknown",
+  UNSUPPORTED_DISPATCH_CONTROL_MESSAGE: "unsupported_dispatch_control_message",
+  ZERO: 0,
+});
+
+
+const DISPATCH_READINESS_ERROR_CODE = Object.freeze({
+  TARGET_NODE_NOT_READY: 'TARGET_NODE_NOT_READY',
+  TARGET_NODE_READINESS_REFRESH_FAILED:
+    'TARGET_NODE_READINESS_REFRESH_FAILED',
+});
+
+const DISPATCH_READINESS_ERROR_REASON = Object.freeze({
+  AUTHORITATIVE_NODE_ROW_VISIBILITY_LAG:
+    'authoritative_node_row_visibility_lag',
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE:
+    'authoritative_row_source_unavailable',
+  TARGET_NODE_READINESS_REFRESH_FAILED:
+    'target_node_readiness_refresh_failed',
+  UNKNOWN: 'unknown_error',
+});
+
+const DISPATCH_READINESS_MESSAGE = Object.freeze({
+  CONTROL_PLANE_LEADER_NOT_READY:
+    'Control-plane leader is not ready',
+});
 
 class ReplicaDispatchService extends EventEmitter {
   /**
@@ -128,11 +192,14 @@ class ReplicaDispatchService extends EventEmitter {
 
     this.messageGroupServices = new Set();
     this.messageGroupHandlers = new Map();
+    this.directDispatchServiceAddress = null;
+    this.directDispatchServiceHandler = null;
     this.dispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
     this.nodeStateUpdateWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
     this.dispatchFailureSignaturesByOperationId = new Map();
+    this.operationDispatchDeferredRetries = new Map();
     this.nodeStateUpdateDeferredRetries = new Map();
     this.nodeStateUpdateQueueAssignments = new Map();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
@@ -157,16 +224,35 @@ class ReplicaDispatchService extends EventEmitter {
       this.normalizeNodeStateUpdateRetryAfterMs(
         options.nodeStateUpdateRetryAfterMs,
       );
+    this.operationDispatchRetryAfterMs =
+      this.normalizeOperationDispatchRetryAfterMs(
+        options.operationDispatchRetryAfterMs,
+      );
+    this.operationDispatchQueueShardCount =
+      this.normalizeOperationDispatchQueueShardCount(
+        options.operationDispatchQueueShardCount,
+      );
+    this.dispatchReadinessRefreshTimeoutMs =
+      this.normalizeDispatchReadinessRefreshTimeoutMs(
+        options.dispatchReadinessRefreshTimeoutMs,
+      );
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(DISPATCH_SUBSYSTEM) : console;
 
-    this.operationDispatchQueue = new OwnerKeyReconcileQueue({
-      name: DISPATCH_QUEUE_NAME.OPERATION,
-      reconcileFn: (ownerKey, _reasons, context) =>
-        this.reconcileOperationDispatch(ownerKey, context),
-    });
+    this.operationDispatchQueues = Array.from(
+      {length: this.operationDispatchQueueShardCount},
+      (_unused, shardIndex) => {
+        return new OwnerKeyReconcileQueue({
+          name: this.buildOperationDispatchQueueName(shardIndex),
+          reconcileFn: (ownerKey, _reasons, context) =>
+            this.reconcileOperationDispatch(ownerKey, context),
+        });
+      },
+    );
+    this.operationDispatchQueue =
+      this.buildOperationDispatchQueueFacade();
 
     this.nodeStateUpdateQueueShardCount =
       this.normalizeNodeStateUpdateQueueShardCount(
@@ -230,6 +316,30 @@ class ReplicaDispatchService extends EventEmitter {
       this.systemTableCache.onCacheChange(this.cacheChangeListener);
     }
 
+    if (this.messageRouter &&
+        typeof this.messageRouter.register === TYPEOF.FUNCTION) {
+      this.directDispatchServiceAddress =
+        this.buildDirectDispatchServiceAddress(this.nodeId);
+      if (this.directDispatchServiceAddress) {
+        this.directDispatchServiceHandler = async (envelope = {}) => {
+          const payload = envelope?.payload || {};
+          if (payload.type !==
+              ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH) {
+            return {
+              acknowledged: false,
+              error: REPLICA_DISPATCH_SERVICE_LITERAL.UNSUPPORTED_DISPATCH_CONTROL_MESSAGE,
+            };
+          }
+          await this.handleReplicaOperationDispatch(payload);
+          return {acknowledged: true};
+        };
+        this.messageRouter.register(
+          this.directDispatchServiceAddress,
+          this.directDispatchServiceHandler,
+        );
+      }
+    }
+
     if (this.rebalanceCoordinator &&
         typeof this.rebalanceCoordinator.on === TYPEOF.FUNCTION) {
       this.coordinatorOperationCreatedListener = (event = {}) => {
@@ -238,7 +348,7 @@ class ReplicaDispatchService extends EventEmitter {
             this.logger.warn(DISPATCH_LOG_MSG.DISPATCH_FAILED, {
               operationId: event?.operation?.operationId,
               error: error.message,
-              source: 'coordinator.event',
+              source: REPLICA_DISPATCH_SERVICE_LITERAL.COORDINATOR_DOT_EVENT,
             });
           });
       };
@@ -362,7 +472,7 @@ class ReplicaDispatchService extends EventEmitter {
         typeof mgService.getMetadataIngressReadiness !== TYPEOF.FUNCTION) {
       return {
         ready: false,
-        reason: 'message-group ingress readiness unavailable',
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_DASH_GROUP_INGRESS_READINESS_UNAVAILABLE,
       };
     }
     return mgService.getMetadataIngressReadiness({requiredTables});
@@ -375,31 +485,31 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleCdcApplied(_mgService, event) {
-      if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
-        const nodeRow = event?.data;
-        const nodeId = this.getNodeIdFromRecord(nodeRow);
-        if (nodeId) {
-          this.nodeReadyRetryQueue.enqueue(
-            nodeId,
-            RECONCILE_REASON.NODES_CDC_READY,
-            {nodeRow},
-          );
-        }
-        return;
+    if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
+      const nodeRow = event?.data;
+      const nodeId = this.getNodeIdFromRecord(nodeRow);
+      if (nodeId) {
+        this.nodeReadyRetryQueue.enqueue(
+          nodeId,
+          RECONCILE_REASON.NODES_CDC_READY,
+          {nodeRow},
+        );
       }
-
-      if (event?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        return;
-      }
-
-      this.enqueueReplicaOperationRow(
-        event?.data,
-        {
-          pendingReason: RECONCILE_REASON.CDC_OPERATION_PENDING,
-          replaceActiveReason: RECONCILE_REASON.CDC_REPLACE_ACTIVE,
-        },
-      );
+      return;
     }
+
+    if (event?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      return;
+    }
+
+    this.enqueueReplicaOperationRow(
+      event?.data,
+      {
+        pendingReason: RECONCILE_REASON.CDC_OPERATION_PENDING,
+        replaceActiveReason: RECONCILE_REASON.CDC_REPLACE_ACTIVE,
+      },
+    );
+  }
 
   /**
    * Handle local coordinator operation-created events.
@@ -409,20 +519,85 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleCoordinatorOperationCreated(operation) {
-      if (!operation || !operation.operationId) {
-        return;
-      }
-
-      if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
-        return;
-      }
-
-      this.operationDispatchQueue.enqueue(
-        operation.operationId,
-        RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
-        {row: this.buildOperationRowFromCoordinator(operation)},
-      );
+    if (!operation || !operation.operationId) {
+      return;
     }
+
+    if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
+      return;
+    }
+
+    if (!this.isReplicaOperationLocallyOwned(operation)) {
+      await this.sendDirectDispatchWakeup(operation);
+      return;
+    }
+
+    this.operationDispatchQueue.enqueue(
+      operation.operationId,
+      RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
+      {row: this.buildOperationRowFromCoordinator(operation)},
+    );
+  }
+
+  /**
+   * Build the direct router address used to wake one replica-operation owner.
+   * @param {string} nodeId
+   * @return {string|null}
+   * @private
+   */
+  buildDirectDispatchServiceAddress(nodeId) {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (normalizedNodeId.length === NUM.ZERO) {
+      return null;
+    }
+    return `${normalizedNodeId}/service/replica-dispatch`;
+  }
+
+  /**
+   * Resolve the current owner node for one replica operation.
+   * @param {Object} operation
+   * @return {string|null}
+   * @private
+   */
+  resolveReplicaOperationOwnerNodeId(operation) {
+    if (this.rebalanceCoordinator &&
+        typeof this.rebalanceCoordinator.resolveOperationOwnerNodeId ===
+          TYPEOF.FUNCTION) {
+      return this.rebalanceCoordinator.resolveOperationOwnerNodeId(operation);
+    }
+    return operation?.targetNodeId || operation?.target_node_id || null;
+  }
+
+  /**
+   * Send one best-effort direct owner wake-up when a newly created operation
+   * is owned by another node and CDC/cache visibility may lag.
+   * @param {Object} operation
+   * @return {Promise<void>}
+   * @private
+   */
+  async sendDirectDispatchWakeup(operation) {
+    if (!operation?.operationId ||
+        !this.messageRouter ||
+        typeof this.messageRouter.deliver !== TYPEOF.FUNCTION) {
+      return;
+    }
+    const operationRow = this.buildOperationRowFromCoordinator(operation);
+    const ownerNodeId = this.resolveReplicaOperationOwnerNodeId(operation);
+    const targetAddress =
+      this.buildDirectDispatchServiceAddress(ownerNodeId);
+    if (!targetAddress) {
+      return;
+    }
+    try {
+      await this.messageRouter.deliver(targetAddress, {
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        [ControlPlaneField.OPERATION_ID]: operation.operationId,
+        [ControlPlaneField.OPERATION_ROW]: operationRow,
+      });
+    } catch (_error) {
+      // Best-effort wake-up only. CDC/cache visibility remains the fallback.
+    }
+  }
 
   /**
    * Enqueue one node-state update onto the dedicated owner-key lane.
@@ -448,7 +623,7 @@ class ReplicaDispatchService extends EventEmitter {
     if (!this.isNodeStateUpdateWatermarkNewer(previousWatermark, nextWatermark)) {
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
         nodeId,
-        reason: 'stale_or_duplicate_enqueue',
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.STALE_OR_DUPLICATE_ENQUEUE,
       });
       return false;
     }
@@ -460,7 +635,7 @@ class ReplicaDispatchService extends EventEmitter {
     if (this.replaceDeferredNodeStateUpdatePayload(nodeId, payload)) {
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED, {
         nodeId,
-        reason: 'deferred_retry_pending',
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.DEFERRED_RETRY_PENDING,
       });
       return false;
     }
@@ -488,6 +663,7 @@ class ReplicaDispatchService extends EventEmitter {
     const nodeId = payload[ControlPlaneField.NODE_ID];
     const state = payload[ControlPlaneField.STATE];
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
+    const isHeartbeatOnly = this.isHeartbeatOnlyNodeStateUpdate(payload);
     const nodeRow = payloadNodeRow &&
       typeof payloadNodeRow === TYPEOF.OBJECT ?
       payloadNodeRow :
@@ -546,9 +722,18 @@ class ReplicaDispatchService extends EventEmitter {
       staleCheckWatermark,
     )) {
       if (state === STATE.READY &&
+          !isHeartbeatOnly &&
           wasNodeRecordReadyWhenWritten(existing, {
             requireActiveStatus: true,
           })) {
+        this.enqueueMembershipPublicationReconcile(
+          RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+          {
+            nodeId,
+            state: STATE.READY,
+            nodeRow: existing,
+          },
+        );
         this.nodeReadyRetryQueue.enqueue(
           nodeId,
           RECONCILE_REASON.NODE_STATE_UPDATE_READY,
@@ -558,75 +743,58 @@ class ReplicaDispatchService extends EventEmitter {
       }
       this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
         nodeId,
-        reason: 'stale_against_existing_row',
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.STALE_AGAINST_EXISTING_ROW,
       });
       return;
     }
-    const payloadCapabilities = payload[ControlPlaneField.CAPABILITIES];
-    const capabilities = Array.isArray(payloadCapabilities) ?
-      JSON.stringify(payloadCapabilities) :
-      (
-        typeof payloadCapabilities === TYPEOF.STRING ?
-          payloadCapabilities :
-          (existing.capabilities || STRING.EMPTY_JSON_ARRAY)
-      );
-    const persistedBudgetFields =
-      this.resolveNodeStateUpdateBudgetFields(nodeRow);
-
-    const baseRow = {
-      [COLUMN.NODE_ID]: nodeId,
-      [COLUMN.NODE_ADDRESS]: payload[ControlPlaneField.NODE_ADDRESS] ||
-        nodeRow?.[COLUMN.NODE_ADDRESS] ||
-        existing[COLUMN.NODE_ADDRESS] ||
-        STRING.UNKNOWN,
-      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
-        nodeRow[COLUMN.CPU_CORES] :
-        (existing[COLUMN.CPU_CORES] || NUM.ZERO),
-      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
-        nodeRow[COLUMN.MEMORY_MB] :
-        (existing[COLUMN.MEMORY_MB] || NUM.ZERO),
-      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
-        nodeRow[COLUMN.DISK_GB] :
-        (existing[COLUMN.DISK_GB] || NUM.ZERO),
-      [COLUMN.CPU_USAGE_PERCENT]:
-        Number.isFinite(nodeRow?.[COLUMN.CPU_USAGE_PERCENT]) ?
-          nodeRow[COLUMN.CPU_USAGE_PERCENT] :
-          (existing[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO),
-      [COLUMN.MEMORY_USAGE_PERCENT]:
-        Number.isFinite(nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT]) ?
-          nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
-          (existing[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO),
-      [COLUMN.DISK_USAGE_PERCENT]:
-        Number.isFinite(nodeRow?.[COLUMN.DISK_USAGE_PERCENT]) ?
-          nodeRow[COLUMN.DISK_USAGE_PERCENT] :
-          (existing[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO),
-      [COLUMN.STATUS]:
-        typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
-          nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
-          nodeRow[COLUMN.STATUS] :
-          (existing[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE),
-      [COLUMN.CONNECTION_STATE]: nextState,
-      [COLUMN.CAPABILITIES]: capabilities,
-      [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
-      ...persistedBudgetFields,
-    };
+    const baseRow = this.buildNodeStateUpdateRow({
+      nodeId,
+      nodeRow,
+      existing,
+      nextState,
+      heartbeatAt,
+      readyLeaseExpiresAt,
+      payloadNodeAddress: payload[ControlPlaneField.NODE_ADDRESS],
+      payload,
+      isHeartbeatOnly,
+    });
 
     const updateResult =
       await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
-      SYSTEM_TABLE_NAME.NODES,
-      {[COLUMN.NODE_ID]: nodeId},
-      baseRow,
-      this.buildNodeStateUpdateWriteOptions(nodeId, nextState),
-    );
+        SYSTEM_TABLE_NAME.NODES,
+        {[COLUMN.NODE_ID]: nodeId},
+        baseRow,
+        this.buildNodeStateUpdateWriteOptions(nodeId, nextState, isHeartbeatOnly),
+      );
     const updateAffectedRows = Number(
       updateResult?.partitionResult?.affectedRows,
     );
     if (updateAffectedRows === NUM.ZERO) {
-      throw await this.resolveMissingNodeRowUpdateError(nodeId, existing);
+      const bootstrapped = await this.tryBootstrapMissingNodeStateUpdateRow(
+        nodeId,
+        nextState,
+        baseRow,
+        existing,
+        isHeartbeatOnly,
+      );
+      if (!bootstrapped) {
+        throw await this.resolveMissingNodeRowUpdateError(nodeId, existing);
+      }
     }
 
-    if (nextState === STATE.READY) {
+    if (nextState === STATE.READY && !isHeartbeatOnly) {
+      this.enqueueMembershipPublicationReconcile(
+        RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+        {
+          nodeId,
+          state: nextState,
+          nodeRow: {
+            ...existing,
+            [COLUMN.NODE_ID]: nodeId,
+            ...baseRow,
+          },
+        },
+      );
       this.nodeReadyRetryQueue.enqueue(
         nodeId,
         RECONCILE_REASON.NODE_STATE_UPDATE_READY,
@@ -643,6 +811,196 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     this.clearNodeReadyRetryWatermark(nodeId);
+  }
+
+  /**
+   * Build the persisted NODE_STATE_UPDATE row shape.
+   * Heartbeat-only updates intentionally avoid mutating payload participation
+   * fields such as utilization and resource budgets.
+   * @param {Object} options
+   * @param {string} options.nodeId
+   * @param {Object|null} options.nodeRow
+   * @param {Object|null} options.existing
+   * @param {string} options.nextState
+   * @param {number} options.heartbeatAt
+   * @param {number|null} options.readyLeaseExpiresAt
+   * @param {string} [options.payloadNodeAddress]
+   * @param {Object} options.payload
+   * @param {boolean} options.isHeartbeatOnly
+   * @return {Object}
+   * @private
+   */
+  buildNodeStateUpdateRow(options) {
+    const {
+      nodeId,
+      nodeRow,
+      existing,
+      nextState,
+      heartbeatAt,
+      readyLeaseExpiresAt,
+      payloadNodeAddress,
+      payload,
+      isHeartbeatOnly,
+    } = options || {};
+
+    const baseNodeAddress = payloadNodeAddress ||
+      nodeRow?.[COLUMN.NODE_ADDRESS] ||
+      existing?.[COLUMN.NODE_ADDRESS] ||
+      STRING.UNKNOWN;
+
+    if (isHeartbeatOnly === true) {
+      return {
+        [COLUMN.NODE_ID]: nodeId,
+        [COLUMN.NODE_ADDRESS]: baseNodeAddress,
+        [COLUMN.CONNECTION_STATE]: nextState,
+        [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
+      };
+    }
+
+    const payloadCapabilities = payload?.[ControlPlaneField.CAPABILITIES];
+    const capabilities = Array.isArray(payloadCapabilities) ?
+      JSON.stringify(payloadCapabilities) :
+      (
+        typeof payloadCapabilities === TYPEOF.STRING ?
+          payloadCapabilities :
+          (existing?.[COLUMN.CAPABILITIES] || STRING.EMPTY_JSON_ARRAY)
+      );
+
+    return {
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.NODE_ADDRESS]: baseNodeAddress,
+      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
+        nodeRow[COLUMN.CPU_CORES] :
+        (existing?.[COLUMN.CPU_CORES] || NUM.ZERO),
+      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
+        nodeRow[COLUMN.MEMORY_MB] :
+        (existing?.[COLUMN.MEMORY_MB] || NUM.ZERO),
+      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
+        nodeRow[COLUMN.DISK_GB] :
+        (existing?.[COLUMN.DISK_GB] || NUM.ZERO),
+      [COLUMN.CPU_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.CPU_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.CPU_USAGE_PERCENT] :
+          (existing?.[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.MEMORY_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
+          (existing?.[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.DISK_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.DISK_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.DISK_USAGE_PERCENT] :
+          (existing?.[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.STATUS]:
+        nextState === STATE.READY ?
+          SERVICE_STATUS.ACTIVE :
+          (
+            typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
+              nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
+              nodeRow[COLUMN.STATUS] :
+              (existing?.[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE)
+          ),
+      [COLUMN.CONNECTION_STATE]: nextState,
+      [COLUMN.CAPABILITIES]: capabilities,
+      [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
+      ...this.resolveNodeStateUpdateBudgetFields(nodeRow),
+    };
+  }
+
+  /**
+   * Detect heartbeat-only NODE_STATE_UPDATEs and avoid durable participation
+   * mutation side effects on the receiving path.
+   * @param {Object} payload
+   * @return {boolean}
+   * @private
+   */
+  isHeartbeatOnlyNodeStateUpdate(payload) {
+    return payload?.[ControlPlaneField.HEARTBEAT_ONLY] === true;
+  }
+
+  /**
+   * Bootstrap one missing node row from a NODE_STATE_UPDATE payload when
+   * startup registration visibility lags behind steady-state updates.
+   *
+   * @param {string} nodeId
+   * @param {string} nextState
+   * @param {Object} baseRow
+   * @param {Object} existing
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async tryBootstrapMissingNodeStateUpdateRow(
+    nodeId,
+    nextState,
+    baseRow,
+    existing,
+    isHeartbeatOnly,
+  ) {
+    if (!baseRow || typeof baseRow !== TYPEOF.OBJECT) {
+      return false;
+    }
+    if (existing?.[COLUMN.NODE_ID]) {
+      return false;
+    }
+    if (nextState !== STATE.CONNECTED &&
+        nextState !== STATE.READY) {
+      return false;
+    }
+    const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
+    if (nodeAddress.length === NUM.ZERO ||
+        nodeAddress === STRING.UNKNOWN) {
+      return false;
+    }
+
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (typeof gateway.upsertSystemTableRow !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    try {
+      const upsertResult = await gateway.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        baseRow,
+        this.buildNodeStateUpdateWriteOptions(
+          nodeId,
+          nextState,
+          isHeartbeatOnly,
+        ),
+      );
+      if (upsertResult?.success === false) {
+        const upsertError = new Error(
+          `Failed to bootstrap missing node row from NODE_STATE_UPDATE: ` +
+          String(
+            upsertResult.error ||
+              DISPATCH_READINESS_ERROR_REASON.UNKNOWN,
+          ),
+        );
+        upsertError.code =
+          upsertResult.error || REPLICA_DISPATCH_SERVICE_LITERAL.NODE_STATE_UPDATE_BOOTSTRAP_UPSERT_FAILED;
+        if (upsertResult.deferRetry === true) {
+          upsertError.deferRetry = true;
+          upsertError.retryAfterMs = Number.isFinite(upsertResult.retryAfterMs) ?
+            upsertResult.retryAfterMs :
+            this.nodeStateUpdateRetryAfterMs;
+        }
+        throw upsertError;
+      }
+      this.logger.info(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_BOOTSTRAP_UPSERTED, {
+        nodeId,
+        state: nextState,
+      });
+      return true;
+    } catch (error) {
+      if (error?.deferRetry === true ||
+          isRetryableControlPlaneError(error)) {
+        error.deferRetry = true;
+        error.retryAfterMs = Number.isFinite(error?.retryAfterMs) ?
+          error.retryAfterMs :
+          this.nodeStateUpdateRetryAfterMs;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -691,7 +1049,7 @@ class ReplicaDispatchService extends EventEmitter {
   getControlPlaneSystemTableGateway() {
     assertCritical(
       this.controlPlaneSystemTableGateway,
-      'ReplicaDispatchService requires controlPlaneSystemTableGateway',
+      REPLICA_DISPATCH_SERVICE_LITERAL.REPLICADISPATCHSERVICE_REQUIRES_CONTROLPLANESYSTEMTABLEGATEWAY,
     );
     return this.controlPlaneSystemTableGateway;
   }
@@ -702,16 +1060,25 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleReplicaOperationDispatch(payload) {
-      const operationId = payload[ControlPlaneField.OPERATION_ID];
-      if (!operationId) {
-        return;
-      }
-
-      this.operationDispatchQueue.enqueue(
-        operationId,
-        RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
-      );
+    const operationRow =
+      payload?.[ControlPlaneField.OPERATION_ROW] &&
+      typeof payload[ControlPlaneField.OPERATION_ROW] === TYPEOF.OBJECT ?
+        payload[ControlPlaneField.OPERATION_ROW] :
+        null;
+    const operationId =
+      payload[ControlPlaneField.OPERATION_ID] ||
+      operationRow?.operation_id ||
+      null;
+    if (!operationId) {
+      return;
     }
+
+    this.operationDispatchQueue.enqueue(
+      operationId,
+      RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
+      operationRow ? {row: operationRow} : undefined,
+    );
+  }
 
   /**
    * Dispatch an operation record to its target node.
@@ -734,29 +1101,72 @@ class ReplicaDispatchService extends EventEmitter {
       return;
     }
 
-    const targetNodeId = row.target_node_id;
-    const rowOperation = this.buildOperationFromRow(row);
-    const dispatchReadiness = this.captureDispatchReadiness(
-      targetNodeId,
-    );
-    if (!dispatchReadiness.ready) {
-      this.recordDispatchFailure({
-        operationId: row.operation_id,
-        targetNodeId,
-        workflowStep: row.workflow_step || null,
-        skipped: true,
-        reason: 'target_node_not_ready',
-        readinessSnapshot: dispatchReadiness.snapshot,
-      });
+    const operationId = row.operation_id;
+    if (!this.isReplicaOperationLocallyOwned(row)) {
+      this.clearDeferredOperationDispatchRetry(operationId);
       return;
     }
 
-    const operationId = row.operation_id;
+    const targetNodeId = row.target_node_id;
+    const rowOperation = this.buildOperationFromRow(row);
+    const dispatchReadiness = await this.captureDispatchReadiness(
+      targetNodeId,
+    );
+    if (dispatchReadiness.error) {
+      const readinessError =
+        this.buildDispatchReadinessRefreshFailureError(
+          targetNodeId,
+          dispatchReadiness,
+        );
+      this.recordDispatchFailure({
+        operationId,
+        targetNodeId,
+        workflowStep: row.workflow_step || null,
+        skipped: true,
+        reason:
+          DISPATCH_READINESS_ERROR_REASON
+            .TARGET_NODE_READINESS_REFRESH_FAILED,
+        error: readinessError.message,
+        readinessSnapshot: dispatchReadiness.snapshot,
+      });
+      if (this.deferOperationDispatchRetry(
+        operationId,
+        readinessError,
+        row,
+      )) {
+        return;
+      }
+      throw readinessError;
+    }
+    if (!dispatchReadiness.ready) {
+      const readinessError = this.buildDispatchNotReadyError(
+        targetNodeId,
+        dispatchReadiness,
+      );
+      this.recordDispatchFailure({
+        operationId,
+        targetNodeId,
+        workflowStep: row.workflow_step || null,
+        skipped: true,
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.TARGET_NODE_NOT_READY,
+        error: readinessError.message,
+        readinessSnapshot: dispatchReadiness.snapshot,
+      });
+      if (this.deferOperationDispatchRetry(
+        operationId,
+        readinessError,
+        row,
+      )) {
+        return;
+      }
+      return;
+    }
+
     this.dispatchInFlight.add(operationId);
     try {
       let dispatchResult = null;
       if (typeof this.rebalanceCoordinator.dispatchOperation ===
-        TYPEOF.FUNCTION) {
+          TYPEOF.FUNCTION) {
         dispatchResult = await this.rebalanceCoordinator.dispatchOperation(
           rowOperation,
         );
@@ -792,18 +1202,26 @@ class ReplicaDispatchService extends EventEmitter {
       }
 
       if (!dispatchResult || dispatchResult.success !== true) {
+        if (this.deferOperationDispatchRetry(
+          operationId,
+          dispatchResult,
+          row,
+        )) {
+          return;
+        }
         this.recordDispatchFailure({
           operationId,
           targetNodeId,
           workflowStep: row.workflow_step || null,
           skipped: dispatchResult?.skipped === true,
-          reason: dispatchResult?.reason || 'dispatch_unsuccessful',
+          reason: dispatchResult?.reason || REPLICA_DISPATCH_SERVICE_LITERAL.DISPATCH_UNSUCCESSFUL,
           error: dispatchResult?.error || null,
           readinessSnapshot: dispatchReadiness.snapshot,
         });
         return;
       }
 
+      this.clearDeferredOperationDispatchRetry(operationId);
       this.dispatchFailureSignaturesByOperationId.delete(operationId);
 
       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
@@ -811,13 +1229,101 @@ class ReplicaDispatchService extends EventEmitter {
         targetNodeId,
         readinessSnapshot: dispatchReadiness.snapshot,
       });
+    } catch (error) {
+      if (this.deferOperationDispatchRetry(
+        operationId,
+        error,
+        row,
+      )) {
+        return;
+      }
+      throw error;
     } finally {
       this.dispatchInFlight.delete(operationId);
     }
   }
 
   /**
-   * Retry pending dispatches for operations targeting a ready node.
+   * Build one retryable readiness-gate error for dispatch.
+   * @param {string} targetNodeId
+   * @param {string} message
+   * @param {string} code
+   * @param {number|null|undefined} retryAfterMs
+   * @param {Error|null} [cause=null]
+   * @return {Error}
+   * @private
+   */
+  buildDispatchReadinessGateError(
+    targetNodeId,
+    message,
+    code,
+    retryAfterMs,
+    cause = null,
+  ) {
+    const error = new Error(message);
+    error.code = code;
+    error.targetNodeId = targetNodeId || null;
+    error.deferRetry = true;
+    error.retryAfterMs =
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO ?
+        retryAfterMs :
+        this.operationDispatchRetryAfterMs;
+    if (cause) {
+      error.cause = cause;
+    }
+    return error;
+  }
+
+  /**
+   * Build one readiness-refresh failure error.
+   * @param {string} targetNodeId
+   * @param {Object} dispatchReadiness
+   * @return {Error}
+   * @private
+   */
+  buildDispatchReadinessRefreshFailureError(targetNodeId, dispatchReadiness) {
+    const originalError = dispatchReadiness?.error;
+    const originalMessage =
+      typeof originalError?.message === TYPEOF.STRING &&
+        originalError.message.length > NUM.ZERO ?
+        originalError.message :
+          String(
+            originalError ||
+              DISPATCH_READINESS_ERROR_REASON.UNKNOWN,
+          );
+    const code =
+      typeof originalError?.code === TYPEOF.STRING &&
+        originalError.code.length > NUM.ZERO ?
+        originalError.code :
+        DISPATCH_READINESS_ERROR_CODE.TARGET_NODE_READINESS_REFRESH_FAILED;
+    return this.buildDispatchReadinessGateError(
+      targetNodeId,
+      `Target node ${targetNodeId || REPLICA_DISPATCH_SERVICE_LITERAL.UNKNOWN} readiness refresh failed: ` +
+        originalMessage,
+      code,
+      dispatchReadiness?.retryAfterMs,
+      originalError,
+    );
+  }
+
+  /**
+   * Build one target-not-ready error.
+   * @param {string} targetNodeId
+   * @param {Object} dispatchReadiness
+   * @return {Error}
+   * @private
+   */
+  buildDispatchNotReadyError(targetNodeId, dispatchReadiness) {
+    return this.buildDispatchReadinessGateError(
+      targetNodeId,
+      `Target node ${targetNodeId || REPLICA_DISPATCH_SERVICE_LITERAL.UNKNOWN} is not ready for dispatch`,
+      DISPATCH_READINESS_ERROR_CODE.TARGET_NODE_NOT_READY,
+      dispatchReadiness?.retryAfterMs,
+    );
+  }
+
+  /**
+   * Retry dispatches for operations targeting a ready node.
    * Re-enters the canonical per-operation queue so ready-node retries cannot
    * create a second inline dispatch owner path.
    * @param {string} nodeId - Ready node ID.
@@ -831,17 +1337,17 @@ class ReplicaDispatchService extends EventEmitter {
 
     this.retryInFlightNodes.add(nodeId);
     try {
-      const pendingRows = await this.getPendingReplicaOpsForNode(nodeId);
-      if (pendingRows.length === NUM.ZERO) {
+      const dispatchRows = await this.getDispatchRetryRowsForNode(nodeId);
+      if (dispatchRows.length === NUM.ZERO) {
         return;
       }
 
       this.logger.info(DISPATCH_LOG_MSG.RETRY_PENDING_READY_NODE, {
         nodeId,
-        pendingCount: pendingRows.length,
+        pendingCount: dispatchRows.length,
       });
 
-      for (const row of pendingRows) {
+      for (const row of dispatchRows) {
         if (!row?.operation_id) {
           continue;
         }
@@ -857,13 +1363,36 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
-   * Read pending replica_operations for one target node.
-   * Uses SystemTableCache as the single source of truth.
+   * Read dispatch-retry replica_operations for one target node.
+   * Uses SystemTableCache first, then falls back to the authoritative
+   * repository owner path when unresolved priority recovery indicates cache
+   * visibility may be lagging.
    * @param {string} nodeId - Target node ID.
-   * @return {Promise<Array<Object>>} Pending operation rows.
+   * @return {Promise<Array<Object>>} Dispatchable operation rows.
    * @private
    */
-  async getPendingReplicaOpsForNode(nodeId) {
+  async getDispatchRetryRowsForNode(nodeId) {
+    const membershipPublicationService =
+      this.resolveMembershipPublicationService();
+    if (membershipPublicationService &&
+        typeof membershipPublicationService.getDispatchRetryRowsForNode ===
+          TYPEOF.FUNCTION) {
+      try {
+        const dispatchRows = await membershipPublicationService
+          .getDispatchRetryRowsForNode(nodeId);
+        return Array.isArray(dispatchRows) ? dispatchRows : [];
+      } catch (error) {
+        this.logger.warn(
+          DISPATCH_LOG_MSG.DISPATCH_LOOKUP_FAILED,
+          {
+            nodeId,
+            error: error?.message || String(error),
+            path: REPLICA_DISPATCH_SERVICE_LITERAL.MEMBERSHIP_PUBLICATION_OWNER_DISPATCH_RETRY,
+          },
+        );
+      }
+    }
+
     const cacheRows = this.replicaOperationsOwner &&
       typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
         TYPEOF.FUNCTION ?
@@ -872,12 +1401,148 @@ class ReplicaDispatchService extends EventEmitter {
       this.getSystemTableRowsFromCache(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       );
-    return cacheRows.filter((row) => {
+    const dispatchRows = cacheRows.filter((row) => {
       return isCoordinatorOwnedOperationType(row?.type) &&
         this.isReplicaOperationLocallyOwned(row) &&
         row?.target_node_id === nodeId &&
-        row?.workflow_step === WORKFLOW_STEP.PENDING;
+        (row?.workflow_step === WORKFLOW_STEP.PENDING ||
+          row?.workflow_step === WORKFLOW_STEP.SENDING);
     });
+    if (dispatchRows.length > NUM.ZERO) {
+      return dispatchRows;
+    }
+
+    if (!await this.shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId)) {
+      return dispatchRows;
+    }
+
+    return this.getAuthoritativeDispatchRetryRowsForNode(nodeId);
+  }
+
+  /**
+   * Compatibility alias for older tests/callers. Ready-node retry now
+   * re-enters both PENDING and SENDING rows, but the historical method name
+   * is kept to avoid a second compatibility seam.
+   *
+   * @param {string} nodeId
+   * @return {Promise<Array<Object>>}
+   */
+  async getPendingReplicaOpsForNode(nodeId) {
+    return this.getDispatchRetryRowsForNode(nodeId);
+  }
+
+  /**
+   * Decide whether ready-node retry should bypass cache-only rediscovery for
+   * unresolved priority control-plane recovery.
+   * @param {string} nodeId
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async shouldUseAuthoritativePriorityRecoveryRediscovery(nodeId) {
+    const readinessService = this.controlPlaneReadinessService;
+    if (!readinessService || typeof readinessService !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    try {
+      return shouldUseAuthoritativePriorityRecoveryRediscovery(
+        nodeId,
+        {
+          cacheVisible: false,
+          publicationConvergence:
+            await this.resolvePriorityRecoveryPublicationConvergence(
+              readinessService,
+              nodeId,
+            ),
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_REFRESH_FAILED,
+        {
+          nodeId,
+          error: error?.message || String(error),
+        },
+      );
+      return false;
+    }
+  }
+
+  /**
+   * Resolve one publication-convergence snapshot for priority-recovery
+   * rediscovery.
+   * @param {Object} readinessService
+   * @param {string} nodeId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolvePriorityRecoveryPublicationConvergence(
+    readinessService,
+    nodeId,
+  ) {
+    if (typeof readinessService.getMembershipPublicationDiagnosticsSync ===
+        TYPEOF.FUNCTION) {
+      const syncDiagnostics =
+        readinessService.getMembershipPublicationDiagnosticsSync(
+          nodeId,
+          Date.now(),
+        );
+      if (syncDiagnostics) {
+        return syncDiagnostics;
+      }
+    }
+    if (typeof readinessService.getMembershipPublicationDiagnostics ===
+        TYPEOF.FUNCTION) {
+      return readinessService.getMembershipPublicationDiagnostics(
+        nodeId,
+        Date.now(),
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Read dispatch-retry operations through the canonical repository owner path
+   * when cache coverage is missing under priority recovery.
+   * @param {string} nodeId
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async getAuthoritativeDispatchRetryRowsForNode(nodeId) {
+    const repository = this.rebalanceCoordinator?.repository || null;
+    if (!repository ||
+        typeof repository.queryIncompleteOperations !== TYPEOF.FUNCTION) {
+      return [];
+    }
+
+    try {
+      const operations = await repository.queryIncompleteOperations({
+        preferAuthoritativeRead: true,
+      });
+      if (!Array.isArray(operations) || operations.length === NUM.ZERO) {
+        return [];
+      }
+
+      return operations
+        .filter((operation) => {
+          return isCoordinatorOwnedOperationType(operation?.type) &&
+            this.isReplicaOperationLocallyOwned(operation) &&
+            operation?.targetNodeId === nodeId &&
+            (operation?.workflowStep === WORKFLOW_STEP.PENDING ||
+              operation?.workflowStep === WORKFLOW_STEP.SENDING);
+        })
+        .map((operation) => this.buildOperationRowFromCoordinator(operation));
+    } catch (error) {
+      this.logger.warn(
+        DISPATCH_LOG_MSG.DISPATCH_LOOKUP_FAILED,
+        {
+          nodeId,
+          error: error?.message || String(error),
+          path: REPLICA_DISPATCH_SERVICE_LITERAL.AUTHORITATIVE_PRIORITY_RECOVERY_RETRY,
+        },
+      );
+      return [];
+    }
   }
 
   /**
@@ -904,7 +1569,7 @@ class ReplicaDispatchService extends EventEmitter {
         this.nodeId;
     }
     return String(
-      operation?.sourceNodeId || operation?.source_node_id || '',
+      operation?.sourceNodeId || operation?.source_node_id || REPLICA_DISPATCH_SERVICE_LITERAL.EMPTY_STRING,
     ) === this.nodeId;
   }
 
@@ -940,7 +1605,7 @@ class ReplicaDispatchService extends EventEmitter {
       this.logger.debug(DISPATCH_LOG_MSG.RETRY_READY_TRIGGER_SKIPPED, {
         nodeId,
         source: options.source || null,
-        reason: 'duplicate_ready_trigger',
+        reason: REPLICA_DISPATCH_SERVICE_LITERAL.DUPLICATE_READY_TRIGGER,
       });
       return false;
     }
@@ -968,29 +1633,45 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     if (!row || !row.operation_id) {
+      this.clearDeferredOperationDispatchRetry(operationId);
       return;
     }
     if (!isCoordinatorOwnedOperationType(row.type)) {
+      this.clearDeferredOperationDispatchRetry(operationId);
       return;
     }
 
-    if (row.type === OperationType.REPLACE &&
-        row.workflow_step === WORKFLOW_STEP.ACTIVE) {
-      const operation = this.buildOperationFromRow(row);
-      if (typeof this.rebalanceCoordinator.dispatchOperation ===
-        TYPEOF.FUNCTION) {
-        await this.rebalanceCoordinator.dispatchOperation(operation);
-      } else {
-        await this.rebalanceCoordinator.executeOperation(operation);
+    try {
+      if (row.type === OperationType.REPLACE &&
+          row.workflow_step === WORKFLOW_STEP.ACTIVE) {
+        this.clearDeferredOperationDispatchRetry(operationId);
+        const operation = this.buildOperationFromRow(row);
+        if (typeof this.rebalanceCoordinator.dispatchOperation ===
+          TYPEOF.FUNCTION) {
+          await this.rebalanceCoordinator.dispatchOperation(operation);
+        } else {
+          await this.rebalanceCoordinator.executeOperation(operation);
+        }
+        return;
       }
-      return;
-    }
 
-    if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
-      return;
-    }
+      if (row.workflow_step !== WORKFLOW_STEP.PENDING &&
+          row.workflow_step !== WORKFLOW_STEP.SENDING) {
+        this.clearDeferredOperationDispatchRetry(operationId);
+        return;
+      }
 
-    await this.dispatchOperationRow(row);
+      await this.dispatchOperationRow(row);
+    } catch (error) {
+      if (this.deferOperationDispatchRetry(
+        operationId,
+        error,
+        row,
+      )) {
+        return;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1048,66 +1729,68 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   handleCacheNodeChange(tableName, operationOrRecord, recordInput) {
-      const operation = typeof operationOrRecord === TYPEOF.STRING ?
-        operationOrRecord :
-        null;
-      const record = recordInput || operationOrRecord;
-      if (!record) {
-        return;
-      }
+    const operation = typeof operationOrRecord === TYPEOF.STRING ?
+      operationOrRecord :
+      null;
+    const record = recordInput || operationOrRecord;
+    if (!record) {
+      return;
+    }
 
-      if (tableName === SYSTEM_TABLE_NAME.NODES) {
-        const nodeId = this.getNodeIdFromRecord(record);
-        if (!nodeId) {
-          return;
-        }
-        this.nodeReadyRetryQueue.enqueue(
-          nodeId,
-          RECONCILE_REASON.NODES_CACHE_READY,
-          {nodeRow: record},
-        );
-        return;
-      }
-
-      if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-        if (operation === 'DELETE') {
-          return;
-        }
-        this.enqueueReplicaOperationRow(
-          record,
-          {
-            pendingReason: RECONCILE_REASON
-              .REPLICA_OPERATIONS_CACHE_PENDING,
-            replaceActiveReason: RECONCILE_REASON
-              .REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
-          },
-        );
-        return;
-      }
-
-      if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
-        return;
-      }
-
+    if (tableName === SYSTEM_TABLE_NAME.NODES) {
       const nodeId = this.getNodeIdFromRecord(record);
-      const status =
-        record?.[COLUMN.STATUS] || record?.status || null;
-      if (!nodeId ||
-          status !== SERVICE_STATUS.ACTIVE ||
-          !this.isNodeReady(nodeId)) {
+      if (!nodeId) {
         return;
       }
-
       this.nodeReadyRetryQueue.enqueue(
         nodeId,
-        RECONCILE_REASON.SERVICES_CACHE_ACTIVE,
+        RECONCILE_REASON.NODES_CACHE_READY,
+        {nodeRow: record},
       );
+      return;
     }
+
+    if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+      if (operation === REPLICA_DISPATCH_SERVICE_LITERAL.DELETE) {
+        return;
+      }
+      this.enqueueReplicaOperationRow(
+        record,
+        {
+          pendingReason: RECONCILE_REASON
+            .REPLICA_OPERATIONS_CACHE_PENDING,
+          replaceActiveReason: RECONCILE_REASON
+            .REPLICA_OPERATIONS_CACHE_REPLACE_ACTIVE,
+        },
+      );
+      return;
+    }
+
+    if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+      return;
+    }
+
+    const nodeId = this.getNodeIdFromRecord(record);
+    const status =
+        record?.[COLUMN.STATUS] || record?.status || null;
+    if (!nodeId ||
+          status !== SERVICE_STATUS.ACTIVE ||
+          !this.isNodeReady(nodeId)) {
+      return;
+    }
+
+    this.nodeReadyRetryQueue.enqueue(
+      nodeId,
+      RECONCILE_REASON.SERVICES_CACHE_ACTIVE,
+    );
+  }
 
   /**
    * Enqueue a locally owned replica operation row for dispatch reconciliation.
    * Cache and CDC visibility can arrive on different nodes or at different
-   * times, so both paths must converge on the same local-owner gate.
+   * times, so both paths must converge on the same local-owner gate. SENDING
+   * rows remain replayable because retryable dispatch failures deliberately
+   * park persisted workflow state in SENDING until the owner re-arms it.
    * @param {Object} row - Replica operation row.
    * @param {Object} reasons - Reconcile reason overrides.
    * @param {string} reasons.pendingReason - Reason for pending rows.
@@ -1134,7 +1817,8 @@ class ReplicaDispatchService extends EventEmitter {
       return true;
     }
 
-    if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
+    if (row.workflow_step !== WORKFLOW_STEP.PENDING &&
+        row.workflow_step !== WORKFLOW_STEP.SENDING) {
       return false;
     }
 
@@ -1312,7 +1996,24 @@ class ReplicaDispatchService extends EventEmitter {
         next.readyLeaseExpiresAt === null) {
       return false;
     }
-    return compareNodeHeartbeatWatermarks(previous, next) > 0;
+    return compareNodeHeartbeatWatermarks(previous, next) > REPLICA_DISPATCH_SERVICE_LITERAL.ZERO;
+  }
+
+  /**
+   * Normalize operation-dispatch queue shard count to a safe positive integer.
+   * One blocked operation reconcile must not head-of-line block unrelated
+   * operation ids on the same node.
+   *
+   * @param {*} value - Candidate shard count.
+   * @return {number}
+   * @private
+   */
+  normalizeOperationDispatchQueueShardCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return DISPATCH_DEFAULT.OPERATION_DISPATCH_QUEUE_SHARD_COUNT;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
   }
 
   /**
@@ -1324,7 +2025,7 @@ class ReplicaDispatchService extends EventEmitter {
   normalizeNodeStateUpdateQueueShardCount(value) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
-      return 4;
+      return REPLICA_DISPATCH_SERVICE_LITERAL.FOUR;
     }
     return Math.max(NUM.ONE, Math.floor(numeric));
   }
@@ -1344,29 +2045,267 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Normalize one retry-after default for deferred replica dispatch retries.
+   * @param {*} value
+   * @return {number}
+   * @private
+   */
+  normalizeOperationDispatchRetryAfterMs(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+      return DISPATCH_DEFAULT.OPERATION_DISPATCH_RETRY_AFTER_MS;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
+  }
+
+  /**
+   * Keep dispatch readiness refresh bounded so one slow authoritative read
+   * cannot head-of-line block the owner queue while sync recovery evidence is
+   * already available locally.
+   *
+   * @param {*} value
+   * @return {number}
+   * @private
+   */
+  normalizeDispatchReadinessRefreshTimeoutMs(value) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > NUM.ZERO) {
+      return Math.max(NUM.ONE, Math.floor(numeric));
+    }
+    return Math.max(
+      this.operationDispatchRetryAfterMs,
+      DISPATCH_DEFAULT.OPERATION_DISPATCH_READINESS_REFRESH_TIMEOUT_MS,
+    );
+  }
+
+  /**
+   * @param {*} errorLike
+   * @return {number}
+   * @private
+   */
+  resolveOperationDispatchRetryAfterMs(errorLike) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.max(NUM.ONE, Math.floor(retryAfterMs));
+    }
+    return this.operationDispatchRetryAfterMs;
+  }
+
+  /**
+   * @param {string} nodeId
+   * @param {number} timeoutMs
+   * @return {Error}
+   * @private
+   */
+  buildDispatchReadinessRefreshTimeoutError(nodeId, timeoutMs) {
+    const error = new Error(
+      'Message timeout while refreshing readiness for dispatch target ' +
+      String(nodeId || 'unknown') +
+      ' after ' +
+      String(timeoutMs) +
+      'ms',
+    );
+    error.code = REPLICA_DISPATCH_SERVICE_LITERAL.CONTROL_PLANE_READINESS_REFRESH_TIMEOUT;
+    error.retryAfterMs = this.operationDispatchRetryAfterMs;
+    error.deferRetry = true;
+    error.targetNodeId = nodeId || null;
+    return error;
+  }
+
+  /**
+   * Bound one authoritative readiness refresh so dispatch progression can fall
+   * back to the already-visible sync snapshot instead of stalling indefinitely.
+   *
+   * @param {string} nodeId
+   * @param {string} decisionDimension
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async getBoundedDispatchReadiness(nodeId, decisionDimension) {
+    if (typeof this.controlPlaneReadinessService.getNodeReadiness !==
+        TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    const timeoutMs = this.dispatchReadinessRefreshTimeoutMs;
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+      return this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
+        allowAuthoritativeRefresh: true,
+        decisionDimension,
+        maxCachedAgeMs: NUM.ZERO,
+      });
+    }
+
+    let timeoutHandle = null;
+    try {
+      return await Promise.race([
+        this.controlPlaneReadinessService.getNodeReadiness(nodeId, {
+          allowAuthoritativeRefresh: true,
+          decisionDimension,
+          maxCachedAgeMs: NUM.ZERO,
+        }),
+        new Promise((_resolve, reject) => {
+          timeoutHandle = this.setTimeoutFn(() => {
+            reject(
+              this.buildDispatchReadinessRefreshTimeoutError(
+                nodeId,
+                timeoutMs,
+              ),
+            );
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        this.clearTimeoutFn(timeoutHandle);
+      }
+    }
+  }
+
+  /**
+   * Defer one retryable operation-dispatch failure onto the existing owner queue.
+   * @param {string} operationId
+   * @param {*} errorLike
+   * @param {Object|null} [row=null]
+   * @return {boolean}
+   * @private
+   */
+  deferOperationDispatchRetry(operationId, errorLike, row = null) {
+    if (!operationId || !isRetryableControlPlaneError(errorLike)) {
+      return false;
+    }
+    const retryAfterMs =
+      this.resolveOperationDispatchRetryAfterMs(errorLike);
+    const desiredAttemptAt = Date.now() + retryAfterMs;
+    const errorMessage =
+      errorLike?.message ||
+      errorLike?.error ||
+      null;
+    const existing =
+      this.operationDispatchDeferredRetries.get(operationId);
+    if (existing) {
+      existing.errorMessage = errorMessage;
+      if (row) {
+        existing.row = this.cloneDeferredOperationDispatchRow(row);
+      }
+      if (desiredAttemptAt < existing.nextAttemptAt) {
+        if (existing.timeoutHandle) {
+          this.clearTimeoutFn(existing.timeoutHandle);
+        }
+        existing.nextAttemptAt = desiredAttemptAt;
+        existing.timeoutHandle = this.armDeferredOperationDispatchRetry(
+          operationId,
+          retryAfterMs,
+        );
+      }
+      return true;
+    }
+
+    const deferredRetry = {
+      errorMessage,
+      nextAttemptAt: desiredAttemptAt,
+      row: row ? this.cloneDeferredOperationDispatchRow(row) : null,
+      timeoutHandle: this.armDeferredOperationDispatchRetry(
+        operationId,
+        retryAfterMs,
+      ),
+    };
+    this.operationDispatchDeferredRetries.set(operationId, deferredRetry);
+    this.logger.info(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED, {
+      nodeId: this.nodeId,
+      operationId,
+      retryAfterMs,
+      error: errorMessage,
+    });
+    return true;
+  }
+
+  /**
+   * @param {string} operationId
+   * @param {number} delayMs
+   * @return {*}
+   * @private
+   */
+  armDeferredOperationDispatchRetry(operationId, delayMs) {
+    return this.setTimeoutFn(() => {
+      const deferredRetry =
+        this.operationDispatchDeferredRetries.get(operationId);
+      if (!deferredRetry) {
+        return;
+      }
+      this.operationDispatchDeferredRetries.delete(operationId);
+      const row = deferredRetry?.row ?
+        this.cloneDeferredOperationDispatchRow(deferredRetry.row) :
+        null;
+      this.operationDispatchQueue.enqueue(
+        operationId,
+        RECONCILE_REASON.RETRYABLE_OPERATION_DISPATCH,
+        row ? {row} : undefined,
+      );
+      this.logger.debug(DISPATCH_LOG_MSG.OPERATION_DISPATCH_DEFERRED_RETRY, {
+        nodeId: this.nodeId,
+        operationId,
+        retryAfterMs: delayMs,
+      });
+    }, delayMs);
+  }
+
+  /**
+   * Preserve one dispatchable replica_operations row across deferred retries so
+   * direct wake-up payloads can survive until cache visibility converges.
+   * @param {Object|null} row
+   * @return {Object|null}
+   * @private
+   */
+  cloneDeferredOperationDispatchRow(row) {
+    if (!row || typeof row !== TYPEOF.OBJECT) {
+      return null;
+    }
+    return {
+      ...row,
+    };
+  }
+
+  /**
+   * @param {string} operationId
+   * @return {void}
+   * @private
+   */
+  clearDeferredOperationDispatchRetry(operationId) {
+    const deferredRetry =
+      this.operationDispatchDeferredRetries.get(operationId);
+    if (!deferredRetry) {
+      return;
+    }
+    if (deferredRetry.timeoutHandle) {
+      this.clearTimeoutFn(deferredRetry.timeoutHandle);
+    }
+    this.operationDispatchDeferredRetries.delete(operationId);
+  }
+
+  /**
    * Build canonical write options for NODE_STATE_UPDATE persistence.
    * @param {string} nodeId
    * @param {string} nextState
+   * @param {boolean} [isHeartbeatOnly=false]
    * @return {Object}
    * @private
    */
-  buildNodeStateUpdateWriteOptions(nodeId, nextState) {
+  buildNodeStateUpdateWriteOptions(nodeId, nextState, isHeartbeatOnly = false) {
     const isReady = nextState === STATE.READY;
+    const isHeartbeatOnlyUpdate = isHeartbeatOnly === true;
     return {
       allowCoalescing: true,
-      allowPressureDefer: !isReady,
+      allowPressureDefer: isHeartbeatOnlyUpdate || !isReady,
       coalescingKey: `node-state:${nodeId}`,
-      deliveryPriority: isReady ? 'critical' : 'background',
+      deliveryPriority: isHeartbeatOnlyUpdate || !isReady ? REPLICA_DISPATCH_SERVICE_LITERAL.BACKGROUND :
+        REPLICA_DISPATCH_SERVICE_LITERAL.CRITICAL,
       pressureRetryAfterMs: this.nodeStateUpdateRetryAfterMs,
       queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
       skipCacheWait: true,
-      workClass: isReady ?
-        // READY publication is the durable cluster-readiness signal that
-        // unblocks critical system topology settlement during join/recovery.
-        // It must not be parked behind pressure deferral the way routine
-        // non-ready churn can be.
-        PRESSURE_WORK_CLASS.CRITICAL :
-        PRESSURE_WORK_CLASS.BACKGROUND,
+      workClass: isHeartbeatOnlyUpdate || !isReady ?
+        PRESSURE_WORK_CLASS.BACKGROUND :
+        PRESSURE_WORK_CLASS.CRITICAL,
     };
   }
 
@@ -1383,153 +2322,52 @@ class ReplicaDispatchService extends EventEmitter {
       null;
   }
 
-  resolvePublicationNodeIds(publicationRow, camelKey, snakeKey) {
-    if (Array.isArray(publicationRow?.[camelKey])) {
-      return publicationRow[camelKey];
+  /**
+   * READY node-state updates must re-enter the canonical publication owner
+   * queue so cluster publication convergence advances through the durable
+   * control-plane writer rather than only via later read-time repair.
+   *
+   * @param {string} reason
+   * @param {Object} [context={}]
+   * @return {boolean}
+   * @private
+   */
+  enqueueMembershipPublicationReconcile(reason, context = {}) {
+    const membershipPublicationService =
+      this.resolveMembershipPublicationService();
+    if (!membershipPublicationService ||
+        typeof membershipPublicationService.enqueueClusterMembershipReconcile !==
+          TYPEOF.FUNCTION) {
+      return false;
     }
-    if (Array.isArray(publicationRow?.[snakeKey])) {
-      return publicationRow[snakeKey];
-    }
-    return [];
-  }
-
-  isTerminalPublicationStatus(publicationStatus) {
-    return publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED ||
-      publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.ABANDONED ||
-      publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.SUPERSEDED;
-  }
-
-  async refreshLatestPublicationForNode(membershipPublicationService, nodeId) {
-    if (typeof membershipPublicationService.getLatestPublicationForNode !==
-      TYPEOF.FUNCTION) {
-      return null;
-    }
-
-    try {
-      const publicationRow =
-        await membershipPublicationService.getLatestPublicationForNode(
-          nodeId,
-          {
-            preferAuthoritativeRead: true,
-          },
-        );
-      return publicationRow && typeof publicationRow === TYPEOF.OBJECT ?
-        publicationRow :
-        null;
-    } catch (error) {
-      this.logger.warn(
-        DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_REFRESH_FAILED,
-        {
-          nodeId,
-          error: error?.message || String(error),
-        },
-      );
-      return null;
-    }
+    membershipPublicationService.enqueueClusterMembershipReconcile(
+      reason,
+      context,
+    );
+    return true;
   }
 
   async acknowledgeMembershipPublicationForNode(nodeId) {
     const membershipPublicationService =
       this.resolveMembershipPublicationService();
     if (!membershipPublicationService ||
-        typeof membershipPublicationService.acknowledgePublication !==
+        typeof membershipPublicationService.acknowledgeMembershipPublicationForNode !==
           TYPEOF.FUNCTION) {
       return null;
-    }
-
-    let publicationRow = null;
-    if (typeof membershipPublicationService.getLatestPublicationForNodeSync ===
-      TYPEOF.FUNCTION) {
-      publicationRow =
-        membershipPublicationService.getLatestPublicationForNodeSync(nodeId);
-    }
-    if (!publicationRow &&
-        typeof membershipPublicationService.getLatestPublicationForNode ===
-          TYPEOF.FUNCTION) {
-      publicationRow =
-        await membershipPublicationService.getLatestPublicationForNode(nodeId);
-    }
-    if (!publicationRow || typeof publicationRow !== TYPEOF.OBJECT) {
-      return null;
-    }
-
-    let publicationStatus =
-      typeof publicationRow.status === TYPEOF.STRING ?
-        publicationRow.status.toUpperCase() :
-        null;
-    if (this.isTerminalPublicationStatus(publicationStatus)) {
-      return publicationRow;
-    }
-
-    let publicationId = publicationRow.publication_id ||
-      publicationRow.publicationId ||
-      null;
-    if (!publicationId) {
-      return publicationRow;
-    }
-    let requiredAckNodeIds = this.resolvePublicationNodeIds(
-      publicationRow,
-      'requiredAckNodeIds',
-      'required_ack_node_ids',
-    );
-    if (!requiredAckNodeIds.includes(nodeId)) {
-      const refreshedPublicationRow = await this.refreshLatestPublicationForNode(
-        membershipPublicationService,
-        nodeId,
-      );
-      if (!refreshedPublicationRow) {
-        return publicationRow;
-      }
-      publicationRow = refreshedPublicationRow;
-      publicationStatus =
-        typeof publicationRow.status === TYPEOF.STRING ?
-          publicationRow.status.toUpperCase() :
-          null;
-      if (this.isTerminalPublicationStatus(publicationStatus)) {
-        return publicationRow;
-      }
-      publicationId = publicationRow.publication_id ||
-        publicationRow.publicationId ||
-        null;
-      if (!publicationId) {
-        return publicationRow;
-      }
-      requiredAckNodeIds = this.resolvePublicationNodeIds(
-        publicationRow,
-        'requiredAckNodeIds',
-        'required_ack_node_ids',
-      );
-      if (!requiredAckNodeIds.includes(nodeId)) {
-        return publicationRow;
-      }
-    }
-    const acknowledgedNodeIds = this.resolvePublicationNodeIds(
-      publicationRow,
-      'acknowledgedNodeIds',
-      'acknowledged_node_ids',
-    );
-    if (acknowledgedNodeIds.includes(nodeId)) {
-      return publicationRow;
     }
 
     try {
-      const acknowledgedPublication =
-        await membershipPublicationService.acknowledgePublication(
-          publicationId,
-          nodeId,
-          {publicationRow},
-        );
-      return acknowledgedPublication || publicationRow;
+      return await membershipPublicationService
+        .acknowledgeMembershipPublicationForNode(nodeId);
     } catch (error) {
       this.logger.warn(
         DISPATCH_LOG_MSG.MEMBERSHIP_PUBLICATION_ACK_FAILED,
         {
           nodeId,
-          publicationId,
           error: error?.message || String(error),
         },
       );
-      return publicationRow;
+      return null;
     }
   }
 
@@ -1547,11 +2385,14 @@ class ReplicaDispatchService extends EventEmitter {
     if (error?.deferRetry === true) {
       return true;
     }
-    if (error?.code === 'NODE_ROW_MISSING') {
-      return false;
+    if (error?.code === REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING) {
+      return true;
     }
     if (Number.isFinite(error?.retryAfterMs) &&
         error.retryAfterMs > NUM.ZERO) {
+      return true;
+    }
+    if (isRetryableControlPlaneError(error)) {
       return true;
     }
     const message = error?.message || String(error);
@@ -1561,13 +2402,13 @@ class ReplicaDispatchService extends EventEmitter {
       return true;
     }
     return (
-      message.includes('Connection to node') &&
-      message.includes('closed')
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.CONNECTION_TO_NODE) &&
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.CLOSED)
     ) ||
-      message.includes('No connection to node') ||
-      message.includes('Query routing failed') ||
-      message.includes('Failed to forward write to leader') ||
-      message.includes('Message timeout');
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.NO_CONNECTION_TO_NODE) ||
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.QUERY_ROUTING_FAILED) ||
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.FAILED_TO_FORWARD_WRITE_TO_LEADER) ||
+      message.includes(REPLICA_DISPATCH_SERVICE_LITERAL.MESSAGE_TIMEOUT);
   }
 
   /**
@@ -1687,6 +2528,81 @@ class ReplicaDispatchService extends EventEmitter {
       this.clearTimeoutFn(deferredRetry.timeoutHandle);
     }
     this.nodeStateUpdateDeferredRetries.delete(nodeId);
+  }
+
+  /**
+   * Build one queue name for an operation-dispatch shard.
+   * @param {number} shardIndex - Zero-based shard index.
+   * @return {string}
+   * @private
+   */
+  buildOperationDispatchQueueName(shardIndex) {
+    if (this.operationDispatchQueueShardCount <= NUM.ONE) {
+      return DISPATCH_QUEUE_NAME.OPERATION;
+    }
+    return `${DISPATCH_QUEUE_NAME.OPERATION}-${shardIndex}`;
+  }
+
+  /**
+   * Resolve one reconcile shard for an operation-dispatch owner key.
+   * Distinct operation ids may progress concurrently, while each owner key
+   * still remains single-flight inside its assigned shard.
+   *
+   * @param {string} ownerKey - Operation owner key.
+   * @return {OwnerKeyReconcileQueue}
+   * @private
+   */
+  resolveOperationDispatchQueue(ownerKey) {
+    if (!Array.isArray(this.operationDispatchQueues) ||
+        this.operationDispatchQueues.length <= NUM.ONE) {
+      return Array.isArray(this.operationDispatchQueues) &&
+        this.operationDispatchQueues.length === NUM.ONE ?
+        this.operationDispatchQueues[NUM.ZERO] :
+        this.operationDispatchQueue;
+    }
+
+    const normalizedOwnerKey =
+      typeof ownerKey === TYPEOF.STRING ?
+        ownerKey :
+        String(ownerKey || '');
+    let hash = NUM.ZERO;
+    for (const char of normalizedOwnerKey) {
+      hash = ((hash * REPLICA_DISPATCH_SERVICE_LITERAL.THIRTY_ONE) + char.charCodeAt(NUM.ZERO)) >>> NUM.ZERO;
+    }
+    const queueIndex = hash % this.operationDispatchQueues.length;
+    return this.operationDispatchQueues[queueIndex];
+  }
+
+  /**
+   * Expose one compatibility queue facade while routing distinct operation ids
+   * across dedicated shards under the hood.
+   *
+   * Tests and diagnostics still observe `operationDispatchQueue`, but one
+   * slow operation reconcile can no longer stall every other owner key.
+   *
+   * @return {Object}
+   * @private
+   */
+  buildOperationDispatchQueueFacade() {
+    return {
+      enqueue: (ownerKey, reason, context, options) =>
+        this.resolveOperationDispatchQueue(ownerKey)
+          .enqueue(ownerKey, reason, context, options),
+      shutdown: () => {
+        for (const queue of this.operationDispatchQueues) {
+          queue.shutdown();
+        }
+      },
+      get size() {
+        return this.operationDispatchQueues.reduce((sum, queue) =>
+          sum + queue.size, NUM.ZERO);
+      },
+      get draining() {
+        return this.operationDispatchQueues.some((queue) =>
+          queue.draining === true);
+      },
+      operationDispatchQueues: this.operationDispatchQueues,
+    };
   }
 
   /**
@@ -1867,6 +2783,38 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Allow control-plane recovery dispatch to reuse the already visible sync
+   * readiness snapshot when the bounded authoritative refresh path fails for a
+   * retryable reason. This keeps critical recovery progressing under transient
+   * control-plane pressure without widening dispatch eligibility beyond the
+   * canonical recovery-eligible snapshot already in hand.
+   *
+   * @param {Object|null} readiness
+   * @param {string} decisionDimension
+   * @param {Error|Object|null} error
+   * @return {boolean}
+   * @private
+   */
+  shouldUseSyncDispatchReadinessFallback(
+    readiness,
+    decisionDimension,
+    error,
+  ) {
+    if (decisionDimension !==
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE) {
+      return false;
+    }
+    if (!this.isReadinessDimensionSatisfied(readiness, decisionDimension)) {
+      return false;
+    }
+    if (!isRetryableControlPlaneError(error)) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
    * Check whether a node is ready for internal topology dispatch work.
    * Dispatch is an internal topology consumer and gates on repairEligible
    * only (Req 4.2). Serve-only dimensions do not block dispatch.
@@ -1901,29 +2849,132 @@ class ReplicaDispatchService extends EventEmitter {
    * snapshot summary for persistence in diagnostics.
    *
    * @param {string} nodeId - Target node ID.
-   * @return {{ready: boolean, snapshot: Object|null}}
+   * @return {Promise<{
+   *   ready: boolean,
+   *   snapshot: Object|null,
+   *   retryAfterMs: number|null,
+   *   error?: Error,
+   * }>}
    * @private
    */
-  captureDispatchReadiness(nodeId) {
-    const ready = this.isNodeReady(nodeId);
-    if (!nodeId ||
-        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-          TYPEOF.FUNCTION) {
-      return {ready, snapshot: null};
+  async captureDispatchReadiness(nodeId) {
+    if (!nodeId) {
+      return this.buildDispatchReadinessResult(
+        null,
+        null,
+        {
+          ready: false,
+          snapshot: null,
+          retryAfterMs: null,
+        },
+      );
     }
     const decisionDimension =
       this.resolveDispatchReadinessDecisionDimension();
-    const readiness =
-      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
-        decisionDimension:
-          decisionDimension,
-      });
-    const snapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(
-        readiness,
+    let readiness = null;
+    if (typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
+        TYPEOF.FUNCTION) {
+      readiness = this.controlPlaneReadinessService.getNodeReadinessSync(nodeId, {
         decisionDimension,
-      );
-    return {ready, snapshot};
+      });
+    }
+    if (typeof this.controlPlaneReadinessService.getNodeReadiness ===
+        TYPEOF.FUNCTION) {
+      try {
+        const authoritativeReadiness =
+          await this.getBoundedDispatchReadiness(
+            nodeId,
+            decisionDimension,
+          );
+        if (authoritativeReadiness &&
+            typeof authoritativeReadiness === TYPEOF.OBJECT) {
+          readiness = authoritativeReadiness;
+        }
+      } catch (error) {
+        if (this.shouldUseSyncDispatchReadinessFallback(
+          readiness,
+          decisionDimension,
+          error,
+        )) {
+          const retryAfterMs =
+            Number.isFinite(readiness?.retryAfterMs) &&
+              readiness.retryAfterMs > NUM.ZERO ?
+              Math.floor(readiness.retryAfterMs) :
+              null;
+          return this.buildDispatchReadinessResult(
+            readiness,
+            decisionDimension,
+            {
+              ready: true,
+              retryAfterMs,
+            },
+          );
+        }
+        return this.buildDispatchReadinessResult(
+          readiness,
+          decisionDimension,
+          {
+            ready: false,
+            retryAfterMs:
+              this.resolveOperationDispatchRetryAfterMs(error),
+            error,
+          },
+        );
+      }
+    }
+    return this.buildDispatchReadinessResult(
+      readiness,
+      decisionDimension,
+    );
+  }
+
+  /**
+   * Build one dispatch-readiness result object.
+   * @param {Object|null} readiness
+   * @param {string|null} decisionDimension
+   * @param {Object} [overrides={}]
+   * @return {{
+   *   ready: boolean,
+   *   snapshot: Object|null,
+   *   retryAfterMs: number|null,
+   *   error?: Error,
+   * }}
+   * @private
+   */
+  buildDispatchReadinessResult(
+    readiness,
+    decisionDimension,
+    overrides = {},
+  ) {
+    const snapshot =
+      Object.prototype.hasOwnProperty.call(overrides, 'snapshot') ?
+        overrides.snapshot :
+        ControlPlaneReadinessService.compactSnapshotSummary(
+          readiness,
+          decisionDimension,
+        );
+    const retryAfterMs =
+      Object.prototype.hasOwnProperty.call(overrides, 'retryAfterMs') ?
+        overrides.retryAfterMs :
+        (Number.isFinite(readiness?.retryAfterMs) &&
+          readiness.retryAfterMs > NUM.ZERO ?
+          Math.floor(readiness.retryAfterMs) :
+          null);
+    const result = {
+      ready:
+        Object.prototype.hasOwnProperty.call(overrides, 'ready') ?
+          overrides.ready :
+          this.isReadinessDimensionSatisfied(
+            readiness,
+            decisionDimension,
+          ),
+      snapshot,
+      retryAfterMs,
+    };
+    if (Object.prototype.hasOwnProperty.call(overrides, REPLICA_DISPATCH_SERVICE_LITERAL.ERROR)) {
+      result.error = overrides.error;
+    }
+    return result;
   }
 
   /**
@@ -1998,7 +3049,7 @@ class ReplicaDispatchService extends EventEmitter {
     if (this.nodesOwner &&
         typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
       const result = await this.nodesOwner.getNodeFromCache(nodeId);
-      return result?.rows?.[0] || {};
+      return unwrapRowReadResult(result) || {};
     }
     return this.getSystemTableRowFromCache(
       SYSTEM_TABLE_NAME.NODES,
@@ -2021,23 +3072,23 @@ class ReplicaDispatchService extends EventEmitter {
     if (typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
       result = await gateway.readAuthoritativeRows(
         SYSTEM_TABLE_NAME.NODES,
-        'SELECT * FROM nodes WHERE node_id = ?',
+        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         [nodeId],
         {owner: DISPATCH_SUBSYSTEM},
       );
     } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
       result = await gateway.executeRead({
         tableName: SYSTEM_TABLE_NAME.NODES,
-        sql: 'SELECT * FROM nodes WHERE node_id = ?',
+        sql: REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         params: [nodeId],
-        strategy: 'authoritative',
+        strategy: REPLICA_DISPATCH_SERVICE_LITERAL.AUTHORITATIVE,
       }, {
         owner: DISPATCH_SUBSYSTEM,
       });
     } else if (typeof gateway.readRows === TYPEOF.FUNCTION) {
       result = await gateway.readRows(
         SYSTEM_TABLE_NAME.NODES,
-        'SELECT * FROM nodes WHERE node_id = ?',
+        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_NODES_WHERE_NODE_ID_EQUALS_QUESTION_MARK,
         [nodeId],
         {owner: DISPATCH_SUBSYSTEM},
       );
@@ -2046,9 +3097,14 @@ class ReplicaDispatchService extends EventEmitter {
     if (result?.success === false) {
       return {
         success: false,
-        error: result.error || 'authoritative_row_source_unavailable',
+        error:
+          result.error ||
+          DISPATCH_READINESS_ERROR_REASON
+            .AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
         deferRetry: result.deferRetry === true ||
-          result.error === 'authoritative_row_source_unavailable',
+          result.error ===
+            DISPATCH_READINESS_ERROR_REASON
+              .AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
         retryAfterMs: Number.isFinite(result.retryAfterMs) ?
           result.retryAfterMs :
           this.nodeStateUpdateRetryAfterMs,
@@ -2068,8 +3124,8 @@ class ReplicaDispatchService extends EventEmitter {
   /**
    * Classify a zero-row NODE_STATE_UPDATE write miss.
    * Previously known nodes may be temporarily invisible while authoritative
-   * control-plane recovery is still converging; startup first-inserts must
-   * still fail loudly.
+   * control-plane recovery is still converging, so misses remain retryable
+   * through the owner queue when authoritative visibility lags.
    * @param {string} nodeId
    * @param {Object} existing
    * @return {Promise<Error>}
@@ -2085,18 +3141,24 @@ class ReplicaDispatchService extends EventEmitter {
       const authoritativeNodeRow = await this.getAuthoritativeNodeRow(nodeId);
       if (authoritativeNodeRow?.success === true) {
         if (authoritativeNodeRow.row?.[COLUMN.NODE_ID]) {
-          error.deferRetry = true;
-          error.retryAfterMs = this.nodeStateUpdateRetryAfterMs;
-          error.reasonCode = 'authoritative_node_row_visibility_lag';
+          this.applyRetryableNodeRowUpdateError(
+            error,
+            DISPATCH_READINESS_ERROR_REASON
+              .AUTHORITATIVE_NODE_ROW_VISIBILITY_LAG,
+            this.nodeStateUpdateRetryAfterMs,
+          );
         }
         return error;
       }
 
       if (authoritativeNodeRow?.deferRetry === true) {
-        error.deferRetry = true;
-        error.retryAfterMs = authoritativeNodeRow.retryAfterMs;
-        error.reasonCode = authoritativeNodeRow.error ||
-          'authoritative_row_source_unavailable';
+        this.applyRetryableNodeRowUpdateError(
+          error,
+          authoritativeNodeRow.error ||
+            DISPATCH_READINESS_ERROR_REASON
+              .AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+          authoritativeNodeRow.retryAfterMs,
+        );
       }
       return error;
     } catch (readError) {
@@ -2105,16 +3167,37 @@ class ReplicaDispatchService extends EventEmitter {
           (typeof this.cdcIntegrationService?.isTransientCdcError ===
             TYPEOF.FUNCTION &&
             this.cdcIntegrationService.isTransientCdcError(readMessage)) ||
-          readMessage.includes('authoritative_row_source_unavailable')) {
-        error.deferRetry = true;
-        error.retryAfterMs = Number.isFinite(readError?.retryAfterMs) ?
-          readError.retryAfterMs :
-          this.nodeStateUpdateRetryAfterMs;
-        error.reasonCode = readError?.code ||
-          'authoritative_row_source_unavailable';
+          readMessage.includes(
+            DISPATCH_READINESS_ERROR_REASON
+              .AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+          )) {
+        this.applyRetryableNodeRowUpdateError(
+          error,
+          readError?.code ||
+            DISPATCH_READINESS_ERROR_REASON
+              .AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+          Number.isFinite(readError?.retryAfterMs) ?
+            readError.retryAfterMs :
+            this.nodeStateUpdateRetryAfterMs,
+        );
       }
       return error;
     }
+  }
+
+  /**
+   * Apply one retryable node-row update classification.
+   * @param {Error} error
+   * @param {string} reasonCode
+   * @param {number|null|undefined} retryAfterMs
+   * @return {Error}
+   * @private
+   */
+  applyRetryableNodeRowUpdateError(error, reasonCode, retryAfterMs) {
+    error.deferRetry = true;
+    error.retryAfterMs = retryAfterMs;
+    error.reasonCode = reasonCode;
+    return error;
   }
 
   /**
@@ -2127,19 +3210,91 @@ class ReplicaDispatchService extends EventEmitter {
     const error = new Error(
       `${DISPATCH_ERROR_MSG.NODE_ROW_MISSING}: ${nodeId}`,
     );
-    error.code = 'NODE_ROW_MISSING';
+    error.code = REPLICA_DISPATCH_SERVICE_LITERAL.NODE_ROW_MISSING;
     error.nodeId = nodeId;
     return error;
   }
 
   /**
-   * Read a replica operation row from SystemTableCache.
-   * @param {string} operationId - Operation ID.
-   * @return {Promise<Object|null>} Operation row or null.
+   * Read one authoritative replica_operations row directly from the control-
+   * plane gateway. Dispatch retries use this to recover when owner-local cache
+   * visibility lags behind the persisted operation row.
+   * @param {string} operationId
+   * @return {Promise<Object|null>}
    * @private
    */
+  async getAuthoritativeReplicaOperationRow(operationId) {
+    const authoritativeOperationQuery =
+      this.rebalanceCoordinator?.repository &&
+        typeof this.rebalanceCoordinator.repository
+          .queryAuthoritativeOperationById === TYPEOF.FUNCTION ?
+        this.rebalanceCoordinator.repository
+          .queryAuthoritativeOperationById.bind(
+            this.rebalanceCoordinator.repository,
+          ) :
+        null;
+    if (authoritativeOperationQuery) {
+      const authoritativeOperation =
+        await authoritativeOperationQuery(
+          operationId,
+          {
+            requireOwnerRpcRead: false,
+          },
+        );
+      if (authoritativeOperation) {
+        return this.buildOperationRowFromCoordinator(
+          authoritativeOperation,
+        );
+      }
+      return null;
+    }
+
+    const gateway = this.controlPlaneSystemTableGateway;
+    if (!operationId ||
+        !gateway ||
+        typeof gateway !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    let result = null;
+    if (typeof gateway.readAuthoritativeRows === TYPEOF.FUNCTION) {
+      result = await gateway.readAuthoritativeRows(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
+        [operationId],
+        {owner: DISPATCH_SUBSYSTEM},
+      );
+    } else if (typeof gateway.executeRead === TYPEOF.FUNCTION) {
+      result = await gateway.executeRead({
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        sql: REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
+        params: [operationId],
+        strategy: REPLICA_DISPATCH_SERVICE_LITERAL.AUTHORITATIVE,
+      }, {
+        owner: DISPATCH_SUBSYSTEM,
+      });
+    } else if (typeof gateway.readRows === TYPEOF.FUNCTION) {
+      result = await gateway.readRows(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        REPLICA_DISPATCH_SERVICE_LITERAL.SELECT_STAR_FROM_REPLICA_OPERATIONS_WHERE_OPERATION_ID_EQUALS_QUESTION_MARK,
+        [operationId],
+        {owner: DISPATCH_SUBSYSTEM},
+      );
+    }
+
+    if (result?.success === false) {
+      return null;
+    }
+
+    const rows = Array.isArray(result?.rows) ?
+      result.rows :
+      (Array.isArray(result) ? result : []);
+    return rows[REPLICA_DISPATCH_SERVICE_LITERAL.ZERO] || null;
+  }
+
   /**
-   * Get a replica operation row from cache.
+   * Get a replica operation row from cache, with authoritative fallback when
+   * the persisted row is still invisible to the local cache.
    * @readModel DISPATCH_OPERATION_LOOKUP — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} operationId - Operation ID.
    * @return {Promise<Object|null>} Operation row or null.
@@ -2153,12 +3308,20 @@ class ReplicaDispatchService extends EventEmitter {
         await this.replicaOperationsOwner.getReplicaOperationFromCache(
           operationId,
         );
-      return result?.rows?.[0] || null;
+      const cachedRow = unwrapRowReadResult(result);
+      if (cachedRow) {
+        return cachedRow;
+      }
+      return this.getAuthoritativeReplicaOperationRow(operationId);
     }
-    return this.getSystemTableRowFromCache(
+    const cachedRow = this.getSystemTableRowFromCache(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       operationId,
     ) || null;
+    if (cachedRow) {
+      return cachedRow;
+    }
+    return this.getAuthoritativeReplicaOperationRow(operationId);
   }
 
   /**
@@ -2192,7 +3355,7 @@ class ReplicaDispatchService extends EventEmitter {
   async forwardToLeader(mgService, payload, options = {}) {
     const requiredTables = Array.isArray(options.requiredTables) ?
       [...new Set(options.requiredTables.filter((tableName) =>
-        typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO
+        typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO,
       ))] :
       [];
     if (requiredTables.length > NUM.ZERO) {
@@ -2203,16 +3366,10 @@ class ReplicaDispatchService extends EventEmitter {
         );
       if (typeof mgService?.forwardMetadataIngressPayloadToLeader !==
           TYPEOF.FUNCTION) {
-        const error = new Error(
-          readiness.reason ||
+        throw this.buildIngressReadinessError(
+          readiness,
           DISPATCH_ERROR_MSG.METADATA_FORWARD_PATH_UNAVAILABLE,
         );
-        if (Number.isFinite(readiness.retryAfterMs) &&
-            readiness.retryAfterMs > NUM.ZERO) {
-          error.deferRetry = true;
-          error.retryAfterMs = readiness.retryAfterMs;
-        }
-        throw error;
       }
       await mgService.forwardMetadataIngressPayloadToLeader(payload, {
         requiredTables,
@@ -2228,15 +3385,10 @@ class ReplicaDispatchService extends EventEmitter {
           mgService,
           requiredTables,
         );
-      const error = new Error(
-        readiness.reason || 'Control-plane leader is not ready',
+      throw this.buildIngressReadinessError(
+        readiness,
+        DISPATCH_READINESS_MESSAGE.CONTROL_PLANE_LEADER_NOT_READY,
       );
-      if (Number.isFinite(readiness.retryAfterMs) &&
-          readiness.retryAfterMs > NUM.ZERO) {
-        error.deferRetry = true;
-        error.retryAfterMs = readiness.retryAfterMs;
-      }
-      throw error;
     }
 
     const forwardedBy = Array.isArray(
@@ -2262,6 +3414,25 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Build one ingress-readiness error.
+   * @param {Object|null} readiness
+   * @param {string} fallbackMessage
+   * @return {Error}
+   * @private
+   */
+  buildIngressReadinessError(readiness, fallbackMessage) {
+    const error = new Error(
+      readiness?.reason || fallbackMessage,
+    );
+    if (Number.isFinite(readiness?.retryAfterMs) &&
+        readiness.retryAfterMs > NUM.ZERO) {
+      error.deferRetry = true;
+      error.retryAfterMs = readiness.retryAfterMs;
+    }
+    return error;
+  }
+
+  /**
    * Check if a payload is a control-plane message.
    * @param {Object} payload - Message payload.
    * @return {boolean} True if control-plane message.
@@ -2275,6 +3446,14 @@ class ReplicaDispatchService extends EventEmitter {
    * Stop the dispatch service.
    */
   stop() {
+    if (this.directDispatchServiceAddress &&
+        this.messageRouter &&
+        typeof this.messageRouter.unregister === TYPEOF.FUNCTION) {
+      this.messageRouter.unregister(this.directDispatchServiceAddress);
+    }
+    this.directDispatchServiceHandler = null;
+    this.directDispatchServiceAddress = null;
+
     if (this.coordinatorOperationCreatedListener &&
         this.rebalanceCoordinator &&
         typeof this.rebalanceCoordinator.off === TYPEOF.FUNCTION) {
@@ -2308,13 +3487,23 @@ class ReplicaDispatchService extends EventEmitter {
     this.retryInFlightNodes.clear();
     this.nodeStateUpdateWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
+    for (const operationId of this.operationDispatchDeferredRetries.keys()) {
+      this.clearDeferredOperationDispatchRetry(operationId);
+    }
     for (const nodeId of this.nodeStateUpdateDeferredRetries.keys()) {
       this.clearDeferredNodeStateUpdateRetry(nodeId);
     }
     this.nodeStateUpdateQueueAssignments.clear();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
 
-    this.operationDispatchQueue.shutdown();
+    if (Array.isArray(this.operationDispatchQueues) &&
+        this.operationDispatchQueues.length > NUM.ZERO) {
+      for (const operationDispatchQueue of this.operationDispatchQueues) {
+        operationDispatchQueue.shutdown();
+      }
+    } else {
+      this.operationDispatchQueue.shutdown();
+    }
     for (const nodeStateUpdateQueue of this.nodeStateUpdateQueues) {
       nodeStateUpdateQueue.shutdown();
     }
