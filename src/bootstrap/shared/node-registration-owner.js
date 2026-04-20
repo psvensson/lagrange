@@ -8,6 +8,9 @@ import {
 import {createBootstrapCacheHydrationApplier} from
   '../bootstrap-cache-hydration-applier.js';
 import {
+  MembershipPublicationRuntimeOwner,
+} from '../../control-plane/owners/membership-publication-runtime-owner.js';
+import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
@@ -25,8 +28,6 @@ import {
 import {META_SERVICE_ID} from '../../constants/wasm-meta.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
-import {runRetryableControlPlaneWrite} from
-  './retryable-control-plane-write.js';
 import {
   MEMBERSHIP_LIFECYCLE_INTENT,
   resolveMembershipJoinIntentType,
@@ -42,9 +43,33 @@ const LOG_JOIN_ADMISSION_WRITE_RETRY =
   'Retrying join admission system-table write after retryable failure';
 const LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP =
   'Reusing existing canonical membership for durable rejoin';
+const LOG_RESUMING_JOIN_ADMISSION_PROGRESS =
+  'Resuming join admission from canonical membership progress';
+const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.TWO;
+const JOIN_ADMISSION_PUBLICATION = Object.freeze({
+  META_SERVICE_ENDPOINT:
+    'built-in meta service endpoint publication',
+  NODE_ENDPOINT: 'node websocket endpoint publication',
+  NODE_MEMBERSHIP: 'node membership publication',
+  NODE_MEMBERSHIP_REFRESH: 'durable rejoin membership refresh',
+});
+const NODE_REGISTRATION_ERROR = Object.freeze({
+  UNSUPPORTED_PUBLICATION_TABLE:
+    'Unsupported join publication table for node registration',
+});
+const JOIN_ADMISSION_RESOLUTION_SOURCE = Object.freeze({
+  DURABLE_REJOIN_EXISTING_MEMBERSHIP:
+    'durable_rejoin_existing_membership',
+  EXISTING_PROGRESS:
+    'existing_join_admission_progress',
+});
 const DURABLE_REJOIN_REQUIRED_SERVICE_IDS = Object.freeze([
   META_SERVICE_ID.POSTGRES_WIRE,
+]);
+const REUSABLE_JOIN_ADMISSION_CONNECTION_STATES = Object.freeze([
+  STATE.CONNECTED,
+  STATE.READY,
 ]);
 
 const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
@@ -58,6 +83,8 @@ class NodeRegistrationOwner {
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.authoritativeControlPlaneView = null;
+    this.membershipPublicationRuntimeOwner =
+      options.membershipPublicationRuntimeOwner || null;
   }
 
   async registerNodeInCluster() {
@@ -95,44 +122,66 @@ class NodeRegistrationOwner {
         return existingMembership;
       }
 
-      const budgetService =
-        this.delegates.getNodeStorageBudgetService();
-      const {budgetRow, resolution} =
-        await NodeStorageBudgetSetup.resolveWithoutPersist({
-          budgetService,
-          nodeRow,
-          nodeId: this.nodeId,
+      const existingJoinAdmissionProgress =
+        await this.resolveExistingJoinAdmissionProgress();
+
+      let budgetRow = existingJoinAdmissionProgress?.nodeRow || null;
+      let resolution = existingJoinAdmissionProgress?.resolution || null;
+      if (!budgetRow) {
+        const budgetService =
+          this.delegates.getNodeStorageBudgetService();
+        const budgetResolution =
+          await NodeStorageBudgetSetup.resolveWithoutPersist({
+            budgetService,
+            nodeRow,
+            nodeId: this.nodeId,
+          });
+        budgetRow = budgetResolution.budgetRow;
+        resolution = budgetResolution.resolution;
+
+        const nodeUpsertResult = await this.upsertSystemTableRowWithRetry(
+          TABLES.NODES,
+          budgetRow,
+          {
+            admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_MEMBERSHIP,
+          },
+        );
+        if (nodeUpsertResult?.success !== true) {
+          throw new Error(
+            `Failed to register node: ${nodeUpsertResult?.error}`,
+          );
+        }
+
+        this.seedJoinTimeCacheRow(TABLES.NODES, {
+          ...budgetRow,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
         });
 
-      const nodeUpsertResult = await this.upsertSystemTableRowWithRetry(
-        TABLES.NODES,
-        budgetRow,
-        {admissionTarget: 'node membership publication'},
-      );
-      if (nodeUpsertResult?.success !== true) {
-        throw new Error(
-          `Failed to register node: ${nodeUpsertResult?.error}`,
-        );
+        logger.info('Node registered in cluster', {
+          nodeId: this.nodeId,
+          nodeAddress: this.nodeAddress,
+          cpuCores: budgetRow?.[COLUMN.CPU_CORES] || null,
+          memoryMb: budgetRow?.[COLUMN.MEMORY_MB] || null,
+          diskGb: budgetRow?.[COLUMN.DISK_GB] || null,
+          budgetBytes: resolution?.budgetBytes || null,
+          budgetSource: resolution?.source || null,
+        });
+      } else {
+        this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
+        logger.info(LOG_RESUMING_JOIN_ADMISSION_PROGRESS, {
+          nodeId: this.nodeId,
+          nodeAddress: this.nodeAddress,
+          hasExistingNodeEndpoint:
+            existingJoinAdmissionProgress.endpointRow !== null,
+          reusedMetaEndpointCount:
+            existingJoinAdmissionProgress.metaEndpointRows.length,
+        });
       }
 
-      this.seedJoinTimeCacheRow(TABLES.NODES, {
-        ...budgetRow,
-        [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-        [COLUMN.LAST_HEARTBEAT]: now,
-        [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-      });
-
-      logger.info('Node registered in cluster', {
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        cpuCores: budgetRow?.[COLUMN.CPU_CORES] || null,
-        memoryMb: budgetRow?.[COLUMN.MEMORY_MB] || null,
-        diskGb: budgetRow?.[COLUMN.DISK_GB] || null,
-        budgetBytes: resolution?.budgetBytes || null,
-        budgetSource: resolution?.source || null,
-      });
-
       const endpointRow =
+        existingJoinAdmissionProgress?.endpointRow ||
         await this.registerNodeEndpoint(now);
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
@@ -140,7 +189,11 @@ class NodeRegistrationOwner {
       );
 
       const metaEndpointRows =
-        await this.registerMetaServiceEndpoints();
+        this.hasCompleteRequiredMetaEndpointRows(
+          existingJoinAdmissionProgress?.metaEndpointRows,
+        ) ?
+          existingJoinAdmissionProgress.metaEndpointRows :
+          await this.registerMetaServiceEndpoints();
       for (const metaEndpointRow of metaEndpointRows) {
         this.seedJoinTimeCacheRow(
           TABLES.SERVICE_ENDPOINTS,
@@ -259,24 +312,75 @@ class NodeRegistrationOwner {
       endpointRow: authoritativeEndpointRow,
       metaEndpointRows,
       resolution: {
-        source: 'durable_rejoin_existing_membership',
+        source:
+          JOIN_ADMISSION_RESOLUTION_SOURCE
+            .DURABLE_REJOIN_EXISTING_MEMBERSHIP,
       },
       reusedExistingMembership: true,
     };
   }
 
+  hasReusableJoinAdmissionConnectionState(connectionState) {
+    return REUSABLE_JOIN_ADMISSION_CONNECTION_STATES.includes(
+      normalizeString(connectionState).toLowerCase(),
+    );
+  }
+
+  hasCompleteRequiredMetaEndpointRows(metaEndpointRows) {
+    return Array.isArray(metaEndpointRows) &&
+      metaEndpointRows.length === DURABLE_REJOIN_REQUIRED_SERVICE_IDS.length;
+  }
+
+  canReuseObservedJoinAdmissionNodeRow(nodeRow) {
+    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    const cachedNodeAddress = normalizeString(
+      nodeRow[COLUMN.NODE_ADDRESS],
+    );
+    const currentNodeAddress = normalizeString(this.nodeAddress);
+    if (cachedNodeAddress.length > NUM.ZERO &&
+      currentNodeAddress.length > NUM.ZERO &&
+      cachedNodeAddress !== currentNodeAddress) {
+      return false;
+    }
+
+    return this.hasReusableJoinAdmissionConnectionState(
+      nodeRow[COLUMN.CONNECTION_STATE],
+    );
+  }
+
+  async resolveExistingJoinAdmissionProgress() {
+    const authoritativeNodeRow =
+      await this.readAuthoritativeDurableRejoinNodeRow();
+    if (!this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow)) {
+      return null;
+    }
+
+    const authoritativeEndpointRow =
+      await this.readAuthoritativeNodeEndpointRow();
+    const metaEndpointRows =
+      await this.readAuthoritativeMetaEndpointRows();
+    return {
+      nodeRow: authoritativeNodeRow,
+      endpointRow: authoritativeEndpointRow,
+      metaEndpointRows,
+      resolution: {
+        source: JOIN_ADMISSION_RESOLUTION_SOURCE.EXISTING_PROGRESS,
+      },
+    };
+  }
+
   async refreshExistingDurableRejoinMembership(existingMembership) {
     const nodeRow = existingMembership?.nodeRow || null;
-    const refreshResult = await this.upsertSystemTableRowWithRetry(
-      TABLES.NODES,
+    const refreshResult = await this.upsertJoinPublicationRow(
+      JOIN_ADMISSION_PUBLICATION.NODE_MEMBERSHIP_REFRESH,
       nodeRow,
-      {
-        admissionTarget: 'durable rejoin membership refresh',
-      },
     );
     if (!refreshResult?.success) {
       throw new Error(
-        `Failed to refresh durable rejoin membership: ` +
+        'Failed to refresh durable rejoin membership: ' +
         `${refreshResult?.error}`,
       );
     }
@@ -447,7 +551,9 @@ class NodeRegistrationOwner {
     const endpointResult = await this.upsertSystemTableRowWithRetry(
       TABLES.NODE_ENDPOINTS,
       endpointData,
-      {admissionTarget: 'node websocket endpoint publication'},
+      {
+        admissionTarget: JOIN_ADMISSION_PUBLICATION.NODE_ENDPOINT,
+      },
     );
     if (!endpointResult?.success) {
       throw new Error(
@@ -477,7 +583,7 @@ class NodeRegistrationOwner {
             row,
             {
               admissionTarget:
-                'built-in meta service endpoint publication',
+                JOIN_ADMISSION_PUBLICATION.META_SERVICE_ENDPOINT,
             },
           );
         },
@@ -522,27 +628,71 @@ class NodeRegistrationOwner {
     };
   }
 
-  async upsertSystemTableRow(tableName, rowData) {
-    const cdcIntegrationService =
-      this.delegates.getCdcIntegrationService();
-    const upsertOptions = this.getJoinTimeUpsertOptions();
-    if (hasFunction(cdcIntegrationService?.upsertSystemTableRow)) {
-      return cdcIntegrationService.upsertSystemTableRow(
-        tableName,
-        rowData,
-        upsertOptions,
-      );
+  getMembershipPublicationRuntimeOwner() {
+    if (this.membershipPublicationRuntimeOwner) {
+      return this.membershipPublicationRuntimeOwner;
     }
+    this.membershipPublicationRuntimeOwner =
+      new MembershipPublicationRuntimeOwner({
+        nodeId: this.nodeId,
+        cdcIntegrationService:
+          this.delegates.getCdcIntegrationService?.() || null,
+        systemTableCache:
+          this.delegates.getSystemTableCache?.() ||
+          NodeService.getInstance().getSystemTableCache() ||
+          null,
+        messageRouter: this.delegates.getMessageRouter?.() || null,
+        controlPlaneWriteRetryTimeoutMs:
+          this.getJoinAdmissionWriteRetryTimeoutMs(),
+        controlPlaneWriteRetryNow: () => this.delegates.getNow()(),
+        controlPlaneWriteRetrySleep: (delayMs) => this.sleep(delayMs),
+      });
+    return this.membershipPublicationRuntimeOwner;
+  }
 
-    const columns = Object.keys(rowData);
-    const placeholders =
-      columns.map(() => '?').join(', ');
-    const sql =
-      `INSERT INTO ${tableName} ` +
-      `(${columns.join(', ')}) VALUES (${placeholders})`;
-    const params = columns.map((column) => rowData[column]);
-    return cdcIntegrationService.sqlQueryEngine
-      .executeQuery(sql, params, upsertOptions);
+  buildJoinAdmissionRetryLogger(tableName, admissionTarget = null) {
+    return ({
+      attempt,
+      delayMs,
+      remainingMs,
+      retryAfterMs,
+      resultOrError,
+    }) => {
+      this.delegates.getLogger().warn(
+        LOG_JOIN_ADMISSION_WRITE_RETRY,
+        {
+          nodeId: this.nodeId,
+          tableName,
+          attempt,
+          retryAfterMs,
+          delayMs,
+          remainingMs,
+          admissionTarget,
+          error:
+            resultOrError?.error ||
+            resultOrError?.message ||
+            'retryable join admission write failure',
+        },
+      );
+    };
+  }
+
+  async upsertJoinPublicationRow(admissionTarget, rowData) {
+    const membershipPublicationRuntimeOwner =
+      this.getMembershipPublicationRuntimeOwner();
+    const joinTimeOptions = this.getJoinTimeUpsertOptions();
+    const retryOptions = {
+      ...joinTimeOptions,
+      controlPlaneWriteRetryOnRetry:
+        this.buildJoinAdmissionRetryLogger(
+          TABLES.NODES,
+          admissionTarget,
+        ),
+    };
+    return membershipPublicationRuntimeOwner.upsertJoinNode(
+      rowData,
+      retryOptions,
+    );
   }
 
   async upsertSystemTableRowWithRetry(
@@ -550,43 +700,44 @@ class NodeRegistrationOwner {
     rowData,
     options = {},
   ) {
-    return runRetryableControlPlaneWrite(
-      () => this.upsertSystemTableRow(tableName, rowData),
-      {
-        timeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
-        now: () => this.delegates.getNow()(),
-        onRetry: ({
-          attempt,
-          delayMs,
-          remainingMs,
-          retryAfterMs,
-          resultOrError,
-        }) => {
-          this.delegates.getLogger().warn(
-            LOG_JOIN_ADMISSION_WRITE_RETRY,
-            {
-              nodeId: this.nodeId,
-              tableName,
-              attempt,
-              retryAfterMs,
-              delayMs,
-              remainingMs,
-              admissionTarget: options.admissionTarget || null,
-              error:
-                resultOrError?.error ||
-                resultOrError?.message ||
-                'retryable join admission write failure',
-            },
-          );
-        },
-        sleep: (delayMs) => this.sleep(delayMs),
-      },
+    const membershipPublicationRuntimeOwner =
+      this.getMembershipPublicationRuntimeOwner();
+    const joinTimeOptions = this.getJoinTimeUpsertOptions();
+    const mutationOptions = {
+      ...joinTimeOptions,
+      controlPlaneWriteRetryOnRetry:
+        this.buildJoinAdmissionRetryLogger(
+          tableName,
+          options.admissionTarget || null,
+        ),
+    };
+    if (tableName === TABLES.NODES) {
+      return membershipPublicationRuntimeOwner.upsertJoinNode(
+        rowData,
+        mutationOptions,
+      );
+    }
+    if (tableName === TABLES.NODE_ENDPOINTS) {
+      return membershipPublicationRuntimeOwner.upsertJoinNodeEndpoint(
+        rowData,
+        mutationOptions,
+      );
+    }
+    if (tableName !== TABLES.SERVICE_ENDPOINTS) {
+      throw new Error(
+        `${NODE_REGISTRATION_ERROR.UNSUPPORTED_PUBLICATION_TABLE}: ` +
+        `${tableName}`,
+      );
+    }
+    return membershipPublicationRuntimeOwner.upsertJoinServiceEndpoint(
+      rowData,
+      mutationOptions,
     );
   }
 
   getJoinTimeUpsertOptions() {
     return {
-      deliveryPriority: 'critical',
+      deliveryPriority: JOIN_ADMISSION_DELIVERY_PRIORITY,
       skipCacheWait: true,
       queryTimeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
     };

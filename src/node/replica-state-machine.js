@@ -62,6 +62,9 @@ const CLEARS_CANONICAL_PARTITION_LEADER_STATES = new Set([
   ReplicaState.REMOVED,
   ReplicaState.FAILED,
 ]);
+const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
+  ReplicaState.ACTIVE,
+]);
 
 /**
  * ReplicaStateMachine - Central state machine for replica lifecycle.
@@ -104,6 +107,7 @@ class ReplicaStateMachine extends EventEmitter {
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       REPLICA_STATE_MACHINE_NOW;
+    this.systemTableCache = options.systemTableCache || null;
 
     // State tracking: Map<replicaId, ReplicaStateInfo>
     this.replicas = new Map();
@@ -293,39 +297,6 @@ class ReplicaStateMachine extends EventEmitter {
     const previousState = currentState;
     const timeInPreviousState = existingState ?
       now - existingState.stateEnteredAt : REPLICA_STATE_MACHINE_NUM.ZERO;
-
-    // Update state counts
-    if (previousState !== null) {
-      this.stateCounts[previousState]--;
-    }
-    this.stateCounts[newState]++;
-
-    // Track metrics: transition counts
-    const transitionKey =
-      `${previousState}${REPLICA_STATE_MACHINE_TRANSITION.SEPARATOR}${newState}`;
-    const currentTransitionCount = this.transitionCounts.get(transitionKey) ||
-      REPLICA_STATE_MACHINE_NUM.ZERO;
-    this.transitionCounts.set(
-      transitionKey,
-      currentTransitionCount + REPLICA_STATE_MACHINE_NUM.ONE,
-    );
-
-    // Track metrics: time spent in previous state
-    if (previousState !== null && timeInPreviousState > REPLICA_STATE_MACHINE_NUM.ZERO) {
-      const currentTimeInState = this.timeInState.get(previousState) ||
-        REPLICA_STATE_MACHINE_NUM.ZERO;
-      this.timeInState.set(previousState, currentTimeInState + timeInPreviousState);
-    }
-
-    // Track metrics: failure count
-    if (newState === ReplicaState.FAILED) {
-      this.failureCount++;
-    }
-
-    // Track metrics: peak concurrent operations
-    this._updatePeakConcurrentOperations();
-
-    // Create or update replica state
     const replicaState = {
       replicaId,
       partitionId: context.partitionId || existingState?.partitionId || null,
@@ -341,32 +312,62 @@ class ReplicaStateMachine extends EventEmitter {
       serviceType: context.serviceType || existingState?.serviceType || SERVICE_TYPE.PARTITION,
       serviceAddress: context.serviceAddress || existingState?.serviceAddress || null,
     };
+    const commitTransition = () => {
+      if (previousState !== null) {
+        this.stateCounts[previousState]--;
+      }
+      this.stateCounts[newState]++;
 
-    this.replicas.set(replicaId, replicaState);
+      const transitionKey =
+        `${previousState}${REPLICA_STATE_MACHINE_TRANSITION.SEPARATOR}${newState}`;
+      const currentTransitionCount = this.transitionCounts.get(transitionKey) ||
+        REPLICA_STATE_MACHINE_NUM.ZERO;
+      this.transitionCounts.set(
+        transitionKey,
+        currentTransitionCount + REPLICA_STATE_MACHINE_NUM.ONE,
+      );
 
-    this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
-      replicaId,
-      previousState,
-      newState,
-      reason: context.reason,
-      nodeId: this.nodeId,
-    });
+      if (previousState !== null &&
+          timeInPreviousState > REPLICA_STATE_MACHINE_NUM.ZERO) {
+        const currentTimeInState = this.timeInState.get(previousState) ||
+          REPLICA_STATE_MACHINE_NUM.ZERO;
+        this.timeInState.set(
+          previousState,
+          currentTimeInState + timeInPreviousState,
+        );
+      }
 
-    // Emit state transition event
-    this.emit(REPLICA_STATE_MACHINE_EVENT.STATE_TRANSITION, {
-      eventType: REPLICA_STATE_MACHINE_EVENT_TYPE.REPLICA_STATE_TRANSITION,
-      replicaId,
-      partitionId: replicaState.partitionId,
-      nodeId: replicaState.nodeId,
-      previousState,
-      newState,
-      timestamp: now,
-      triggerReason: replicaState.triggerReason,
-      errorMessage: replicaState.errorMessage,
-      timeInPreviousState,
-    });
+      if (newState === ReplicaState.FAILED) {
+        this.failureCount++;
+      }
+
+      this._updatePeakConcurrentOperations();
+      this.replicas.set(replicaId, replicaState);
+
+      this.logger.info(REPLICA_STATE_MACHINE_LOG_MSG.STATE_TRANSITION, {
+        replicaId,
+        previousState,
+        newState,
+        reason: context.reason,
+        nodeId: this.nodeId,
+      });
+
+      this.emit(REPLICA_STATE_MACHINE_EVENT.STATE_TRANSITION, {
+        eventType: REPLICA_STATE_MACHINE_EVENT_TYPE.REPLICA_STATE_TRANSITION,
+        replicaId,
+        partitionId: replicaState.partitionId,
+        nodeId: replicaState.nodeId,
+        previousState,
+        newState,
+        timestamp: now,
+        triggerReason: replicaState.triggerReason,
+        errorMessage: replicaState.errorMessage,
+        timeInPreviousState,
+      });
+    };
 
     if (!persist) {
+      commitTransition();
       this._armTimeoutClock(replicaId);
       return true;
     }
@@ -376,6 +377,7 @@ class ReplicaStateMachine extends EventEmitter {
       this._updateReplicaStateInCdc(replicaState, previousState);
 
     return Promise.resolve(persistenceResult).then((result) => {
+      commitTransition();
       this._armTimeoutClock(replicaId);
       return result;
     });
@@ -410,6 +412,7 @@ class ReplicaStateMachine extends EventEmitter {
         tableName: TABLES.SERVICES,
         row: insertData,
       }, persistenceOptions);
+      await this._clearCanonicalPartitionLeaderIfNeeded(replicaState);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
@@ -456,6 +459,7 @@ class ReplicaStateMachine extends EventEmitter {
         whereClause: {service_id: serviceId},
         data: this._buildUpdateCdcData(replicaState, previousState),
       }, persistenceOptions);
+      await this._clearCanonicalPartitionLeaderIfNeeded(replicaState);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
@@ -492,6 +496,9 @@ class ReplicaStateMachine extends EventEmitter {
         replicaState.nodeId.length === 0) {
       return;
     }
+    if (this.hasOtherActivePartitionReplicaOnLeaderNode(replicaState)) {
+      return;
+    }
 
     await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -511,6 +518,51 @@ class ReplicaStateMachine extends EventEmitter {
       workClass: 'critical',
       skipCacheWait: true,
     });
+  }
+
+  /**
+   * @param {Object|null} replicaState
+   * @return {boolean}
+   * @private
+   */
+  hasOtherActivePartitionReplicaOnLeaderNode(replicaState) {
+    if (!replicaState ||
+        !this.systemTableCache ||
+        typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    const currentReplicaId = replicaState.replicaId || replicaState.serviceId;
+    const siblingServices = this.systemTableCache.filter(
+      TABLES.SERVICES,
+      (service) => {
+        if (!service) {
+          return false;
+        }
+        const serviceType = service.service_type || service.serviceType;
+        if (serviceType !== SERVICE_TYPE.PARTITION) {
+          return false;
+        }
+        const partitionId = service.partition_id || service.partitionId;
+        if (partitionId !== replicaState.partitionId) {
+          return false;
+        }
+        const nodeId = service.node_id || service.nodeId;
+        if (nodeId !== replicaState.nodeId) {
+          return false;
+        }
+        const replicaId =
+          service.replica_id || service.replicaId || service.service_id;
+        if (replicaId === currentReplicaId) {
+          return false;
+        }
+        const status = service.status;
+        return RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES.has(status);
+      },
+    );
+
+    return Array.isArray(siblingServices) &&
+      siblingServices.length > REPLICA_STATE_MACHINE_NUM.ZERO;
   }
 
   /**
@@ -976,6 +1028,8 @@ class ReplicaStateMachine extends EventEmitter {
         ),
       });
     }
+
+    return timedOutReplicas.length;
   }
 
   /**
@@ -983,9 +1037,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @return {number} Number of replicas that timed out.
    */
   checkTimeoutsNow() {
-    const countBefore = this.stateCounts[ReplicaState.FAILED];
-    this._checkTimeouts();
-    return this.stateCounts[ReplicaState.FAILED] - countBefore;
+    return this._checkTimeouts();
   }
 
   /**

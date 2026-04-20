@@ -28,6 +28,7 @@ import {
 } from '../../control-plane/control-plane-runtime-bundle.js';
 import {
   createSystemMetadataOwners,
+  MembershipPublicationRuntimeOwner,
 } from '../../control-plane/owners/index.js';
 import {
   ReplicaDispatchService,
@@ -317,6 +318,15 @@ class ControlPlaneSetup {
       controlPlaneSystemTableGateway,
       systemTableCache,
     });
+    const membershipPublicationRuntimeOwner =
+      new MembershipPublicationRuntimeOwner({
+        nodeId,
+        cdcIntegrationService,
+        systemTableCache,
+        messageRouter,
+        controlPlaneSystemTableGateway,
+        systemMetadataOwners,
+      });
     const membershipPublicationService =
       new MembershipPublicationCoordinator({
         nodeId,
@@ -325,8 +335,7 @@ class ControlPlaneSetup {
         controlPlaneReadinessService,
         replicaOperationRepository:
           rebalanceCoordinator?.repository || null,
-        controlPlanePublicationsOwner:
-          systemMetadataOwners.controlPlanePublicationsOwner,
+        membershipPublicationRuntimeOwner,
       });
     if (!controlPlaneReadinessService.nodesOwner) {
       controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
@@ -419,6 +428,7 @@ class ControlPlaneSetup {
       dispatchService,
       rebalanceCoordinator,
       membershipPublicationService,
+      membershipPublicationRuntimeOwner,
       systemMetadataOwners,
     };
   }

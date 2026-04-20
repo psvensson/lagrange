@@ -16,6 +16,11 @@ export const PANEL_POSITION = {
   OVERLAY: 'overlay',
 };
 
+const DETAIL_PANEL_SECTION_TITLE = Object.freeze({
+  NAVIGATION: 'Quick Navigation',
+  RELATED_ENTITIES: 'Related Entities',
+});
+
 /**
  * DetailPanel class for displaying entity details with scrolling support
  */
@@ -191,6 +196,88 @@ export class DetailPanel {
     this.scrollDown(this.maxHeight - 2);
   }
 
+  addSectionHeader(title, options = {}) {
+    if (options.leadingBlank === true) {
+      this.renderedLines.push({type: 'blank'});
+    }
+    this.renderedLines.push({
+      type: 'sectionHeader',
+      text: title,
+    });
+  }
+
+  renderTitleBlock() {
+    if (!this.detailData?.title) {
+      return;
+    }
+
+    this.renderedLines.push({
+      type: 'title',
+      text: this.detailData.title,
+    });
+    this.renderedLines.push({type: 'separator'});
+  }
+
+  renderSections() {
+    const sections = this.detailData?.sections;
+    if (!sections) {
+      return;
+    }
+
+    for (const [index, section] of sections.entries()) {
+      if (section.title) {
+        this.addSectionHeader(section.title, {
+          leadingBlank: index > 0,
+        });
+      }
+
+      if (section.fields) {
+        for (const field of section.fields) {
+          this.addFieldLines(field);
+        }
+      }
+    }
+  }
+
+  renderRelatedCounts() {
+    const relatedCounts = this.detailData?.relatedCounts;
+    if (!relatedCounts) {
+      return;
+    }
+
+    this.addSectionHeader(DETAIL_PANEL_SECTION_TITLE.RELATED_ENTITIES, {
+      leadingBlank: true,
+    });
+
+    for (const [entity, count] of Object.entries(relatedCounts)) {
+      this.renderedLines.push({
+        type: 'field',
+        label: entity,
+        value: String(count),
+      });
+    }
+  }
+
+  renderNavigationLinks() {
+    const navigationLinks = this.detailData?.navigationLinks;
+    if (!navigationLinks || navigationLinks.length === 0) {
+      return;
+    }
+
+    this.addSectionHeader(DETAIL_PANEL_SECTION_TITLE.NAVIGATION, {
+      leadingBlank: true,
+    });
+
+    for (const link of navigationLinks) {
+      this.renderedLines.push({
+        type: 'link',
+        label: link.label,
+        target: link.target,
+        key: link.key,
+      });
+    }
+  }
+
   /**
    * Render the detail content into lines
    */
@@ -201,74 +288,10 @@ export class DetailPanel {
       return;
     }
 
-    // Add title
-    if (this.detailData.title) {
-      this.renderedLines.push({
-        type: 'title',
-        text: this.detailData.title,
-      });
-      this.renderedLines.push({type: 'separator'});
-    }
-
-    // Add sections
-    if (this.detailData.sections) {
-      for (let i = 0; i < this.detailData.sections.length; i++) {
-        const section = this.detailData.sections[i];
-
-        // Add section header
-        if (section.title) {
-          if (i > 0) {
-            this.renderedLines.push({type: 'blank'});
-          }
-          this.renderedLines.push({
-            type: 'sectionHeader',
-            text: section.title,
-          });
-        }
-
-        // Add fields
-        if (section.fields) {
-          for (const field of section.fields) {
-            this.addFieldLines(field);
-          }
-        }
-      }
-    }
-
-    // Add related counts if available
-    if (this.detailData.relatedCounts) {
-      this.renderedLines.push({type: 'blank'});
-      this.renderedLines.push({
-        type: 'sectionHeader',
-        text: 'Related Entities',
-      });
-
-      for (const [entity, count] of Object.entries(this.detailData.relatedCounts)) {
-        this.renderedLines.push({
-          type: 'field',
-          label: entity,
-          value: String(count),
-        });
-      }
-    }
-
-    // Add navigation links if available
-    if (this.detailData.navigationLinks && this.detailData.navigationLinks.length > 0) {
-      this.renderedLines.push({type: 'blank'});
-      this.renderedLines.push({
-        type: 'sectionHeader',
-        text: 'Quick Navigation',
-      });
-
-      for (const link of this.detailData.navigationLinks) {
-        this.renderedLines.push({
-          type: 'link',
-          label: link.label,
-          target: link.target,
-          key: link.key,
-        });
-      }
-    }
+    this.renderTitleBlock();
+    this.renderSections();
+    this.renderRelatedCounts();
+    this.renderNavigationLinks();
   }
 
   /**

@@ -6,6 +6,12 @@ import {
   RAFT_PROVIDER_CONTRACT_METHOD,
 } from '../../src/raft/raft-provider-contract-constants.js';
 
+const TEST_ROUTE_OVERRIDE_COMMAND = Object.freeze({
+  type: 'CDC',
+});
+const TEST_RETRYABLE_FORWARD_HINT_MS = 7;
+const TEST_RETRYABLE_FORWARD_ERROR_MSG = 'Connection to node seed closed';
+
 function buildProviderStub() {
   const provider = {};
   const noOp = () => {};
@@ -182,6 +188,82 @@ test('LiferaftProvider proposeWithLeaderRouting retries on propose timeout',
     t.equal(forwardCalls, 1);
   });
 
+test(
+  'LiferaftProvider proposeWithLeaderRouting honors owner-supplied local ' +
+    'leadership when raw raft state is stale',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let proposeCalls = 0;
+    let forwardCalls = 0;
+    const raftNode = {
+      state: null,
+      command: async () => {
+        proposeCalls += 1;
+        return {ok: true};
+      },
+    };
+
+    const result = await provider.proposeWithLeaderRouting(
+      raftNode,
+      TEST_ROUTE_OVERRIDE_COMMAND,
+      {
+        shouldProposeLocally: () => true,
+        forwardToLeader: async () => {
+          forwardCalls += 1;
+        },
+      },
+    );
+
+    t.same(result, {
+      attempt: 1,
+      mode: 'propose',
+    });
+    t.equal(
+      proposeCalls,
+      1,
+      'owner-supplied leadership should keep the command on the local propose path',
+    );
+    t.equal(
+      forwardCalls,
+      0,
+      'owner-supplied leadership should prevent leader forwarding when raw raft state is stale',
+    );
+  },
+);
+
+test(
+  'LiferaftProvider proposeWithLeaderRouting falls back to forwarding when ' +
+    'owner-supplied leadership lacks a live command API',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let forwardCalls = 0;
+    const raftNode = {
+      state: null,
+    };
+
+    const result = await provider.proposeWithLeaderRouting(
+      raftNode,
+      TEST_ROUTE_OVERRIDE_COMMAND,
+      {
+        shouldProposeLocally: () => true,
+        forwardToLeader: async () => {
+          forwardCalls += 1;
+        },
+      },
+    );
+
+    t.same(result, {
+      attempt: 1,
+      mode: 'forward',
+    });
+    t.equal(
+      forwardCalls,
+      1,
+      'route selection should stay on the forward path until the live raft command API exists',
+    );
+  },
+);
+
 test('LiferaftProvider proposeWithLeaderRouting throws when propose keeps timing out',
   async (t) => {
     const provider = new LiferaftProvider();
@@ -241,3 +323,52 @@ test('LiferaftProvider proposeWithLeaderRouting stops after first non-retryable 
       'non-retryable forward failure should not schedule retry delays',
     );
   });
+
+test(
+  'LiferaftProvider proposeWithLeaderRouting honors retry-after hints from retryable forward failures',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let forwardCalls = 0;
+    const retryDelayLog = [];
+    const raftNode = {
+      state: LifeRaft.FOLLOWER,
+    };
+
+    const result = await provider.proposeWithLeaderRouting(
+      raftNode,
+      {type: 'CDC'},
+      {
+        maxAttempts: 2,
+        computeRetryDelayMs: () => 0,
+        onRetry: ({retryDelayMs}) => {
+          retryDelayLog.push(retryDelayMs);
+        },
+        forwardToLeader: async () => {
+          forwardCalls += 1;
+          if (forwardCalls === 1) {
+            const error = new Error(TEST_RETRYABLE_FORWARD_ERROR_MSG);
+            error.deferRetry = true;
+            error.retryAfterMs = TEST_RETRYABLE_FORWARD_HINT_MS;
+            error.retryable = true;
+            throw error;
+          }
+        },
+      },
+    );
+
+    t.same(result, {
+      attempt: 2,
+      mode: 'forward',
+    });
+    t.equal(
+      forwardCalls,
+      2,
+      'retryable forward failure should use the remaining routing attempt budget',
+    );
+    t.same(
+      retryDelayLog,
+      [TEST_RETRYABLE_FORWARD_HINT_MS],
+      'retry scheduling should honor the deferred retry-after hint from the failed forward attempt',
+    );
+  },
+);

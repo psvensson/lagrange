@@ -140,10 +140,10 @@ test('ReplicaHandler idempotency property tests', async (t) => {
      *
      * For any replica ID and any status value in the services table of the
      * System_Table_Cache, when a CREATE_REPLICA request arrives for that replica,
-     * the ReplicaHandler's idempotency response should reflect the status from
-     * the cache.
+     * the ReplicaHandler's idempotency response should reflect both the durable
+     * cache row and whether a tracked local runtime service exists.
      *
-     * - ACTIVE status → ALREADY_EXISTS response
+     * - ACTIVE cache-only status → INITIATED repair response
      * - CREATING/SYNCING status → IN_PROGRESS response
      * - No cache entry → INITIATED response (new replica)
      */
@@ -195,12 +195,12 @@ test('ReplicaHandler idempotency property tests', async (t) => {
 
         const response = await handler.handleCreateReplica(request);
 
-        // Verify idempotency response matches cache state
+        // Verify idempotency response matches cache state and tracked runtime.
         if (status === ReplicaStatus.ACTIVE) {
           t.equal(
             response.status,
-            ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            `ACTIVE replica should return ALREADY_EXISTS (replicaId: ${replicaId})`,
+            ReplicaOperationResponseStatus.INITIATED,
+            `ACTIVE cache-only replica should return INITIATED for repair (replicaId: ${replicaId})`,
           );
         } else if (status === ReplicaStatus.CREATING || status === ReplicaStatus.SYNCING) {
           t.equal(

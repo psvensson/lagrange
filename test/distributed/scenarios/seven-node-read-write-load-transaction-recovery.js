@@ -21,7 +21,6 @@ import {
   waitForProgressOrStall,
 } from '../harness/progress-wait.js';
 import {
-  BENCHMARK_WORKLOAD_PROFILE,
   createPartitioningAdaptiveDispatchGuardrail,
   createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
@@ -52,6 +51,7 @@ const REPLAY_TERMINAL_NO_PROGRESS_TIMEOUT_MS = 45000;
 const REPLAY_RECOVERY_GAP_NO_PROGRESS_TIMEOUT_MS = 30000;
 const REPLAY_READY_PLATEAU_NO_PROGRESS_TIMEOUT_MS = 15000;
 const STATUS_WITNESS_NODE_COUNT = 3;
+const MIN_REPLAY_PHASE_TIMEOUT_MS = 1000;
 const LOAD_PHASE_POLL_INTERVAL_MS = 1000;
 const LOAD_PHASE_NO_PROGRESS_TIMEOUT_MS = 60000;
 const RECOVERY_READINESS_TIMEOUT_ERROR_PREFIX =
@@ -131,6 +131,16 @@ function resolveNoProgressTimeoutMs(value, totalTimeoutMs, fallbackMs) {
     Math.min(
       normalizePositiveInteger(totalTimeoutMs, fallbackMs),
       normalizePositiveInteger(value, fallbackMs),
+    ),
+  );
+}
+
+function resolveReplayPhaseTimeoutMs(value) {
+  return Math.max(
+    MIN_REPLAY_PHASE_TIMEOUT_MS,
+    normalizePositiveInteger(
+      value,
+      RECOVERY_READINESS_NO_PROGRESS_TIMEOUT_MS,
     ),
   );
 }
@@ -1035,6 +1045,7 @@ async function run(cluster, options = {}) {
     expectedNodeCount,
     loadOpsPerSec,
     loadDuration,
+    workloadProfile,
     loadOperations,
     tableName,
     minAdditionalPartitions,
@@ -1120,9 +1131,12 @@ async function run(cluster, options = {}) {
     SEEDED_VISIBILITY_TIMEOUT_MS,
     SEEDED_VISIBILITY_NO_PROGRESS_TIMEOUT_MS,
   );
+  const replayPhaseTimeoutMs = resolveReplayPhaseTimeoutMs(
+    transactionReplayTimeoutMs,
+  );
   const recoveryReadinessNoProgressTimeoutMs = resolveNoProgressTimeoutMs(
     options.recoveryReadinessNoProgressTimeoutMs,
-    Math.max(convergenceTimeoutMs, transactionReplayTimeoutMs),
+    replayPhaseTimeoutMs,
     Math.max(
       controlPlaneQuiescenceNoProgressTimeoutMs || ZERO,
       RECOVERY_READINESS_NO_PROGRESS_TIMEOUT_MS,
@@ -1130,7 +1144,7 @@ async function run(cluster, options = {}) {
   );
   const transactionReplayNoProgressTimeoutMs = resolveNoProgressTimeoutMs(
     options.transactionReplayNoProgressTimeoutMs,
-    Math.max(transactionReplayTimeoutMs, convergenceTimeoutMs),
+    replayPhaseTimeoutMs,
     Math.max(
       controlPlaneQuiescenceNoProgressTimeoutMs || ZERO,
       REPLAY_TERMINAL_NO_PROGRESS_TIMEOUT_MS,
@@ -1154,7 +1168,7 @@ async function run(cluster, options = {}) {
   );
   const postRestartSeededVisibilityNoProgressTimeoutMs = resolveNoProgressTimeoutMs(
     options.postRestartSeededVisibilityNoProgressTimeoutMs,
-    Math.max(transactionReplayTimeoutMs, convergenceTimeoutMs),
+    replayPhaseTimeoutMs,
     Math.max(
       SEEDED_VISIBILITY_NO_PROGRESS_TIMEOUT_MS,
       Math.min(
@@ -1194,7 +1208,7 @@ async function run(cluster, options = {}) {
     adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: loadOperations,
     tableName: effectiveTableName,
-    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    workloadProfile,
   });
   let distribution = null;
   let seededTransactions = null;
@@ -1307,10 +1321,7 @@ async function run(cluster, options = {}) {
         seededTransactions,
         {
           expectedNodeCount,
-          timeoutMs: Math.max(
-            convergenceTimeoutMs,
-            transactionReplayTimeoutMs,
-          ),
+          timeoutMs: replayPhaseTimeoutMs,
           pollIntervalMs: transactionReplayPollIntervalMs,
           queryTimeoutMs: replayProbeTimeoutMs,
           noProgressTimeoutMs: recoveryReadinessNoProgressTimeoutMs,
@@ -1333,10 +1344,7 @@ async function run(cluster, options = {}) {
       replayValidationNodes,
       seededTransactions,
       {
-        timeoutMs: Math.max(
-          transactionReplayTimeoutMs,
-          convergenceTimeoutMs,
-        ),
+        timeoutMs: replayPhaseTimeoutMs,
         pollIntervalMs: transactionReplayPollIntervalMs,
         queryTimeoutMs: replayProbeTimeoutMs,
         noProgressTimeoutMs: postRestartSeededVisibilityNoProgressTimeoutMs,
@@ -1353,10 +1361,7 @@ async function run(cluster, options = {}) {
       replayValidationNodes,
       seededTransactions,
       {
-        timeoutMs: Math.max(
-          transactionReplayTimeoutMs,
-          convergenceTimeoutMs,
-        ),
+        timeoutMs: replayPhaseTimeoutMs,
         pollIntervalMs: transactionReplayPollIntervalMs,
         queryTimeoutMs: replayProbeTimeoutMs,
         noProgressTimeoutMs: transactionReplayNoProgressTimeoutMs,

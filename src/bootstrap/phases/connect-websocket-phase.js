@@ -28,6 +28,9 @@ import {
   resolveNodeWebSocketAddress,
 } from
   '../../transport/node-address-resolution.js';
+import {
+  resolveQueryTransportSelection,
+} from '../shared/query-transport-selection.js';
 
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
 const ERR_MISSING_WS_ENDPOINT = 'Missing canonical node_endpoints websocket address';
@@ -42,44 +45,6 @@ const MESH_CONNECTED_OR_CONNECTING_STATES = new Set([
   CONNECTION_STATE.CONNECTED,
   CONNECTION_STATE.CONNECTING,
 ]);
-
-function resolveQueryTransportSelection(getSelection) {
-  if (typeof getSelection !== TYPEOF.FUNCTION) {
-    return null;
-  }
-  const selection = getSelection();
-  if (selection &&
-      typeof selection.sendMessage === TYPEOF.FUNCTION) {
-    return selection.initialized === true ? selection : null;
-  }
-  if (!selection || typeof selection !== TYPEOF.OBJECT) {
-    return null;
-  }
-
-  const service = selection.service;
-  if (service &&
-      typeof service.sendMessage === TYPEOF.FUNCTION &&
-      service.initialized === true) {
-    return {
-      ...selection,
-      service,
-    };
-  }
-
-  return {
-    service: null,
-    reason:
-      typeof selection.reason === TYPEOF.STRING &&
-      selection.reason.length > NUM.ZERO ?
-        selection.reason :
-        null,
-    retryAfterMs:
-      Number.isFinite(selection.retryAfterMs) &&
-      selection.retryAfterMs > NUM.ZERO ?
-        Math.floor(selection.retryAfterMs) :
-        NUM.ZERO,
-  };
-}
 
 function getConnectedPeerNodeIds(messageRouter, localNodeId) {
   if (!messageRouter || typeof messageRouter !== TYPEOF.OBJECT) {

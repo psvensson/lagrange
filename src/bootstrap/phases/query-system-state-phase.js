@@ -38,6 +38,9 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 import {canonicalizeSystemTableRow} from '../../control-plane/system-row-normalizers.js';
+import {
+  resolveControlPlaneSnapshotRevisionMetadata,
+} from '../../control-plane/control-plane-snapshot-revision.js';
 
 const LOG_CACHE_POPULATED =
   'System cache populated from bootstrap response';
@@ -574,19 +577,43 @@ class QuerySystemStatePhase {
    * @private
    */
   recordBootstrapTopologySnapshotMetadata(bootstrapResponse) {
+    const nowMs =
+      typeof this.delegates.getNow === TYPEOF.FUNCTION ?
+        this.delegates.getNow() :
+        Date.now();
+    const topologySnapshotMeta =
+      bootstrapResponse?.topologySnapshotMeta &&
+      typeof bootstrapResponse.topologySnapshotMeta === TYPEOF.OBJECT ?
+        bootstrapResponse.topologySnapshotMeta :
+        null;
+    const revisionMetadata = resolveControlPlaneSnapshotRevisionMetadata(
+      {
+        topologySnapshotEpoch:
+          topologySnapshotMeta?.topologyEpoch ??
+          bootstrapResponse?.currentEpoch?.epoch ??
+          null,
+        capturedAt: nowMs,
+      },
+    );
     if (typeof this.delegates.setBootstrapTopologySnapshotMeta ===
         TYPEOF.FUNCTION) {
       this.delegates.setBootstrapTopologySnapshotMeta(
-        bootstrapResponse?.topologySnapshotMeta || null,
+        topologySnapshotMeta ?
+          {
+            ...topologySnapshotMeta,
+            snapshotRevision: revisionMetadata.revision,
+            snapshotRevisionSource: revisionMetadata.revisionSource,
+            snapshotResumeToken: revisionMetadata.resumeToken,
+            snapshotObservedAt: revisionMetadata.observedAt,
+            snapshotObservedAtMs: revisionMetadata.observedAtMs,
+          } :
+          null,
       );
     }
     if (typeof this.delegates.setBootstrapTopologySnapshotHydratedAtMs ===
         TYPEOF.FUNCTION) {
-      const now = typeof this.delegates.getNow === TYPEOF.FUNCTION ?
-        this.delegates.getNow() :
-        Date.now;
       this.delegates.setBootstrapTopologySnapshotHydratedAtMs(
-        typeof now === TYPEOF.FUNCTION ? now() : Date.now(),
+        nowMs,
       );
     }
   }

@@ -33,6 +33,16 @@ scope that makes this work package valid without a roadmap change.
 2. File or subsystem
 3. File or subsystem
 
+## Shared Boundary Contract
+
+Required when adding or reshaping a shared runtime boundary.
+
+- Semantic owner:
+- Canonical contract shape / vocabulary:
+- Allowed consumers:
+- Prohibited reinterpretations:
+- Primary diagnostics / proof surfaces:
+
 ## Detection / Analysis Tasks
 
 - [ ] Build the concern inventory.
@@ -47,6 +57,14 @@ scope that makes this work package valid without a roadmap change.
 - [ ] Collapse to one canonical owner path.
 - [ ] Remove or wrap parallel paths.
 - [ ] Tighten static guardrails.
+
+## Residual Closure Inventory
+
+- [ ] Owner-path cutovers are complete.
+- [ ] Tail consumers are cut over.
+- [ ] Diagnostics, admin, and reporting surfaces match the new contract.
+- [ ] Superseded paths, booleans, or vocabulary are deleted.
+- [ ] Required proof layers are complete.
 
 ## Validation
 

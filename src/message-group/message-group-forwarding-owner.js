@@ -9,6 +9,8 @@ import {
 } from '../constants/index.js';
 import {getSystemCachePrimaryKeyFieldOrFallback} from
   '../cache/system-cache-key-descriptor.js';
+import {resolveCdcPropagationDeliveryProfile} from
+  '../cache/cdc-propagation-delivery-profile.js';
 import {ControlPlaneField} from '../control-plane/control-plane-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -16,8 +18,12 @@ import {
 import {
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
+import {
+  INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
@@ -26,44 +32,42 @@ import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from './constants.js';
 import {
+  resolveMessageGroupForwardServiceCandidatesFromCache,
   resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
 } from './message-group-target-resolver.js';
+import {createMessageGroupForwardingOwnerDeliveryMethods} from
+  './message-group-forwarding-owner-delivery-methods.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+
 const MESSAGE_GROUP_FORWARDING_OWNER_LITERAL = Object.freeze({
-  AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED: "Authoritative message-group forward topology repair failed",
-  BACKGROUND: "background",
-  CDC_FORWARD_TO_LEADER_REJECTED: "CDC forward to leader rejected",
-  CLOSED: "closed",
-  CONNECTION_TO_NODE: "Connection to node",
-  CRITICAL: "critical",
-  EAI_AGAIN: "EAI_AGAIN",
-  ECONNREFUSED: "ECONNREFUSED",
-  ENOTFOUND: "ENOTFOUND",
-  FORWARD_SLASH: "/",
-  IS_SATURATED: "is saturated",
-  MESSAGE_DASH_GROUP_DASH_SERVICE: "message-group-service",
-  METADATA_INGRESS: "metadata_ingress",
-  NO_CONNECTION_TO_NODE: "No connection to node",
-  NO_HANDLER_REGISTERED_FOR_ADDRESS: "No handler registered for address",
-  OUTBOUND_QUEUE_BACKPRESSURED: "OUTBOUND_QUEUE_BACKPRESSURED",
-  OUTBOUND_QUEUE_FOR_NODE: "Outbound queue for node",
-  REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS: "Repaired message-group forward topology from authoritative rows",
+  AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED:
+    'Authoritative message-group forward topology repair failed',
+  BACKGROUND: 'background',
+  CDC_FORWARD_TO_LEADER_REJECTED: 'CDC forward to leader rejected',
+  CLOSED: 'closed',
+  CONNECTION_TO_NODE: 'Connection to node',
+  CRITICAL: 'critical',
+  EAI_AGAIN: 'EAI_AGAIN',
+  ECONNREFUSED: 'ECONNREFUSED',
+  ENOTFOUND: 'ENOTFOUND',
+  FORWARD_SLASH: '/',
+  IS_SATURATED: 'is saturated',
+  MESSAGE_DASH_GROUP_DASH_SERVICE: 'message-group-service',
+  METADATA_INGRESS: 'metadata_ingress',
+  NO_CONNECTION_TO_NODE: 'No connection to node',
+  NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
+  OUTBOUND_QUEUE_BACKPRESSURED: 'OUTBOUND_QUEUE_BACKPRESSURED',
+  OUTBOUND_QUEUE_FOR_NODE: 'Outbound queue for node',
+  REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS:
+    'Repaired message-group forward topology from authoritative rows',
   ZERO: 0,
 });
-
 
 const STRICT_CDC_FORWARD_SYSTEM_TABLES = new Set(
   Object.values(SYSTEM_TABLE_NAME),
 );
-const BACKGROUND_CDC_FORWARD_SYSTEM_TABLES = new Set([
-  SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
-  SYSTEM_TABLE_NAME.NODES,
-  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
-  SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
-]);
-
 const FORWARD_TOPOLOGY_REPAIR_OUTCOME = Object.freeze({
   FAILED: 'failed',
   REPAIRED: 'repaired',
@@ -72,6 +76,73 @@ const FORWARD_TOPOLOGY_REPAIR_OUTCOME = Object.freeze({
 
 const MESSAGE_GROUP_FORWARDING_REASON = Object.freeze({
   INGRESS_NOT_INITIALIZED: 'message-group ingress not initialized',
+});
+
+const MESSAGE_GROUP_CDC_INGRESS_ACTION = Object.freeze({
+  APPLY_LOCAL: 'apply_local',
+  DEFER: 'defer',
+  FORWARD: 'forward',
+});
+
+const MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION = Object.freeze({
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+});
+
+const MESSAGE_GROUP_CDC_INGRESS_STATE = Object.freeze({
+  DEFER_INGRESS_NOT_INITIALIZED: 'defer_ingress_not_initialized',
+  DEFER_STRICT_TARGET_UNKNOWN: 'defer_strict_target_unknown',
+  FORWARD_NON_STRICT: 'forward_non_strict',
+  FORWARD_STRICT_RECOVERY_TARGET: 'forward_strict_recovery_target',
+  FORWARD_STRICT_TARGET: 'forward_strict_target',
+  LOCAL_RAFT_LEADER: 'local_raft_leader',
+  LOCAL_STRICT_CONVERGENCE_INGRESS: 'local_strict_convergence_ingress',
+  LOCAL_STRICT_RECOVERY_INGRESS: 'local_strict_recovery_ingress',
+});
+
+const MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE = Object.freeze({
+  LOCAL_ONLY: 'local_only',
+  NONE: 'none',
+  REMOTE_TARGETS_AVAILABLE: 'remote_targets_available',
+});
+
+const MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH = NUM.ONE;
+
+const MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE = Object.freeze({
+  NON_RETRYABLE_DEFER: 'non_retryable_defer',
+  RETRYABLE_DEFER: 'retryable_defer',
+});
+
+const MESSAGE_GROUP_LEADER_IDENTITY_SOURCE = Object.freeze({
+  CACHE_ROW: 'cache_row',
+  LIVE_LOCAL_LEADER: 'live_local_leader',
+  NONE: 'none',
+  PENDING_PUBLICATION: 'pending_publication',
+  PERSISTED_PUBLICATION: 'persisted_publication',
+});
+
+const MESSAGE_GROUP_LEADER_IDENTITY_STATE = Object.freeze({
+  CACHE_CONFIRMED: 'cache_confirmed',
+  LIVE_LOCAL_HINT: 'live_local_hint',
+  MISSING: 'missing',
+  PUBLICATION_PENDING: 'publication_pending',
+  PUBLICATION_PERSISTED: 'publication_persisted',
+});
+
+function buildMessageGroupLeaderIdentitySnapshot(
+  state,
+  source,
+  leaderNodeId,
+) {
+  return Object.freeze({
+    state,
+    source,
+    leaderNodeId,
+  });
+}
+
+const MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD = Object.freeze({
+  ADDRESSED_STRICT_CONVERGENCE: 'addressedStrictConvergence',
 });
 
 function extractCDCForwardPayloadRows(payload = null) {
@@ -85,34 +156,38 @@ function extractCDCForwardPayloadRows(payload = null) {
     .filter(Boolean);
 }
 
-function isCriticalPartitionServiceRow(row = null) {
-  const serviceType = String(
-    row?.[COLUMN.SERVICE_TYPE] ??
-    row?.service_type ??
-    row?.serviceType ??
-    '',
-  ).toLowerCase();
-  return serviceType === SERVICE_TYPE.PARTITION;
-}
-
 function resolveCDCForwardDeliveryPriority(
   tableName,
   payload = null,
   replayOnly = false,
 ) {
-  if (replayOnly === true) {
-    return MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND;
-  }
-  if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
-    const payloadRows = extractCDCForwardPayloadRows(payload);
-    return payloadRows.some((row) => isCriticalPartitionServiceRow(row)) ?
-      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CRITICAL :
-      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND;
-  }
-  return typeof tableName === TYPEOF.STRING &&
-    BACKGROUND_CDC_FORWARD_SYSTEM_TABLES.has(tableName) ?
-    MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.BACKGROUND :
-    MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CRITICAL;
+  const payloadRows = extractCDCForwardPayloadRows(payload);
+  const deliveryProfile = resolveCdcPropagationDeliveryProfile(
+    payloadRows.length > NUM.ZERO ?
+      payloadRows.map((row) => ({tableName, data: row})) :
+      [{tableName, data: null}],
+    {replayOnly},
+  );
+  return deliveryProfile.deliveryPriority;
+}
+
+function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
+  return {
+    queryTimeoutMs: service.forwardTopologyRepairQueryTimeoutMs,
+    sessionId:
+      `message-group-forward-topology:${service.groupId}:${service.now()}`,
+    routingReadinessDimension:
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    workloadClass: workloadProfile.workloadClass,
+    workClass: workloadProfile.workClass,
+    allowPressureDegrade: workloadProfile.allowPressureDegrade,
+    allowPressureDefer: workloadProfile.allowPressureDefer,
+    preferOwnerRpcRead: false,
+    requireOwnerRpcRead: false,
+    allowOwnerRpcFallback: false,
+    allowSqlFallback: false,
+    confirmEmptyLocalReadWithOwnerRpc: false,
+  };
 }
 
 class MessageGroupForwardingOwner {
@@ -251,13 +326,22 @@ class MessageGroupForwardingOwner {
         isConnectedNode,
       },
     );
+    const strictRecoveryRoutingContract = strictForwarding ?
+      this.resolveStrictCdcRecoveryRoutingContract(logContext) :
+      null;
+    const canonicalLeaderIdentity =
+      this.resolveCanonicalLeaderIdentityFromCache();
     const {
       targets,
       suppressedCount,
+      recoveryCandidateWidened,
     } = service.buildCDCForwardTargets(
       cacheLeaderService,
       cacheForwardService,
-      {strictForwarding},
+      {
+        strictForwarding,
+        strictRecoveryRoutingContract,
+      },
     );
 
     return {
@@ -265,16 +349,148 @@ class MessageGroupForwardingOwner {
       strictForwardRetryAfterMs,
       cacheLeaderService,
       cacheForwardService,
+      canonicalLeaderIdentity,
+      strictRecoveryRoutingContract,
+      recoveryCandidateWidened,
       targets,
       suppressedCount,
     };
   }
 
+  buildStrictCdcRecoveryRoutingContract(contract = {}) {
+    const routableNodeIds = [...new Set(
+      (Array.isArray(contract.routableNodeIds) ? contract.routableNodeIds : [])
+        .filter((nodeId) =>
+          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO),
+    )];
+    const forwardCandidates = Array.isArray(contract.forwardCandidates) ?
+      contract.forwardCandidates :
+      [];
+    const localSystemTableWriteAvailable =
+      contract.localSystemTableWriteAvailable === true;
+    const remoteForwardCandidates = forwardCandidates.filter((candidate) => {
+      return candidate?.[COLUMN.NODE_ID] !== this.service.nodeId;
+    });
+    const state = remoteForwardCandidates.length > NUM.ZERO ?
+      MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.REMOTE_TARGETS_AVAILABLE :
+      localSystemTableWriteAvailable ?
+        MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY :
+        MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.NONE;
+    return Object.freeze({
+      state,
+      partitionId:
+        typeof contract.partitionId === TYPEOF.STRING &&
+          contract.partitionId.length > NUM.ZERO ?
+          contract.partitionId :
+          null,
+      routingSnapshot:
+        contract.routingSnapshot && typeof contract.routingSnapshot === TYPEOF.OBJECT ?
+          contract.routingSnapshot :
+          null,
+      routableNodeIds,
+      localSystemTableWriteAvailable,
+      forwardCandidates: remoteForwardCandidates,
+      recoveryCandidateWidening:
+        remoteForwardCandidates.length > NUM.ZERO ||
+        localSystemTableWriteAvailable,
+    });
+  }
+
+  resolveStrictCdcSystemTablePartitionId(tableName) {
+    const service = this.service;
+    const cdcIntegrationService = service.cdcIntegrationService || null;
+    if (typeof cdcIntegrationService?.resolveSystemTablePartitionIds ===
+        TYPEOF.FUNCTION) {
+      const partitionIds = cdcIntegrationService.resolveSystemTablePartitionIds(
+        tableName,
+      );
+      const partitionId = Array.isArray(partitionIds) ?
+        partitionIds[NUM.ZERO] :
+        null;
+      if (typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO) {
+        return partitionId;
+      }
+    }
+
+    const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
+    return typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO ?
+      partitionId :
+      null;
+  }
+
+  resolveStrictCdcRecoveryRoutingContract(logContext = {}) {
+    const service = this.service;
+    const tableName = typeof logContext?.tableName === TYPEOF.STRING &&
+      logContext.tableName.length > NUM.ZERO ?
+      logContext.tableName :
+      null;
+    if (!tableName || !STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName)) {
+      return this.buildStrictCdcRecoveryRoutingContract();
+    }
+
+    const cdcIntegrationService = service.cdcIntegrationService || null;
+    const partitionId = this.resolveStrictCdcSystemTablePartitionId(tableName);
+    const queryExecutor = cdcIntegrationService?.sqlQueryEngine?.queryExecutor || null;
+    let routingSnapshot = null;
+    if (partitionId &&
+        typeof queryExecutor?.getPartitionRoutingSnapshot === TYPEOF.FUNCTION) {
+      try {
+        routingSnapshot = queryExecutor.getPartitionRoutingSnapshot(
+          partitionId,
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        );
+      } catch (_error) {
+        routingSnapshot = null;
+      }
+    }
+
+    const routableNodeIdSet = new Set(
+      (Array.isArray(routingSnapshot?.routableServices) ?
+        routingSnapshot.routableServices :
+        [])
+        .map((candidate) => candidate?.[COLUMN.NODE_ID] || null)
+        .filter((nodeId) =>
+          typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO),
+    );
+    const forwardCandidates = resolveMessageGroupForwardServiceCandidatesFromCache(
+      service.systemTableCache,
+      service.groupId,
+      {
+        excludeServiceId: service.replicaId,
+        isConnectedNode: (nodeId) => this.isStrictForwardNodeConnected(nodeId),
+      },
+    ).filter((candidate) => {
+      if (routableNodeIdSet.size === NUM.ZERO) {
+        return false;
+      }
+      return routableNodeIdSet.has(candidate?.[COLUMN.NODE_ID] || null);
+    });
+
+    const localSystemTableWriteAvailable =
+      typeof cdcIntegrationService?.canWriteSystemTableLocally ===
+        TYPEOF.FUNCTION &&
+      cdcIntegrationService.canWriteSystemTableLocally(tableName) === true;
+
+    return this.buildStrictCdcRecoveryRoutingContract({
+      partitionId,
+      routingSnapshot,
+      routableNodeIds: [...routableNodeIdSet],
+      forwardCandidates,
+      localSystemTableWriteAvailable,
+    });
+  }
+
   buildCDCForwardTargets(cacheLeaderService, cacheForwardService, options = {}) {
     const service = this.service;
     const strictForwarding = options.strictForwarding === true;
+    const strictRecoveryRoutingContract =
+      options.strictRecoveryRoutingContract &&
+      typeof options.strictRecoveryRoutingContract === TYPEOF.OBJECT ?
+        options.strictRecoveryRoutingContract :
+        this.buildStrictCdcRecoveryRoutingContract();
     const targets = [];
     let suppressedCount = NUM.ZERO;
+    let recoveryCandidateWidened = false;
     const targetsByServiceId = new Map();
     const addTarget = (serviceId, address = null) => {
       if (typeof serviceId !== TYPEOF.STRING ||
@@ -331,7 +547,19 @@ class MessageGroupForwardingOwner {
           addTarget(bootstrapTarget.serviceId, bootstrapTarget.address);
         }
       }
-      return {targets, suppressedCount};
+      if (targets.length === NUM.ZERO &&
+          strictRecoveryRoutingContract.state ===
+            MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.REMOTE_TARGETS_AVAILABLE) {
+        for (const recoveryCandidate of
+          strictRecoveryRoutingContract.forwardCandidates) {
+          addTarget(
+            recoveryCandidate?.[COLUMN.SERVICE_ID] || null,
+            recoveryCandidate?.[COLUMN.ADDRESS] || null,
+          );
+        }
+        recoveryCandidateWidened = targets.length > NUM.ZERO;
+      }
+      return {targets, suppressedCount, recoveryCandidateWidened};
     }
 
     addTarget(
@@ -350,7 +578,7 @@ class MessageGroupForwardingOwner {
       }
     }
 
-    return {targets, suppressedCount};
+    return {targets, suppressedCount, recoveryCandidateWidened};
   }
 
   shouldUseStrictCDCForwarding(logContext = {}) {
@@ -359,15 +587,63 @@ class MessageGroupForwardingOwner {
       STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName);
   }
 
-  shouldUseCanonicalLocalIngressForStrictCDC(selection = null) {
+  shouldAllowRelayedStrictConvergenceIngress(logContext = {}) {
+    const relayDepth = Number.isInteger(logContext?.relayDepth) &&
+      logContext.relayDepth >= NUM.ZERO ?
+      logContext.relayDepth :
+      NUM.ZERO;
+    return relayDepth >= MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH;
+  }
+
+  shouldAllowAddressedStrictConvergenceIngress(logContext = {}) {
+    return logContext?.[
+      MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE
+    ] === true;
+  }
+
+  buildAddressedStrictConvergenceContext(logContext = {}) {
+    return {
+      ...logContext,
+      [MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD.ADDRESSED_STRICT_CONVERGENCE]: true,
+    };
+  }
+
+  shouldUseCanonicalLocalIngressForStrictCDC(
+    selection = null,
+    logContext = {},
+  ) {
     const service = this.service;
+    if (selection?.strictForwarding !== true) {
+      return false;
+    }
+
+    if (selection?.strictRecoveryRoutingContract?.state ===
+          MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY &&
+        Array.isArray(selection?.targets) &&
+        selection.targets.length === NUM.ZERO) {
+      return true;
+    }
+
     const allowMetadataPublicationConvergenceIngress =
       typeof service.isMetadataPublicationConvergenceWindowOpen ===
         TYPEOF.FUNCTION &&
       service.isMetadataPublicationConvergenceWindowOpen() === true;
-    if (selection?.strictForwarding !== true ||
-        (service.shouldAllowJoinConvergenceStrictTargeting() !== true &&
-          !allowMetadataPublicationConvergenceIngress)) {
+    const allowRelayedStrictConvergenceIngress =
+      this.shouldAllowRelayedStrictConvergenceIngress(logContext);
+    const allowAddressedStrictConvergenceIngress =
+      this.shouldAllowAddressedStrictConvergenceIngress(logContext);
+    // Once strict CDC has already been relayed to this addressed replica,
+    // re-running stale competing-target selection just reopens the same loop.
+    // At that point the addressed local ingress is the canonical bounded
+    // convergence path until leader metadata catches up.
+    if (allowRelayedStrictConvergenceIngress ||
+        allowAddressedStrictConvergenceIngress) {
+      return true;
+    }
+    if (service.shouldAllowJoinConvergenceStrictTargeting() !== true &&
+        !allowMetadataPublicationConvergenceIngress &&
+        !allowRelayedStrictConvergenceIngress &&
+        !allowAddressedStrictConvergenceIngress) {
       return false;
     }
 
@@ -390,12 +666,15 @@ class MessageGroupForwardingOwner {
     // needed to make ingress "ready" can only arrive through this strict path.
     // Seed/bootstrap convergence can hit the same self-deadlock while leader
     // metadata is still incomplete but lifecycle publication is already open.
+    // Relayed strict CDC needs the same bounded local-ingress escape hatch once
+    // another replica has already selected this addressed target.
     if (Array.isArray(selection?.targets) &&
         selection.targets.length === NUM.ZERO) {
       return true;
     }
 
-    return service.resolveCanonicalLeaderNodeIdFromCache() === service.nodeId;
+    return this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId ===
+      service.nodeId;
   }
 
   buildIngressReadinessResult(
@@ -424,6 +703,313 @@ class MessageGroupForwardingOwner {
     };
   }
 
+  buildCdcIngressDecision(decision = {}) {
+    const strictForwardRetryAfterMs = Number.isFinite(
+      decision.strictForwardRetryAfterMs,
+    ) ?
+      decision.strictForwardRetryAfterMs :
+      NUM.ZERO;
+    const normalizedDecision = {
+      action: decision.action,
+      state: decision.state,
+      ready: decision.ready === true,
+      strictForwarding: decision.strictForwarding === true,
+      strictForwardRetryAfterMs,
+      cacheLeaderService: decision.cacheLeaderService || null,
+      cacheForwardService: decision.cacheForwardService || null,
+      canonicalLeaderNodeId:
+        decision?.canonicalLeaderIdentity?.leaderNodeId || null,
+      canonicalLeaderIdentityState:
+        decision?.canonicalLeaderIdentity?.state || null,
+      canonicalLeaderIdentitySource:
+        decision?.canonicalLeaderIdentity?.source || null,
+      targets: Array.isArray(decision.targets) ? decision.targets : [],
+      suppressedCount: Number.isInteger(decision.suppressedCount) ?
+        decision.suppressedCount :
+        NUM.ZERO,
+      localIngress: decision.localIngress === true,
+      recoveryCandidateWidening: decision.recoveryCandidateWidening === true,
+      strictRecoveryRoutingState:
+        typeof decision.strictRecoveryRoutingState === TYPEOF.STRING &&
+          decision.strictRecoveryRoutingState.length > NUM.ZERO ?
+          decision.strictRecoveryRoutingState :
+          null,
+      shouldRepairAuthoritativeTopology:
+        decision.shouldRepairAuthoritativeTopology === true,
+    };
+    if (typeof decision.reason === TYPEOF.STRING &&
+        decision.reason.length > NUM.ZERO) {
+      normalizedDecision.reason = decision.reason;
+    }
+    return normalizedDecision;
+  }
+
+  buildIngressReadinessFromDecision(decision = {}) {
+    const includeRetryAfterMs =
+      decision.ready !== true || decision.localIngress === true;
+    return this.buildIngressReadinessResult(
+      decision.ready === true,
+      decision.reason || null,
+      includeRetryAfterMs === true ?
+        decision.strictForwardRetryAfterMs :
+        undefined,
+      {
+        ...(decision.localIngress === true ? {localIngress: true} : {}),
+        canonicalLeaderNodeId: decision.canonicalLeaderNodeId || null,
+        canonicalLeaderIdentityState:
+          decision.canonicalLeaderIdentityState || null,
+        canonicalLeaderIdentitySource:
+          decision.canonicalLeaderIdentitySource || null,
+      },
+    );
+  }
+
+  resolveForwardRetryAfterMs(baseRetryAfterMs, errorLike = null) {
+    const normalizedBaseRetryAfterMs = Number.isFinite(baseRetryAfterMs) &&
+      baseRetryAfterMs > NUM.ZERO ?
+      Math.floor(baseRetryAfterMs) :
+      NUM.ZERO;
+    const boundedErrorRetryAfterMs = Number.isFinite(errorLike?.retryAfterMs) &&
+      errorLike.retryAfterMs > NUM.ZERO ?
+      Math.floor(errorLike.retryAfterMs) :
+      NUM.ZERO;
+    return Math.max(normalizedBaseRetryAfterMs, boundedErrorRetryAfterMs);
+  }
+
+  isRetryableForwardDeliveryFailure(deliveryResult = null, errorMessage = null) {
+    const normalizedErrorMessage = typeof errorMessage === TYPEOF.STRING ?
+      errorMessage :
+      '';
+    if (deliveryResult?.deferRetry === true) {
+      return true;
+    }
+    return this.service.isForwardTargetBackpressured(
+      deliveryResult,
+      normalizedErrorMessage,
+    ) ||
+      normalizedErrorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
+      normalizedErrorMessage.includes(
+        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
+      ) ||
+      normalizedErrorMessage.includes(
+        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.EAI_AGAIN,
+      ) ||
+      normalizedErrorMessage.includes(
+        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ECONNREFUSED,
+      ) ||
+      normalizedErrorMessage.includes(
+        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_CONNECTION_TO_NODE,
+      ) ||
+      (
+        normalizedErrorMessage.includes(
+          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CONNECTION_TO_NODE,
+        ) &&
+        normalizedErrorMessage.includes(
+          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CLOSED,
+        )
+      );
+  }
+
+  resolveForwardFailureState(deliveryResult = null, errorLike = null) {
+    const errorMessage = typeof errorLike?.message === TYPEOF.STRING ?
+      errorLike.message :
+      typeof errorLike === TYPEOF.STRING ?
+        errorLike :
+        null;
+    if (errorLike?.deferRetry === true ||
+        this.isRetryableForwardDeliveryFailure(
+          deliveryResult,
+          errorMessage,
+        )) {
+      return MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.RETRYABLE_DEFER;
+    }
+    return MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.NON_RETRYABLE_DEFER;
+  }
+
+  buildStrictForwardError(message, retryAfterMs, options = {}) {
+    const error = this.buildDeferredCdcForwardError(message, retryAfterMs);
+    if (options.failureState ===
+        MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE.RETRYABLE_DEFER) {
+      error.retryable = true;
+    }
+    if (typeof options.code === TYPEOF.STRING &&
+        options.code.length > NUM.ZERO) {
+      error.code = options.code;
+    }
+    return error;
+  }
+
+  requestAuthoritativeTopologyRepair(
+    decision = {},
+    logContext = {},
+  ) {
+    if (decision.shouldRepairAuthoritativeTopology !== true) {
+      return;
+    }
+    void this.service.maybeRepairAuthoritativeForwardTopology({
+      errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      tableName: logContext?.tableName || null,
+      operation: logContext?.operation || null,
+    });
+  }
+
+  async resolveCdcIngressDecisionWithRepair(
+    logContext = {},
+    options = {},
+  ) {
+    let decision = this.resolveCdcIngressDecision(logContext, options);
+    if (decision.shouldRepairAuthoritativeTopology !== true) {
+      return decision;
+    }
+
+    await this.service.maybeRepairAuthoritativeForwardTopology({
+      errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      tableName: logContext?.tableName || null,
+      operation: logContext?.operation || null,
+    });
+    decision = this.resolveCdcIngressDecision(logContext, options);
+    return decision;
+  }
+
+  resolveCdcIngressDecision(logContext = {}, options = {}) {
+    const service = this.service;
+    const tableName = typeof logContext?.tableName === TYPEOF.STRING &&
+      logContext.tableName.length > NUM.ZERO ?
+      logContext.tableName :
+      null;
+    const operation = typeof logContext?.operation === TYPEOF.STRING &&
+      logContext.operation.length > NUM.ZERO ?
+      logContext.operation :
+      null;
+    const initializationRequirement =
+      options.initializationRequirement ===
+        MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED ?
+        MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED :
+        MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.OPTIONAL;
+    const strictForwarding = service.shouldUseStrictCDCForwarding({
+      tableName,
+      operation,
+    });
+    const strictForwardRetryAfterMs = strictForwarding === true ?
+      service.resolveStrictCdcForwardRetryAfterMs() :
+      NUM.ZERO;
+
+    if (initializationRequirement ===
+          MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED &&
+        service.initialized !== true) {
+      return this.buildCdcIngressDecision({
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
+        state:
+          MESSAGE_GROUP_CDC_INGRESS_STATE.DEFER_INGRESS_NOT_INITIALIZED,
+        ready: false,
+        reason: MESSAGE_GROUP_FORWARDING_REASON.INGRESS_NOT_INITIALIZED,
+        strictForwarding,
+        strictForwardRetryAfterMs:
+          service.resolveStrictCdcForwardRetryAfterMs(),
+      });
+    }
+
+    if (service.isCurrentRaftLeader()) {
+      return this.buildCdcIngressDecision({
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL,
+        state: MESSAGE_GROUP_CDC_INGRESS_STATE.LOCAL_RAFT_LEADER,
+        ready: true,
+        strictForwarding,
+        strictForwardRetryAfterMs,
+        canonicalLeaderIdentity:
+          this.resolveCanonicalLeaderIdentityFromCache(),
+      });
+    }
+
+    const selection = service.resolveCDCForwardSelection({
+      tableName,
+      operation,
+    });
+    const resolvedStrictForwardRetryAfterMs = Number.isFinite(
+      selection.strictForwardRetryAfterMs,
+    ) ?
+      selection.strictForwardRetryAfterMs :
+      strictForwardRetryAfterMs;
+    if (selection.strictForwarding !== true) {
+      return this.buildCdcIngressDecision({
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
+        state: MESSAGE_GROUP_CDC_INGRESS_STATE.FORWARD_NON_STRICT,
+        ready: true,
+        strictForwarding: false,
+        strictForwardRetryAfterMs: resolvedStrictForwardRetryAfterMs,
+        cacheLeaderService: selection.cacheLeaderService,
+        cacheForwardService: selection.cacheForwardService,
+        canonicalLeaderIdentity: selection.canonicalLeaderIdentity,
+        targets: selection.targets,
+        suppressedCount: selection.suppressedCount,
+      });
+    }
+
+    if (this.shouldUseCanonicalLocalIngressForStrictCDC(
+      selection,
+      logContext,
+    )) {
+      const strictRecoveryRoutingState =
+        selection?.strictRecoveryRoutingContract?.state || null;
+      return this.buildCdcIngressDecision({
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL,
+        state: strictRecoveryRoutingState ===
+            MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY ?
+          MESSAGE_GROUP_CDC_INGRESS_STATE.LOCAL_STRICT_RECOVERY_INGRESS :
+          MESSAGE_GROUP_CDC_INGRESS_STATE.LOCAL_STRICT_CONVERGENCE_INGRESS,
+        ready: true,
+        strictForwarding: true,
+        strictForwardRetryAfterMs: resolvedStrictForwardRetryAfterMs,
+        cacheLeaderService: selection.cacheLeaderService,
+        cacheForwardService: selection.cacheForwardService,
+        canonicalLeaderIdentity: selection.canonicalLeaderIdentity,
+        targets: selection.targets,
+        suppressedCount: selection.suppressedCount,
+        localIngress: true,
+        recoveryCandidateWidening:
+          selection?.strictRecoveryRoutingContract?.recoveryCandidateWidening ===
+            true,
+        strictRecoveryRoutingState,
+      });
+    }
+
+    if (selection.targets.length > NUM.ZERO) {
+      const strictRecoveryRoutingState =
+        selection?.strictRecoveryRoutingContract?.state || null;
+      return this.buildCdcIngressDecision({
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
+        state: selection.recoveryCandidateWidened === true ?
+          MESSAGE_GROUP_CDC_INGRESS_STATE.FORWARD_STRICT_RECOVERY_TARGET :
+          MESSAGE_GROUP_CDC_INGRESS_STATE.FORWARD_STRICT_TARGET,
+        ready: true,
+        strictForwarding: true,
+        strictForwardRetryAfterMs: resolvedStrictForwardRetryAfterMs,
+        cacheLeaderService: selection.cacheLeaderService,
+        cacheForwardService: selection.cacheForwardService,
+        canonicalLeaderIdentity: selection.canonicalLeaderIdentity,
+        targets: selection.targets,
+        suppressedCount: selection.suppressedCount,
+        recoveryCandidateWidening: selection.recoveryCandidateWidened === true,
+        strictRecoveryRoutingState,
+      });
+    }
+
+    return this.buildCdcIngressDecision({
+      action: MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
+      state: MESSAGE_GROUP_CDC_INGRESS_STATE.DEFER_STRICT_TARGET_UNKNOWN,
+      ready: false,
+      reason: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      strictForwarding: true,
+      strictForwardRetryAfterMs: resolvedStrictForwardRetryAfterMs,
+      cacheLeaderService: selection.cacheLeaderService,
+      cacheForwardService: selection.cacheForwardService,
+      canonicalLeaderIdentity: selection.canonicalLeaderIdentity,
+      targets: selection.targets,
+      suppressedCount: selection.suppressedCount,
+      shouldRepairAuthoritativeTopology: true,
+    });
+  }
+
   buildForwardTopologyRepairOutcome(repaired, outcome) {
     return {
       repaired,
@@ -432,43 +1018,9 @@ class MessageGroupForwardingOwner {
   }
 
   canAcceptCDCEvent(cdcEvent = {}) {
-    const service = this.service;
-    if (service.isCurrentRaftLeader()) {
-      return this.buildIngressReadinessResult(true);
-    }
-
-    const selection = service.resolveCDCForwardSelection({
-      tableName: cdcEvent?.tableName || null,
-      operation: cdcEvent?.operation || null,
-    });
-    if (!selection.strictForwarding) {
-      return this.buildIngressReadinessResult(true);
-    }
-    if (this.shouldUseCanonicalLocalIngressForStrictCDC(selection)) {
-      return this.buildIngressReadinessResult(
-        true,
-        null,
-        selection.strictForwardRetryAfterMs,
-        {
-          localIngress: true,
-        },
-      );
-    }
-    if (selection.targets.length > NUM.ZERO) {
-      return this.buildIngressReadinessResult(true);
-    }
-
-    void service.maybeRepairAuthoritativeForwardTopology({
-      errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-      tableName: cdcEvent?.tableName || null,
-      operation: cdcEvent?.operation || null,
-    });
-
-    return this.buildIngressReadinessResult(
-      false,
-      MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-      selection.strictForwardRetryAfterMs,
-    );
+    const decision = this.resolveCdcIngressDecision(cdcEvent);
+    this.requestAuthoritativeTopologyRepair(decision, cdcEvent);
+    return this.buildIngressReadinessFromDecision(decision);
   }
 
   getMetadataIngressReadiness(options = {}) {
@@ -500,8 +1052,25 @@ class MessageGroupForwardingOwner {
 
     let retryAfterMs = NUM.ZERO;
     for (const tableName of requiredTables) {
-      const readiness = service.canAcceptCDCEvent({tableName});
-      if (readiness.ready !== true) {
+      const decision = this.resolveCdcIngressDecision(
+        {
+          tableName,
+          operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
+        },
+        {
+          initializationRequirement:
+            MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED,
+        },
+      );
+      this.requestAuthoritativeTopologyRepair(
+        decision,
+        {
+          tableName,
+          operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
+        },
+      );
+      const readiness = this.buildIngressReadinessFromDecision(decision);
+      if (decision.ready !== true) {
         return this.buildIngressReadinessResult(
           false,
           readiness.reason ||
@@ -524,7 +1093,6 @@ class MessageGroupForwardingOwner {
   }
 
   async resolveMetadataIngressForwardSelection(options = {}) {
-    const service = this.service;
     const requiredTables = [...new Set(
       (Array.isArray(options.requiredTables) ? options.requiredTables : [])
         .filter((tableName) =>
@@ -544,41 +1112,17 @@ class MessageGroupForwardingOwner {
       });
     }
 
-    let selection = service.resolveCDCForwardSelection({
-      tableName,
-      operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
-    });
-    if (selection.strictForwarding === true &&
-        selection.targets.length === NUM.ZERO) {
-      await service.maybeRepairAuthoritativeForwardTopology({
-        errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+    const decision = await this.resolveCdcIngressDecisionWithRepair(
+      {
         tableName,
         operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
-      });
-      selection = service.resolveCDCForwardSelection({
-        tableName,
-        operation: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.METADATA_INGRESS,
-      });
-    }
-    if (selection.strictForwarding === true &&
-        selection.targets.length === NUM.ZERO) {
-      const readiness = service.canAcceptCDCEvent({
-        tableName,
-        operation: 'metadata_ingress',
-      });
-      if (readiness?.ready === true && readiness?.localIngress === true) {
-        return this.buildMetadataForwardSelectionResult(
-          selection,
-          {
-            localIngress: true,
-            strictForwardRetryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
-              readiness.retryAfterMs :
-              selection.strictForwardRetryAfterMs,
-          },
-        );
-      }
-    }
-    return selection;
+      },
+      {
+        initializationRequirement:
+          MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION.REQUIRED,
+      },
+    );
+    return this.buildMetadataForwardSelectionResult(decision);
   }
 
   async forwardMetadataIngressPayloadToLeader(payload, options = {}) {
@@ -689,7 +1233,8 @@ class MessageGroupForwardingOwner {
       return null;
     }
 
-    const leaderNodeId = service.resolveCanonicalLeaderNodeIdFromCache();
+    const leaderNodeId =
+      this.resolveCanonicalLeaderIdentityFromCache().leaderNodeId;
     if (typeof leaderNodeId !== TYPEOF.STRING ||
         leaderNodeId.length === NUM.ZERO) {
       return null;
@@ -717,724 +1262,47 @@ class MessageGroupForwardingOwner {
 
     return null;
   }
-
-  resolveCanonicalLeaderNodeIdFromCache() {
-    const service = this.service;
-    if (!service.systemTableCache ||
-        typeof service.systemTableCache.get !== TYPEOF.FUNCTION) {
-      return null;
-    }
-
-    const group = service.systemTableCache.get(TABLES.MESSAGE_GROUPS, service.groupId);
-    const leaderNodeId =
-      group?.[COLUMN.LEADER_NODE_ID] ||
-      group?.leader_node_id ||
-      group?.leaderNodeId ||
-      null;
-    return typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO ?
-      leaderNodeId :
-      null;
-  }
-
-  isLocalForwardTarget(serviceId, address = null) {
-    const service = this.service;
-    if (typeof address === TYPEOF.STRING && address.length > NUM.ZERO) {
-      if (address === service.unifiedAddress) {
-        return true;
-      }
-      try {
-        const parsed = service.addressManager.parse(address);
-        return parsed?.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
-          parsed?.serviceId === service.replicaId &&
-          parsed?.nodeId === service.nodeId;
-      } catch (_error) {
-        // Ignore malformed addresses and fall back to service-id-only logic.
-      }
-    }
-
-    return typeof serviceId === TYPEOF.STRING &&
-      serviceId.length > NUM.ZERO &&
-      serviceId === service.replicaId;
-  }
-
-  resolveForwardTargetNodeId(target = null) {
-    const service = this.service;
-    const targetAddress = typeof target?.address === TYPEOF.STRING &&
-      target.address.length > NUM.ZERO ?
-      target.address :
-      service.resolvePeerAddressFromCache(target?.serviceId || null);
-
-    if (typeof targetAddress === TYPEOF.STRING &&
-        targetAddress.length > NUM.ZERO) {
-      try {
-        const parsed = service.addressManager.parse(targetAddress);
-        if (typeof parsed?.nodeId === TYPEOF.STRING &&
-            parsed.nodeId.length > NUM.ZERO) {
-          return parsed.nodeId;
-        }
-      } catch (_error) {
-        // Ignore malformed or stale addresses and fall through to cache rows.
-      }
-    }
-
-    const cache = service.systemTableCache;
-    if (!cache || typeof cache.get !== TYPEOF.FUNCTION) {
-      return null;
-    }
-    const serviceRow = cache.get(TABLES.SERVICES, target?.serviceId || null);
-    const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
-    return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
-      nodeId :
-      null;
-  }
-
-  isStrictForwardNodeReady(nodeId) {
-    const service = this.service;
-    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
-      return false;
-    }
-
-    const cache = service.systemTableCache;
-    if (!cache) {
-      return true;
-    }
-
-    if (typeof cache.getReadyNodes === TYPEOF.FUNCTION) {
-      const readyNodes = cache.getReadyNodes();
-      if (Array.isArray(readyNodes)) {
-        return readyNodes.includes(nodeId);
-      }
-    }
-
-    const allNodeRows = typeof cache.getAll === TYPEOF.FUNCTION ?
-      cache.getAll(TABLES.NODES) || [] :
-      typeof cache.filter === TYPEOF.FUNCTION ?
-        cache.filter(TABLES.NODES, () => true) || [] :
-        [];
-    if (!Array.isArray(allNodeRows) || allNodeRows.length === NUM.ZERO) {
-      return true;
-    }
-
-    const nodeRow = typeof cache.get === TYPEOF.FUNCTION ?
-      cache.get(TABLES.NODES, nodeId) :
-      allNodeRows.find((row) => row?.[COLUMN.NODE_ID] === nodeId) || null;
-    if (!nodeRow) {
-      return false;
-    }
-
-    const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
-    return nodeRow?.[COLUMN.CONNECTION_STATE] === STATE.READY &&
-      Number.isFinite(readyLeaseExpiresAt) &&
-      readyLeaseExpiresAt > Date.now();
-  }
-
-  isStrictForwardNodeConnected(nodeId) {
-    const service = this.service;
-    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
-      return false;
-    }
-    if (nodeId === service.nodeId) {
-      return true;
-    }
-
-    if (typeof service.transport?.getConnectionState !== TYPEOF.FUNCTION) {
-      return true;
-    }
-
-    return service.transport.getConnectionState(nodeId) === STATE.CONNECTED;
-  }
-
-  getForwardTargetSuppressionKeys(target = {}) {
-    const keys = [];
-    if (typeof target.serviceId === TYPEOF.STRING &&
-        target.serviceId.length > NUM.ZERO) {
-      keys.push(`service:${target.serviceId}`);
-    }
-    if (typeof target.address === TYPEOF.STRING &&
-        target.address.length > NUM.ZERO) {
-      keys.push(`address:${target.address}`);
-    }
-    return keys;
-  }
-
-  pruneForwardTargetSuppressions(nowMs = this.service.now()) {
-    for (const [key, expiresAt] of this.forwardTargetSuppression.entries()) {
-      if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
-        this.forwardTargetSuppression.delete(key);
-      }
-    }
-  }
-
-  isForwardTargetSuppressed(target = {}) {
-    const nowMs = this.service.now();
-    this.pruneForwardTargetSuppressions(nowMs);
-    return this.getForwardTargetSuppressionKeys(target).some((key) => {
-      const expiresAt = this.forwardTargetSuppression.get(key);
-      return Number.isFinite(expiresAt) && expiresAt > nowMs;
-    });
-  }
-
-  suppressForwardTarget(target = {}) {
-    const service = this.service;
-    const suppressionMs = Number.isFinite(service.forwardTargetSuppressionMs) &&
-      service.forwardTargetSuppressionMs > NUM.ZERO ?
-      Math.floor(service.forwardTargetSuppressionMs) :
-      NUM.ZERO;
-    if (suppressionMs <= NUM.ZERO) {
-      return;
-    }
-    const expiresAt = service.now() + suppressionMs;
-    for (const key of this.getForwardTargetSuppressionKeys(target)) {
-      this.forwardTargetSuppression.set(key, expiresAt);
-    }
-  }
-
-  clearForwardTargetSuppression(target = {}) {
-    for (const key of this.getForwardTargetSuppressionKeys(target)) {
-      this.forwardTargetSuppression.delete(key);
-    }
-  }
-
-  shouldRepairForwardTopology(errorMessage) {
-    return typeof errorMessage === TYPEOF.STRING &&
-      errorMessage.includes(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-  }
-
-  canRepairAuthoritativeForwardTopology() {
-    const service = this.service;
-    const gateway = service.getControlPlaneSystemTableGateway();
-    return Boolean(
-      service.systemTableCache &&
-      typeof service.systemTableCache.applySystemTableChange === TYPEOF.FUNCTION &&
-      gateway &&
-      typeof gateway.executeRead === TYPEOF.FUNCTION,
-    );
-  }
-
-  async maybeRepairAuthoritativeForwardTopology(context = {}) {
-    const service = this.service;
-    if (!service.canRepairAuthoritativeForwardTopology()) {
-      return false;
-    }
-
-    if (this.forwardTopologyRepairInFlight) {
-      return this.forwardTopologyRepairInFlight;
-    }
-
-    const nowMs = service.now();
-    if ((nowMs - this.lastForwardTopologyRepairAtMs) <
-      this.lastForwardTopologyRepairCooldownMs) {
-      return false;
-    }
-
-    this.forwardTopologyRepairInFlight = (async () => {
-      try {
-        const repairResult =
-          await service.repairAuthoritativeForwardTopology(context);
-        if (repairResult.repaired === true) {
-          this.lastForwardTopologyRepairCooldownMs =
-            service.forwardTopologyRepairCooldownMs;
-        } else if (
-          repairResult.outcome ===
-            FORWARD_TOPOLOGY_REPAIR_OUTCOME.UNCHANGED
-        ) {
-          this.lastForwardTopologyRepairCooldownMs =
-            service.forwardTopologyRepairNoChangeCooldownMs;
-        } else {
-          this.lastForwardTopologyRepairCooldownMs =
-            service.forwardTopologyRepairFailureCooldownMs;
-        }
-        return repairResult.repaired === true;
-      } catch (error) {
-        this.lastForwardTopologyRepairCooldownMs =
-          service.forwardTopologyRepairFailureCooldownMs;
-        service.logger.warn(
-          MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.AUTHORITATIVE_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_REPAIR_FAILED,
-          {
-            groupId: service.groupId,
-            replicaId: service.replicaId,
-            staleServiceId: context?.serviceId || null,
-            staleAddress: context?.address || null,
-            error: error?.message || String(error),
-          },
-        );
-        return false;
-      } finally {
-        this.lastForwardTopologyRepairAtMs = service.now();
-        this.forwardTopologyRepairInFlight = null;
-      }
-    })();
-
-    return this.forwardTopologyRepairInFlight;
-  }
-
-  async repairAuthoritativeForwardTopology(context = {}) {
-    const service = this.service;
-    const gateway = service.getControlPlaneSystemTableGateway();
-    if (!gateway || typeof gateway.executeRead !== TYPEOF.FUNCTION) {
-      return this.buildForwardTopologyRepairOutcome(
-        false,
-        FORWARD_TOPOLOGY_REPAIR_OUTCOME.FAILED,
-      );
-    }
-    const sessionId =
-      `message-group-forward-topology:${service.groupId}:${service.now()}`;
-    const readOptions = {
-      queryTimeoutMs: service.forwardTopologyRepairQueryTimeoutMs,
-      sessionId,
-      routingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-    };
-    const [groupResult, serviceResult] = await Promise.all([
-      gateway.executeRead(
-        {
-          tableName: TABLES.MESSAGE_GROUPS,
-          sql: `SELECT * FROM ${TABLES.MESSAGE_GROUPS} WHERE ${COLUMN.GROUP_ID} = ?`,
-          params: [service.groupId],
-          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-          owner: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.MESSAGE_DASH_GROUP_DASH_SERVICE,
-        },
-        readOptions,
-      ),
-      gateway.executeRead(
-        {
-          tableName: TABLES.SERVICES,
-          sql: `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.GROUP_ID} = ? ` +
-            `AND ${COLUMN.SERVICE_TYPE} = ?`,
-          params: [service.groupId, SERVICE_TYPE.MESSAGE_GROUP],
-          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-          owner: MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.MESSAGE_DASH_GROUP_DASH_SERVICE,
-        },
-        readOptions,
-      ),
-    ]);
-
-    const groupRows = groupResult?.success === true &&
-      Array.isArray(groupResult.rows) ?
-      groupResult.rows :
-      [];
-    const serviceRows = serviceResult?.success === true &&
-      Array.isArray(serviceResult.rows) ?
-      serviceResult.rows :
-      [];
-    const nodeIds = [...new Set(serviceRows
-      .map((row) => row?.[COLUMN.NODE_ID] || row?.node_id || null)
-      .filter((nodeId) => {
-        return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
-      }))];
-
-    let nodeRows = [];
-    if (nodeIds.length > NUM.ZERO) {
-      const placeholders = nodeIds.map(() => '?').join(', ');
-      const nodeResult = await gateway.executeRead(
-        {
-          tableName: TABLES.NODES,
-          sql: `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} IN (${placeholders})`,
-          params: nodeIds,
-          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
-          owner: 'message-group-service',
-        },
-        readOptions,
-      );
-      if (nodeResult?.success === true && Array.isArray(nodeResult.rows)) {
-        nodeRows = nodeResult.rows;
-      }
-    }
-
-    let repairedRowCount = NUM.ZERO;
-    repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
-      TABLES.MESSAGE_GROUPS,
-      groupRows,
-    );
-    repairedRowCount += await service.reconcileAuthoritativeForwardServiceRows(
-      serviceRows,
-    );
-    repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
-      TABLES.NODES,
-      nodeRows,
-    );
-
-    if (repairedRowCount > NUM.ZERO) {
-      service.logger.warn(
-        MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS,
-        {
-          groupId: service.groupId,
-          replicaId: service.replicaId,
-          staleServiceId: context?.serviceId || null,
-          staleAddress: context?.address || null,
-          repairedRowCount,
-          repairedGroupRowCount: groupRows.length,
-          repairedServiceRowCount: serviceRows.length,
-          repairedNodeRowCount: nodeRows.length,
-        },
-      );
-      return this.buildForwardTopologyRepairOutcome(
-        true,
-        FORWARD_TOPOLOGY_REPAIR_OUTCOME.REPAIRED,
-      );
-    }
-
-    return this.buildForwardTopologyRepairOutcome(
-      false,
-      FORWARD_TOPOLOGY_REPAIR_OUTCOME.UNCHANGED,
-    );
-  }
-
-  async applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
-    const service = this.service;
-    const gateway = service.getControlPlaneSystemTableGateway();
-    const cache = service.systemTableCache;
-    if (!cache || !gateway) {
-      return NUM.ZERO;
-    }
-    const result = await gateway.reconcileAuthoritativeCacheRows(tableName, rows, {
-      primaryKeyField: getSystemCachePrimaryKeyFieldOrFallback(tableName),
-      deleteMissing: false,
-      areRowsEqual: (left, right) =>
-        service.areForwardTopologyRowsEqual(left, right),
-      systemTableCache: cache,
-    });
-    return result?.mutationCount || NUM.ZERO;
-  }
-
-  async reconcileAuthoritativeForwardServiceRows(authoritativeRows = []) {
-    const service = this.service;
-    const gateway = service.getControlPlaneSystemTableGateway();
-    const cache = service.systemTableCache;
-    if (!cache || !gateway) {
-      return NUM.ZERO;
-    }
-    const cachedRows = typeof cache.filter === TYPEOF.FUNCTION ?
-      cache.filter(TABLES.SERVICES, (row) => {
-        return row?.[COLUMN.GROUP_ID] === service.groupId &&
-          row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
-      }) :
-      [];
-    const result = await gateway.reconcileAuthoritativeCacheRows(
-      TABLES.SERVICES,
-      authoritativeRows,
-      {
-        cachedRows,
-        areRowsEqual: (left, right) =>
-          service.areForwardTopologyRowsEqual(left, right),
-        systemTableCache: cache,
-      },
-    );
-    return result?.mutationCount || NUM.ZERO;
-  }
-
-  areForwardTopologyRowsEqual(left, right) {
-    if (!left || !right ||
-      typeof left !== TYPEOF.OBJECT ||
-      typeof right !== TYPEOF.OBJECT) {
-      return false;
-    }
-    const keys = new Set([
-      ...Object.keys(left),
-      ...Object.keys(right),
-    ]);
-    for (const key of keys) {
-      if (left[key] !== right[key]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  shouldSuppressForwardTarget(deliveryResult, errorMessage) {
-    if (typeof errorMessage !== TYPEOF.STRING || errorMessage.length === NUM.ZERO) {
-      return false;
-    }
-    return this.service.shouldRepairForwardTopology(errorMessage) ||
-      this.service.isForwardTargetBackpressured(deliveryResult, errorMessage) ||
-      errorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
-      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND) ||
-      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.EAI_AGAIN) ||
-      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ECONNREFUSED) ||
-      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_CONNECTION_TO_NODE) ||
-      (errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CONNECTION_TO_NODE) &&
-        errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CLOSED)) ||
-      errorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.NO_HANDLER_REGISTERED_FOR_ADDRESS);
-  }
-
-  isForwardTargetBackpressured(deliveryResult, errorMessage) {
-    const normalizedErrorMessage =
-      typeof errorMessage === TYPEOF.STRING ?
-        errorMessage :
-        '';
-    if (deliveryResult?.errorCode === MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.OUTBOUND_QUEUE_BACKPRESSURED) {
-      return true;
-    }
-    return normalizedErrorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.OUTBOUND_QUEUE_FOR_NODE) &&
-      normalizedErrorMessage.includes(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.IS_SATURATED);
-  }
-
-  async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
-    const service = this.service;
-    const eventTimestamp = typeof options.timestamp === 'string' &&
-      options.timestamp.length > NUM.ZERO ?
-      options.timestamp :
-      service.hlcClock.now().toString();
-    const replayOnly = options.replayOnly === true;
-    const relayDepth = Number.isInteger(options.relayDepth) &&
-      options.relayDepth >= NUM.ZERO ?
-      options.relayDepth :
-      NUM.ZERO;
-    const causeId = normalizeCauseId(options.causeId);
-    const payload = {
-      type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
-      tableName,
-      operation,
-      data,
-      timestamp: eventTimestamp,
-      sourceNodeId: service.nodeId,
-      relayDepth,
-      causeId,
-      replayOnly,
-    };
-    return service.forwardCDCPayloadToLeader(payload, {
-      tableName,
-      operation,
-      relayDepth,
-      causeId,
-      replayOnly,
-    });
-  }
-
-  async forwardCDCBatchToLeader(events, options = {}) {
-    const service = this.service;
-    const replayOnly = options.replayOnly === true;
-    const relayDepth = Number.isInteger(options.relayDepth) &&
-      options.relayDepth >= NUM.ZERO ?
-      options.relayDepth :
-      NUM.ZERO;
-    const normalizedEvents = (Array.isArray(events) ? events : [])
-      .filter((event) => event?.tableName && event?.operation && event?.data)
-      .map((event) => {
-        const timestamp = typeof event.timestamp === 'string' &&
-          event.timestamp.length > NUM.ZERO ?
-          event.timestamp :
-          service.hlcClock.now().toString();
-        return {
-          tableName: event.tableName,
-          operation: event.operation,
-          data: event.data,
-          timestamp,
-          causeId: normalizeCauseId(event.causeId),
-          replayOnly: event.replayOnly === true || replayOnly,
-        };
-      });
-    if (normalizedEvents.length === NUM.ZERO) {
-      throw new Error(
-        MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_BATCH_PAYLOAD,
-      );
-    }
-
-    const payload = {
-      type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH,
-      events: normalizedEvents,
-      sourceNodeId: service.nodeId,
-      relayDepth,
-      replayOnly:
-        replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
-    };
-    return service.forwardCDCPayloadToLeader(payload, {
-      tableName: normalizedEvents[MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ZERO].tableName,
-      operation: `batch:${normalizedEvents.length}`,
-      relayDepth,
-      causeId: normalizeCauseId(normalizedEvents[MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ZERO].causeId),
-      replayOnly:
-        replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
-    });
-  }
-
-  async forwardCDCPayloadToLeader(payload, logContext = {}) {
-    const service = this.service;
-    const tableName = logContext.tableName || null;
-    const operation = logContext.operation || null;
-    const replayOnly = logContext.replayOnly === true ||
-      payload?.replayOnly === true;
-    const deliveryPriority = resolveCDCForwardDeliveryPriority(
-      tableName,
-      payload,
-      replayOnly,
-    );
-    const relayDepth = Number.isInteger(logContext.relayDepth) ?
-      logContext.relayDepth :
-      NUM.ZERO;
-    const causeId = normalizeCauseId(logContext.causeId);
-    let selection = service.resolveCDCForwardSelection(logContext);
-    if (selection.strictForwarding === true &&
-        selection.targets.length === NUM.ZERO) {
-      await service.maybeRepairAuthoritativeForwardTopology({
-        errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-        tableName,
-        operation,
-        causeId,
-      });
-      selection = service.resolveCDCForwardSelection(logContext);
-    }
-    const {
-      strictForwarding,
-      strictForwardRetryAfterMs,
-      targets: forwardTargets,
-      suppressedCount,
-    } = selection;
-    if (forwardTargets.length === NUM.ZERO) {
-      const error = strictForwarding ?
-        this.buildDeferredCdcForwardError(
-          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-          strictForwardRetryAfterMs,
-        ) :
-        new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-      if (suppressedCount > NUM.ZERO) {
-        error.retryable = false;
-      }
-      throw error;
-    }
-    let lastAddressError = null;
-    let lastDeliveryError = null;
-
-    for (const target of forwardTargets) {
-      let leaderAddress = target.address;
-      try {
-        if (!leaderAddress) {
-          leaderAddress = service.buildPeerAddress(target.serviceId);
-        }
-        if (!leaderAddress) {
-          throw new Error(
-            MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
-          );
-        }
-      } catch (error) {
-        lastAddressError = error;
-        continue;
-      }
-
-      const forwardStartMs = service.now();
-      try {
-        const deliveryResult = await service.transport.deliver(
-          leaderAddress,
-          payload,
-          {deliveryPriority},
-        );
-        const deliveryAcked = deliveryResult?.acknowledged === true;
-        const deliverySucceeded = deliveryResult?.success !== false;
-        const deliveryErrorMessage =
-          typeof deliveryResult?.error === TYPEOF.STRING &&
-          deliveryResult.error.length > NUM.ZERO ?
-            deliveryResult.error :
-            null;
-        const deliveryRejectedByHandler = deliveryResult?.noHandler === true ||
-          deliveryErrorMessage !== null;
-        if (!deliveryAcked || !deliverySucceeded || deliveryRejectedByHandler) {
-          const shouldRepairTopology =
-            service.shouldRepairForwardTopology(deliveryErrorMessage);
-          if (service.shouldSuppressForwardTarget(
-            deliveryResult,
-            deliveryErrorMessage,
-          )) {
-            service.suppressForwardTarget({
-              serviceId: target.serviceId,
-              address: leaderAddress,
-            });
-          }
-          if (shouldRepairTopology) {
-            await service.maybeRepairAuthoritativeForwardTopology({
-              serviceId: target.serviceId,
-              address: leaderAddress,
-              errorMessage: deliveryErrorMessage,
-            });
-          }
-          service.logger.warn(MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.CDC_FORWARD_TO_LEADER_REJECTED, {
-            groupId: service.groupId,
-            replicaId: service.replicaId,
-            leaderId: target.serviceId,
-            leaderServiceId: target.serviceId,
-            leaderAddress,
-            tableName,
-            operation,
-            relayDepth,
-            causeId,
-            durationMs: service.now() - forwardStartMs,
-            deliveryRejectedByHandler,
-            acknowledged: deliveryAcked,
-            success: deliverySucceeded,
-            noHandler: deliveryResult?.noHandler === true,
-            replayIsolationEngaged: replayOnly,
-            deliveryPriority,
-            strictForwarding,
-            strictForwardRetryAfterMs,
-            error: deliveryErrorMessage,
-          });
-          const deliveryError = deliveryErrorMessage !== null ?
-            `: ${this.boundCdcForwardErrorDetail(deliveryErrorMessage)}` :
-            '';
-          const forwardErrorMessage =
-            `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`;
-          lastDeliveryError = strictForwarding ?
-            this.buildDeferredCdcForwardError(
-              forwardErrorMessage,
-              strictForwardRetryAfterMs,
-            ) :
-            new Error(forwardErrorMessage);
-          continue;
-        }
-        service.clearForwardTargetSuppression({
-          serviceId: target.serviceId,
-          address: leaderAddress,
-        });
-        return;
-      } catch (error) {
-        const shouldRepairTopology =
-          service.shouldRepairForwardTopology(error?.message || null);
-        if (service.shouldSuppressForwardTarget(
-          null,
-          error?.message || null,
-        )) {
-          service.suppressForwardTarget({
-            serviceId: target.serviceId,
-            address: leaderAddress,
-          });
-        }
-        if (shouldRepairTopology) {
-          await service.maybeRepairAuthoritativeForwardTopology({
-            serviceId: target.serviceId,
-            address: leaderAddress,
-            errorMessage: error?.message || null,
-          });
-        }
-        lastDeliveryError = strictForwarding ?
-          this.buildDeferredCdcForwardError(
-            this.boundCdcForwardErrorDetail(error?.message) ||
-              MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-            strictForwardRetryAfterMs,
-          ) :
-          error;
-      }
-    }
-
-    if (lastDeliveryError) {
-      throw lastDeliveryError;
-    }
-    if (lastAddressError) {
-      const message =
-        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
-        `${this.boundCdcForwardErrorDetail(lastAddressError.message)}`;
-      throw strictForwarding ?
-        this.buildDeferredCdcForwardError(message, strictForwardRetryAfterMs) :
-        new Error(message);
-    }
-
-    throw strictForwarding ?
-      this.buildDeferredCdcForwardError(
-        MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-        strictForwardRetryAfterMs,
-      ) :
-      new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-  }
 }
 
-export {MessageGroupForwardingOwner};
+Object.assign(
+  MessageGroupForwardingOwner.prototype,
+  createMessageGroupForwardingOwnerDeliveryMethods({
+    buildMessageGroupLeaderIdentitySnapshot,
+    buildForwardTopologyRepairReadOptions,
+    resolveCDCForwardDeliveryPriority,
+    getSystemCachePrimaryKeyFieldOrFallback,
+    buildControlPlaneWorkloadProfile,
+    normalizeCauseId,
+    column: COLUMN,
+    controlPlaneReadStrategy: CONTROL_PLANE_READ_STRATEGY,
+    entityType: ENTITY_TYPE,
+    forwardTopologyRepairOutcome: FORWARD_TOPOLOGY_REPAIR_OUTCOME,
+    messageGroupApplicationErrorMsg: MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+    messageGroupApplicationMessageType: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+    messageGroupCdcErrorMsg: MESSAGE_GROUP_CDC_ERROR_MSG,
+    messageGroupCdcIngressAction: MESSAGE_GROUP_CDC_INGRESS_ACTION,
+    messageGroupCdcLogContextField: MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
+    messageGroupForwardingOwnerLiteral:
+      MESSAGE_GROUP_FORWARDING_OWNER_LITERAL,
+    messageGroupLeaderIdentitySource: MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
+    messageGroupLeaderIdentityState: MESSAGE_GROUP_LEADER_IDENTITY_STATE,
+    num: NUM,
+    serviceType: SERVICE_TYPE,
+    state: STATE,
+    tables: TABLES,
+    transportErrorMsg: TRANSPORT_ERROR_MSG,
+    typeofToken: TYPEOF,
+    forwardTopologyRepairWorkloadClass:
+      CONTROL_PLANE_WORKLOAD_CLASS.MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR,
+  }),
+);
+
+export {
+  MESSAGE_GROUP_CDC_INGRESS_ACTION,
+  MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION,
+  MESSAGE_GROUP_CDC_INGRESS_STATE,
+  MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
+  MESSAGE_GROUP_LEADER_IDENTITY_SOURCE,
+  MESSAGE_GROUP_LEADER_IDENTITY_STATE,
+  MessageGroupForwardingOwner,
+};

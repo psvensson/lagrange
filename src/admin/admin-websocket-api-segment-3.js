@@ -1,0 +1,1128 @@
+import { ADMIN_WEBSOCKET_API_SHARED } from "./admin-websocket-api-shared.js";
+import { AdminWebSocketAPISegment2 } from "./admin-websocket-api-segment-2.js";
+
+const {
+  ADMIN_CACHE_DUMP,
+  ADMIN_CACHE_OBSERVATION_TABLES,
+  ADMIN_CLIENT,
+  ADMIN_CONFIG_KEY,
+  ADMIN_CONTENT_TYPE,
+  ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_DEFAULT,
+  ADMIN_ENFORCEMENT_MODE,
+  ADMIN_ERROR_CODE,
+  ADMIN_ERROR_DETAIL_KEY,
+  ADMIN_ERROR_HINT,
+  ADMIN_ERROR_MATCH,
+  ADMIN_ERROR_MESSAGE,
+  ADMIN_LIMIT,
+  ADMIN_LOCAL_DISPATCH,
+  ADMIN_LOG_MSG,
+  ADMIN_MESSAGE_TYPE,
+  ADMIN_META_ACTION,
+  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
+  ADMIN_QUERY_RESULT,
+  ADMIN_ROUTE,
+  ADMIN_SERVICE_DISCOVERY,
+  ADMIN_SERVICE_OPERATION,
+  ADMIN_STATUS,
+  ADMIN_STREAM_LANE_DEFAULT,
+  ADMIN_STREAM_LANE_LOAD,
+  ADMIN_STREAM_LANE_PROBE,
+  ADMIN_STREAM_LANE_SNAPSHOT,
+  ADMIN_SUBSYSTEM,
+  ADMIN_TEST_DEFAULT,
+  ADMIN_TEST_ERROR_MSG,
+  ADMIN_TEST_STREAM_EVENT,
+  AST_TYPE,
+  AdminControlSnapshot,
+  AdminDebugHandlers,
+  AdminPreflightSnapshot,
+  AdminServiceDiscovery,
+  AdminTestRunService,
+  CACHE_DUMP_TABLES,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+  CancellationToken,
+  ConfigurationManager,
+  ControlPlaneSnapshotOwner,
+  DebugMetadataStore,
+  EMPTY_STRING,
+  ENDPOINT_SYNC_UNHEALTHY_POLICY,
+  ERRNO,
+  EXECUTION_MODE,
+  EXPR_TYPE,
+  ErrorCode,
+  Fastify,
+  HTTP_HEADER,
+  HTTP_HEADER_VALUE,
+  HTTP_STATUS,
+  LOAD_LANE_ADMISSION_REASON_FALLBACK,
+  LOAD_LANE_QUERY_ADMISSION_STATE,
+  LOAD_LANE_QUERY_TIMEOUT_CAP_MS,
+  LOAD_LANE_READINESS_CACHE_MAX_AGE_MS,
+  LOAD_LANE_SOFT_ADMISSION_REASON_CODES,
+  LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
+  LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS,
+  LOAD_LANE_TABLE_ADMISSION_STATE,
+  LOAD_LANE_VOTER_READY_REPLICA_ROLES,
+  LoggingService,
+  META_SERVICE_ID,
+  MUTATION_GUARD_MODE,
+  MessageType,
+  NUM,
+  PRESSURE_GOVERNOR_ACTION,
+  PressureGovernor,
+  QUERY_RESULT_MESSAGE_KIND,
+  QUERY_RESULT_WRITE_OPERATIONS,
+  READINESS_SNAPSHOT_KEY,
+  SQLParser,
+  SQL_REQUEST_TIMEOUT_BUDGET_COMPLETION_MARGIN_MS,
+  SSE_FRAME_PREFIX,
+  SSE_FRAME_SUFFIX,
+  TABLES,
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  TRANSPORT_EVENT,
+  TYPEOF,
+  TraceCollector,
+  WASM_SERVICE_PROTOCOL,
+  adaptAdminMessageToServiceMessage,
+  appendStructuredQueryMetadata,
+  buildControlPlaneWorkloadProfile,
+  buildLoadLaneAdmissionErrorDetails,
+  buildLoadLaneQueryAdmissionResult,
+  buildLoadLaneQueryAdmissionSnapshot,
+  buildLoadLaneRuntimeAuthoritySummary,
+  createAdminOperationError,
+  createRetryableAdminOperationError,
+  createSqlRequest,
+  createTimeoutBudget,
+  createTimeoutBudgetError,
+  evaluateSharedMetadataNodeCoverage,
+  getControlPlaneRetryAfterMs,
+  getRegisteredControlPlaneSystemTableGateway,
+  guardedAdaptAdminAction,
+  isAdminMessageDispatchable,
+  isRetryableControlPlaneError,
+  normalizeIdentifier,
+  normalizeSql,
+  parseDiscoveryBooleanQuery,
+  parseDiscoveryListQuery,
+  parseLiveSelect,
+  parseServiceDiscoverySqlQuery,
+  resolveLoadLaneQueryAdmissionState,
+  resolveRequestedQueryTimeoutMs,
+  resolveSqlEngineControlPlaneReadinessService,
+  resolveSqlRequestTimeoutBudgetMs,
+  websocket,
+} = ADMIN_WEBSOCKET_API_SHARED;
+
+class AdminWebSocketAPISegment3 extends AdminWebSocketAPISegment2 {
+  resolveLocalSystemTableObservationPartitions(tableName, rows) {
+    if (tableName === TABLES.PARTITIONS) {
+      return rows
+        .map((row) => row?.partition_id || row?.partitionId || null)
+        .filter(
+          (partitionId) =>
+            typeof partitionId === TYPEOF.STRING &&
+            partitionId.length > NUM.ZERO,
+        );
+    }
+
+    if (
+      tableName === TABLES.SERVICES ||
+      tableName === TABLES.REPLICA_OPERATIONS
+    ) {
+      return [
+        ...new Set(
+          rows
+            .map((row) => row?.partition_id || row?.partitionId || null)
+            .filter(
+              (partitionId) =>
+                typeof partitionId === TYPEOF.STRING &&
+                partitionId.length > NUM.ZERO,
+            ),
+        ),
+      ];
+    }
+
+    if (typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+
+    return this.systemTableCache
+      .filter(TABLES.PARTITIONS, (row) => {
+        const rowTableName = normalizeIdentifier(
+          row?.table_name || row?.tableName || null,
+        );
+        const rowTableId = normalizeIdentifier(
+          row?.table_id || row?.tableId || null,
+        );
+        return rowTableName === tableName || rowTableId === tableName;
+      })
+      .map((row) => row?.partition_id || row?.partitionId || null)
+      .filter(
+        (partitionId) =>
+          typeof partitionId === TYPEOF.STRING && partitionId.length > NUM.ZERO,
+      );
+  }
+
+  /**
+   * Match one SQL LIKE pattern for local cache observation queries.
+   * @param {*} value
+   * @param {*} pattern
+   * @return {boolean}
+   * @private
+   */
+  matchesLocalSystemTableObservationLike(value, pattern) {
+    const normalizedValue = String(value ?? EMPTY_STRING);
+    const normalizedPattern = String(pattern ?? EMPTY_STRING)
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/%/g, ".*")
+      .replace(/_/g, ".");
+    return new RegExp(`^${normalizedPattern}$`, "i").test(normalizedValue);
+  }
+
+  /**
+   * Execute canonical query operation payload.
+   * @param {Object} payload
+   * @param {Object} executionContext
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalQueryEnvelope(payload, executionContext = {}) {
+    const queryId = payload?.queryId || null;
+    const sql = payload?.sql;
+    const params = payload?.params || [];
+    const timeoutMs = this.resolveExecutionQueryTimeoutMs(
+      payload?.timeoutMs,
+      executionContext,
+    );
+    const loadLaneExecution = this.isLoadLaneExecution(executionContext);
+
+    if (!queryId) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID,
+        ADMIN_ERROR_HINT.MISSING_QUERY_ID,
+      );
+    }
+    if (!sql || typeof sql !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.SYNTAX_ERROR,
+        ADMIN_ERROR_MESSAGE.MISSING_SQL,
+        ADMIN_ERROR_HINT.MISSING_SQL,
+      );
+    }
+    await this.assertLoadLaneQueryAdmitted(executionContext);
+    if (this.isPreflightCriticalPathSnapshotQuery(sql)) {
+      return this.buildPreflightCriticalPathSnapshotQueryResult();
+    }
+    const controlSnapshotQuery = this.parseControlSnapshotQuery(sql);
+    if (controlSnapshotQuery.isQuery) {
+      const observationPolicy = this.resolveLocalObservationExecutionPolicy(
+        executionContext,
+        {
+          forceAuthoritativeRepair:
+            controlSnapshotQuery.forceAuthoritativeRepair,
+        },
+      );
+      return this.buildControlSnapshotQueryResult({
+        forceAuthoritativeRepair: controlSnapshotQuery.forceAuthoritativeRepair,
+        allowAuthoritativeRepair: observationPolicy.allowAuthoritativeRepair,
+        allowAuthoritativeReadinessRefresh:
+          observationPolicy.allowAuthoritativeReadinessRefresh,
+        allowStaleReadinessOnCacheChange:
+          observationPolicy.allowStaleReadinessOnCacheChange,
+        allowAuthoritativePublishedMembershipRecovery:
+          observationPolicy.allowAuthoritativePublishedMembershipRecovery,
+      });
+    }
+    const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
+    if (serviceDiscoveryQuery.isQuery) {
+      const observationPolicy =
+        this.resolveLocalObservationExecutionPolicy(executionContext);
+      return this.serviceDiscovery.buildServiceDiscoveryQueryResult({
+        tableName: serviceDiscoveryQuery.tableName,
+        tableId: serviceDiscoveryQuery.tableId,
+        allowAuthoritativeRepair: observationPolicy.allowAuthoritativeRepair,
+      });
+    }
+    const localSystemTableObservation =
+      this.tryExecuteLocalSystemTableObservationQuery(sql, params);
+    if (localSystemTableObservation) {
+      return localSystemTableObservation;
+    }
+
+    await this.assertLoadLaneTableQueryAdmitted(sql, executionContext);
+
+    const routed = guardedAdaptAdminAction(
+      ADMIN_META_ACTION.EXECUTE_QUERY,
+      { sql, queryParams: params },
+      this.systemTableCache,
+      this.resolveMutationGuardMode(),
+    );
+    if (!routed.success) {
+      throw createAdminOperationError(
+        routed.code || ErrorCode.INTERNAL_ERROR,
+        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+      );
+    }
+
+    let result;
+    try {
+      result = await this.executeQueryWithTimeout(
+        routed.sql,
+        routed.params || [],
+        queryId,
+        timeoutMs,
+      );
+    } catch (error) {
+      if (
+        loadLaneExecution &&
+        this.isRetryableLoadLaneExecutionFailure(error)
+      ) {
+        throw createRetryableAdminOperationError(
+          this.getErrorCode(error),
+          String(
+            error?.message || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+          ),
+          {
+            retryAfterMs: this.resolveLoadLaneRetryAfterMs(error),
+          },
+        );
+      }
+      throw error;
+    }
+
+    if (
+      loadLaneExecution &&
+      result?.success === false &&
+      this.isRetryableLoadLaneExecutionFailure(result)
+    ) {
+      result = {
+        ...result,
+        deferRetry: true,
+        retryAfterMs: this.resolveLoadLaneRetryAfterMs(result),
+      };
+    }
+    if (routed.warning) {
+      result.warning = routed.warning;
+    }
+    return result;
+  }
+
+  /**
+   * Execute canonical partition-callback payload.
+   * @param {Object} payload
+   * @param {Object} _executionContext
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalPartitionCallbackEnvelope(payload, _executionContext = {}) {
+    const queryId = payload?.queryId || null;
+    const statement = payload?.statement;
+    const parameters = payload?.parameters || [];
+    const callbackModuleRef = payload?.callbackModuleRef;
+    const callbackExport = payload?.callbackExport;
+    const runtimeKind = payload?.runtimeKind;
+    const timeoutMs = resolveRequestedQueryTimeoutMs(payload?.timeoutMs);
+
+    if (!queryId) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID,
+        ADMIN_ERROR_HINT.MISSING_QUERY_ID,
+      );
+    }
+    if (!statement || typeof statement !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.SYNTAX_ERROR,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT,
+      );
+    }
+    if (!callbackModuleRef || typeof callbackModuleRef !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF,
+      );
+    }
+    if (!callbackExport || typeof callbackExport !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT,
+      );
+    }
+    if (!runtimeKind || typeof runtimeKind !== TYPEOF.STRING) {
+      throw createAdminOperationError(
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
+        ADMIN_ERROR_HINT.MISSING_CALLBACK_RUNTIME_KIND,
+      );
+    }
+
+    return this.executeSqlRequestWithTimeout(
+      createSqlRequest({
+        statement,
+        parameters,
+        sessionId: queryId,
+        executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+        callbackModuleRef,
+        callbackExport,
+        runtimeKind,
+      }),
+      timeoutMs === null ? undefined : timeoutMs,
+    );
+  }
+
+  /**
+   * Execute canonical cache-dump operation payload.
+   * @return {Object}
+   * @private
+   */
+  executeLocalCacheDumpEnvelope() {
+    const routed = guardedAdaptAdminAction(
+      ADMIN_META_ACTION.GET_CACHE_DUMP,
+      {},
+      this.systemTableCache,
+      this.resolveMutationGuardMode(),
+    );
+    if (!routed.success) {
+      throw createAdminOperationError(
+        routed.code || ErrorCode.INTERNAL_ERROR,
+        routed.error || ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE,
+      );
+    }
+    return this.buildValidatedCacheDump(routed.tables);
+  }
+
+  /**
+   * Handle incoming message from client.
+   * @param {Object} clientInfo - Client information.
+   * @param {Buffer|string} data - Message data.
+   * @private
+   */
+  handleMessage(clientInfo, data) {
+    let message;
+
+    try {
+      const messageStr = data.toString();
+      message = JSON.parse(messageStr);
+    } catch (_error) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.INVALID_JSON,
+        ADMIN_ERROR_HINT.INVALID_JSON,
+      );
+      return;
+    }
+
+    if (!message || typeof message.type !== TYPEOF.STRING) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.MISSING_TYPE,
+        ADMIN_ERROR_HINT.MISSING_TYPE,
+      );
+      return;
+    }
+
+    this.logger.debug(ADMIN_LOG_MSG.RECEIVED_MESSAGE, {
+      clientId: clientInfo.id,
+      type: message.type,
+    });
+
+    switch (message.type) {
+      case MessageType.QUERY:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.PARTITION_CALLBACK:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.REFRESH:
+        this.handleDispatchableAdminMessage(clientInfo, message);
+        break;
+
+      case MessageType.LIVE_QUERY_SUBSCRIBE:
+        this.handleLiveQuerySubscribe(clientInfo, message);
+        break;
+
+      case MessageType.LIVE_QUERY_UNSUBSCRIBE:
+        this.handleLiveQueryUnsubscribe(clientInfo, message);
+        break;
+
+      default:
+        // Ignore unknown message types (Requirement 32.38)
+        this.logger.debug(ADMIN_LOG_MSG.UNKNOWN_MESSAGE, {
+          clientId: clientInfo.id,
+          type: message.type,
+        });
+        break;
+    }
+  }
+
+  /**
+   * Handle live query subscribe request.
+   * Parses the LIVE SELECT SQL, registers with the server-side
+   * LiveQueryManager, and bridges CDC events to the client socket.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Subscribe message.
+   * @private
+   */
+  async handleLiveQuerySubscribe(clientInfo, message) {
+    const subscriptionId = message.subscriptionId;
+    const sql = message.sql;
+
+    if (!subscriptionId) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
+        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SUBSCRIPTION_ID,
+      );
+      return;
+    }
+    if (!sql || typeof sql !== TYPEOF.STRING) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.MALFORMED_JSON,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MISSING_SQL,
+        ADMIN_ERROR_HINT.LIVE_QUERY_MISSING_SQL,
+      );
+      return;
+    }
+    if (!this.liveQueryManager) {
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.INTERNAL_ERROR,
+        ADMIN_ERROR_MESSAGE.LIVE_QUERY_MANAGER_UNAVAILABLE,
+      );
+      return;
+    }
+
+    try {
+      const parsed = parseLiveSelect(sql);
+      const selectSql = parsed.isLive ? parsed.sql : sql;
+      const parser = new SQLParser(selectSql);
+      const ast = parser.parse();
+
+      const registrationResult = { partitions: [] };
+      const liveClient = {
+        id: clientInfo.id,
+        send: (data) => {
+          const payload =
+            typeof data === TYPEOF.STRING ? JSON.parse(data) : data;
+          const innerType = payload.type;
+          this.sendToClient(clientInfo, {
+            type: MessageType.LIVE_QUERY_EVENT,
+            subscriptionId,
+            eventType: innerType,
+            data: payload.row || payload.new || payload.rows || null,
+            oldData: payload.old || null,
+            queryId: payload.queryId || null,
+            partitions: registrationResult.partitions || [],
+          });
+        },
+      };
+
+      const result = await this.liveQueryManager.registerLiveQuery(
+        ast,
+        liveClient,
+      );
+      registrationResult.partitions = result.partitions || [];
+
+      clientInfo.liveQueryMap.set(subscriptionId, result.queryId);
+
+      this.sendToClient(clientInfo, {
+        type: MessageType.LIVE_QUERY_EVENT,
+        subscriptionId,
+        queryId: result.queryId,
+        partitions: result.partitions,
+        expiresAt: result.expiresAt,
+      });
+
+      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        queryId: result.queryId,
+      });
+    } catch (error) {
+      this.logger.error(ADMIN_LOG_MSG.LIVE_QUERY_SUBSCRIBE_FAILED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        error: error.message,
+      });
+      this.sendError(
+        clientInfo,
+        null,
+        ErrorCode.INTERNAL_ERROR,
+        `${ADMIN_ERROR_MESSAGE.LIVE_QUERY_PARSE_FAILED}: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Handle live query unsubscribe request.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Unsubscribe message.
+   * @private
+   */
+  handleLiveQueryUnsubscribe(clientInfo, message) {
+    const subscriptionId = message.subscriptionId;
+    if (!subscriptionId) {
+      return;
+    }
+
+    const queryId = clientInfo.liveQueryMap.get(subscriptionId);
+    if (queryId && this.liveQueryManager) {
+      this.liveQueryManager.unregisterLiveQuery(queryId, clientInfo.id);
+      clientInfo.liveQueryMap.delete(subscriptionId);
+
+      this.logger.info(ADMIN_LOG_MSG.LIVE_QUERY_UNSUBSCRIBED, {
+        clientId: clientInfo.id,
+        subscriptionId,
+        queryId,
+      });
+    }
+  }
+
+  /**
+   * Handle one dispatchable admin message by first translating to
+   * canonical Service_Message envelope.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Admin websocket message.
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleDispatchableAdminMessage(clientInfo, message) {
+    if (!isAdminMessageDispatchable(message.type)) {
+      return;
+    }
+
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    await this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  }
+
+  /**
+   * Handle dispatchable admin messages through ServiceDispatcher.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Admin websocket message.
+   * @private
+   */
+  async handleServiceDispatchMessage(clientInfo, message) {
+    const envelope = adaptAdminMessageToServiceMessage(message, {
+      clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
+      tenantId: message.tenantId || null,
+      principal: message.principal || null,
+      traceId: message.traceId || null,
+    });
+    return this.handleServiceDispatchEnvelope(clientInfo, message, envelope);
+  }
+
+  /**
+   * Dispatch one canonical envelope through the shared service dispatcher.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Original admin websocket message.
+   * @param {Object} envelope - Canonical service-message envelope.
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDispatchEnvelope(clientInfo, message, envelope) {
+    const queryId = message.queryId || message.messageId || null;
+
+    try {
+      const dispatchResult = await this.serviceDispatcher.dispatch(envelope, {
+        clientInfo,
+        nodeId: this.nodeId,
+        traceId: envelope.traceId || null,
+        tenantId: envelope.tenantId || null,
+        principal: envelope.principal || null,
+      });
+
+      const deliveryPayload = dispatchResult.delivery?.payload || {};
+      const operation = dispatchResult.envelope.operation;
+
+      if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
+        const cacheDump =
+          deliveryPayload.cacheDump || deliveryPayload.data || null;
+        if (!cacheDump || typeof cacheDump !== TYPEOF.OBJECT) {
+          throw new Error(ADMIN_ERROR_MESSAGE.SYSTEM_CACHE_EMPTY);
+        }
+        this.sendCacheDumpPayload(clientInfo, cacheDump);
+        return;
+      }
+
+      if (
+        deliveryPayload.queryResult &&
+        typeof deliveryPayload.queryResult === TYPEOF.OBJECT
+      ) {
+        this.sendQueryResult(
+          clientInfo,
+          queryId || envelope.messageId,
+          deliveryPayload.queryResult,
+        );
+        return;
+      }
+
+      const deliveryResults = Array.isArray(deliveryPayload.results)
+        ? deliveryPayload.results
+        : [];
+      this.sendQueryResult(clientInfo, queryId || envelope.messageId, {
+        operation,
+        results: deliveryResults,
+        count: deliveryResults.length,
+      });
+    } catch (error) {
+      const errorCode = this.getErrorCode(error);
+      this.sendError(
+        clientInfo,
+        queryId,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Resolve unified lifecycle diagnostics report payload.
+   * @return {Object|null}
+   * @private
+   */
+  resolveServiceDiagnosticsReport() {
+    if (
+      !this.serviceDiagnosticsProvider ||
+      typeof this.serviceDiagnosticsProvider !== TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+
+    const report = this.serviceDiagnosticsProvider();
+    if (!report || typeof report !== TYPEOF.OBJECT) {
+      return null;
+    }
+    return report;
+  }
+
+  /**
+   * Handle lifecycle/reconciler diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDiagnostics(reply) {
+    const report = this.resolveServiceDiagnosticsReport();
+    if (!report) {
+      reply
+        .code(HTTP_STATUS.SERVICE_UNAVAILABLE)
+        .send({ error: ADMIN_ERROR_MESSAGE.SERVICE_DIAGNOSTICS_UNAVAILABLE });
+      return;
+    }
+
+    reply.code(HTTP_STATUS.OK).send({
+      nodeId: this.nodeId,
+      timestamp: Date.now(),
+      diagnostics: report,
+    });
+  }
+
+  /**
+   * Handle local CDC diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleCdcDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalCdcDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local partition diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handlePartitionDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalPartitionDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local SQL diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleSqlDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalSqlDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle preflight critical-path snapshot diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handlePreflightCriticalPathSnapshot(reply) {
+    try {
+      const snapshot = await this.resolvePreflightCriticalPathSnapshot();
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local control snapshot route.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleControlSnapshot(request, reply) {
+    const scope = String(
+      request?.query?.[ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_KEY] ||
+        ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_LOCAL,
+    )
+      .trim()
+      .toLowerCase();
+    if (scope !== ADMIN_CONTROL_SNAPSHOT.QUERY_SCOPE_LOCAL) {
+      reply.code(HTTP_STATUS.BAD_REQUEST).send({
+        error: ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_SCOPE_UNSUPPORTED,
+      });
+      return;
+    }
+    try {
+      const snapshot = await this.buildLocalControlSnapshot();
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local service-discovery route.
+   * @param {Object} request
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleServiceDiscovery(request, reply) {
+    const protocolAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_PROTOCOL_KEY],
+    );
+    const serviceIdAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_SERVICE_ID_KEY],
+    );
+    const nodeIdAllowlist = parseDiscoveryListQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_NODE_ID_KEY],
+    );
+    const healthyOnly = parseDiscoveryBooleanQuery(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_HEALTHY_ONLY_KEY],
+      false,
+    );
+    const unhealthyPolicyRaw =
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_UNHEALTHY_POLICY_KEY];
+    const unhealthyPolicy = String(
+      unhealthyPolicyRaw || ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY,
+    )
+      .trim()
+      .toLowerCase();
+    const tableName = normalizeIdentifier(
+      request?.query?.[ADMIN_SERVICE_DISCOVERY.QUERY_TABLE_NAME_KEY],
+    );
+    const resolvedUnhealthyPolicy =
+      unhealthyPolicy === ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE
+        ? ENDPOINT_SYNC_UNHEALTHY_POLICY.EXCLUDE
+        : ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
+
+    try {
+      const snapshot =
+        await this.serviceDiscovery.resolveServiceDiscoverySnapshot({
+          protocolAllowlist,
+          serviceIdAllowlist,
+          nodeIdAllowlist,
+          tableName,
+          healthyOnly,
+          unhealthyPolicy: resolvedUnhealthyPolicy,
+        });
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Determine whether one SQL statement requests preflight critical path snapshot.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isPreflightCriticalPathSnapshotQuery(sql) {
+    return (
+      normalizeSql(sql) ===
+      normalizeSql(ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.QUERY_SQL)
+    );
+  }
+
+  /**
+   * Determine whether one SQL statement requests local control snapshot.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isControlSnapshotQuery(sql) {
+    return this.parseControlSnapshotQuery(sql).isQuery;
+  }
+
+  /**
+   * Parse one local control snapshot SQL query.
+   * @param {string} sql
+   * @return {Object}
+   * @private
+   */
+  parseControlSnapshotQuery(sql) {
+    const normalizedSql = normalizeSql(sql);
+    if (normalizedSql === normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL)) {
+      return {
+        isQuery: true,
+        forceAuthoritativeRepair: false,
+      };
+    }
+    if (
+      normalizedSql ===
+      normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL_FORCE_REPAIR)
+    ) {
+      return {
+        isQuery: true,
+        forceAuthoritativeRepair: true,
+      };
+    }
+    return {
+      isQuery: false,
+      forceAuthoritativeRepair: false,
+    };
+  }
+
+  /**
+   * Determine whether one SQL statement requests local service discovery.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isServiceDiscoveryQuery(sql) {
+    return parseServiceDiscoverySqlQuery(sql).isQuery;
+  }
+
+  /**
+   * Delegate: build service discovery query result.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async buildServiceDiscoveryQueryResult(options = {}) {
+    return this.serviceDiscovery.buildServiceDiscoveryQueryResult(options);
+  }
+
+  /**
+   * Delegate: resolve service discovery snapshot.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async resolveServiceDiscoverySnapshot(options = {}) {
+    return this.serviceDiscovery.resolveServiceDiscoverySnapshot(options);
+  }
+
+  /**
+   * Delegate: build service discovery replica readiness.
+   * @param {Object} replica
+   * @param {Object} readinessContext
+   * @return {Object}
+   */
+  buildServiceDiscoveryReplicaReadiness(replica, readinessContext) {
+    return this.serviceDiscovery.buildServiceDiscoveryReplicaReadiness(
+      replica,
+      readinessContext,
+    );
+  }
+
+  /**
+   * Delegate: build local preflight critical-path snapshot.
+   * @return {Promise<Object>}
+   */
+  async buildLocalPreflightCriticalPathSnapshot() {
+    return this.preflightSnapshot.buildLocalPreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Delegate: resolve preflight critical-path snapshot.
+   * @return {Promise<Object>}
+   */
+  async resolvePreflightCriticalPathSnapshot() {
+    return this.preflightSnapshot.resolvePreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Delegate: build preflight critical-path snapshot query result.
+   * @return {Promise<Object>}
+   */
+  async buildPreflightCriticalPathSnapshotQueryResult() {
+    return this.preflightSnapshot.buildPreflightCriticalPathSnapshotQueryResult();
+  }
+
+  /**
+   * Delegate: build preflight cache freshness summary.
+   * @param {Object} options
+   * @return {Object}
+   */
+  buildPreflightCacheFreshnessSummary(options) {
+    return this.preflightSnapshot.buildPreflightCacheFreshnessSummary(options);
+  }
+
+  /**
+   * Delegate: build local control snapshot.
+   * @return {Promise<Object>}
+   */
+  async buildLocalControlSnapshot() {
+    if (
+      typeof this.controlSnapshot.resolveLocalControlSnapshot ===
+      TYPEOF.FUNCTION
+    ) {
+      return this.controlSnapshot.resolveLocalControlSnapshot();
+    }
+    return this.controlSnapshot.buildLocalControlSnapshot();
+  }
+
+  /**
+   * Delegate: build control snapshot leader summary.
+   * @param {Array<Object>} partitionRows
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   */
+  buildControlSnapshotLeaderSummary(partitionRows = [], serviceRows = []) {
+    return this.controlSnapshot.buildControlSnapshotLeaderSummary(
+      partitionRows,
+      serviceRows,
+    );
+  }
+
+  /**
+   * Delegate: build control snapshot voter counts.
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   */
+  buildControlSnapshotVoterCounts(serviceRows = []) {
+    return this.controlSnapshot.buildControlSnapshotVoterCounts(serviceRows);
+  }
+
+  /**
+   * Delegate: build control snapshot replica operation summary.
+   * @param {Array<Object>} replicaOperationRows
+   * @param {Object} [options={}]
+   * @return {Object}
+   */
+  buildControlSnapshotReplicaOperationSummary(
+    replicaOperationRows = [],
+    options = {},
+  ) {
+    return this.controlSnapshot.buildControlSnapshotReplicaOperationSummary(
+      replicaOperationRows,
+      options,
+    );
+  }
+
+  /**
+   * Delegate: build local CDC telemetry.
+   * @return {Object}
+   */
+  buildLocalCdcTelemetry() {
+    return this.controlSnapshot.buildLocalCdcTelemetry();
+  }
+
+  /**
+   * Delegate: build local CDC diagnostics.
+   * @return {Object}
+   */
+  buildLocalCdcDiagnostics() {
+    return this.controlSnapshot.buildLocalCdcDiagnostics();
+  }
+
+  /**
+   * Delegate: build local partition diagnostics.
+   * @return {Object}
+   */
+  buildLocalPartitionDiagnostics() {
+    return this.controlSnapshot.buildLocalPartitionDiagnostics();
+  }
+
+  /**
+   * Delegate: build local SQL diagnostics.
+   * @return {Object}
+   */
+  buildLocalSqlDiagnostics() {
+    return this.controlSnapshot.buildLocalSqlDiagnostics();
+  }
+
+  /**
+   * Delegate: build control snapshot query result.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async buildControlSnapshotQueryResult(options = {}) {
+    return this.controlSnapshot.buildControlSnapshotQueryResult(options);
+  }
+
+  /**
+   * Handle query message.
+   * @param {Object} clientInfo - Client information.
+   * @param {Object} message - Query message.
+   * @private
+   */
+}
+
+export { AdminWebSocketAPISegment3 };

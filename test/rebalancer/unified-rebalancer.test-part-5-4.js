@@ -1,0 +1,1286 @@
+/**
+ * Unit tests for UnifiedRebalancer.
+ * Tests the core rebalancing logic for partitions and message groups.
+ * Requirements: 8.1, 8.2, 8.3
+ */
+
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../../src/cdc/cdc-integration-service.js';
+import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
+} from '../../src/rebalancer/replica-operation-repository.js';
+import {
+  UnifiedRebalancer,
+  EntityType,
+  TriggerType,
+  MoveType,
+  ReplicaStatus,
+  NodeStatus,
+  DEFAULT_TABLE_POLICY,
+  DEFAULT_MESSAGE_GROUP_POLICY,
+} from '../../src/rebalancer/unified-rebalancer.js';
+import {
+  REPLICA_OPERATION_SEMANTIC_PHASE,
+} from '../../src/rebalancer/replica-status.js';
+import {
+  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
+  REBALANCER_LOG_MSG,
+  REBALANCER_SKIP_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+import {
+  LIFECYCLE_PHASE,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
+  PRESSURE_BEHAVIOR_DECISION,
+  PRESSURE_STATE,
+} from '../../src/rebalancer/storage-capacity-constants.js';
+import {
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  ENDPOINT_STATUS,
+  META_SERVICE_ID,
+  TRANSPORT_TYPE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
+import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
+
+// Initialize test environment
+function initializeTestEnvironment() {
+  ConfigurationManager.resetInstance();
+  const config = ConfigurationManager.getInstance();
+  if (!config.isInitialized()) {
+    config.initialize({
+      node: {id: 'test-node'},
+      logging: {level: 'error'},
+    });
+  }
+
+  const logging = LoggingService.getInstance();
+  if (!logging.isInitialized()) {
+    logging.initialize({level: 'error'});
+  }
+}
+
+// Create a mock system table cache
+function createMockCache(
+  nodes = [],
+  services = [],
+  partitions = [],
+  tables = [],
+  replicaOperations = [],
+  nodeEndpoints = [],
+  serviceEndpoints = [],
+) {
+  const now = Date.now();
+  const normalizedNodes = nodes.map((node) => ({
+    connection_state: Object.hasOwn(node, 'connection_state') ?
+      node.connection_state : 'ready',
+    ready_lease_expires_at: Object.hasOwn(node, 'ready_lease_expires_at') ?
+      node.ready_lease_expires_at : now + 10000,
+    ...node,
+  }));
+  const cache = {
+    nodes: new Map(normalizedNodes.map((node) => [node.node_id, node])),
+    services: new Map(services.map((s) => [s.service_id, s])),
+    partitions: new Map(partitions.map((p) => [p.partition_id, p])),
+    tables: new Map(tables.map((t) => [t.table_id, t])),
+    message_groups: new Map(),
+    replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
+    node_endpoints: new Map(nodeEndpoints.map((row, index) => [index, row])),
+    service_endpoints:
+      new Map(serviceEndpoints.map((row, index) => [index, row])),
+  };
+
+  return {
+    get: (tableName, key) => cache[tableName]?.get(key),
+    filter: (tableName, predicate) => {
+      const table = cache[tableName];
+      if (!table) return [];
+      return Array.from(table.values()).filter(predicate);
+    },
+    getAll: (tableName) => {
+      const table = cache[tableName];
+      if (!table) return [];
+      return Array.from(table.values());
+    },
+  };
+}
+
+// Create mock CDC integration service
+function createMockCdcService() {
+  return {
+    insertSystemTableRow: async () => ({success: true}),
+    updateSystemTableRow: async () => ({success: true}),
+  };
+}
+
+// Create mock table policy service
+function createMockPolicyService(partitions = [], tables = []) {
+  return {
+    getPolicyForPartition: (partitionId) => {
+      const partition = partitions.find((p) => p.partition_id === partitionId);
+      if (!partition) return {...DEFAULT_TABLE_POLICY};
+      const table = tables.find((t) => t.table_id === partition.table_id);
+      if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
+      try {
+        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
+      } catch (_e) {
+        return {...DEFAULT_TABLE_POLICY};
+      }
+    },
+    getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
+  };
+}
+
+// Create mock message router
+function createMockMessageRouter(
+  connectionState = 'connected',
+  connectedNodes = [],
+) {
+  return {
+    getConnectionState: () => connectionState,
+    getConnectedNodes: () => [...connectedNodes],
+    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    pingNode: async () => true,
+    isOutboundQueueAvailable: () => true,
+  };
+}
+
+function createNodeEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    transport_type: TRANSPORT_TYPE.WEBSOCKET,
+    status: ENDPOINT_STATUS.ACTIVE,
+  };
+}
+
+function createPostgresWireEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    service_id: META_SERVICE_ID.POSTGRES_WIRE,
+    health_status: ENDPOINT_SYNC_HEALTH.HEALTHY,
+  };
+}
+
+// Create mock rebalance coordinator
+function createMockCoordinator() {
+  const storageAccountingService = {
+    estimateReplicaBytes: () => 1,
+  };
+  const storageAdmissionService = {
+    checkAdd: async () => ({decision: 'allow'}),
+    checkReplace: async () => ({decision: 'allow'}),
+  };
+  return {
+    getMoveSafetyError: () => null,
+    createOperation: async (move) => ({
+      operationId: 'op-' + Date.now(),
+      type: move.type,
+      partitionId: move.partitionId,
+      targetNodeId: move.nodeId,
+      status: 'pending',
+      workflowStep: 'pending',
+    }),
+    executeOperation: async () => ({success: true}),
+    canStartAddOperation: async () => true,
+    canStartRemoveOperation: async () => true,
+    // getStats is called synchronously by UnifiedRebalancer.getStats()
+    getStats: () => ({
+      operationsCreated: 0,
+      operationsCompleted: 0,
+      operationsFailed: 0,
+      operationsTimedOut: 0,
+      inFlightOperations: 0,
+      totalOperations: 0,
+    }),
+    storageAccountingService,
+    storageAdmissionService,
+  };
+}
+
+// Create mock readiness service backed by the same cache
+function createMockReadinessService(mockCache) {
+  return {
+    getNodeReadinessSync: (nodeId) => {
+      const nodeRow = mockCache.get('nodes', nodeId);
+      if (!nodeRow) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+          reasons: [],
+        };
+      }
+      const now = Date.now();
+      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
+      const leaseValid =
+        Number.isFinite(leaseExpiry) && leaseExpiry > now;
+      const isActive = nodeRow.status === 'active';
+      const healthy = isActive && leaseValid;
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .METADATA_PUBLICATION_HEALTHY]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+            healthy,
+        },
+        reasons: [],
+      };
+    },
+    getNodeReadiness: async (nodeId) => {
+      return createMockReadinessService(mockCache)
+        .getNodeReadinessSync(nodeId);
+    },
+  };
+}
+
+function createMockMembershipPublicationService(
+  publishedActiveNodeIds = [],
+  publicationEpoch = 1,
+  options = {},
+) {
+  return {
+    getLatestClusterPublicationSync() {
+      return {
+        status: 'PUBLISHED',
+        publicationEpoch,
+        publishedActiveNodeIds,
+        ...(options && typeof options === 'object' ? options : {}),
+      };
+    },
+  };
+}
+
+// Create a fully configured rebalancer for testing
+function createTestRebalancer(options = {}) {
+  const {
+    entityId = 'partition-1',
+    entityType = EntityType.PARTITION,
+    nodeId = 'node-1',
+    nodes = [],
+    services = [],
+    partitions = [],
+    tables = [],
+    replicaOperations = [],
+    nodeEndpoints = [],
+    serviceEndpoints = [],
+    connectionState = 'connected',
+    sqlQueryEngine = null,
+    controlPlaneSystemTableGateway = null,
+    cdcIntegrationService = null,
+    messageRouter = null,
+    rebalanceCoordinator = null,
+    controlPlaneReadinessService = null,
+    bootstrapReadinessState = null,
+    nowFn = null,
+    priorityRecoveryActivityStaleGraceMs = null,
+  } = options;
+
+  const mockCache = createMockCache(
+    nodes,
+    services,
+    partitions,
+    tables,
+    replicaOperations,
+    nodeEndpoints,
+    serviceEndpoints,
+  );
+
+});
+  const mockCdcService = cdcIntegrationService || createMockCdcService();
+  const mockPolicyService = createMockPolicyService(
+    partitions, tables,
+  );
+  const mockMessageRouter = messageRouter ||
+    createMockMessageRouter(connectionState);
+  const mockCoordinator = rebalanceCoordinator || createMockCoordinator();
+  const mockSqlQueryEngine = sqlQueryEngine || {
+    async executeQuery() {
+      return {success: true, rows: []};
+    },
+  };
+  const mockReadinessService = controlPlaneReadinessService ||
+    createMockReadinessService(mockCache);
+
+  return new UnifiedRebalancer({
+    entityId,
+    entityType,
+    nodeId,
+    systemTableCache: mockCache,
+    cdcIntegrationService: mockCdcService,
+    tablePolicyService: mockPolicyService,
+    messageRouter: mockMessageRouter,
+    rebalanceCoordinator: mockCoordinator,
+    sqlQueryEngine: mockSqlQueryEngine,
+    controlPlaneSystemTableGateway,
+    controlPlaneReadinessService: mockReadinessService,
+    bootstrapReadinessState,
+    nowFn,
+    priorityRecoveryActivityStaleGraceMs,
+  });
+}
+
+test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
+  initializeTestEnvironment();
+
+  await t.test(
+    'checkRebalance keeps control_plane_publications blocked until ' +
+      'websocket endpoint visibility covers every active node',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        messageRouter: createMockMessageRouter('connected', [
+          'node-2',
+          'node-3',
+        ]),
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'publication-owner recovery should stay blocked until every active node exposes endpoint visibility',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'publication-owner recovery should remain on the short priority retry cadence while waiting for full endpoint visibility',
+      );
+    });
+
+  await t.test(
+    'checkRebalance clears endpoint visibility blockers after authoritative ' +
+      'endpoint revalidation closes a cache gap',
+    async (t) => {
+      const activeNodeIds = Object.freeze([
+        'node-1',
+        'node-2',
+        'node-3',
+      ]);
+      const authoritativeCalls = [];
+      const authoritativeGateway = {
+        async readAuthoritativeRows(tableName, _sql, params = []) {
+          authoritativeCalls.push({
+            tableName,
+            params: [...params],
+          });
+          if (tableName === SYSTEM_TABLE_NAME.NODE_ENDPOINTS) {
+            return {
+              success: true,
+              rows: [createNodeEndpoint(activeNodeIds[2])],
+            };
+          }
+          if (tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS) {
+            return {
+              success: true,
+              rows: [createPostgresWireEndpoint(activeNodeIds[2])],
+            };
+          }
+          return {success: true, rows: []};
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: activeNodeIds[0],
+        nodes: activeNodeIds.map((nodeId) => ({
+          node_id: nodeId,
+          status: NodeStatus.ACTIVE,
+        })),
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint(activeNodeIds[0]),
+          createNodeEndpoint(activeNodeIds[1]),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint(activeNodeIds[0]),
+          createPostgresWireEndpoint(activeNodeIds[1]),
+        ],
+        controlPlaneSystemTableGateway: authoritativeGateway,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'authoritative endpoint rows should reopen planning once they close the cache visibility gap',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'revalidated endpoint visibility should not leave the topology-settling retry armed',
+      );
+      t.same(
+        authoritativeCalls.map((call) => call.tableName),
+        [
+          SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+          SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
+        ],
+        'endpoint visibility revalidation should consult both authoritative endpoint tables',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows control_plane_publications once full endpoint ' +
+      'visibility covers every active node',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        messageRouter: createMockMessageRouter('connected', [
+          'node-2',
+          'node-3',
+        ]),
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'publication-owner recovery should proceed once endpoint visibility covers every active node',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'full endpoint visibility should clear the topology-settling blocker for publication-owner recovery',
+      );
+    });
+
+  await t.test(
+    'checkRebalance does not defer critical system partitions for unrelated active-node replica operations in flight',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'replace',
+          partition_group_id: 'services-p1',
+          target_node_id: 'node-2',
+          status: 'running',
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should continue evaluating when only unrelated topology operations are in flight',
+      );
+      t.equal(
+        scheduledDelayMs !== UNSCHEDULED,
+        true,
+        'evaluation should still schedule the next check',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while same-entity add-side replica operations are in flight',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'add',
+          partition_group_id: 'nodes-p1',
+          target_node_id: 'node-2',
+          status: ReplicaStatus.CREATING,
+          workflow_step: WORKFLOW_STEP.CREATING,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should still defer when the same entity already has an add-side topology operation in flight',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'entity-scoped in-flight topology operations should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance does not defer critical system partitions for same-entity REPLACE remove-dispatch rows',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'replace',
+          partition_group_id: 'nodes-p1',
+          target_node_id: 'node-2',
+          status: 'running',
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should keep evaluating once the same-entity REPLACE is only dispatching source removal',
+      );
+      t.equal(
+        scheduledDelayMs !== UNSCHEDULED,
+        true,
+        'source-removal dispatch rows should still allow the normal next check scheduling path',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while local serve readiness is false',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync: () => ({
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+          reasons: [
+            {code: 'load_not_ready'},
+            {code: 'transport_not_ready'},
+          ],
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while the local leader is not serve-eligible',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'local serve-readiness gate should schedule a delayed retry',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.criticalCheckDelayMs,
+        'priority control-plane partitions should retry serve-readiness checks on the short critical cadence',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows priority control-plane partitions once bootstrap lifecycle opens metadata publication',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane partitions should evaluate once lifecycle opens metadata publication',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'priority control-plane partitions should not remain blocked on the traffic-ready stable window',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows priority control-plane partitions to recover ' +
+    'while the local seed still has an explicit self ready-lease clear ' +
+    'once bootstrap lifecycle opens metadata publication',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId !== 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {
+            node_id: 'node-1',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'priority control-plane recovery must not self-deadlock behind the restarting seed ready-lease quarantine once metadata publication is open',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'priority control-plane recovery should not remain parked on local self readiness after metadata publication opens',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions blocked on remote stale ready leases until peers become cluster-member healthy',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId === 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const staleLease = Date.now() - 1000;
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: staleLease,
+          },
+          {
+            node_id: 'node-3',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: staleLease,
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'priority control-plane recovery should not fan out onto remote stale ready leases while peers are still non-terminal',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority control-plane recovery should retry on the short priority cadence while remote ready-lease refresh catches up',
+      );
+    });
+
+  await t.test(
+    'checkRebalance keeps priority control-plane partitions blocked on ' +
+    'remote explicit ready-lease clears until peers republish readiness',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          if (nodeId === 'node-1') {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                  true,
+                [CONTROL_PLANE_READINESS_DIMENSION
+                  .METADATA_PUBLICATION_HEALTHY]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+              reasons: [],
+            };
+          }
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+            reasons: [
+              {code: 'cluster_member_unhealthy'},
+              {code: 'control_plane_write_unhealthy'},
+            ],
+          };
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+          {
+            node_id: 'node-3',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'priority control-plane recovery must not override a remote owner-authored ready-lease clear',
+      );
+      t.equal(
+        scheduledDelayMs,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority control-plane recovery should retry on the short priority cadence while remote readiness republishes',
+      );
+    });
+

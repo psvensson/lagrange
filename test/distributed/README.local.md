@@ -23,19 +23,127 @@ node test/distributed/run.js --config <config-path> [--scenario <scenario-name>]
 
 ## Failure Triage
 
-After a distributed harness failure, start from the auto-generated triage
-summary before sampling logs by hand. These files are written under the run
-artifact directory (typically
+After a distributed harness failure, artifact-first triage is mandatory. Start
+from the auto-generated triage summary before sampling logs by hand. These
+files are written under the run artifact directory (typically
 `test-output/reports/.playback/<report-basename>/<scenario>/`):
 
 1. `triage-summary.md`
 2. `triage-summary.json`
+
+Required order after a failure:
+
+1. Read `triage-summary.md`.
+2. Read `triage-summary.json`.
+3. Run the consolidated diagnostics script if you need deeper cross-scenario
+   analysis.
+4. Only then sample raw node logs.
 
 For deeper cross-scenario analysis, use the consolidated diagnostics script:
 
 ```bash
 npm run analyze:distributed-failure -- --report test-output/reports/<report>.report.json
 ```
+
+### Canonical Convergence Diagnostics
+
+Recent harness artifacts now emit canonical convergence state directly instead
+of only symptom counters.
+
+Useful partitioning fields in `triage-summary.json`, `triage-summary.md`, and
+the scenario `failure-bundle.json`:
+
+1. `localPrimaryNodeIds`
+2. `routedSupportNodeIds`
+3. `dispatchContributionHistogram`
+4. `degradationStateHistogram`
+5. `criticalControlPlaneStability`
+6. `convergenceEvaluations`
+
+Read them in this order:
+
+1. `selectedNodeIds` and `readyReplicaNodeIds` tell you what the harness could
+   actually drive.
+2. `localPrimaryNodeIds` versus `routedSupportNodeIds` tells you whether
+   usable spread exists or whether the system only has routed support.
+3. `criticalControlPlaneStability` tells you whether the harness is
+   intentionally holding benchmark growth on a shared control-plane gate and
+   why.
+4. `convergenceEvaluations` gives the per-node canonical state:
+   `ready_replica`, `replica_blocked`, `routed_admission_only`, or `absent`,
+   plus dispatch contribution, blocker reasons, and `retryAfterMs`.
+
+This should be your first stop before sampling raw node logs.
+
+### Stability Gates
+
+Recent triage artifacts also emit explicit stability gates under
+`summary.stabilityGates` in `triage-summary.json`, `triage-summary.md`, and
+the scenario `failure-bundle.json`.
+
+Read them as the top-level bar check for this workstream:
+
+1. `failover`
+2. `convergence`
+3. `restart_recovery`
+
+Interpretation:
+
+1. `closed` means repo-owned evidence currently satisfies that bar.
+2. `open` means typed blockers are still present; read the `blockers` list
+   before sampling logs.
+3. `not_applicable` means the scenario did not exercise that lane.
+
+Current AGPL-scoped production bars for this sprint:
+
+1. `failover` should close once the cluster can route/repair without
+   publication or readiness blockers.
+2. `convergence` should close only after publication, pending-ack, blocked-node,
+   and priority-spread blockers are gone.
+3. `restart_recovery` should close for rolling-restart and seed-restart
+   scenarios before a checkpoint rerun counts as acceptance evidence.
+
+## Validation Ladder
+
+For control-plane and topology work, use this order by default:
+
+1. targeted owner-path tests
+2. boundary-transition scenarios
+3. shared unit-only gate when the shared TAP boundary or broad cross-cutting
+   package surface is involved
+4. one full `7node` checkpoint rerun
+
+Do not use repeated full distributed reruns as the normal debugging loop.
+Checkpoint reruns should happen only after the earlier surfaces are green.
+
+The reusable local helper is:
+
+`node scripts/run-distributed-validation-ladder.js`
+
+Example:
+
+`node scripts/run-distributed-validation-ladder.js --owner "node test/control-plane/control-plane-system-table-gateway.test.js" --owner "node test/admin/admin-websocket-api.test.js" --boundary "npm run test:distributed:boundary:transition" --checkpoint "npm run test:distributed:checkpoint:7node:transaction-recovery"`
+
+## Boundary-Transition Scenario Layer
+
+Use the middle-layer boundary-transition scenarios when a bug is too coupled
+for a tiny unit test but not yet ready for another full `7node` rerun.
+
+Run the focused scenario layer with:
+
+```bash
+node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js
+```
+
+The first scenarios cover:
+
+1. usable spread versus raw spread
+2. authority-establishment deferred outcomes during benchmark table
+   preparation
+3. dispatch contribution under sustained slot pressure
+
+Prefer this layer before another full distributed rerun when the active work
+package names one of those boundaries.
 
 ## Scenario Policy SQL Ownership Guard
 

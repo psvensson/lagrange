@@ -19,7 +19,9 @@ import fc from 'fast-check';
 import {
   NodeLifecycleStateMachine,
   NodeState,
+  TransitionOutcome,
   VALID_TRANSITIONS,
+  resolveNodeLifecycleTransitionOutcome,
 } from '../../src/node/node-lifecycle-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -135,14 +137,15 @@ test('Property 3: State Transition Validity', async (t) => {
           (fromState, toState) => {
             initializeTestDependencies();
 
-            const validTargets = VALID_TRANSITIONS[fromState] || [];
-            const isValidTransition = validTargets.includes(toState);
+          const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+            fromState,
+            toState,
+          );
 
-            // Skip if this is actually a valid transition
-            if (isValidTransition) {
-              resetTestDependencies();
-              return true; // Property holds trivially for valid transitions
-            }
+          if (transitionOutcome !== TransitionOutcome.INVALID) {
+            resetTestDependencies();
+            return true;
+          }
 
             // Create state machine starting in fromState
             const sm = new NodeLifecycleStateMachine({
@@ -176,7 +179,7 @@ test('Property 3: State Transition Validity', async (t) => {
    *
    * This tests the isValidTransition helper method consistency.
    */
-  t.test('isValidTransition matches VALID_TRANSITIONS map', async (t) => {
+  t.test('isValidTransition matches transition outcome contract', async (t) => {
     fc.assert(
       fc.property(
         nodeStateArb,
@@ -185,12 +188,12 @@ test('Property 3: State Transition Validity', async (t) => {
           initializeTestDependencies();
 
           const sm = new NodeLifecycleStateMachine({nodeId: 'test-node'});
+          const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+            fromState,
+            toState,
+          );
+          const expectedValid = transitionOutcome !== TransitionOutcome.INVALID;
 
-          // Check what VALID_TRANSITIONS says
-          const validTargets = VALID_TRANSITIONS[fromState] || [];
-          const expectedValid = validTargets.includes(toState);
-
-          // Check what isValidTransition says
           const actualValid = sm.isValidTransition(fromState, toState);
 
           resetTestDependencies();
@@ -201,7 +204,7 @@ test('Property 3: State Transition Validity', async (t) => {
       {numRuns: 10},
     );
 
-    t.pass('isValidTransition matches VALID_TRANSITIONS map');
+    t.pass('isValidTransition matches transition outcome contract');
   });
 
   /**
@@ -218,11 +221,12 @@ test('Property 3: State Transition Validity', async (t) => {
         (fromState, toState) => {
           initializeTestDependencies();
 
-          const validTargets = VALID_TRANSITIONS[fromState] || [];
-          const isValidTransition = validTargets.includes(toState);
+          const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+            fromState,
+            toState,
+          );
 
-          // Skip valid transitions - we only care about rejected ones
-          if (isValidTransition) {
+          if (transitionOutcome !== TransitionOutcome.INVALID) {
             resetTestDependencies();
             return true;
           }

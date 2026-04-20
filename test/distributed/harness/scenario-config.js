@@ -5,6 +5,8 @@ import {
 
 const ZERO = 0;
 const DEFAULT_LOG_TABLE_NAME = 'logs';
+const WORKLOAD_PROFILE_DEFAULT = 'default';
+const WORKLOAD_PROFILE_BENCHMARK_EVENTS = 'benchmark_events_mixed';
 
 const DEFAULT_MIXED_LOAD_OPERATIONS = Object.freeze([
   'INSERT',
@@ -12,6 +14,14 @@ const DEFAULT_MIXED_LOAD_OPERATIONS = Object.freeze([
   'UPDATE',
   'DELETE',
 ]);
+const DEFAULT_BENCHMARK_LOAD_OPERATIONS = Object.freeze([
+  'INSERT',
+  'SELECT',
+]);
+const LOAD_WORKLOAD_OPERATION_DEFAULTS = Object.freeze({
+  [WORKLOAD_PROFILE_DEFAULT]: DEFAULT_MIXED_LOAD_OPERATIONS,
+  [WORKLOAD_PROFILE_BENCHMARK_EVENTS]: DEFAULT_BENCHMARK_LOAD_OPERATIONS,
+});
 
 function normalizeFiniteNumber(value, fallback) {
   return Number.isFinite(value) ? value : fallback;
@@ -33,6 +43,26 @@ function normalizeObject(value) {
     null;
 }
 
+function resolveLoadWorkloadConfig(
+  options = {},
+  defaultWorkloadProfile = WORKLOAD_PROFILE_DEFAULT,
+) {
+  const workloadProfile = normalizeNonEmptyString(
+    options.workloadProfile,
+    defaultWorkloadProfile,
+  );
+  const defaultOperations =
+    LOAD_WORKLOAD_OPERATION_DEFAULTS[workloadProfile] ||
+    DEFAULT_MIXED_LOAD_OPERATIONS;
+  return Object.freeze({
+    workloadProfile,
+    loadOperations: normalizeNonEmptyArray(
+      options.loadOperations,
+      defaultOperations,
+    ),
+  });
+}
+
 function resolveScenarioOptions(options = {}, cluster = null, scenarioKey = '') {
   const normalizedOptions = normalizeObject(options) || {};
   if (typeof scenarioKey !== 'string' || scenarioKey.length <= ZERO) {
@@ -52,14 +82,16 @@ function resolveScenarioOptions(options = {}, cluster = null, scenarioKey = '') 
 }
 
 function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
+  const loadWorkload = resolveLoadWorkloadConfig(
+    options,
+    WORKLOAD_PROFILE_BENCHMARK_EVENTS,
+  );
   return Object.freeze({
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 7),
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 140),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '120s'),
-    loadOperations: normalizeNonEmptyArray(
-      options.loadOperations,
-      DEFAULT_MIXED_LOAD_OPERATIONS,
-    ),
+    workloadProfile: loadWorkload.workloadProfile,
+    loadOperations: loadWorkload.loadOperations,
     tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
@@ -134,14 +166,16 @@ function resolveSevenNodeTablePartitionDistributionScenarioConfig(options = {}) 
 }
 
 function resolveSevenNodeLoadDuringPartitioningScenarioConfig(options = {}) {
+  const loadWorkload = resolveLoadWorkloadConfig(
+    options,
+    WORKLOAD_PROFILE_BENCHMARK_EVENTS,
+  );
   return Object.freeze({
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 7),
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 140),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '240s'),
-    loadOperations: normalizeNonEmptyArray(
-      options.loadOperations,
-      DEFAULT_MIXED_LOAD_OPERATIONS,
-    ),
+    workloadProfile: loadWorkload.workloadProfile,
+    loadOperations: loadWorkload.loadOperations,
     tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 1),

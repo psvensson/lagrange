@@ -27,6 +27,9 @@ async function authorizeAlways(_envelope, _context) {
   return undefined;
 }
 
+const NO_HANDLER_DELIVERY_ERROR =
+  'No handler registered for address node-a/service/svc-1';
+
 describe('ServiceDispatcher', () => {
   it('dispatches canonical envelope through leader resolver and message router', async () => {
     const delivered = [];
@@ -139,6 +142,26 @@ describe('ServiceDispatcher', () => {
     await assert.rejects(
       () => dispatcher.dispatch(validEnvelope()),
       /not acknowledged/,
+    );
+  });
+
+  it('treats acknowledged no-handler deliveries as rejected', async () => {
+    const dispatcher = new ServiceDispatcher({
+      messageRouter: {
+        deliver: async () => ({
+          acknowledged: true,
+          noHandler: true,
+          error: NO_HANDLER_DELIVERY_ERROR,
+        }),
+      },
+      leaderResolver: async () => ({targetAddress: 'node-a/service/svc-1'}),
+      authenticate: authenticateAlways,
+      authorize: authorizeAlways,
+    });
+
+    await assert.rejects(
+      () => dispatcher.dispatch(validEnvelope()),
+      /No handler registered/,
     );
   });
 

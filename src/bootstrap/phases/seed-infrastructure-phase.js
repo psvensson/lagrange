@@ -28,26 +28,12 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 import {
-  ControlPlaneMessageType,
-  getControlPlaneMessageRequiredTables,
-} from '../../control-plane/control-plane-constants.js';
+  resolveQueryTransportSelection,
+} from '../shared/query-transport-selection.js';
 
 const MESSAGE_ROUTER_SETUP_OWNER = 'MessageRouterSetup';
 const RECONCILER_INIT_REQUIRED =
   'Bootstrap reconciler must be initialized before reconciliation';
-const QUERY_TRANSPORT_REQUIRED_TABLES = Object.freeze(
-  getControlPlaneMessageRequiredTables(
-    ControlPlaneMessageType.NODE_STATE_UPDATE,
-  ),
-);
-
-function resolveInitializedQueryMessageGroupService(getService) {
-  if (typeof getService !== TYPEOF.FUNCTION) {
-    return null;
-  }
-  const service = getService();
-  return service?.initialized === true ? service : null;
-}
 
 /**
  * Format bootstrap replica options mismatch message.
@@ -195,10 +181,8 @@ class SeedInfrastructurePhase {
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
         TYPEOF.FUNCTION) {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
-        resolveInitializedQueryMessageGroupService(
-          () => d.getLeaderMessageGroupService({
-            requiredTables: QUERY_TRANSPORT_REQUIRED_TABLES,
-          }),
+        resolveQueryTransportSelection(
+          () => d.resolveQueryTransportMessageGroupSelection(),
         ),
       );
     }

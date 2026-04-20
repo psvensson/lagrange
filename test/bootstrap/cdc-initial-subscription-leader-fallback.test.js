@@ -132,7 +132,7 @@ test(
 );
 
 test(
-  'subscribeToCDC defers CDC delivery when no operational message-group is ready',
+  'subscribeToCDC defers CDC delivery when the captured ingress owner is unavailable',
   async (t) => {
     setupEnvironment();
 
@@ -159,7 +159,7 @@ test(
     ]);
     service.messageGroupServices = new Map([
       ['mg-1-r1', {
-        initialized: true,
+        initialized: false,
         systemTableCache: {
           get: () => null,
         },
@@ -177,6 +177,20 @@ test(
       'partitions',
       'partitions-p1',
       ['partitions-p1-r1'],
+    );
+
+    assert.deepEqual(
+      capturedCdcSubscriber.canAcceptCDCEvent({
+        tableName: 'partitions',
+        operation: 'INSERT',
+        data: {partition_id: 'tbl-abc-p1', table_name: 'benchmark'},
+      }),
+      {
+        ready: false,
+        reason: 'leader metadata incomplete',
+        retryAfterMs: 250,
+      },
+      'subscriber should expose typed readiness before partition CDC starts delivery work',
     );
 
     await assert.rejects(
@@ -200,7 +214,7 @@ test(
 );
 
 test(
-  'subscribeToCDC repairs strict ingress selection before deferring',
+  'subscribeToCDC reuses the captured strict ingress owner before rerunning selection repair',
   async (t) => {
     setupEnvironment();
 
@@ -280,11 +294,13 @@ test(
     assert.equal(
       propagatedEvents.length,
       1,
-      'strict ingress selection should use authoritative repair before declaring owner-not-ready',
+      'strict CDC propagation should stay bound to the captured ingress owner',
     );
-    assert.ok(
-      repairSelectionCalls >= 1,
-      'strict ingress selection should invoke the repair-aware selection path',
+    assert.equal(
+      repairSelectionCalls,
+      0,
+      'captured ingress reuse should avoid re-deriving strict repair ' +
+      'selection in the outer owner path',
     );
 
     teardownEnvironment();
@@ -293,7 +309,7 @@ test(
 );
 
 test(
-  'subscribeToCDC accepts strict local ingress after repair when no remote target exists yet',
+  'subscribeToCDC keeps strict local ingress bound to the captured owner when no remote target exists yet',
   async (t) => {
     setupEnvironment();
 
@@ -381,9 +397,10 @@ test(
       localRelay,
       'strict local ingress should return the local relay as the operational ingress service',
     );
-    assert.ok(
-      repairSelectionCalls >= 1,
-      'strict local ingress should still use the repair-aware selection path before admitting the relay',
+    assert.equal(
+      repairSelectionCalls,
+      0,
+      'captured local ingress reuse should avoid rerunning outer selection repair',
     );
 
     teardownEnvironment();

@@ -34,6 +34,8 @@ function createLocalQueryTransportReadiness(ready) {
       ready: false,
       state: 'deferred',
       reason: 'Query/data-plane message-group transport is not configured',
+      reasonCode: 'query_transport_not_ready',
+      errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
       retryAfterMs: 250,
     };
 }

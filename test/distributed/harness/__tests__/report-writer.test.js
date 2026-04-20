@@ -13,7 +13,6 @@ import {
 } from '../report-writer.js';
 
 const JSON_INDENT_EXPECTED = 2;
-
 describe('ReportWriter', () => {
   let tempDir;
   let outputPath;
@@ -30,7 +29,6 @@ describe('ReportWriter', () => {
       // best-effort cleanup
     }
   });
-
   describe('addResult', () => {
     it('accumulates scenario results', () => {
       const writer = new ReportWriter(outputPath);
@@ -40,7 +38,6 @@ describe('ReportWriter', () => {
       assert.equal(writer.scenarios[0].scenario, 'scenario-a');
       assert.equal(writer.scenarios[1].scenario, 'scenario-b');
     });
-
     it('includes all required per-scenario fields', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('test-scenario', {
@@ -89,6 +86,7 @@ describe('ReportWriter', () => {
       assert.equal(entry.memoryLeakAssertion, null);
       assert.equal(entry.failureClassification, null);
       assert.equal(entry.publicationConvergence, null);
+      assert.equal(entry.stabilityGates, null);
       assert.equal(entry.decisionArtifactsByNodeId, null);
       assert.deepEqual(entry.performanceMeasurement, {
         available: false,
@@ -101,7 +99,6 @@ describe('ReportWriter', () => {
       assert.ok(Array.isArray(entry.optimizationPriorities));
       assert.ok(entry.optimizationPriorities.length > 0);
     });
-
     it('includes load metrics with latency and throughput', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('load-scenario', {
@@ -159,7 +156,6 @@ describe('ReportWriter', () => {
         observedP99LatencyMs: 120,
       });
     });
-
     it('marks failed load measurements as invalid for performance comparison',
       () => {
         const writer = new ReportWriter(outputPath);
@@ -185,7 +181,6 @@ describe('ReportWriter', () => {
           observedP99LatencyMs: 120,
         });
     });
-
     it('defaults required optimization load fields when absent', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('load-scenario', {
@@ -236,7 +231,6 @@ describe('ReportWriter', () => {
         perNode: {},
       });
     });
-
     it('preserves additive load diagnostics for observability compatibility', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('postgres-baseline-comparison', {
@@ -284,7 +278,6 @@ describe('ReportWriter', () => {
         perNode: {},
       });
     });
-
     it('preserves additive dispatch accounting and per-node metrics fields', () => {
       const writer = new ReportWriter(outputPath);
       writer.addResult('postgres-baseline-comparison', {
@@ -458,6 +451,60 @@ describe('ReportWriter', () => {
       assert.equal(entry.passed, false);
       assert.equal(entry.error, 'Convergence timeout');
       assert.ok(entry.stackTrace.includes('Convergence timeout'));
+    });
+
+    it('preserves canonical convergence diagnostics in scenario details', () => {
+      const entry = buildScenarioEntry('seven-node-read-write-load-transaction-recovery', {
+        passed: false,
+        duration: 500,
+        details: {
+          diagnostics: {
+            failedPhase: {
+              phase: 'verify',
+              artifacts: {
+                partitioningPlanner: {
+                  localPrimaryNodeIds: ['node-1', 'node-2'],
+                  routedSupportNodeIds: ['node-4'],
+                  dispatchContributionHistogram: {
+                    local_primary: 2,
+                    routed_support: 1,
+                  },
+                  convergenceEvaluations: [
+                    {
+                      nodeId: 'node-3',
+                      state: 'replica_blocked',
+                      dispatchContributionState: 'local_blocked',
+                      reasonCodes: ['local_replica_not_voter_ready'],
+                      retryAfterMs: 125,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      });
+
+      assert.deepEqual(
+        entry.details.diagnostics.failedPhase.artifacts.partitioningPlanner,
+        {
+          localPrimaryNodeIds: ['node-1', 'node-2'],
+          routedSupportNodeIds: ['node-4'],
+          dispatchContributionHistogram: {
+            local_primary: 2,
+            routed_support: 1,
+          },
+          convergenceEvaluations: [
+            {
+              nodeId: 'node-3',
+              state: 'replica_blocked',
+              dispatchContributionState: 'local_blocked',
+              reasonCodes: ['local_replica_not_voter_ready'],
+              retryAfterMs: 125,
+            },
+          ],
+        },
+      );
     });
   });
 
@@ -756,6 +803,49 @@ describe('ReportWriter', () => {
         cdcReplay: {
           replayBufferGrowthCount: 3,
           replayRetryDepth: 2,
+        },
+      });
+    });
+
+    it('persists stability gate diagnostics on the scenario entry', () => {
+      const entry = buildScenarioEntry('seed-restart-under-load', {
+        passed: false,
+        stabilityGates: {
+          failover: {
+            type: 'failover',
+            status: 'closed',
+            blockers: [],
+            evidence: {
+              pendingAckCount: 0,
+            },
+          },
+          convergence: {
+            type: 'convergence',
+            status: 'open',
+            blockers: ['priority_spread_pending', 'closure_record'],
+            evidence: {
+              closureRecordId: 'CL-003',
+            },
+          },
+        },
+      });
+
+      assert.deepEqual(entry.stabilityGates, {
+        failover: {
+          type: 'failover',
+          status: 'closed',
+          blockers: [],
+          evidence: {
+            pendingAckCount: 0,
+          },
+        },
+        convergence: {
+          type: 'convergence',
+          status: 'open',
+          blockers: ['priority_spread_pending', 'closure_record'],
+          evidence: {
+            closureRecordId: 'CL-003',
+          },
         },
       });
     });

@@ -7,8 +7,10 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   NodeLifecycleStateMachine,
   NodeState,
+  TransitionOutcome,
   VALID_TRANSITIONS,
   InvalidTransitionError,
+  resolveNodeLifecycleTransitionOutcome,
 } from '../../src/node/node-lifecycle-state-machine.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
 import {NODE_LIFECYCLE_DIAGNOSTIC_CODE} from '../../src/node/node-constants.js';
@@ -147,6 +149,11 @@ test('NodeLifecycleStateMachine - isValidTransition', async (t) => {
     true,
     'READY -> DRAINING is valid',
   );
+  t.equal(
+    sm.isValidTransition(NodeState.READY, NodeState.READY),
+    true,
+    'READY -> READY is an allowed idempotent no-op',
+  );
 
   // Invalid transitions
   t.equal(
@@ -216,6 +223,32 @@ test('NodeLifecycleStateMachine - full lifecycle transition', async (t) => {
   t.equal(sm.getState(), NodeState.STOPPED, 'should end in STOPPED');
   t.end();
 });
+
+test('NodeLifecycleStateMachine - READY to READY is idempotent no-op',
+  async (t) => {
+    const sm = new NodeLifecycleStateMachine({
+      nodeId: 'test-node-1',
+      initialState: NodeState.READY,
+    });
+    const events = [];
+    sm.on('stateChange', (event) => {
+      events.push(event);
+    });
+
+    t.equal(
+      resolveNodeLifecycleTransitionOutcome(NodeState.READY, NodeState.READY),
+      TransitionOutcome.IDEMPOTENT_NOOP,
+      'transition contract should classify READY -> READY as idempotent',
+    );
+    t.equal(
+      sm.transition(NodeState.READY),
+      true,
+      'READY -> READY should succeed',
+    );
+    t.equal(sm.getState(), NodeState.READY, 'state should remain READY');
+    t.same(events, [], 'idempotent no-op should not emit state change');
+    t.end();
+  });
 
 test('NodeLifecycleStateMachine - JOINING to READY direct transition', async (t) => {
   const sm = new NodeLifecycleStateMachine();

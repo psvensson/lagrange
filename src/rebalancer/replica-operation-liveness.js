@@ -1,7 +1,11 @@
 import {NUM, TIME_MS, WORKFLOW_STEP} from '../constants/index.js';
 import {
   OperationType,
+  REPLICA_OPERATION_SEMANTIC_PHASE,
+  buildReplicaOperationSemanticWitnesses,
+  isReplaceRemoveDispatchPhase,
   isTerminalStep as isTerminalReplicaOperationStep,
+  resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
 import {REBALANCER_DEFAULT} from './rebalancer-constants.js';
 
@@ -25,7 +29,6 @@ const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   MINUTES_PER_HOUR;
 
 const REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
-  'active',
   'removed',
   REPLICA_OPERATION_STATUS_FAILED,
 ]);
@@ -78,6 +81,131 @@ function parseStepsHistory(stepsHistoryRaw) {
   }
 }
 
+function inferPartitionIdFromReplicaId(replicaId) {
+  const normalizedReplicaId = String(replicaId || '').trim();
+  if (normalizedReplicaId.length === NUM.ZERO) {
+    return null;
+  }
+  const match = normalizedReplicaId.match(/^(.*)-r\d+$/);
+  if (!match || typeof match[1] !== 'string') {
+    return null;
+  }
+  const partitionId = match[1].trim();
+  return partitionId.length > NUM.ZERO ? partitionId : null;
+}
+
+function inferNodeIdFromPeerAddress(address) {
+  const normalizedAddress = String(address || '').trim();
+  if (normalizedAddress.length === NUM.ZERO) {
+    return null;
+  }
+  const slashIndex = normalizedAddress.indexOf('/');
+  if (slashIndex === NUM.ZERO) {
+    return null;
+  }
+  if (slashIndex > NUM.ZERO) {
+    return normalizedAddress.slice(NUM.ZERO, slashIndex);
+  }
+  return normalizedAddress;
+}
+
+function inferTargetNodeIdFromStepsHistory(stepsHistory, replicaId) {
+  const normalizedReplicaId = String(replicaId || '').trim();
+  const normalizedStepsHistory = Array.isArray(stepsHistory) ?
+    stepsHistory :
+    [];
+  for (let index = normalizedStepsHistory.length - NUM.ONE;
+    index >= NUM.ZERO;
+    index -= NUM.ONE) {
+    const entry = normalizedStepsHistory[index];
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const replicaIds = Array.isArray(entry.replicaIds) ?
+      entry.replicaIds :
+      [];
+    const peerAddresses = Array.isArray(entry.peerAddresses) ?
+      entry.peerAddresses :
+      [];
+    if (normalizedReplicaId.length > NUM.ZERO &&
+        replicaIds.length > NUM.ZERO &&
+        replicaIds.length === peerAddresses.length) {
+      const replicaIndex = replicaIds.findIndex((candidateReplicaId) =>
+        String(candidateReplicaId || '').trim() === normalizedReplicaId,
+      );
+      if (replicaIndex >= NUM.ZERO) {
+        const peerNodeId = inferNodeIdFromPeerAddress(
+          peerAddresses[replicaIndex],
+        );
+        if (peerNodeId) {
+          return peerNodeId;
+        }
+      }
+    }
+    const readinessNodeId = firstStringField(
+      entry?.readinessSnapshot,
+      'nodeId',
+      'node_id',
+    );
+    if (readinessNodeId) {
+      return readinessNodeId;
+    }
+  }
+  return null;
+}
+
+function inferOperationTypeFromStepsHistory(
+  stepsHistory,
+  replicaId,
+  workflowStep,
+  status,
+) {
+  const normalizedReplicaId = String(replicaId || '').trim();
+  const normalizedWorkflowStep = String(workflowStep || '').toUpperCase();
+  const normalizedStatus = String(status || '').toLowerCase();
+  const normalizedStepsHistory = Array.isArray(stepsHistory) ?
+    stepsHistory :
+    [];
+  const timelineSteps = new Set(
+    normalizedStepsHistory.map((entry) =>
+      String(entry?.step || '').toUpperCase(),
+    ).filter((step) => step.length > NUM.ZERO),
+  );
+  let sourceReplicaId = null;
+  for (const entry of normalizedStepsHistory) {
+    const candidateSourceReplicaId = firstStringField(
+      entry,
+      'sourceReplicaId',
+      'source_replica_id',
+    );
+    if (!candidateSourceReplicaId) {
+      continue;
+    }
+    sourceReplicaId = candidateSourceReplicaId;
+    break;
+  }
+  if (timelineSteps.has(WORKFLOW_STEP.STOPPING) ||
+      normalizedWorkflowStep === WORKFLOW_STEP.STOPPING ||
+      normalizedWorkflowStep === WORKFLOW_STEP_FAILED &&
+        timelineSteps.has(WORKFLOW_STEP.STOPPING)) {
+    return OperationType.REMOVE;
+  }
+  if (sourceReplicaId &&
+      normalizedReplicaId.length > NUM.ZERO &&
+      sourceReplicaId !== normalizedReplicaId) {
+    return OperationType.REPLACE;
+  }
+  if (timelineSteps.has(WORKFLOW_STEP.CREATING) ||
+      timelineSteps.has(WORKFLOW_STEP.SYNCING) ||
+      normalizedWorkflowStep === WORKFLOW_STEP.CREATING ||
+      normalizedWorkflowStep === WORKFLOW_STEP.SYNCING ||
+      normalizedStatus === 'syncing' ||
+      normalizedStatus === 'creating') {
+    return sourceReplicaId ? OperationType.REPLACE : OperationType.ADD;
+  }
+  return null;
+}
+
 function resolveAgeMs(record, nowMs) {
   const referenceAtMs = normalizeEpochMillis(
     record?.updatedAt ?? record?.createdAt,
@@ -118,6 +246,44 @@ function normalizeReplicaOperationRecord(row, options = {}) {
   const stepsHistory = parseStepsHistory(
     row?.steps_history ?? row?.stepsHistory,
   );
+  const replicaId = String(firstStringField(
+    row,
+    'replica_id',
+    'replicaId',
+    'service_id',
+    'serviceId',
+  ) || '');
+  const inferredPartitionGroupId =
+    inferPartitionIdFromReplicaId(replicaId);
+  const partitionGroupId = String(firstStringField(
+    row,
+    'partition_group_id',
+    'partitionGroupId',
+    'partition_id',
+    'partitionId',
+    'entity_id',
+    'entityId',
+  ) || inferredPartitionGroupId || UNKNOWN_PARTITION_GROUP_ID);
+  const inferredType = inferOperationTypeFromStepsHistory(
+    stepsHistory,
+    replicaId,
+    workflowStep,
+    status,
+  );
+  const inferredTargetNodeId = inferTargetNodeIdFromStepsHistory(
+    stepsHistory,
+    replicaId,
+  );
+  const semanticPhase = resolveReplicaOperationSemanticPhase(
+    type || inferredType || '',
+    workflowStep,
+    status,
+  );
+  const witnesses = buildReplicaOperationSemanticWitnesses(
+    type || inferredType || '',
+    workflowStep,
+    status,
+  );
 
   return {
     operationId: String(firstStringField(
@@ -125,16 +291,11 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       'operation_id',
       'operationId',
     ) || ''),
-    type,
+    type: type || inferredType || '',
     status,
     workflowStep,
-    partitionGroupId: String(firstStringField(
-      row,
-      'partition_id',
-      'partitionId',
-      'entity_id',
-      'entityId',
-    ) || UNKNOWN_PARTITION_GROUP_ID),
+    partitionGroupId,
+    partitionId: partitionGroupId,
     entityType: String(firstStringField(
       row,
       'entity_type',
@@ -144,32 +305,30 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       row,
       'entity_id',
       'entityId',
+      'partition_group_id',
+      'partitionGroupId',
       'partition_id',
       'partitionId',
-    ) || UNKNOWN_PARTITION_GROUP_ID),
+    ) || inferredPartitionGroupId || UNKNOWN_PARTITION_GROUP_ID),
     sourceNodeId: String(firstStringField(
       row,
       'source_node_id',
       'sourceNodeId',
     ) || ''),
-    replicaId: String(firstStringField(
-      row,
-      'replica_id',
-      'replicaId',
-      'service_id',
-      'serviceId',
-    ) || ''),
+    replicaId,
     targetNodeId: String(firstStringField(
       row,
       'target_node_id',
       'targetNodeId',
-    ) || ''),
+    ) || inferredTargetNodeId || ''),
     createdAt,
     updatedAt,
     completedAt,
     hasCompletedAt,
     stepsHistory,
     ageMs: resolveAgeMs({updatedAt, createdAt}, nowMs),
+    semanticPhase,
+    witnesses,
   };
 }
 
@@ -177,9 +336,13 @@ function isReplicaOperationTerminalSuccess(record) {
   if (!record?.type || !record?.status) {
     return false;
   }
-  if (record.status === REPLICA_OPERATION_STATUS_FAILED ||
+  if (record.witnesses?.failureWitness === true ||
+      record.status === REPLICA_OPERATION_STATUS_FAILED ||
       record.workflowStep === WORKFLOW_STEP_FAILED) {
     return false;
+  }
+  if (record.witnesses?.settlementWitness === true) {
+    return true;
   }
   if (record.workflowStep &&
       isTerminalReplicaOperationStep(record.type, record.workflowStep)) {
@@ -319,12 +482,26 @@ function hasObservedActiveTargetServiceOwnership(record, options = {}) {
   return false;
 }
 
+function isReplicaOperationExplicitlyExcludedFromInFlight(record) {
+  const normalizedStatus = String(record?.status || '').toLowerCase();
+  if (REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES.has(normalizedStatus)) {
+    return true;
+  }
+  if (record?.semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.FAILED ||
+      record?.semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED) {
+    return true;
+  }
+  if (normalizedStatus !== REPLICA_OPERATION_STATUS_ACTIVE) {
+    return false;
+  }
+  return !isReplaceRemoveDispatchPhase(record);
+}
+
 function isReplicaOperationInFlight(record, options = {}) {
   if (!record || typeof record !== 'object') {
     return false;
   }
-  const normalizedStatus = String(record.status || '').toLowerCase();
-  if (REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES.has(normalizedStatus)) {
+  if (isReplicaOperationExplicitlyExcludedFromInFlight(record)) {
     return false;
   }
   if (isReplicaOperationTerminalSuccess(record)) {
@@ -465,9 +642,11 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
   const includeTimeline = options.includeTimeline !== false;
   const statusHistogram = {};
   const stepHistogram = {};
+  const semanticPhaseHistogram = {};
   const partitionGroupInFlight = {};
   const operationTimelineById = {};
   const inFlightOperationIds = [];
+  const visibleRows = [];
   let inFlightCount = NUM.ZERO;
   let staleInFlightCount = NUM.ZERO;
   let oldestInFlightAgeMs = null;
@@ -478,8 +657,13 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
         !scopedPartitionIds.has(record.partitionGroupId)) {
       continue;
     }
+    visibleRows.push(record);
     const statusKey = record.status || UNKNOWN_STATUS;
     statusHistogram[statusKey] = (statusHistogram[statusKey] || NUM.ZERO) + NUM.ONE;
+    const semanticPhaseKey =
+      record.semanticPhase || REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN;
+    semanticPhaseHistogram[semanticPhaseKey] =
+      (semanticPhaseHistogram[semanticPhaseKey] || NUM.ZERO) + NUM.ONE;
 
     if (includeTimeline && record.operationId) {
       operationTimelineById[record.operationId] =
@@ -515,12 +699,14 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
   return {
     inFlightCount,
     statusHistogram,
+    semanticPhaseHistogram,
     partitionGroupInFlight,
     stepHistogram,
     oldestInFlightAgeMs,
     staleInFlightCount,
     inFlightOperationIds,
     operationTimelineById,
+    rows: visibleRows,
   };
 }
 

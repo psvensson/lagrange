@@ -83,6 +83,30 @@ runAdapterConformanceSuite({
   },
 });
 
+describe('PartitionServiceAdapter validation', () => {
+  it('fails closed when createReplica hook is missing', () => {
+    assert.throws(
+      () => new PartitionServiceAdapter({
+        startReplica: async () => ({started: true}),
+        stopReplica: async () => ({stopped: true}),
+      }),
+      /partition adapter requires createReplica hook/,
+    );
+  });
+
+  it('fails closed when optional hooks are not functions', () => {
+    assert.throws(
+      () => new PartitionServiceAdapter({
+        createReplica: async () => ({created: true}),
+        startReplica: async () => ({started: true}),
+        stopReplica: async () => ({stopped: true}),
+        health: 'running',
+      }),
+      /adapter hook must be a function/,
+    );
+  });
+});
+
 runAdapterConformanceSuite({
   name: 'message-group',
   serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
@@ -130,6 +154,30 @@ runAdapterConformanceSuite({
     health: {status: 'healthy'},
     calls: ['createReplica', 'startReplica', 'stopReplica', 'health'],
   },
+});
+
+describe('MessageGroupServiceAdapter validation', () => {
+  it('fails closed when startReplica hook is missing', () => {
+    assert.throws(
+      () => new MessageGroupServiceAdapter({
+        createReplica: async () => ({created: true}),
+        stopReplica: async () => ({stopped: true}),
+      }),
+      /message-group adapter requires startReplica hook/,
+    );
+  });
+
+  it('fails closed when optional hooks are not functions', () => {
+    assert.throws(
+      () => new MessageGroupServiceAdapter({
+        createReplica: async () => ({created: true}),
+        startReplica: async () => ({started: true}),
+        stopReplica: async () => ({stopped: true}),
+        validateDefinition: 'invalid',
+      }),
+      /adapter hook must be a function/,
+    );
+  });
 });
 
 runAdapterConformanceSuite({

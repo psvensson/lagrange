@@ -24,12 +24,15 @@ function resolveBootstrapLeaderSelection(options = {}) {
   });
 
   if (leaderServices.length === NUM.ONE) {
+    const leaderServiceNodeId =
+      leaderServices[NUM.ZERO]?.node_id ||
+      leaderServices[NUM.ZERO]?.nodeId;
     return {
       selectedService: leaderServices[NUM.ZERO],
-      leaderNodeId:
-        leaderServices[NUM.ZERO]?.node_id ||
-        leaderServices[NUM.ZERO]?.nodeId ||
-        null,
+      ...(typeof leaderServiceNodeId === TYPEOF.STRING &&
+        leaderServiceNodeId.length > NUM.ZERO ? {
+        leaderNodeId: leaderServiceNodeId,
+      } : {}),
       selectionSource: 'leader_role',
     };
   }
@@ -50,19 +53,21 @@ function resolveBootstrapLeaderSelection(options = {}) {
 
   if (options?.allowSingleReplicaFallback !== false &&
       visibleServices.length === NUM.ONE) {
+    const singleReplicaNodeId =
+      visibleServices[NUM.ZERO]?.node_id ||
+      visibleServices[NUM.ZERO]?.nodeId;
     return {
       selectedService: visibleServices[NUM.ZERO],
-      leaderNodeId:
-        visibleServices[NUM.ZERO]?.node_id ||
-        visibleServices[NUM.ZERO]?.nodeId ||
-        null,
+      ...(typeof singleReplicaNodeId === TYPEOF.STRING &&
+        singleReplicaNodeId.length > NUM.ZERO ? {
+        leaderNodeId: singleReplicaNodeId,
+      } : {}),
       selectionSource: 'single_service',
     };
   }
 
   return {
     selectedService: null,
-    leaderNodeId: null,
     selectionSource: null,
   };
 }

@@ -1,7 +1,11 @@
 timeout: 5000
 allow-incomplete-coverage: true
-jobs: 8
+# Shared unit validation is stable at 4 concurrent TAP workers on the current
+# workstation budget. Higher parallelism has produced aggregate-only gate
+# failures even when the same subsystem shards pass in isolation.
+jobs: 4
 node-arg:
+  - --no-compilation-cache
   - --max-old-space-size=512
 serial:
   - test/integration

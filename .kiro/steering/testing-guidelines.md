@@ -43,9 +43,64 @@ Required workflow:
    has passed.
 4. If validation reveals a second concern, split that concern into a new idea
    or work package instead of silently widening the current one.
+5. After the package validation surface is green, perform the required
+   package-closure deep dive across the affected area before closing the
+   package.
+6. If that deep dive finds mistakes, irregularities, or doctrine/system
+   guideline violations in the affected area, fix them before renaming the
+   package to `done-...`.
+7. If a package changes a shared contract, validation must prove not only the
+   runtime owner path, but also the direct status, diagnostics, admin, harness,
+   or reporting surfaces that consume that contract.
+8. A package is not validation-complete while tail-consumer proof is still
+   missing, even if the main owner tests are green.
+9. When residual closures are split into a follow-on package, the original
+   package must stop short of `done-...` until the split is explicit in `work/`
+   and the original package file names the exact handoff.
 
 This keeps test closure aligned with bounded implementation scope instead of
 letting validation sprawl across unrelated concerns.
+
+The package is not done merely because the named tests pass. Test closure and
+package closure both require the final affected-area deep dive required by
+`.kiro/steering/system guidelines.md`.
+
+## Runner Stability Boundary Policy
+
+When a validation run fails with unrelated TAP child-worker crashes such as
+`SIGILL`, `SIGSEGV`, or `1..0 # no tests found`, treat the problem as a shared
+runner-boundary concern until proven otherwise.
+
+Required workflow:
+
+1. Confirm whether the failing files are unrelated in domain behavior.
+2. Prefer a shared runner or bootstrap fix before editing individual suites.
+3. If the crash traces point to Node/V8 startup or worker initialization,
+   harden the shared TAP worker configuration first.
+4. Only return to suite-local fixes after the shared runner boundary is shown
+   stable.
+
+This prevents nondeterministic worker crashes from being misdiagnosed as a
+series of unrelated test bugs.
+
+## Runner Parallelism Budget Policy
+
+When isolated subsystem or shard runs pass, but the aggregate TAP gate fails
+only when all suites run together, treat the problem as a shared runner
+parallelism-budget concern until proven otherwise.
+
+Required workflow:
+
+1. Confirm that the same suites pass in smaller grouped or isolated bail runs.
+2. Check shared machine budget signals such as available RAM, swap pressure,
+   and TAP worker count before editing individual suites.
+3. Prefer lowering the shared TAP `jobs` budget or other runner-wide worker
+   concurrency settings before chasing late aggregate-only assertions.
+4. Only restore higher parallelism after the aggregate gate is proven stable at
+   the new boundary.
+
+This prevents full-gate resource collapse from being misdiagnosed as a long
+tail of unrelated suite failures.
 
 ## Test-First Bug Fix Policy
 
@@ -472,6 +527,114 @@ distributed baseline:
 ## Node Join Convergence SLO Strategy
 Integration-specific node-join convergence procedure lives in
 `test/integration/README.local.md`.
+
+## Boundary-Transition Scenario Layer Policy
+
+Between focused owner-unit tests and full distributed harness reruns, use a
+dedicated boundary-transition scenario layer when the failure sits at a shared
+distributed boundary.
+
+Use this layer when:
+
+1. The bug depends on several real owner contracts interacting together.
+2. A tiny unit test loses the important owner transition.
+3. A full `5node` or `7node` rerun is truthful but too expensive for the next
+   debugging step.
+
+Required workflow:
+
+1. Name the boundary explicitly in the test description and package notes.
+2. Reuse existing harness helpers and owner snapshots instead of building a
+   second fake distributed framework.
+3. Assert canonical state transitions directly, for example:
+   - usable spread versus raw spread
+   - routed admission versus local usability
+   - structured deferred outcome versus timeout-shaped silence
+   - dispatch contribution versus nominal admission
+4. Keep the scenario narrow enough to run in the normal local loop.
+5. Still finish with the full distributed harness when the package explicitly
+   requires real-cluster closure.
+
+This layer exists to shrink the gap between “too small to be truthful” and
+“too expensive to iterate on”.
+
+## Distributed Validation Ladder Policy
+
+For control-plane, readiness, topology, and other shared distributed-boundary
+work, the normal debugging loop must follow one validation ladder instead of
+jumping straight from unit failures to repeated full distributed reruns.
+
+Required workflow:
+
+1. Run the targeted owner-path tests for the boundary you are changing.
+2. Run the boundary-transition scenario layer next.
+3. If the package or runner boundary requires it, run the shared unit-only gate
+   before any checkpoint distributed rerun.
+4. Run a full `5node` or `7node` harness scenario only after the earlier
+   stages are green.
+5. Treat the full distributed rerun as checkpoint truth, not as the default
+   inner-loop debugger.
+
+Local execution may use `scripts/run-distributed-validation-ladder.js` to
+make this order explicit. Work packages should list their targeted owner tests,
+the relevant boundary-transition scenarios, and the final distributed checkpoint
+command in that same order.
+
+## Artifact-First Distributed Failure Triage Policy
+
+After a distributed harness failure, artifact-first triage is mandatory.
+
+Required workflow:
+
+1. Read `triage-summary.md` first.
+2. Read `triage-summary.json` next.
+3. Use the consolidated diagnostics tooling before sampling raw node logs.
+4. Only after the artifact summaries have been read may raw container or node
+   logs become the primary debugging surface.
+
+This keeps rerun cost low and prevents repeated raw-log spelunking from becoming
+an accidental substitute for canonical owner diagnostics.
+
+## Structured Deferred-Outcome Regression Policy
+
+When an owner path is intentionally unresolved under pressure, publication
+establishment, or recovery completion, tests must prove the caller receives a
+structured deferred outcome rather than ambiguous absence.
+
+Required coverage:
+
+1. Assert the canonical deferred vocabulary for the boundary, such as
+   `outcome`, `completionState`, `reasonCodes`, `retryAfterMs`,
+   `runtimeAuthority`, `visibilityState`, or other owner-defined fields.
+2. Assert that callers preserve or consume that contract instead of silently
+   converting it into:
+   - `[]`
+   - `null`
+   - timeout-only failure text
+   - generic fallback success
+3. When diagnostics or reports consume the boundary, add coverage that they
+   emit the structured deferred state directly.
+4. If the same hotspot family has a bounded audit, update that audit in the
+   same change.
+
+## Read-Side Repair Separation Regression Policy
+
+When a change touches startup, readiness, admin snapshot, service discovery, or
+another shared control-plane truth surface, tests must prove readers observe
+and schedule repair instead of repairing inline.
+
+Required coverage:
+
+1. Add a regression showing the non-forced read path returns a fresh, stale,
+   deferred, or failed observation contract without blocking on synchronous
+   multi-table authoritative repair.
+2. Add a regression showing any background or deferred repair is routed
+   through the shared owner path rather than a reader-local retry loop.
+3. If the caller caches the observation, add a regression proving stale or
+   deferred blocked answers are not memoized as fresh truth.
+4. If the same boundary also carries critical convergence traffic, add coverage
+   proving that diagnostics or repair deferral does not block the critical
+   owner path.
 
 ## When to Run Full Test Suite
 

@@ -210,6 +210,58 @@ test('deferred election clears liferaft timers on initialize',
     }
   });
 
+test('joinPeers honors resolver-provided join snapshots',
+  async (t) => {
+    let group;
+    const joinedAddresses = [];
+    const resolvedPeerIds = [];
+
+    try {
+      group = new RaftGroup(buildOptions({
+        replicaId: 'replica-1',
+        replicaIds: ['replica-1', 'replica-2'],
+        peerAddressResolver: {
+          resolve() {
+            throw new Error('resolve() should not be used for join snapshots');
+          },
+          resolveJoinTarget(peerId) {
+            resolvedPeerIds.push(peerId);
+            if (peerId === 'replica-1') {
+              return {
+                address: null,
+                shouldJoin: false,
+              };
+            }
+            return {
+              address: `node1/${ENTITY_TYPE.PARTITION}/${peerId}`,
+              shouldJoin: true,
+            };
+          },
+        },
+      }));
+
+      group.initialize();
+      group.raftProvider.joinPeer = (_raft, address) => {
+        joinedAddresses.push(address);
+      };
+
+      group.joinPeers();
+
+      t.same(
+        resolvedPeerIds,
+        ['replica-1', 'replica-2'],
+        'joinPeers should consult the resolver snapshot for each replica id',
+      );
+      t.same(
+        joinedAddresses,
+        [`node1/${ENTITY_TYPE.PARTITION}/replica-2`],
+        'resolver snapshots should allow self to be skipped without forcing address resolution errors',
+      );
+    } finally {
+      await safeShutdown(group);
+    }
+  });
+
 // ============================================================
 // Shutdown Safety (Requirement 1.7)
 // ============================================================

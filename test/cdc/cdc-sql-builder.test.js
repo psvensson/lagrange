@@ -61,12 +61,12 @@ test('CDCSqlBuilder exposes explicit table-name extraction states',
     );
   });
 
-test('CDCSqlBuilder wrapper methods now return explicit contracts',
+test('CDCSqlBuilder explicit-result methods return named contracts',
   async (t) => {
     const builder = new CDCSqlBuilder();
 
     t.same(
-      builder.normalizeDefaultValue(undefined),
+      builder.normalizeDefaultValueResult(undefined),
       {
         state: DEFAULT_VALUE_NORMALIZATION_STATE.UNDEFINED,
       },
@@ -74,7 +74,7 @@ test('CDCSqlBuilder wrapper methods now return explicit contracts',
     );
 
     t.same(
-      builder.normalizeDefaultValue('42'),
+      builder.normalizeDefaultValueResult('42'),
       {
         state: DEFAULT_VALUE_NORMALIZATION_STATE.VALUE,
         value: 42,

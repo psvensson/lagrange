@@ -334,6 +334,9 @@ function buildMembershipLifecycleSummary(options = {}) {
         recoveryEligibleIncludedNodeIds: Object.freeze(normalizeNodeIdList(
           options.projectionDiagnostics.recoveryEligibleIncludedNodeIds,
         )),
+        runtimeAuthorityIncludedNodeIds: Object.freeze(normalizeNodeIdList(
+          options.projectionDiagnostics.runtimeAuthorityIncludedNodeIds,
+        )),
         livenessFallbackIncludedNodeIds: Object.freeze(normalizeNodeIdList(
           options.projectionDiagnostics.livenessFallbackIncludedNodeIds,
         )),

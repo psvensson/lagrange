@@ -98,6 +98,9 @@ class RaftGroup extends EventEmitter {
     this.peerAddresses = options.peerAddresses || [];
     this.logAdapter = options.logAdapter || null;
     this.deferElection = options.deferElection || false;
+    this.shouldJoinPeer = typeof options.shouldJoinPeer === TYPEOF.FUNCTION ?
+      options.shouldJoinPeer :
+      null;
 
     // Timing configuration
     this.heartbeatMs = options.heartbeatMs ||
@@ -228,9 +231,12 @@ class RaftGroup extends EventEmitter {
     };
 
     if (logAdapter) {
-      raftOptions[RAFT_GROUP_LIFERAFT_TIMER.LOG] = function() {
-        return logAdapter;
-      };
+      raftOptions[RAFT_GROUP_LIFERAFT_TIMER.LOG] =
+        typeof logAdapter === TYPEOF.FUNCTION ?
+          logAdapter :
+          function() {
+            return logAdapter;
+          };
     }
 
     this.raft = new RaftNode(this.unifiedAddress, raftOptions);
@@ -269,7 +275,7 @@ class RaftGroup extends EventEmitter {
       this.isLeader = true;
       this.leaderId = this.replicaId;
       const term = this.raftProvider.getCurrentTerm(this.raft);
-      this.scheduleLeaderActivation(term);
+      this.scheduleLeaderActivation(term, {immediate: isSingleReplica});
     });
 
     this.raft.on(RAFT_GROUP_LIFERAFT_EVENT.FOLLOWER, () => {
@@ -311,22 +317,73 @@ class RaftGroup extends EventEmitter {
   }
 
   /**
+   * Resolve one canonical join snapshot for a peer.
+   * Custom resolvers may provide an explicit join target snapshot when
+   * self/same-id join eligibility depends on authoritative runtime
+   * location rather than replica id alone.
+   * @param {string} peerId
+   * @return {{peerAddress: string|null, shouldJoin: boolean}}
+   * @private
+   */
+  resolveJoinPeerTarget(peerId) {
+    if (typeof this.peerAddressResolver.resolveJoinTarget ===
+        TYPEOF.FUNCTION) {
+      const joinTarget = this.peerAddressResolver.resolveJoinTarget(
+        peerId,
+        this.peerAddresses,
+      ) || {};
+      const peerAddress =
+        typeof joinTarget.address === TYPEOF.STRING &&
+          joinTarget.address.length > NUM.ZERO ?
+          joinTarget.address :
+          null;
+      return {
+        peerAddress,
+        shouldJoin: joinTarget.shouldJoin === true,
+      };
+    }
+
+    if (peerId === this.replicaId && !this.shouldJoinPeer) {
+      return {
+        peerAddress: null,
+        shouldJoin: false,
+      };
+    }
+
+    const peerAddress = this.peerAddressResolver.resolve(
+      peerId,
+      this.peerAddresses,
+    );
+    const shouldJoin = this.shouldJoinPeer ?
+      this.shouldJoinPeer(peerId, peerAddress) === true :
+      peerId !== this.replicaId;
+
+    return {
+      peerAddress,
+      shouldJoin,
+    };
+  }
+
+  /**
    * Join all peer replicas to the Raft cluster.
    * Resolves each peer via PeerAddressResolver, skipping self.
    */
   joinPeers() {
     for (const peerId of this.replicaIds) {
-      if (peerId !== this.replicaId) {
-        const peerAddress = this.peerAddressResolver.resolve(
-          peerId, this.peerAddresses,
-        );
-        this.logger.info(RAFT_GROUP_LOG_MSG.JOINING_PEER_ADDRESS, {
-          peerId,
-          peerAddress,
-          replicaId: this.replicaId,
-        });
-        this.raftProvider.joinPeer(this.raft, peerAddress);
+      const {peerAddress, shouldJoin} = this.resolveJoinPeerTarget(peerId);
+      if (!shouldJoin) {
+        continue;
       }
+      if (typeof peerAddress !== TYPEOF.STRING ||
+          peerAddress.length === NUM.ZERO) {
+        throw new Error(RAFT_GROUP_ERROR_MSG.peerJoinFailed(peerId));
+      }
+      this.logger.info(RAFT_GROUP_LOG_MSG.JOINING_PEER_ADDRESS, {
+        peerId,
+        peerAddress,
+        replicaId: this.replicaId,
+      });
+      this.raftProvider.joinPeer(this.raft, peerAddress);
     }
   }
 
@@ -363,15 +420,21 @@ class RaftGroup extends EventEmitter {
    * @private
    */
   handleSingleReplicaPromotion() {
-    this.role = RAFT_GROUP_ROLE.LEADER;
-    this.isLeader = true;
-    this.leaderId = this.replicaId;
+    if (!this.raft ||
+        typeof this.raft.change !== TYPEOF.FUNCTION) {
+      throw new Error(RAFT_GROUP_ERROR_MSG.SINGLE_REPLICA_CHANGE_REQUIRED);
+    }
+    const leaderState = this.raft?.constructor?.LEADER;
+    if (!Number.isFinite(leaderState)) {
+      throw new Error(
+        RAFT_GROUP_ERROR_MSG.SINGLE_REPLICA_LEADER_STATE_REQUIRED,
+      );
+    }
+    this.raft.change({state: leaderState});
+    this.raft.leader = this.unifiedAddress;
 
     this.logger.info(RAFT_GROUP_LOG_MSG.SINGLE_REPLICA_LEADER, {
       replicaId: this.replicaId,
-    });
-    this.scheduleLeaderActivation(this.raftProvider.getCurrentTerm(this.raft), {
-      immediate: true,
     });
   }
 

@@ -43,10 +43,15 @@ const WEBSOCKET_URL_PROTOCOL = Object.freeze({
   WSS: 'wss:',
 });
 
-const NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE = Object.freeze({
-  BOOTSTRAP_SEED_ADDRESS: 'bootstrap_seed_address',
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY = Object.freeze({
+  NORMALIZED_BOOTSTRAP_SEED: 'normalized_bootstrap_seed',
+  CANONICAL_NODE_ENDPOINT: 'canonical_node_endpoint',
+});
+
+const NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE = Object.freeze({
+  BOOTSTRAP_SEED_INGRESS: 'bootstrap_seed_ingress',
   BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS: 'bootstrap_snapshot_node_endpoints',
-  CACHE_NODE_ENDPOINTS: 'cache_node_endpoints',
+  SYSTEM_TABLE_CACHE: 'system_table_cache',
 });
 
 const ADDRESS_PROTOCOL_SEPARATOR = '://';
@@ -55,10 +60,6 @@ function normalizeAddressString(value) {
   return typeof value === TYPEOF.STRING ?
     value.trim() :
     '';
-}
-
-function parseAddressParts(address) {
-  return parseAddressPartsResult(address);
 }
 
 function buildAddressStateResult(state) {
@@ -426,7 +427,12 @@ function resolveNodeWebSocketAddressResult(options = {}) {
     return Object.freeze({
       state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
       address: bootstrapResponse.seedNodeWsAddress,
-      source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.BOOTSTRAP_SEED_ADDRESS,
+      authority:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+          .NORMALIZED_BOOTSTRAP_SEED,
+      evidenceSource:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
+          .BOOTSTRAP_SEED_INGRESS,
     });
   }
 
@@ -441,7 +447,11 @@ function resolveNodeWebSocketAddressResult(options = {}) {
       address:
         normalizeToWebSocketAddress(cacheEndpointAddress) ||
         cacheEndpointAddress,
-      source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.CACHE_NODE_ENDPOINTS,
+      authority:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+          .CANONICAL_NODE_ENDPOINT,
+      evidenceSource:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE,
     });
   }
 
@@ -456,8 +466,11 @@ function resolveNodeWebSocketAddressResult(options = {}) {
       address:
         normalizeToWebSocketAddress(bootstrapEndpointAddress) ||
         bootstrapEndpointAddress,
-      source:
-        NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE
+      authority:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+          .CANONICAL_NODE_ENDPOINT,
+      evidenceSource:
+        NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
           .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS,
     });
   }
@@ -470,10 +483,10 @@ function resolveNodeWebSocketAddressResult(options = {}) {
 }
 
 export {
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
-  parseAddressParts,
   parseAddressPartsResult,
   resolveAdvertisedEndpointHost,
   resolveAdvertisedWebSocketAddress,

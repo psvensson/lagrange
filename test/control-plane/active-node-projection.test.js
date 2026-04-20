@@ -10,8 +10,10 @@ import {
 } from '../../src/control-plane/active-node-projection.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROVISIONING_ELIGIBILITY_STATE,
+  RUNTIME_AUTHORITY_STATE,
+  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-
 test('active-node projection requires readiness health and canonical websocket endpoints when available',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -80,7 +82,6 @@ test('active-node projection requires readiness health and canonical websocket e
       'only readiness-healthy nodes with canonical websocket endpoints should project as active',
     );
   });
-
 test('active-node projection falls back to ready-lease evidence when readiness owner is unavailable',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -114,7 +115,6 @@ test('active-node projection falls back to ready-lease evidence when readiness o
       'ready-lease fallback should exclude non-ready and expired nodes',
     );
   });
-
 test('active-node projection can include recovery-eligible nodes during publication convergence windows',
   async (t) => {
     const commonProjectionOptions = {
@@ -167,6 +167,17 @@ test('active-node projection can include recovery-eligible nodes during publicat
               .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
             [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
           },
+          runtimeAuthority: {
+            state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+            provisioning: {
+              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+              eligible: true,
+            },
+            visibility: {
+              state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+              published: false,
+            },
+          },
         },
       ],
       nowMs: 1000,
@@ -203,12 +214,67 @@ test('active-node projection can include recovery-eligible nodes during publicat
       {
         readinessDecisionMode: 'cluster_member_or_recovery_eligible',
         recoveryEligibleProjectionEnabled: true,
-        recoveryEligibleIncludedNodeIds: ['node-2'],
+        runtimeAuthorityIncludedNodeIds: ['node-2'],
       },
       'convergence projection diagnostics should show recovery-eligible inclusion',
     );
   });
+test('active-node projection can use runtime authority when dimensions lag',
+  async (t) => {
+    const projection = resolveActiveNodeViews({
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 2000,
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          runtimeAuthority: {
+            state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+            provisioning: {
+              state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+              eligible: true,
+            },
+            visibility: {
+              state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+              published: false,
+            },
+          },
+        },
+      ],
+      allowControlPlaneRecoveryEligibleProjection: true,
+      nowMs: 1000,
+    });
 
+    t.same(
+      projection.projectedServingNodeIds,
+      ['node-1'],
+      'runtime authority should keep projection discussable when dimension rows lag',
+    );
+    t.match(
+      projection.projectionDiagnostics,
+      {
+        runtimeAuthorityIncludedNodeIds: ['node-1'],
+        recoveryEligibleIncludedNodeIds: [],
+      },
+    );
+  });
 test('active-node projection can retain recovery-eligible nodes when endpoint and service rows lag',
   async (t) => {
     const projectionOptions = {
@@ -283,7 +349,6 @@ test('active-node projection can retain recovery-eligible nodes when endpoint an
       'projection diagnostics should explicitly record recovery-eligibility inclusion',
     );
   });
-
 test('active-node projection can fail open on fresh liveness when recovery projection is enabled',
   async (t) => {
     const projectionOptions = {
@@ -349,7 +414,6 @@ test('active-node projection can fail open on fresh liveness when recovery proje
       'diagnostics should record liveness-based fail-open inclusion',
     );
   });
-
 test('active-node projection can retain connected healthy nodes when discovery rows lag',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
@@ -403,7 +467,6 @@ test('active-node projection can retain connected healthy nodes when discovery r
       'live transport connectivity should keep healthy connected nodes in projection while endpoint rows catch up',
     );
   });
-
 test('active-node projection can retain the responsive local node when self rows lag',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
@@ -446,8 +509,6 @@ test('active-node projection can retain the responsive local node when self rows
       'a responsive local node should not disappear from local projection just because replicated self rows are delayed',
     );
   });
-
-
 test('active-node projection can require published membership and suppress derived fallback',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -486,7 +547,6 @@ test('active-node projection can require published membership and suppress deriv
       'strict published-membership mode should not derive active nodes from runtime evidence alone',
     );
   });
-
 test('active-node projection separates authoritative membership from projected serving views',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
@@ -571,7 +631,6 @@ test('active-node projection separates authoritative membership from projected s
       'published membership should be marked as the authoritative source when available',
     );
   });
-
 test('active-node projection reports broad-suspicion membership freeze against the last published set',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
@@ -636,7 +695,6 @@ test('active-node projection reports broad-suspicion membership freeze against t
       'broad suspicion should trip the membership freeze diagnostics',
     );
   });
-
 test('active-node projection resolves the latest publication row from publication rows when strict mode is enabled',
   async (t) => {
     const latestPublicationRow = resolveLatestPublicationRow({
@@ -687,7 +745,6 @@ test('active-node projection resolves the latest publication row from publicatio
       'strict mode should use the latest published active-node set',
     );
   });
-
 test('active-node projection retains the latest published membership when a newer open publication exists',
   async (t) => {
     const latestPublishedPublicationRow = resolveLatestPublishedPublicationRow({
@@ -739,7 +796,6 @@ test('active-node projection retains the latest published membership when a newe
       'strict mode should keep the latest published active-node set while a newer publication remains open',
     );
   });
-
 test('active-node projection keeps durable published membership from the latest ack-pending publication when published history is unavailable',
   async (t) => {
     const activeNodeViews = resolveActiveNodeViews({
@@ -847,7 +903,6 @@ test('active-node projection keeps durable published membership from the latest 
       'projection should continue advertising published membership availability from the durable published set',
     );
   });
-
 test('active-node projection ignores newer non-membership publications in strict mode',
   async (t) => {
     const publicationRows = [
@@ -889,7 +944,6 @@ test('active-node projection ignores newer non-membership publications in strict
       'strict mode should preserve the membership publication active-node set',
     );
   });
-
 test('buildReadinessByNodeId normalizes node identifiers from readiness entries',
   async (t) => {
     const readinessByNodeId = buildReadinessByNodeId({
@@ -906,7 +960,6 @@ test('buildReadinessByNodeId normalizes node identifiers from readiness entries'
       'readiness map should index both camelCase and snake_case node identifiers',
     );
   });
-
 test('active-node projection can retain a readiness-healthy node when the node row is missing but active service evidence remains',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -971,7 +1024,6 @@ test('active-node projection can retain a readiness-healthy node when the node r
       'healthy nodes with active service and endpoint evidence should remain visible even if the node row lags the cache',
     );
   });
-
 test('active-node projection keeps readiness-healthy node rows when service evidence is present but node_endpoints lags',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1049,7 +1101,6 @@ test('active-node projection keeps readiness-healthy node rows when service evid
       'healthy nodes with active service evidence should remain active even when endpoint coverage lags behind repaired discovery rows',
     );
   });
-
 test('active-node projection tolerates transient stopped node rows when ready heartbeats remain fresh',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1110,7 +1161,6 @@ test('active-node projection tolerates transient stopped node rows when ready he
       'recent heartbeat evidence should keep a ready node active even when its status row transiently regresses to stopped',
     );
   });
-
 test('active-node projection excludes stopped nodes after heartbeat grace expires',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1171,7 +1221,6 @@ test('active-node projection excludes stopped nodes after heartbeat grace expire
       'heartbeat grace should not keep a stopped node active indefinitely once its liveness evidence has aged out',
     );
   });
-
 test('active-node projection excludes stopped nodes at the heartbeat grace boundary',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1232,7 +1281,6 @@ test('active-node projection excludes stopped nodes at the heartbeat grace bound
       'heartbeat evidence at the exact grace cutoff should no longer keep a stopped node projected active',
     );
   });
-
 test('active-node projection prefers the durable published active-node set when a publication epoch is closed',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1333,7 +1381,6 @@ test('active-node projection prefers the durable published active-node set when 
       'projection should prefer the durable published active-node set over repaired cache observation once the epoch is closed',
     );
   });
-
 test('active-node projection builds a canonical membership publication snapshot from publication rows',
   async (t) => {
     const snapshot = buildMembershipPublicationActiveSnapshot({
@@ -1379,7 +1426,6 @@ test('active-node projection builds a canonical membership publication snapshot 
       'canonical publication snapshots should preserve projection diagnostics once at the owner boundary',
     );
   });
-
 test('active-node projection preserves explicit published-membership presence even when the node array is absent',
   async (t) => {
     const snapshot = buildMembershipPublicationActiveSnapshot({
@@ -1398,6 +1444,31 @@ test('active-node projection preserves explicit published-membership presence ev
     t.equal(
       snapshot?.recoveryActiveNodeSource,
       'locally_eligible_projection',
+    );
+  });
+test('active-node projection augments stale explicit recovery-active node ids with fresher locally eligible projection',
+  async (t) => {
+    const snapshot = buildMembershipPublicationActiveSnapshot({
+      publication_epoch: 27,
+      status: 'PUBLISHED',
+      published_active_node_ids: ['node-a', 'node-b', 'node-c'],
+      recovery_active_node_ids: ['node-a', 'node-b', 'node-c'],
+      recovery_active_node_source: 'published_membership',
+      membership_lifecycle_summary: {
+        projectedServingNodeIds: ['node-a', 'node-b', 'node-c', 'node-d'],
+        locallyEligibleNodeIds: ['node-a', 'node-b', 'node-c', 'node-d'],
+      },
+    });
+
+    t.same(
+      snapshot?.recoveryActiveNodeIds,
+      ['node-a', 'node-b', 'node-c', 'node-d'],
+      'stale explicit recovery-active node ids should not suppress fresher projected eligibility',
+    );
+    t.same(
+      snapshot?.missingPublishedRecoveryActiveNodeIds,
+      ['node-d'],
+      'the publication snapshot should keep exposing which fresher recovery-active nodes still need publication convergence',
     );
   });
 

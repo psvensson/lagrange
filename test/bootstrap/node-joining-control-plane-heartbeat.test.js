@@ -141,6 +141,90 @@ test('NodeJoiningService keeps steady-state control-plane reporter enabled durin
     );
   });
 
+test('NodeJoiningService disables steady-state control-plane reporter outside durable rejoin',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let clearedReporter = false;
+    let heartbeatStarted = false;
+    const service = new NodeJoiningService({
+      nodeId: 'joiner-node',
+      nodeAddress: 'ddb-test-reuse-3-7:8080',
+      seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
+    });
+
+    service.heartbeatService = {
+      state: 'stopped',
+      setNodeStateReporter(reporter) {
+        if (reporter === null) {
+          clearedReporter = true;
+        }
+      },
+      start() {
+        heartbeatStarted = true;
+      },
+    };
+
+    await service.activateControlPlaneBackgroundWriters();
+
+    t.equal(
+      clearedReporter,
+      true,
+      'should cut steady-state heartbeats over to direct control-plane writes outside durable rejoin',
+    );
+    t.equal(
+      heartbeatStarted,
+      true,
+      'should still activate steady-state heartbeat writers',
+    );
+  });
+
+test('NodeJoiningService clears join-time reporter at READY cutover when heartbeat writers already run',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let clearedReporter = false;
+    let heartbeatStartCount = 0;
+    const service = new NodeJoiningService({
+      nodeId: 'joiner-node',
+      nodeAddress: 'ddb-test-reuse-3-8:8080',
+      seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
+    });
+
+    service.heartbeatService = {
+      state: 'running',
+      setNodeStateReporter(reporter) {
+        if (reporter === null) {
+          clearedReporter = true;
+        }
+      },
+      start() {
+        heartbeatStartCount += 1;
+      },
+    };
+    service.runtimeHandoffOwner.delegates.flushDeferredCreateSelfHostedMetadata =
+      () => {};
+    service.runtimeHandoffOwner.delegates.activateDistributedTransactionRecovery =
+      () => {};
+    service.runtimeHandoffOwner.delegates.startLatencyTopologyLifecycle =
+      () => {};
+    service.startTime = 0;
+    service.now = () => 100;
+
+    service.completeSuccessfulJoin();
+
+    t.equal(
+      clearedReporter,
+      true,
+      'READY cutover should clear the join-time reporter even when heartbeat writers are already active',
+    );
+    t.equal(
+      heartbeatStartCount,
+      0,
+      'READY cutover should not restart heartbeat writers that are already running',
+    );
+  });
+
 test('NodeJoiningService treats unacknowledged control-plane heartbeats as failures',
   async (t) => {
     initializeTestEnvironment();

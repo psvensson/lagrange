@@ -20,7 +20,10 @@ import {
 import {
   createControlPlaneRuntimeBundle,
 } from '../control-plane/control-plane-runtime-bundle.js';
-import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
 import {
   STORAGE_BUDGET_CONFIG_KEY,
   STORAGE_BUDGET_SOURCE,
@@ -234,13 +237,19 @@ class NodeStorageBudgetService {
     );
 
     const {budgetRow, resolution} = this.resolveBudgetRow(nodeRow);
+    const workloadProfile = buildControlPlaneWorkloadProfile(
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
+    );
     const result = await this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
       tableName: TABLES.NODES,
       row: budgetRow,
     }, {
       ...upsertOptions,
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      workloadClass: workloadProfile.workloadClass,
+      workClass: workloadProfile.workClass,
+      allowPressureDefer: workloadProfile.allowPressureDefer,
+      allowPressureDegrade: workloadProfile.allowPressureDegrade,
       deliveryPriority: 'critical',
     });
 

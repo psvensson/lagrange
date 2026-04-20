@@ -11,7 +11,6 @@ import {
   resolveSevenNodeReadWriteLoadDistributionScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
-  BENCHMARK_WORKLOAD_PROFILE,
   createPartitioningAdaptiveDispatchGuardrail,
   createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
@@ -62,6 +61,7 @@ async function run(cluster, options = {}) {
     controlPlaneQuiescenceNoProgressTimeoutMs,
     loadOpsPerSec,
     loadDuration,
+    workloadProfile,
     loadOperations,
     tableName,
     minAdditionalPartitions,
@@ -138,7 +138,7 @@ async function run(cluster, options = {}) {
     adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: loadOperations,
     tableName: effectiveTableName,
-    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    workloadProfile,
   });
 
   let distribution = null;

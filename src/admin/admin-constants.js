@@ -300,7 +300,6 @@ const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   SCHEMA_VERSION: 1,
   TABLE_NAME: 'control_snapshot_local',
   IN_FLIGHT_EXCLUDED_STATUSES: Object.freeze([
-    'active',
     'removed',
     'failed',
   ]),

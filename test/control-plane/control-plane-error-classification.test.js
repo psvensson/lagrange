@@ -1,6 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  CONTROL_PLANE_FAILURE_REASON,
   getControlPlaneErrorCode,
+  getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -27,6 +29,15 @@ test('isRetryableControlPlaneError detects deferred connection failures', async 
 
   t.equal(isRetryableControlPlaneError(error), true);
 });
+
+test('isRetryableControlPlaneError treats stale no-handler ingress targets as retryable',
+  async (t) => {
+    const error = new Error(
+      'No handler registered for address seed-node-1/message-group/mg-1-r2',
+    );
+
+    t.equal(isRetryableControlPlaneError(error), true);
+  });
 
 test('isRetryableControlPlaneError detects explicit deferRetry marker', async (t) => {
   const error = new Error('validation deferred');
@@ -97,4 +108,30 @@ test('isRetryableControlPlaneError follows nested participant pressure ' +
     true,
     'nested participant pressure should classify the top-level failure as retryable',
   );
+});
+
+test('getControlPlaneFailureSummary prioritizes authoritative source gaps over ' +
+  'broader participant failures', async (t) => {
+  const result = {
+    success: false,
+    error: 'Distributed operation failed due to participant failures',
+    errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+    participantFailures: [{
+      error: 'authoritative_row_source_unavailable',
+    }, {
+      error: 'Connection to node node-2 closed',
+    }],
+  };
+
+  const summary = getControlPlaneFailureSummary(result);
+
+  t.equal(
+    summary.primaryReason,
+    CONTROL_PLANE_FAILURE_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+    'the most specific authoritative source blocker should win',
+  );
+  t.equal(summary.authoritativeRowSourceUnavailableCount, 1);
+  t.equal(summary.distributedParticipantFailureCount, 1);
+  t.equal(summary.reconnectDeliveryFailureCount, 1);
+  t.equal(summary.retryable, true);
 });

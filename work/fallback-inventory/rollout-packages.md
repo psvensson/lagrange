@@ -4,7 +4,7 @@ This file maps classified fallback IDs to follow-on implementation packages.
 
 Sprint umbrella:
 
-1. [Control-Plane Recovery Architecture Sprint](../sprints/done-2026-q2-control-plane-recovery-architecture.md)
+1. [Control-Plane Recovery Architecture Sprint](../sprints/archived/done-2026-q2-control-plane-recovery-architecture.md)
 
 ## Concrete Follow-On Packages
 
@@ -12,7 +12,7 @@ Sprint umbrella:
 
 Package file:
 
-1. `work/packages/done-20260410-control-plane-planning-snapshot-fallback-collapse.md`
+1. `work/packages/archived/done-20260410-control-plane-planning-snapshot-fallback-collapse.md`
 
 Fallback IDs:
 
@@ -31,7 +31,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-membership-publication-fetch-and-ack-fallback-collapse.md`
+1. `work/packages/archived/done-20260410-membership-publication-fetch-and-ack-fallback-collapse.md`
 
 Fallback IDs:
 
@@ -47,7 +47,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-authoritative-control-plane-ingress-and-admin-snapshot-rationalization.md`
+1. `work/packages/archived/done-20260410-authoritative-control-plane-ingress-and-admin-snapshot-rationalization.md`
 
 Fallback IDs:
 
@@ -69,7 +69,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-control-plane-mutation-ingress-bridge-removal.md`
+1. `work/packages/archived/done-20260410-control-plane-mutation-ingress-bridge-removal.md`
 
 Fallback IDs:
 
@@ -85,7 +85,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-bootstrap-runtime-surface-bridge-removal.md`
+1. `work/packages/archived/done-20260410-bootstrap-runtime-surface-bridge-removal.md`
 
 Fallback IDs:
 
@@ -103,7 +103,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-bootstrap-topology-snapshot-owner-cutover.md`
+1. `work/packages/archived/done-20260410-bootstrap-topology-snapshot-owner-cutover.md`
 
 Fallback IDs:
 
@@ -120,7 +120,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-bootstrap-join-ingress-and-peer-mesh-fallback-reduction.md`
+1. `work/packages/archived/done-20260410-bootstrap-join-ingress-and-peer-mesh-fallback-reduction.md`
 
 Fallback IDs:
 
@@ -140,7 +140,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-rebalancer-read-model-fallback-policy-collapse.md`
+1. `work/packages/archived/done-20260410-rebalancer-read-model-fallback-policy-collapse.md`
 
 Fallback IDs:
 
@@ -159,7 +159,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-rebalancer-recovery-path-guardrail-cleanup.md`
+1. `work/packages/archived/done-20260410-rebalancer-recovery-path-guardrail-cleanup.md`
 
 Fallback IDs:
 
@@ -177,7 +177,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-critical-partition-classification-owner-cutover.md`
+1. `work/packages/archived/done-20260410-critical-partition-classification-owner-cutover.md`
 
 Fallback IDs:
 
@@ -192,7 +192,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-query-provisioning-cohort-unification.md`
+1. `work/packages/archived/done-20260410-query-provisioning-cohort-unification.md`
 
 Fallback IDs:
 
@@ -210,7 +210,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-partition-service-owner-dependency-fallback-removal.md`
+1. `work/packages/archived/done-20260410-partition-service-owner-dependency-fallback-removal.md`
 
 Fallback IDs:
 
@@ -225,7 +225,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-cdc-grouped-delivery-safe-fallback-review.md`
+1. `work/packages/archived/done-20260410-cdc-grouped-delivery-safe-fallback-review.md`
 
 Fallback IDs:
 
@@ -241,7 +241,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260410-transport-reconnect-authority-cleanup.md`
+1. `work/packages/archived/done-20260410-transport-reconnect-authority-cleanup.md`
 
 Fallback IDs:
 
@@ -258,7 +258,7 @@ Intent:
 
 Package file:
 
-1. `work/packages/done-20260409-priority-recovery-completion-and-topology-settling.md`
+1. `work/packages/archived/done-20260409-priority-recovery-completion-and-topology-settling.md`
 
 Fallback IDs:
 

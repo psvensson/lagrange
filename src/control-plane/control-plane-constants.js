@@ -11,6 +11,10 @@ import {
   TIME_MS,
 } from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from './control-plane-workload-profile.js';
 
 const ControlPlaneMessageType = Object.freeze({
   NODE_STATE_UPDATE: MESSAGE_TYPE.NODE_STATE_UPDATE,
@@ -33,6 +37,7 @@ const ControlPlaneField = Object.freeze({
   HEARTBEAT_AT: FIELD.HEARTBEAT_AT,
   READY_LEASE_EXPIRES_AT: FIELD.READY_LEASE_EXPIRES_AT,
   HEARTBEAT_ONLY: FIELD.HEARTBEAT_ONLY,
+  NODE_STATE_PUBLICATION_MODE: FIELD.NODE_STATE_PUBLICATION_MODE,
   NODE_ROW: FIELD.NODE_ROW,
   OPERATION_ID: FIELD.OPERATION_ID,
   OPERATION_ROW: FIELD.OPERATION_ROW,
@@ -40,6 +45,80 @@ const ControlPlaneField = Object.freeze({
   REPLICA_ID: FIELD.REPLICA_ID,
   TARGET_NODE_ID: FIELD.TARGET_NODE_ID,
   FORWARDED_BY: FIELD.FORWARDED_BY,
+});
+
+const CONTROL_PLANE_DELIVERY_PRIORITY = Object.freeze({
+  BACKGROUND: 'background',
+  CRITICAL: 'critical',
+});
+
+const CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE = Object.freeze({
+  HEARTBEAT_STEADY: 'heartbeat_steady',
+  HEARTBEAT_MAINTENANCE: 'heartbeat_maintenance',
+  HEARTBEAT_RECOVERY: 'heartbeat_recovery',
+  READY_TRANSITION: 'ready_transition',
+  LIFECYCLE_BACKGROUND: 'lifecycle_background',
+});
+
+const CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT = Object.freeze({
+  FRESH: 'fresh',
+  DEFERRED_PENDING: 'deferred_pending',
+});
+
+function buildNodeStatePublicationProfile(
+  mode,
+  workloadClass,
+  deliveryPriority,
+  allowPressureDefer,
+) {
+  const workloadProfile = buildControlPlaneWorkloadProfile(workloadClass, {
+    allowPressureDefer,
+  });
+  return Object.freeze({
+    mode,
+    workloadClass: workloadProfile.workloadClass,
+    allowPressureDefer: workloadProfile.allowPressureDefer,
+    deliveryPriority,
+    workClass: workloadProfile.workClass,
+  });
+}
+
+const CONTROL_PLANE_NODE_STATE_PUBLICATION_PROFILE = Object.freeze({
+  [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY]:
+    buildNodeStatePublicationProfile(
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY,
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
+      CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+      true,
+    ),
+  [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE]:
+    buildNodeStatePublicationProfile(
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
+      CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+      true,
+    ),
+  [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY]:
+    buildNodeStatePublicationProfile(
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
+      CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
+      true,
+    ),
+  [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION]:
+    buildNodeStatePublicationProfile(
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION,
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_CRITICAL,
+      CONTROL_PLANE_DELIVERY_PRIORITY.CRITICAL,
+      false,
+    ),
+  [CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND]:
+    buildNodeStatePublicationProfile(
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND,
+      CONTROL_PLANE_WORKLOAD_CLASS.NODE_STATE_PUBLICATION_BACKGROUND,
+      CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+      true,
+    ),
 });
 
 const DEFAULT_READY_LEASE_MS = TIME_MS.CONTROL_PLANE_READY_LEASE;
@@ -101,10 +180,76 @@ function getControlPlaneMessageRequiredTables(messageType) {
   return Array.isArray(requiredTables) ? [...requiredTables] : [];
 }
 
+function normalizeControlPlaneNodeStatePublicationMode(mode) {
+  if (mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY;
+  }
+  if (mode ===
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE;
+  }
+  if (mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY;
+  }
+  if (mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION;
+  }
+  if (mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND;
+  }
+  return null;
+}
+
+function resolveControlPlaneNodeStatePublicationMode(options = {}) {
+  const normalizedMode = normalizeControlPlaneNodeStatePublicationMode(
+    options?.publicationMode,
+  );
+  if (normalizedMode) {
+    return normalizedMode;
+  }
+  if (options?.heartbeatOnly === true) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_STEADY;
+  }
+  if (options?.state === STATE.READY) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION;
+  }
+  return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.LIFECYCLE_BACKGROUND;
+}
+
+function resolveReplayControlPlaneNodeStatePublicationMode(options = {}) {
+  const publicationMode = resolveControlPlaneNodeStatePublicationMode(options);
+  const replayContext =
+    options?.replayContext ===
+      CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT.DEFERRED_PENDING ?
+      CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT.DEFERRED_PENDING :
+      CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT.FRESH;
+  if (replayContext ===
+      CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT.DEFERRED_PENDING &&
+      options?.heartbeatOnly === true &&
+      publicationMode ===
+        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY) {
+    return CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE;
+  }
+  return publicationMode;
+}
+
+function getControlPlaneNodeStatePublicationProfile(options = {}) {
+  const mode = resolveControlPlaneNodeStatePublicationMode(options);
+  return CONTROL_PLANE_NODE_STATE_PUBLICATION_PROFILE[mode];
+}
+
+function isHeartbeatEscalatedControlPlaneNodeStatePublicationMode(mode) {
+  return mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY ||
+    mode === CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE;
+}
+
 export {
   ControlPlaneMessageType,
   CONTROL_PLANE_MESSAGE_REQUIRED_TABLES,
   ControlPlaneField,
+  CONTROL_PLANE_DELIVERY_PRIORITY,
+  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
+  CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
   DEFAULT_READY_LEASE_MS,
   DEFAULT_HEARTBEAT_INTERVAL_MS,
   DEFAULT_LEASE_SWEEP_INTERVAL_MS,
@@ -117,4 +262,9 @@ export {
   CONTROL_PLANE_ALLOWED_STATES,
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   getControlPlaneMessageRequiredTables,
+  getControlPlaneNodeStatePublicationProfile,
+  isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
+  resolveReplayControlPlaneNodeStatePublicationMode,
+  normalizeControlPlaneNodeStatePublicationMode,
+  resolveControlPlaneNodeStatePublicationMode,
 };

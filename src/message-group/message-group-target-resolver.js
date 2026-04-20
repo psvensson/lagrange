@@ -200,30 +200,8 @@ function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {})
   return null;
 }
 
-function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
-  const candidates = preferConnectedCandidates(
-    getMessageGroupServiceCandidates(cache, groupId, options),
-    options,
-  )
-    .filter((row) => {
-      return !isExcludedCandidate(row, options);
-    });
-
-  if (candidates.length === NUM.ZERO) {
-    return null;
-  }
-
-  const canonicalLeader = resolveCanonicalLeaderServiceCandidate(
-    cache,
-    groupId,
-    candidates,
-    options,
-  );
-  if (canonicalLeader) {
-    return canonicalLeader;
-  }
-
-  const sorted = [...candidates].sort((left, right) => {
+function sortMessageGroupForwardServiceCandidates(candidates = []) {
+  return [...candidates].sort((left, right) => {
     const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
     if (leftLeader && !rightLeader) {
@@ -251,8 +229,47 @@ function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}
     const rightServiceId = right?.[COLUMN.SERVICE_ID] || '';
     return leftServiceId.localeCompare(rightServiceId);
   });
+}
 
-  return sorted[NUM.ZERO] || null;
+function resolveMessageGroupForwardServiceCandidatesFromCache(
+  cache,
+  groupId,
+  options = {},
+) {
+  const candidates = preferConnectedCandidates(
+    getMessageGroupServiceCandidates(cache, groupId, options),
+    options,
+  ).filter((row) => {
+    return !isExcludedCandidate(row, options);
+  });
+
+  if (candidates.length === NUM.ZERO) {
+    return [];
+  }
+
+  const canonicalLeader = resolveCanonicalLeaderServiceCandidate(
+    cache,
+    groupId,
+    candidates,
+    options,
+  );
+  if (!canonicalLeader) {
+    return sortMessageGroupForwardServiceCandidates(candidates);
+  }
+
+  const remainingCandidates = candidates.filter((row) => row !== canonicalLeader);
+  return [
+    canonicalLeader,
+    ...sortMessageGroupForwardServiceCandidates(remainingCandidates),
+  ];
+}
+
+function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
+  return resolveMessageGroupForwardServiceCandidatesFromCache(
+    cache,
+    groupId,
+    options,
+  )[NUM.ZERO] || null;
 }
 
 function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {}) {
@@ -301,6 +318,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
 }
 
 export {
+  resolveMessageGroupForwardServiceCandidatesFromCache,
   resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
   resolveMessageGroupTargetAddressFromCache,

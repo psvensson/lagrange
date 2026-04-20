@@ -30,24 +30,91 @@ import {
  * @property {Object} keybindings - Custom keybindings
  */
 
+const CONFIG_VALUE_TYPE = Object.freeze({
+  BOOLEAN: 'boolean',
+  NUMBER: 'number',
+  OBJECT: 'object',
+  STRING: 'string',
+});
+const CONFIG_VALIDATION_ERROR = Object.freeze({
+  BOOLEAN: 'Must be a boolean',
+  NUMBER: 'Must be a number',
+  OBJECT: 'Must be an object',
+  STRING: 'Must be a string',
+  UNKNOWN_KEY: 'Unknown configuration key',
+});
+
 /**
  * Valid configuration keys and their types
  */
 const CONFIG_SCHEMA = {
-  node_address: {type: 'string', required: false},
-  refresh_interval: {type: 'number', min: 1000, max: 60000},
+  node_address: {type: CONFIG_VALUE_TYPE.STRING, required: false},
+  refresh_interval: {
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    min: 1000,
+    max: 60000,
+  },
   default_view: {
-    type: 'string',
+    type: CONFIG_VALUE_TYPE.STRING,
     enum: [...CLI_VIEW_LIST],
   },
-  color_scheme: {type: 'string', enum: [CLI_COLOR_SCHEME.DEFAULT, CLI_COLOR_SCHEME.MONOCHROME]},
-  cache_persistence: {type: 'boolean'},
-  cache_path: {type: 'string'},
-  log_path: {type: 'string'},
-  cdc_lag_threshold: {type: 'number', min: 1000},
-  read_only_mode: {type: 'boolean'},
-  keybindings: {type: 'object'},
+  color_scheme: {
+    type: CONFIG_VALUE_TYPE.STRING,
+    enum: [CLI_COLOR_SCHEME.DEFAULT, CLI_COLOR_SCHEME.MONOCHROME],
+  },
+  cache_persistence: {type: CONFIG_VALUE_TYPE.BOOLEAN},
+  cache_path: {type: CONFIG_VALUE_TYPE.STRING},
+  log_path: {type: CONFIG_VALUE_TYPE.STRING},
+  cdc_lag_threshold: {type: CONFIG_VALUE_TYPE.NUMBER, min: 1000},
+  read_only_mode: {type: CONFIG_VALUE_TYPE.BOOLEAN},
+  keybindings: {type: CONFIG_VALUE_TYPE.OBJECT},
 };
+
+function validateNumberField(schema, value) {
+  if (typeof value !== CONFIG_VALUE_TYPE.NUMBER || isNaN(value)) {
+    return {valid: false, error: CONFIG_VALIDATION_ERROR.NUMBER};
+  }
+  if (schema.min !== undefined && value < schema.min) {
+    return {valid: false, error: `Must be at least ${schema.min}`};
+  }
+  if (schema.max !== undefined && value > schema.max) {
+    return {valid: false, error: `Must be at most ${schema.max}`};
+  }
+  return {valid: true};
+}
+
+function validateStringField(schema, value) {
+  if (typeof value !== CONFIG_VALUE_TYPE.STRING) {
+    return {valid: false, error: CONFIG_VALIDATION_ERROR.STRING};
+  }
+  if (schema.enum && !schema.enum.includes(value)) {
+    return {valid: false, error: `Must be one of: ${schema.enum.join(', ')}`};
+  }
+  return {valid: true};
+}
+
+function validateBooleanField(_schema, value) {
+  return typeof value === CONFIG_VALUE_TYPE.BOOLEAN ?
+    {valid: true} :
+    {valid: false, error: CONFIG_VALIDATION_ERROR.BOOLEAN};
+}
+
+function validateObjectField(_schema, value) {
+  const isObjectValue =
+    typeof value === CONFIG_VALUE_TYPE.OBJECT &&
+    value !== null &&
+    !Array.isArray(value);
+  return isObjectValue ?
+    {valid: true} :
+    {valid: false, error: CONFIG_VALIDATION_ERROR.OBJECT};
+}
+
+const CONFIG_FIELD_VALIDATOR = Object.freeze({
+  [CONFIG_VALUE_TYPE.BOOLEAN]: validateBooleanField,
+  [CONFIG_VALUE_TYPE.NUMBER]: validateNumberField,
+  [CONFIG_VALUE_TYPE.OBJECT]: validateObjectField,
+  [CONFIG_VALUE_TYPE.STRING]: validateStringField,
+});
 
 export class ConfigManager {
   constructor() {
@@ -228,35 +295,12 @@ export class ConfigManager {
 
     // Unknown keys are allowed but ignored
     if (!schema) {
-      return {valid: false, error: 'Unknown configuration key'};
+      return {valid: false, error: CONFIG_VALIDATION_ERROR.UNKNOWN_KEY};
     }
 
-    // Type check
-    if (schema.type === 'number') {
-      if (typeof value !== 'number' || isNaN(value)) {
-        return {valid: false, error: 'Must be a number'};
-      }
-      if (schema.min !== undefined && value < schema.min) {
-        return {valid: false, error: `Must be at least ${schema.min}`};
-      }
-      if (schema.max !== undefined && value > schema.max) {
-        return {valid: false, error: `Must be at most ${schema.max}`};
-      }
-    } else if (schema.type === 'string') {
-      if (typeof value !== 'string') {
-        return {valid: false, error: 'Must be a string'};
-      }
-      if (schema.enum && !schema.enum.includes(value)) {
-        return {valid: false, error: `Must be one of: ${schema.enum.join(', ')}`};
-      }
-    } else if (schema.type === 'boolean') {
-      if (typeof value !== 'boolean') {
-        return {valid: false, error: 'Must be a boolean'};
-      }
-    } else if (schema.type === 'object') {
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return {valid: false, error: 'Must be an object'};
-      }
+    const validator = CONFIG_FIELD_VALIDATOR[schema.type];
+    if (validator) {
+      return validator(schema, value);
     }
 
     return {valid: true};

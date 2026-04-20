@@ -26,6 +26,8 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
       ready: null,
       state: 'unknown',
       reason: null,
+      reasonCode: null,
+      errorCode: null,
       retryAfterMs: null,
     });
   }
@@ -51,6 +53,16 @@ function normalizeLocalQueryTransportReadiness(rawReadiness) {
         rawReadiness.reason.length > NUM.ZERO ?
         rawReadiness.reason :
         null,
+    reasonCode:
+      typeof rawReadiness.reasonCode === TYPEOF.STRING &&
+        rawReadiness.reasonCode.length > NUM.ZERO ?
+        rawReadiness.reasonCode :
+        null,
+    errorCode:
+      typeof rawReadiness.errorCode === TYPEOF.STRING &&
+        rawReadiness.errorCode.length > NUM.ZERO ?
+        rawReadiness.errorCode :
+        null,
     retryAfterMs:
       normalizePositiveInteger(rawReadiness.retryAfterMs, null),
   });
@@ -75,7 +87,7 @@ function buildLocalQueryTransportNotReadyError(readiness) {
   const error = new Error(
     readiness?.reason || ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
   );
-  error.code = 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+  error.code = readiness?.errorCode || 'ROUTER_QUERY_TRANSPORT_NOT_READY';
   error.retryAfterMs =
     normalizePositiveInteger(readiness?.retryAfterMs, NUM.ZERO);
   error.localQueryTransport = readiness || null;

@@ -132,83 +132,116 @@ function addLineToMap(map, key, line) {
   map.set(key, lines);
 }
 
-function collectFunctionViolations(node, parent, filePath) {
-  const functionName = getFunctionName(node, parent);
-  const independentIfLines = new Set();
-  const semanticAssignments = new Map();
-  const semanticReturnKeys = new Map();
-  let semanticReturnCount = 0;
+function createViolationEvidence() {
+  return {
+    independentIfLines: new Set(),
+    semanticAssignments: new Map(),
+    semanticReturnKeys: new Map(),
+    semanticReturnCount: 0,
+  };
+}
 
-  function traverse(currentNode, currentParent = null, ancestors = []) {
-    if (!currentNode || typeof currentNode.type !== 'string') {
-      return;
-    }
-    if (currentNode !== node && isFunctionLikeNode(currentNode)) {
-      return;
-    }
-
-    const insideIf = ancestors.some((ancestor) => ancestor.type === 'IfStatement');
-
-    if (currentNode.type === 'IfStatement' &&
-        !isElseIfBranch(currentNode, currentParent)) {
-      independentIfLines.add(currentNode.loc?.start?.line || 1);
-    }
-
-    if (insideIf &&
-        currentNode.type === 'AssignmentExpression') {
-      const targetName = extractTargetName(currentNode.left);
-      if (isSemanticName(targetName)) {
-        addLineToMap(
-          semanticAssignments,
-          targetName,
-          currentNode.loc?.start?.line || 1,
-        );
-      }
-    }
-
-    if (insideIf && currentNode.type === 'ReturnStatement') {
-      const semanticKeys = collectSemanticKeysFromObject(currentNode.argument);
-      if (semanticKeys.length > 0) {
-        semanticReturnCount += 1;
-        for (const key of semanticKeys) {
-          addLineToMap(
-            semanticReturnKeys,
-            key,
-            currentNode.loc?.start?.line || 1,
-          );
-        }
-      }
-    }
-
-    const keys = KEYS[currentNode.type] || [];
-    for (const key of keys) {
-      const value = currentNode[key];
-      if (Array.isArray(value)) {
-        for (const child of value) {
-          traverse(child, currentNode, [...ancestors, currentNode]);
-        }
-        continue;
-      }
-      traverse(value, currentNode, [...ancestors, currentNode]);
-    }
+function collectAssignmentEvidence(currentNode, evidence) {
+  const targetName = extractTargetName(currentNode.left);
+  if (!isSemanticName(targetName)) {
+    return;
   }
 
-  traverse(node.body || node);
+  addLineToMap(
+    evidence.semanticAssignments,
+    targetName,
+    currentNode.loc?.start?.line || 1,
+  );
+}
+
+function collectReturnEvidence(currentNode, evidence) {
+  const semanticKeys = collectSemanticKeysFromObject(currentNode.argument);
+  if (semanticKeys.length === 0) {
+    return;
+  }
+
+  evidence.semanticReturnCount += 1;
+  for (const key of semanticKeys) {
+    addLineToMap(
+      evidence.semanticReturnKeys,
+      key,
+      currentNode.loc?.start?.line || 1,
+    );
+  }
+}
+
+function traverseFunctionEvidence(
+  functionNode,
+  currentNode,
+  currentParent,
+  ancestors,
+  evidence,
+) {
+  if (!currentNode || typeof currentNode.type !== 'string') {
+    return;
+  }
+  if (currentNode !== functionNode && isFunctionLikeNode(currentNode)) {
+    return;
+  }
+
+  const insideIf = ancestors.some((ancestor) => ancestor.type === 'IfStatement');
+  if (currentNode.type === 'IfStatement' &&
+      !isElseIfBranch(currentNode, currentParent)) {
+    evidence.independentIfLines.add(currentNode.loc?.start?.line || 1);
+  }
+
+  if (insideIf && currentNode.type === 'AssignmentExpression') {
+    collectAssignmentEvidence(currentNode, evidence);
+  }
+  if (insideIf && currentNode.type === 'ReturnStatement') {
+    collectReturnEvidence(currentNode, evidence);
+  }
+
+  const nextAncestors = [...ancestors, currentNode];
+  const keys = KEYS[currentNode.type] || [];
+  for (const key of keys) {
+    const value = currentNode[key];
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        traverseFunctionEvidence(
+          functionNode,
+          child,
+          currentNode,
+          nextAncestors,
+          evidence,
+        );
+      }
+      continue;
+    }
+    traverseFunctionEvidence(
+      functionNode,
+      value,
+      currentNode,
+      nextAncestors,
+      evidence,
+    );
+  }
+}
+
+function collectFunctionViolations(node, parent, filePath) {
+  const functionName = getFunctionName(node, parent);
+  const evidence = createViolationEvidence();
+  traverseFunctionEvidence(node, node.body || node, null, [], evidence);
 
   const violations = [];
-  const independentIfCount = independentIfLines.size;
+  const independentIfCount = evidence.independentIfLines.size;
   if (independentIfCount < 2) {
     return violations;
   }
 
-  const repeatedTargets = [...semanticAssignments.entries()]
+  const repeatedTargets = [...evidence.semanticAssignments.entries()]
     .filter(([, lines]) => lines.size >= 2)
     .map(([target]) => target)
     .sort();
   if (repeatedTargets.length > 0) {
     violations.push({
       filePath,
-      line: Math.min(...independentIfLines),
+      line: Math.min(...evidence.independentIfLines),
       column: 1,
       functionName,
       independentIfCount,
@@ -220,11 +253,11 @@ function collectFunctionViolations(node, parent, filePath) {
     });
   }
 
-  const repeatedReturnKeys = [...semanticReturnKeys.keys()].sort();
-  if (semanticReturnCount >= 2 && repeatedReturnKeys.length > 0) {
+  const repeatedReturnKeys = [...evidence.semanticReturnKeys.keys()].sort();
+  if (evidence.semanticReturnCount >= 2 && repeatedReturnKeys.length > 0) {
     violations.push({
       filePath,
-      line: Math.min(...independentIfLines),
+      line: Math.min(...evidence.independentIfLines),
       column: 1,
       functionName,
       independentIfCount,

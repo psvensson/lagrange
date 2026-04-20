@@ -15,12 +15,7 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises';
-import {
-  basename,
-  extname,
-  join,
-  resolve,
-} from 'node:path';
+import {basename, extname, join, resolve} from 'node:path';
 import {URL} from 'node:url';
 import {
   ADMIN_TEST_DEFAULT,
@@ -54,6 +49,7 @@ import {
   mergeRunRecord,
   serializeRun,
 } from './admin-test-run-report.js';
+import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
 
 const FILE_ENCODING = 'utf8';
 const REPORT_TIMESTAMP_FALLBACK_MS = 0;
@@ -76,10 +72,7 @@ const DEFAULT_STDIO = 'pipe';
 const SIGNAL_STOP = ADMIN_TEST_DEFAULT.SIGNAL_TERM;
 const FILE_READ_BYTES_PER_CHUNK = 65536;
 const BUFFER_ENCODING = 'utf8';
-const RUN_CONFIG_MODE = Object.freeze({
-  LOCAL: 'local',
-  REMOTE: 'remote',
-});
+const RUN_CONFIG_MODE = Object.freeze({LOCAL: 'local', REMOTE: 'remote'});
 const CONFIG_PRECHECK_STATE = Object.freeze({
   INVALID_DOCKER_HOST: 'invalid_docker_host',
   LOCAL_READY: 'local_ready',
@@ -100,166 +93,30 @@ const DOCKER_HOST_PORT_SEPARATOR = ':';
 const DOCKER_HOST_IPV6_PREFIX = '[';
 const DOCKER_HOST_IPV6_SUFFIX = ']';
 
-function buildLocalConfigPrecheck(socketPath) {
-  return Object.freeze({
-    state: CONFIG_PRECHECK_STATE.LOCAL_READY,
-    mode: RUN_CONFIG_MODE.LOCAL,
-    socketPath,
-    hosts: [],
-  });
-}
-
-function buildRemoteConfigPrecheck(hosts) {
-  return Object.freeze({
-    state: CONFIG_PRECHECK_STATE.REMOTE_READY,
-    mode: RUN_CONFIG_MODE.REMOTE,
-    socketPath: null,
-    hosts,
-  });
-}
-
-function resolveConfigPrecheckState(observations) {
-  const blockingObservation = observations.find((observation) =>
-    observation.state !== CONFIG_PRECHECK_STATE.REMOTE_HOST_RESOLVED);
-  return blockingObservation?.state || CONFIG_PRECHECK_STATE.REMOTE_READY;
-}
-
-function buildConfigPrecheckOutcome({
-  configName,
-  hosts,
-  observations,
-  precheckState,
-}) {
-  const blockingObservation = observations.find((observation) =>
-    observation.state === precheckState);
-  switch (precheckState) {
-    case CONFIG_PRECHECK_STATE.INVALID_DOCKER_HOST:
-      return Object.freeze({
-        state: precheckState,
-        error: new Error(
-          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
-          `invalid docker host "${blockingObservation.host}" in config "${configName}"`,
-        ),
-      });
-    case CONFIG_PRECHECK_STATE.REMOTE_HOST_UNRESOLVABLE:
-      return Object.freeze({
-        state: precheckState,
-        error: new Error(
-          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
-          `docker host "${blockingObservation.host}" from config "${configName}"` +
-          ` is not resolvable: ${blockingObservation.message}`,
-        ),
-      });
-    case CONFIG_PRECHECK_STATE.REMOTE_READY:
-      return Object.freeze({
-        state: precheckState,
-        precheck: buildRemoteConfigPrecheck(hosts),
-      });
-    default:
-      return Object.freeze({
-        state: precheckState,
-        error: new Error(
-          `${CONFIG_PRECHECK_ERROR_PREFIX}` +
-          `unsupported config precheck state "${precheckState}" for config "${configName}"`,
-        ),
-      });
-  }
-}
-
-function buildRunFinalizationSnapshot(run, exitCode) {
-  return Object.freeze({
-    priorStatus: run.status,
-    exitCode,
-  });
-}
-
-function resolveRunFinalizationState(snapshot) {
-  if (snapshot.priorStatus === ADMIN_TEST_RUN_STATUS.STOPPING) {
-    return RUN_FINALIZATION_STATE.STOPPED;
-  }
-  if (snapshot.exitCode === PROCESS_EXIT_SUCCESS) {
-    return RUN_FINALIZATION_STATE.PASSED;
-  }
-  return RUN_FINALIZATION_STATE.FAILED;
-}
-
-function buildRunFinalizationOutcome(finalizationState) {
-  switch (finalizationState) {
-    case RUN_FINALIZATION_STATE.STOPPED:
-      return Object.freeze({
-        state: finalizationState,
-        status: ADMIN_TEST_RUN_STATUS.STOPPED,
-        progress: Object.freeze({
-          phase: RUN_PROGRESS_PHASE.STOPPED,
-          message: 'Run stopped',
-          percent: 100,
-        }),
-      });
-    case RUN_FINALIZATION_STATE.PASSED:
-      return Object.freeze({
-        state: finalizationState,
-        status: ADMIN_TEST_RUN_STATUS.PASSED,
-        progress: Object.freeze({
-          phase: RUN_PROGRESS_PHASE.COMPLETED,
-          message: 'Run completed successfully',
-          percent: 100,
-        }),
-      });
-    case RUN_FINALIZATION_STATE.FAILED:
-      return Object.freeze({
-        state: finalizationState,
-        status: ADMIN_TEST_RUN_STATUS.FAILED,
-        progress: Object.freeze({
-          phase: RUN_PROGRESS_PHASE.FAILED,
-          message: 'Run failed',
-          percent: 100,
-        }),
-      });
-    default:
-      return Object.freeze({
-        state: finalizationState,
-        status: ADMIN_TEST_RUN_STATUS.FAILED,
-        progress: Object.freeze({
-          phase: RUN_PROGRESS_PHASE.FAILED,
-          message: 'Run failed',
-          percent: 100,
-        }),
-      });
-  }
-}
-
-
-/**
- * Build a stable run identifier.
- * @param {string} scenario
- * @param {number} epochMs
- * @param {string} gitHash
- * @return {string}
- */
-function buildRunId(scenario, epochMs, gitHash) {
-  const safeScenario = String(scenario).replace(RUN_ID_SANITIZE_REGEX, '_');
-  const timestamp = new Date(epochMs)
-    .toISOString()
-    .replace(RUN_TIMESTAMP_CHAR_REGEX, RUN_TIMESTAMP_REPLACEMENT);
-  const safeGitHash = String(gitHash || GIT_HASH_FALLBACK).replace(
-    RUN_ID_SANITIZE_REGEX, '_',
-  );
-  return `${safeScenario}-${timestamp}-${safeGitHash}`;
-}
-
-/**
- * Return JSON parse result or null for unreadable files.
- * @param {string} filePath
- * @return {Promise<Object|null>}
- */
-async function tryReadJson(filePath) {
-  try {
-    const raw = await readFile(filePath, FILE_ENCODING);
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
+const {
+  buildConfigPrecheckOutcome,
+  buildLocalConfigPrecheck,
+  buildRunFinalizationOutcome,
+  buildRunFinalizationSnapshot,
+  buildRunId,
+  resolveConfigPrecheckState,
+  resolveRunFinalizationState,
+  tryReadJson,
+} = buildAdminTestRunServiceHelpers({
+  ADMIN_TEST_ERROR_MSG,
+  ADMIN_TEST_RUN_STATUS,
+  CONFIG_PRECHECK_STATE,
+  FILE_ENCODING,
+  GIT_HASH_FALLBACK,
+  PROCESS_EXIT_SUCCESS,
+  RUN_CONFIG_MODE,
+  RUN_FINALIZATION_STATE,
+  RUN_ID_SANITIZE_REGEX,
+  RUN_PROGRESS_PHASE,
+  RUN_TIMESTAMP_CHAR_REGEX,
+  RUN_TIMESTAMP_REPLACEMENT,
+  readFile,
+});
 
 /**
  * Admin test run service.

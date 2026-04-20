@@ -57,6 +57,15 @@ When writing or modifying code:
   snapshot plus one explicit state model or decision table rather than a bag of
   independent `if` statements.
 - Do not introduce synonyms for an existing concept.
+- Do not expose semantic policy through combinable booleans when one named mode
+  constant set should exist.
+- When a boundary already owns a named mode vocabulary, call sites and tests
+  should use that vocabulary directly instead of restating legacy boolean
+  preferences.
+- When a concern has several views or caches, name them by role and keep one
+  consumer-facing authoritative surface.
+- Do not leak raw storage or transport field shapes into runtime model names or
+  contracts.
 
 ## Before Completing Code Changes
 

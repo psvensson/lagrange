@@ -62,6 +62,26 @@ describe('seed and joining startup integration', () => {
     assert.equal(joiningService.runtimeDriverRegistry.frozen, true);
   });
 
+  it('seed runtime owner exposes control-plane readiness through rebalance coordinator ownership', () => {
+    const bootstrapService = new BootstrapService({
+      nodeId: 'seed-node',
+      nodeAddress: `127.0.0.1:${seedRestPort}`,
+      wsPort: seedRestPort + wsOffset,
+    });
+    const controlPlaneReadinessService = {
+      owner: 'control-plane-readiness',
+    };
+
+    bootstrapService.rebalanceCoordinator = {
+      controlPlaneReadinessService,
+    };
+
+    assert.equal(
+      bootstrapService.runtimeDependencyOwner.controlPlaneReadinessService,
+      controlPlaneReadinessService,
+    );
+  });
+
   it('entrypoint initializes bootstrap readiness API for seed and joining nodes', () => {
     const source = readFileSync('src/index.js', 'utf8');
     const bootstrapApiCreates = source.match(/new BootstrapAPI\(/g) || [];

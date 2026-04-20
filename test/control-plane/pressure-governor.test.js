@@ -5,6 +5,10 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../../src/control-plane/pressure-governor.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
 
 test('PressureGovernor allows critical work during transport pressure',
   async (t) => {
@@ -217,5 +221,23 @@ test('PressureGovernor backpressures control-plane work when critical reserve ' 
       decision.summary?.totalPendingCritical,
       16,
       'control-plane summary should expose critical pending pressure',
+    );
+  });
+
+test('Control-plane workload profiles keep critical replica-operation visibility on the reserved lane',
+  async (t) => {
+    const workloadProfile = buildControlPlaneWorkloadProfile(
+      CONTROL_PLANE_WORKLOAD_CLASS.AUTHORITATIVE_OPERATION_VISIBILITY,
+    );
+
+    t.equal(
+      workloadProfile.workClass,
+      PRESSURE_WORK_CLASS.CRITICAL,
+      'replica-operation visibility should remain on the critical work lane',
+    );
+    t.same(
+      workloadProfile.resourceKeys,
+      ['control-plane:replica-operations:visibility'],
+      'replica-operation visibility should use one shared workload key',
     );
   });

@@ -33,6 +33,26 @@ const TRANSITIONAL_STATES = [
   ReplicaState.REMOVING,
 ];
 
+const TEST_TIMEOUT_TRANSITION_REASON = 'test';
+
+async function transitionReplicaAlongPath(
+  stateMachine,
+  replicaId,
+  partitionId,
+  path,
+) {
+  for (const state of path) {
+    await stateMachine.transition(replicaId, state, {
+      partitionId,
+      reason: TEST_TIMEOUT_TRANSITION_REASON,
+    });
+  }
+}
+
+async function flushTimeoutTriggeredTransition() {
+  await new Promise((resolve) => setImmediate(resolve));
+}
+
 test('Property 10: Timeout-Triggered Failures', async (t) => {
   t.beforeEach(async () => {
     ConfigurationManager.resetInstance();
@@ -56,11 +76,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('replicas exceeding timeout transition to failed', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           // Use very short timeouts for testing
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
@@ -73,12 +93,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Verify replica is in target state
           const beforeState = stateMachine.getState(replicaId);
@@ -92,6 +112,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
+          await flushTimeoutTriggeredTransition();
 
           // Verify replica transitioned to failed
           const afterState = stateMachine.getState(replicaId);
@@ -112,11 +133,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('timeout error message includes timeout value', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           const timeoutMs = 50;
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
@@ -129,12 +150,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
@@ -142,6 +163,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
+          await flushTimeoutTriggeredTransition();
 
           // Verify error message contains timeout value
           const afterState = stateMachine.getState(replicaId);
@@ -166,11 +188,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('timeout reason includes state name', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -182,12 +204,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
@@ -195,6 +217,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
+          await flushTimeoutTriggeredTransition();
 
           // Verify trigger reason contains state name
           const afterState = stateMachine.getState(replicaId);
@@ -219,11 +242,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('replicas not exceeding timeout remain unchanged', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           // Use very long timeouts
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
@@ -236,12 +259,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Check timeouts (should not trigger)
           const timedOutCount = stateMachine.checkTimeoutsNow();
@@ -268,11 +291,11 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('timeout event emitted on timeout', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.constantFrom(...TRANSITIONAL_STATES),
         fc.uuid(),
         fc.uuid(),
-        (targetState, replicaId, partitionId) => {
+        async (targetState, replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -292,12 +315,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get to the target transitional state
           const path = getPathToState(targetState);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
@@ -305,6 +328,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
+          await flushTimeoutTriggeredTransition();
 
           stateMachine.clear();
 
@@ -327,10 +351,10 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
    */
   t.test('non-transitional states do not timeout', async (t) => {
     await fc.assert(
-      fc.property(
+      fc.asyncProperty(
         fc.uuid(),
         fc.uuid(),
-        (replicaId, partitionId) => {
+        async (replicaId, partitionId) => {
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
             cdcIntegrationService: createMockCDCService(),
@@ -342,12 +366,12 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Get replica to active state
           const path = getPathToState(ReplicaState.ACTIVE);
-          for (const state of path) {
-            stateMachine.transition(replicaId, state, {
-              partitionId,
-              reason: 'test',
-            });
-          }
+          await transitionReplicaAlongPath(
+            stateMachine,
+            replicaId,
+            partitionId,
+            path,
+          );
 
           // Manually set entry time to simulate old entry
           const replicaState = stateMachine.getState(replicaId);

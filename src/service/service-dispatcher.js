@@ -7,6 +7,11 @@ import {
   SUBSYSTEM,
   TYPEOF,
 } from '../constants/index.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  classifyTransportDeliveryOutcome,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
 import {ServicePolicyViolationError} from './service-lifecycle-errors.js';
 
@@ -259,16 +264,20 @@ class ServiceDispatcher {
         throw new Error(SERVICE_DISPATCHER_ERROR.TARGET_ADDRESS_REQUIRED);
       }
 
-      const delivery = await this._messageRouter.deliver(
-        target.targetAddress,
-        validatedEnvelope,
-        {
-          targetNodeId: target.targetNodeId || null,
-          traceId,
-        },
+      const delivery = classifyTransportDeliveryOutcome(
+        await this._messageRouter.deliver(
+          target.targetAddress,
+          validatedEnvelope,
+          {
+            targetNodeId: target.targetNodeId || null,
+            traceId,
+          },
+        ),
       );
 
-      if (!delivery || delivery.acknowledged !== true) {
+      if (!isDeliveredTransportDeliveryOutcome(delivery) ||
+          delivery.reasonCode ===
+            TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
         throw new Error(
           `${SERVICE_DISPATCHER_ERROR.DELIVERY_REJECTED}:` +
           ` ${delivery?.error || 'unknown_error'}`,

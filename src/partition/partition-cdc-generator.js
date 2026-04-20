@@ -5,10 +5,14 @@
  */
 
 import {CDC_OPERATION, NUM, SQL, TYPEOF} from '../constants/index.js';
-import {STRING} from '../constants/strings.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   extractConjunctiveWhereColumns,
+  extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
+  extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
+  parseValue as parseValueImpl,
+  parseValuesFromSQL as parseValuesFromSQLImpl,
+  extractUpdateDataFromSQL as extractUpdateDataFromSQLImpl,
 } from './partition-sql-parser.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
@@ -24,6 +28,20 @@ import {
  * CDC operation types.
  */
 const CDCOperation = CDC_OPERATION;
+
+const PARTITION_CDC_EVENT_BUILD_STATE = Object.freeze({
+  BUILT: 'built',
+  SKIPPED: 'skipped',
+});
+
+const PARTITION_CDC_EVENT_SKIP_REASON = Object.freeze({
+  NO_OP_WRITE: 'no_op_write',
+  UNSUPPORTED_OPERATION: 'unsupported_operation',
+});
+
+const PARTITION_CDC_GENERATOR_LITERAL = Object.freeze({
+  SUPPRESSING_CDC_EVENT_FOR_NO_OP_WRITE: 'Suppressing CDC event for no-op write',
+});
 
 /**
  * Generates CDC events for partition write operations.
@@ -114,33 +132,112 @@ class PartitionCDCGenerator {
       return;
     }
 
-    const operationInfo = this.determineOperation(entry);
-    if (!operationInfo) {
-      return; // No CDC for this operation type
+    const buildResult = this.buildEvent(entry);
+    if (buildResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
+      return;
     }
 
-    const {operation, entryType} = operationInfo;
-    const cdcData = this.extractCDCData(entry, entryType);
-    const tableName = this.extractTableName(entry);
-
-    const cdcEvent = {
-      tableName,
-      operation,
-      data: cdcData,
-      timestamp: entry.timestamp,
-      sourcePartition: this.partitionId,
-      sourceReplica: this.replicaId,
-    };
+    const cdcEvent = buildResult.cdcEvent;
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATED_CDC_EVENT, {
       partitionId: this.partitionId,
-      operation,
+      operation: cdcEvent.operation,
       tableName: cdcEvent.tableName,
-      dataKeys: Object.keys(cdcData),
+      dataKeys: Object.keys(cdcEvent.data),
       subscriberCount: this.cdcSubscribers.size,
     });
 
     await this.deliverEvent(cdcEvent);
+  }
+
+  /**
+   * Resolve one explicit event-envelope snapshot before hydrating row data.
+   * This lets callers decide buffering policy without carrying a second local
+   * CDC state machine.
+   * @param {Object} entry - Write entry.
+   * @param {Object} options - Envelope build options.
+   * @param {boolean} options.suppressNoOpWrite - Skip zero-change mutations.
+   * @return {Object} Explicit build outcome.
+   */
+  resolveEventEnvelope(entry, options = {}) {
+    const operationInfo = this.determineOperation(entry);
+    if (!operationInfo) {
+      return Object.freeze({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+        reasonCode: PARTITION_CDC_EVENT_SKIP_REASON.UNSUPPORTED_OPERATION,
+      });
+    }
+
+    const {operation, entryType} = operationInfo;
+    if (options.suppressNoOpWrite === true &&
+      this.shouldSuppressNoOpWrite(entry, entryType)) {
+      this.logger.debug(
+        PARTITION_CDC_GENERATOR_LITERAL.SUPPRESSING_CDC_EVENT_FOR_NO_OP_WRITE,
+        {
+          partitionId: this.partitionId,
+          entryType,
+          changes: entry.changes,
+        },
+      );
+      return Object.freeze({
+        state: PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+        reasonCode: PARTITION_CDC_EVENT_SKIP_REASON.NO_OP_WRITE,
+        entryType,
+      });
+    }
+
+    return Object.freeze({
+      state: PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+      entryType,
+      cdcEventEnvelope: Object.freeze({
+        tableName: this.extractTableName(entry),
+        operation,
+        timestamp: entry.timestamp,
+        sourcePartition: this.partitionId,
+        sourceReplica: this.replicaId,
+      }),
+    });
+  }
+
+  /**
+   * Build a full CDC event from a previously-resolved envelope snapshot.
+   * @param {Object} entry - Write entry.
+   * @param {Object} envelopeResult - Result from resolveEventEnvelope().
+   * @param {Object} options - Event build options.
+   * @param {number} options.sequenceNumber - Optional monotonic sequence number.
+   * @return {Object} Built CDC event.
+   */
+  hydrateEventEnvelope(entry, envelopeResult, options = {}) {
+    const cdcEvent = {
+      ...envelopeResult.cdcEventEnvelope,
+      data: this.extractCDCData(
+        entry,
+        envelopeResult.entryType,
+        envelopeResult.cdcEventEnvelope.tableName,
+      ),
+    };
+    if (Number.isFinite(options.sequenceNumber)) {
+      cdcEvent.sequenceNumber = options.sequenceNumber;
+    }
+    return cdcEvent;
+  }
+
+  /**
+   * Build a CDC event with an explicit state/result contract.
+   * @param {Object} entry - Write entry.
+   * @param {Object} options - Event build options.
+   * @return {Object} Explicit build outcome.
+   */
+  buildEvent(entry, options = {}) {
+    const envelopeResult = this.resolveEventEnvelope(entry, options);
+    if (envelopeResult.state !== PARTITION_CDC_EVENT_BUILD_STATE.BUILT) {
+      return envelopeResult;
+    }
+
+    return Object.freeze({
+      ...envelopeResult,
+      cdcEvent: this.hydrateEventEnvelope(entry, envelopeResult, options),
+    });
   }
 
   /**
@@ -158,7 +255,7 @@ class PartitionCDCGenerator {
       const sqlUpper = entry.sql.trim().toUpperCase();
       // Check for INSERT OR REPLACE first (before plain INSERT)
       // This is used by upsertSystemTableRow and should generate UPSERT CDC events
-      if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE)) {
+      if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase())) {
         entryType = PARTITION_SERVICE_OPERATION.UPSERT;
       } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
         entryType = PARTITION_SERVICE_OPERATION.INSERT;
@@ -204,8 +301,8 @@ class PartitionCDCGenerator {
    * @return {Object} CDC data object.
    * @private
    */
-  extractCDCData(entry, entryType) {
-    const tableName = this.extractTableName(entry);
+  extractCDCData(entry, entryType, resolvedTableName = null) {
+    const tableName = resolvedTableName || this.extractTableName(entry);
     const isUpdateOperation =
       entry.type === PARTITION_SERVICE_OPERATION.UPDATE ||
       entryType === PARTITION_SERVICE_OPERATION.UPDATE;
@@ -263,6 +360,26 @@ class PartitionCDCGenerator {
     }
 
     return cdcData;
+  }
+
+  /**
+   * Decide whether a write entry should be treated as a CDC no-op.
+   * @param {Object} entry - Write entry.
+   * @param {string} entryType - Resolved entry type.
+   * @return {boolean} True when CDC should be suppressed.
+   */
+  shouldSuppressNoOpWrite(entry, entryType) {
+    const hasChangeCount = typeof entry?.changes === TYPEOF.NUMBER;
+    if (!hasChangeCount) {
+      return false;
+    }
+    if (entry.changes > NUM.ZERO) {
+      return false;
+    }
+    return entryType === PARTITION_SERVICE_OPERATION.UPDATE ||
+      entryType === PARTITION_SERVICE_OPERATION.DELETE ||
+      entryType === PARTITION_SERVICE_OPERATION.UPSERT ||
+      entryType === PARTITION_SERVICE_OPERATION.QUERY;
   }
 
   /**
@@ -347,105 +464,64 @@ class PartitionCDCGenerator {
    * Extract data from INSERT SQL by querying the inserted row.
    * @param {string} sql - INSERT SQL statement.
    * @param {string} tableName - Table name.
-   * @return {Object} Extracted data or empty object.
-   * @private
-   */
+  * @return {Object} Extracted data or empty object.
+  * @private
+  */
   extractInsertDataFromSQL(sql, tableName) {
-    // Parse INSERT INTO table (col1, col2) VALUES ('val1', 'val2')
-    // or INSERT OR REPLACE INTO table (col1, col2) VALUES ('val1', 'val2')
-    const columnsMatch = sql.match(
-      /INSERT\s+(?:OR\s+REPLACE\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+    return extractInsertDataFromSQLImpl(
+      sql,
+      tableName,
+      this.db,
+      this.logger,
     );
-    const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
-
-    if (!columnsMatch || !valuesMatch) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-      return {};
-    }
-
-    const columns = columnsMatch[NUM.ONE].split(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((c) => c.trim());
-    const valuesStr = valuesMatch[NUM.ONE];
-
-    // Parse values - handle quoted strings and numbers
-    const values = this.parseValuesFromSQL(valuesStr);
-
-    if (columns.length !== values.length) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
-        columns: columns.length,
-        values: values.length,
-      });
-      return {};
-    }
-
-    // Build data object
-    const data = {};
-    for (let i = NUM.ZERO; i < columns.length; i++) {
-      data[columns[i]] = values[i];
-    }
-
-    const pkColumn = columns[NUM.ZERO];
-    return this.fetchInsertRow(tableName, pkColumn, values[NUM.ZERO], data);
   }
 
   /**
    * Extract data from UPDATE SQL by querying the updated row.
    * @param {string} sql - UPDATE SQL statement.
    * @param {string} tableName - Table name.
-   * @return {Object} Extracted data or empty object.
-   * @private
-   */
+  * @return {Object} Extracted data or empty object.
+  * @private
+  */
   extractUpdateDataFromSQL(sql, tableName) {
-    // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
-    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
-    if (whereMatch && this.db) {
-      const keyColumn = whereMatch[NUM.ONE];
-      const keyValue = whereMatch[NUM.TWO];
-      const authoritativeRow = this.fetchUpdatedRow(
-        tableName,
-        {[keyColumn]: keyValue},
-      );
-      if (authoritativeRow) {
-        return authoritativeRow;
-      }
-    } else {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-    }
-    return {};
+    return extractUpdateDataFromSQLImpl(
+      sql,
+      tableName,
+      this.db,
+      this.logger,
+    );
   }
 
   /**
    * Extract data from DELETE SQL.
    * @param {string} sql - DELETE SQL statement.
-   * @return {Object} Extracted data or empty object.
+  * @return {Object} Extracted data or empty object.
+  * @private
+  */
+  extractDeleteDataFromSQL(sql) {
+    return extractDeleteDataFromSQLImpl(sql, this.logger);
+  }
+
+  /**
+   * Parse values from SQL VALUES clause.
+   * Preserved as a compatibility wrapper around the parser owner.
+   * @param {string} valuesStr - Values string like "'val1', 123, NULL".
+   * @return {Array} Parsed values.
    * @private
    */
-  extractDeleteDataFromSQL(sql) {
-    // Match WHERE clause: WHERE col = 'val'
-    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
-    if (whereMatch) {
-      const keyColumn = whereMatch[NUM.ONE];
-      const keyValue = whereMatch[NUM.TWO];
-      return {[keyColumn]: keyValue};
-    }
-    this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
-      sql: sql.substring(
-        NUM.ZERO,
-        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-      ),
-    });
-    return {};
+  parseValuesFromSQL(valuesStr) {
+    return parseValuesFromSQLImpl(valuesStr);
+  }
+
+  /**
+   * Parse a single value from SQL.
+   * Preserved as a compatibility wrapper around the parser owner.
+   * @param {string} val - Value string.
+   * @return {*} Parsed value.
+   * @private
+   */
+  parseValue(val) {
+    return parseValueImpl(val);
   }
 
   /**
@@ -660,76 +736,6 @@ class PartitionCDCGenerator {
   }
 
   /**
-   * Parse values from SQL VALUES clause.
-   * @param {string} valuesStr - Values string like "'val1', 123, NULL".
-   * @return {Array} Parsed values.
-   * @private
-   */
-  parseValuesFromSQL(valuesStr) {
-    const values = [];
-    let current = STRING.EMPTY;
-    let inQuote = false;
-    let quoteChar = null;
-
-    for (let i = NUM.ZERO; i < valuesStr.length; i++) {
-      const char = valuesStr[i];
-
-      if (!inQuote && (char === PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE ||
-        char === PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE)) {
-        inQuote = true;
-        quoteChar = char;
-      } else if (inQuote && char === quoteChar) {
-        // Check for escaped quote
-        if (i + NUM.ONE < valuesStr.length &&
-          valuesStr[i + NUM.ONE] === quoteChar) {
-          current += char;
-          i += NUM.ONE; // Skip next quote
-        } else {
-          inQuote = false;
-          quoteChar = null;
-        }
-      } else if (!inQuote && char === PARTITION_SERVICE_SQL_FRAGMENT.COMMA) {
-        values.push(this.parseValue(current.trim()));
-        current = STRING.EMPTY;
-      } else {
-        current += char;
-      }
-    }
-
-    // Don't forget the last value
-    if (current.trim()) {
-      values.push(this.parseValue(current.trim()));
-    }
-
-    return values;
-  }
-
-  /**
-   * Parse a single value from SQL.
-   * @param {string} val - Value string.
-   * @return {*} Parsed value.
-   * @private
-   */
-  parseValue(val) {
-    if (val.toUpperCase() === PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE) {
-      return null;
-    }
-    // Remove quotes
-    if ((val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
-      val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
-        (val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
-        val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
-      return val.slice(NUM.ONE, -NUM.ONE);
-    }
-    // Try to parse as number
-    const num = Number(val);
-    if (!isNaN(num)) {
-      return num;
-    }
-    return val;
-  }
-
-  /**
    * Fetch the stored row after an INSERT/UPSERT so CDC emits canonical data.
    * @param {string} tableName
    * @param {string|undefined} keyColumn
@@ -839,5 +845,6 @@ class PartitionCDCGenerator {
 }
 
 export {
+  PARTITION_CDC_EVENT_BUILD_STATE,
   PartitionCDCGenerator,
 };

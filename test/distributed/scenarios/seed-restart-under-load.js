@@ -5,12 +5,12 @@
  * write load is active, then validating convergence and consistency.
  */
 
-import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import assert from "node:assert/strict";
+import { CONVERGENCE_DEFAULTS } from "../harness/constants.js";
 import {
   resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
-} from '../harness/scenario-config.js';
+} from "../harness/scenario-config.js";
 const ZERO = 0;
 
 /**
@@ -35,7 +35,7 @@ async function run(cluster, options = {}) {
   const scenarioOptions = resolveScenarioOptions(
     options,
     cluster,
-    'seedRestartUnderLoad',
+    "seedRestartUnderLoad",
   );
   const {
     loadOpsPerSec,
@@ -51,24 +51,22 @@ async function run(cluster, options = {}) {
   } = resolveSeedRestartUnderLoadScenarioConfig(scenarioOptions);
 
   const nodes = cluster.getNodes();
-  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
-  assert.ok(seedNode, 'Seed node should be available');
+  const seedNode = nodes.find((node) => node.role === "seed") || nodes[0];
+  assert.ok(seedNode, "Seed node should be available");
 
-  const loadNodesById = new Map(
-    nodes.map((node) => [String(node.id), node]),
-  );
+  const loadNodesById = new Map(nodes.map((node) => [String(node.id), node]));
   const steadyLoadNodeIds = nodes
     .filter((node) => String(node.id) !== String(seedNode.id))
     .map((node) => String(node.id));
   const availableLoadNodeIds = new Set(
-    steadyLoadNodeIds.length > ZERO ?
-      steadyLoadNodeIds :
-      nodes.map((node) => String(node.id)),
+    steadyLoadNodeIds.length > ZERO
+      ? steadyLoadNodeIds
+      : nodes.map((node) => String(node.id)),
   );
   const resolveLoadNodes = () =>
     Array.from(availableLoadNodeIds)
       .map((nodeId) => loadNodesById.get(nodeId))
-      .filter((node) => node && typeof node.query === 'function');
+      .filter((node) => node && typeof node.query === "function");
 
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
@@ -78,9 +76,9 @@ async function run(cluster, options = {}) {
   });
 
   await sleep(preRestartDelayMs);
-  if (typeof cluster.waitForAllActive === 'function') {
+  if (typeof cluster.waitForAllActive === "function") {
     await cluster.waitForAllActive({
-      mode: 'load',
+      mode: "load",
       timeoutMs: preRestartActiveTimeoutMs,
     });
   }
@@ -103,25 +101,30 @@ async function run(cluster, options = {}) {
   });
   assert.ok(
     convergence.settledAfterMs <= convergenceTimeoutMs,
-    'Cluster did not converge after seed restart: ' +
-    convergence.settledAfterMs + 'ms',
+    "Cluster did not converge after seed restart: " +
+      convergence.settledAfterMs +
+      "ms",
   );
   const metrics = await loadRun.waitComplete();
-  assert.ok(metrics.total > ZERO, 'Expected at least one load operation');
+  assert.ok(metrics.total > ZERO, "Expected at least one load operation");
 
-  const successRate = metrics.total > ZERO ?
-    metrics.success / metrics.total :
-    ZERO;
+  const successRate =
+    metrics.total > ZERO ? metrics.success / metrics.total : ZERO;
   assert.ok(
     successRate >= minSuccessRate,
-    'Success rate below threshold after seed restart: ' +
-    successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
+    "Success rate below threshold after seed restart: " +
+      successRate.toFixed(3) +
+      " (expected >= " +
+      minSuccessRate +
+      ")",
   );
 
-  if (restartWarning === null &&
-      typeof cluster.waitForAllActive === 'function') {
+  if (
+    restartWarning === null &&
+    typeof cluster.waitForAllActive === "function"
+  ) {
     await cluster.waitForAllActive({
-      mode: 'load',
+      mode: "load",
       timeoutMs: postRestartActiveTimeoutMs,
     });
   }
@@ -146,4 +149,4 @@ async function run(cluster, options = {}) {
   };
 }
 
-export {run};
+export { run };

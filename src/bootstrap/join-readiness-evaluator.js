@@ -22,11 +22,8 @@ import {
 import {
   resolveCanonicalRequiredSchemaVersion,
   resolveCanonicalAppliedSchemaVersion,
-  normalizeJoinSchemaVersion,
-  compareJoinSchemaVersions,
 } from './join-schema-version-resolver.js';
 import {
-  COLUMN,
   ENDPOINT_STATUS,
   NODE_STATE,
   NUM,
@@ -38,10 +35,6 @@ import {
 import {CONNECTION_STATE} from '../constants/transport.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
-import {
-  isReplicaOperationInFlight,
-  normalizeReplicaOperationRecord,
-} from '../rebalancer/replica-operation-liveness.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -64,11 +57,17 @@ import {
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
-  JOINING_LOG_MSG,
 } from './node-joining-constants.js';
 import {
-  isPriorityControlPlanePartition,
-} from './system-partition-classification.js';
+  resolveControlPlaneSnapshotRevisionMetadata,
+} from '../control-plane/control-plane-snapshot-revision.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
+import {
+  createJoinReadinessEvaluatorTailMethods,
+} from './join-readiness-evaluator-tail-methods.js';
 
 const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.ROUTING_NOT_READY,
@@ -132,6 +131,8 @@ class JoinReadinessEvaluator {
     this.meshConnectivityRepairPromise = null;
     this.lastClusterMeshSignature = null;
     this.lastCanonicalJoinBlockedLogAtMs = NUM.ZERO;
+    this.highestObservedSnapshotRevision = null;
+    this.highestObservedSnapshotResumeToken = null;
   }
 
   /**
@@ -208,6 +209,14 @@ class JoinReadinessEvaluator {
             evaluation?.topologySnapshotEpoch ?? null,
           appliedTopologyEpoch:
             evaluation?.appliedTopologyEpoch ?? null,
+          promotionState:
+            evaluation?.promotionState || null,
+          snapshotRevision:
+            evaluation?.snapshotRevision ?? null,
+          snapshotRevisionState:
+            evaluation?.snapshotRevisionState || null,
+          snapshotRevisionGap:
+            evaluation?.snapshotRevisionGap ?? null,
         });
       },
       onBlocked: async (result, context) => {
@@ -239,7 +248,7 @@ class JoinReadinessEvaluator {
         const attempts =
           result?.attempts || context.attempt || NUM.ONE;
         const error = new Error(
-          `join_readiness_timeout: ` +
+          'join_readiness_timeout: ' +
           `${terminalEvaluation.reasons.join(', ')} ` +
           `after ${timeoutMs}ms`,
         );
@@ -283,6 +292,20 @@ class JoinReadinessEvaluator {
             terminalEvaluation.topologySnapshotEpoch,
           appliedTopologyEpoch:
             terminalEvaluation.appliedTopologyEpoch,
+          promotionState:
+            terminalEvaluation.promotionState,
+          promotionReasons:
+            terminalEvaluation.promotionReasons,
+          snapshotRevision:
+            terminalEvaluation.snapshotRevision,
+          snapshotRevisionState:
+            terminalEvaluation.snapshotRevisionState,
+          snapshotExpectedMinimumRevision:
+            terminalEvaluation.snapshotExpectedMinimumRevision,
+          snapshotRevisionGap:
+            terminalEvaluation.snapshotRevisionGap,
+          snapshotResumeToken:
+            terminalEvaluation.snapshotResumeToken,
           elapsedMs: context.elapsedMs,
           attempts,
           snapshotError: lastSnapshotError?.message || null,
@@ -331,6 +354,20 @@ class JoinReadinessEvaluator {
               terminalEvaluation.topologySnapshotEpoch,
             appliedTopologyEpoch:
               terminalEvaluation.appliedTopologyEpoch,
+            promotionState:
+              terminalEvaluation.promotionState,
+            promotionReasons:
+              terminalEvaluation.promotionReasons,
+            snapshotRevision:
+              terminalEvaluation.snapshotRevision,
+            snapshotRevisionState:
+              terminalEvaluation.snapshotRevisionState,
+            snapshotExpectedMinimumRevision:
+              terminalEvaluation.snapshotExpectedMinimumRevision,
+            snapshotRevisionGap:
+              terminalEvaluation.snapshotRevisionGap,
+            snapshotResumeToken:
+              terminalEvaluation.snapshotResumeToken,
             snapshotError: lastSnapshotError?.message || null,
             timeoutKind: context.timeoutKind,
             lastProgressElapsedMs:
@@ -352,6 +389,10 @@ class JoinReadinessEvaluator {
           finalEvaluation?.requiredSchemaVersion || null,
         appliedSchemaVersion:
           finalEvaluation?.appliedSchemaVersion || null,
+        promotionState:
+          finalEvaluation?.promotionState || null,
+        snapshotRevision:
+          finalEvaluation?.snapshotRevision ?? null,
       },
     );
   }
@@ -534,12 +575,15 @@ class JoinReadinessEvaluator {
    */
   isLocalRouterBackpressured() {
     const messageRouter = this.delegates.getMessageRouter?.() || null;
+    const workloadProfile = buildControlPlaneWorkloadProfile(
+      CONTROL_PLANE_WORKLOAD_CLASS.JOIN_REPAIR,
+    );
     return PressureGovernor.getShared({
       nodeId: this.nodeId,
       messageRouter,
     }).isBackpressured({
-      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-      resourceKeys: ['join:repair'],
+      workClass: workloadProfile.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: workloadProfile.resourceKeys,
     });
   }
 
@@ -572,6 +616,8 @@ class JoinReadinessEvaluator {
       bootstrapResponse: this.delegates.getBootstrapResponse(),
       systemTableCache: NodeService.getInstance().getSystemTableCache(),
       messageRouter,
+      expectedMinimumRevision: this.highestObservedSnapshotRevision,
+      expectedResumeToken: this.highestObservedSnapshotResumeToken,
     };
 
     try {
@@ -579,6 +625,7 @@ class JoinReadinessEvaluator {
       const snapshot = provider ?
         await provider(context) :
         this.buildCanonicalJoinReadinessSnapshot(context);
+      this.recordObservedSnapshotFromSnapshot(snapshot);
       return {
         snapshot,
         error: null,
@@ -633,6 +680,21 @@ class JoinReadinessEvaluator {
       tableName,
       systemTableCache,
     );
+    const expectedResumeToken =
+      typeof context.expectedResumeToken === TYPEOF.STRING &&
+      context.expectedResumeToken.length > NUM.ZERO ?
+        context.expectedResumeToken :
+        this.highestObservedSnapshotResumeToken;
+    const snapshotRevisionMetadata =
+      resolveControlPlaneSnapshotRevisionMetadata({
+        topologySnapshotEpoch,
+        capturedAt:
+          this.delegates.getBootstrapTopologySnapshotHydratedAtMs?.() ||
+          null,
+      }, {
+        expectedResumeToken,
+      });
+    this.recordObservedSnapshotRevisionMetadata(snapshotRevisionMetadata);
 
     return {
       nodeId: this.nodeId,
@@ -654,6 +716,15 @@ class JoinReadinessEvaluator {
       appliedTopologyEpoch,
       requiredSchemaVersion,
       appliedSchemaVersion,
+      snapshotRevision: snapshotRevisionMetadata.revision,
+      snapshotRevisionSource: snapshotRevisionMetadata.revisionSource,
+      snapshotRevisionState: snapshotRevisionMetadata.revisionState,
+      snapshotExpectedMinimumRevision:
+        snapshotRevisionMetadata.expectedMinimumRevision,
+      snapshotRevisionGap: snapshotRevisionMetadata.revisionGap,
+      snapshotResumeToken: snapshotRevisionMetadata.resumeToken,
+      snapshotObservedAt: snapshotRevisionMetadata.observedAt,
+      snapshotObservedAtMs: snapshotRevisionMetadata.observedAtMs,
       requiredNodeIds:
         this.resolveJoinReadinessRequiredNodeIds(systemTableCache),
       missingLeaders: topology.missingLeaders,
@@ -1066,808 +1137,19 @@ class JoinReadinessEvaluator {
     }
     return [];
   }
-
-  /**
-   * Resolve one node id from a mesh-connectivity row shape.
-   * @param {Object|null} row
-   * @return {string}
-   */
-  resolveMeshConnectivityNodeId(row) {
-    return normalizeNodeRow(row).nodeId;
-  }
-
-  /**
-   * Resolve one node status from a mesh-connectivity row shape.
-   * @param {Object|null} row
-   * @return {string}
-   */
-  resolveMeshConnectivityNodeStatus(row) {
-    return normalizeNodeRow(row).status;
-  }
-
-  /**
-   * Resolve lifecycle-state tokens relevant to peer mesh eligibility.
-   * Mesh reconciliation is a transport concern, so any non-terminal node with
-   * authoritative endpoint metadata should be considered connectable.
-   * @param {Object|null} row
-   * @return {string[]}
-   */
-  resolveMeshConnectivityLifecycleTokens(row) {
-    return Array.from(new Set([
-      row?.[COLUMN.STATUS],
-      row?.status,
-      row?.[COLUMN.CONNECTION_STATE],
-      row?.connection_state,
-      row?.connectionState,
-    ].map((value) => {
-      return String(value || '').toLowerCase();
-    }).filter((value) => value.length > NUM.ZERO)));
-  }
-
-  /**
-   * Determine whether a node row should participate in mesh reconciliation.
-   * Nodes without lifecycle state are retained so bootstrap snapshots remain
-   * usable before canonical readiness data has fully propagated. For steady
-   * state, only explicitly terminal lifecycle states are excluded.
-   * @param {Object|null} row
-   * @return {boolean}
-   */
-  isMeshEligibleNodeRow(row) {
-    const nodeId = this.resolveMeshConnectivityNodeId(row);
-    if (nodeId.length === NUM.ZERO) {
-      return false;
-    }
-
-    const lifecycleTokens =
-      this.resolveMeshConnectivityLifecycleTokens(row);
-    if (lifecycleTokens.length === NUM.ZERO) {
-      return true;
-    }
-
-    return !lifecycleTokens.some((token) => {
-      return MESH_INELIGIBLE_NODE_STATES.has(token);
-    });
-  }
-
-  /**
-   * Resolve node rows used for mesh connectivity.
-   * Prefer the authoritative nodes cache over the initial bootstrap snapshot
-   * so later joiners are not stranded when membership changes after bootstrap.
-   * @return {{source: string, rows: Object[]}}
-   */
-  resolveMeshConnectivityNodeRows() {
-    const bootstrapActiveNodeIds = new Set(
-      this.resolveBootstrapTopologySnapshotActiveNodeIds(),
-    );
-    const systemTableCache =
-      NodeService.getInstance().getSystemTableCache();
-    if (systemTableCache &&
-        typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
-      const cacheRows =
-        (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
-          return this.isMeshEligibleNodeRow(row);
-        });
-      if (cacheRows.length > NUM.ZERO) {
-        return {
-          source: 'system_table_cache',
-          rows: cacheRows,
-        };
-      }
-    }
-
-    const bootstrapResponse = this.delegates.getBootstrapResponse();
-    const snapshotRows = Array.isArray(
-      bootstrapResponse?.systemTableSnapshots?.nodes,
-    ) ?
-      bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
-        if (bootstrapActiveNodeIds.size > NUM.ZERO) {
-          const nodeId =
-            this.resolveMeshConnectivityNodeId(row);
-          return nodeId.length > NUM.ZERO &&
-            bootstrapActiveNodeIds.has(nodeId);
-        }
-        return this.isMeshEligibleNodeRow(row);
-      }) :
-      [];
-    return {
-      source: 'bootstrap_snapshot',
-      rows: snapshotRows,
-    };
-  }
-
-  /**
-   * Build a stable mesh-membership signature for connection reconciliation.
-   * @param {Array<Object>} nodeRows
-   * @return {string}
-   */
-  buildClusterMeshSignature(nodeRows) {
-    if (!Array.isArray(nodeRows) || nodeRows.length === NUM.ZERO) {
-      return '';
-    }
-
-    const members = nodeRows
-      .map((row) => {
-        const nodeId = this.resolveMeshConnectivityNodeId(row);
-        if (nodeId.length === NUM.ZERO ||
-            nodeId === this.nodeId ||
-            !this.isMeshEligibleNodeRow(row)) {
-          return null;
-        }
-        const nodeAddress = String(
-          row?.[COLUMN.NODE_ADDRESS] ||
-            row?.node_address ||
-            row?.nodeAddress ||
-            '',
-        );
-        const lifecycleSignature =
-          this.resolveMeshConnectivityLifecycleTokens(row)
-            .sort()
-            .join('+');
-        return `${nodeId}|${nodeAddress}|${lifecycleSignature}`;
-      })
-      .filter(Boolean)
-      .sort();
-
-    return members.join(',');
-  }
-
-  /**
-   * Determine whether steady-state READY heartbeats need mesh
-   * reconciliation.
-   * @return {boolean}
-   */
-  shouldReconnectClusterMesh() {
-    const messageRouter = this.delegates.getMessageRouter();
-    if (!messageRouter) {
-      return false;
-    }
-
-    const {rows: nodesSnapshot} = this.resolveMeshConnectivityNodeRows();
-    if (!Array.isArray(nodesSnapshot) ||
-        nodesSnapshot.length === NUM.ZERO) {
-      return false;
-    }
-
-    const signature = this.buildClusterMeshSignature(nodesSnapshot);
-    if (signature !== this.lastClusterMeshSignature) {
-      return true;
-    }
-
-    const hasConnectionState =
-      typeof messageRouter.getConnectionState === TYPEOF.FUNCTION;
-    if (!hasConnectionState) {
-      return false;
-    }
-
-    return nodesSnapshot.some((node) => {
-      const nodeId = this.resolveMeshConnectivityNodeId(node);
-      return nodeId.length > NUM.ZERO &&
-        nodeId !== this.nodeId &&
-        !MESH_CONNECTED_OR_IN_FLIGHT_STATES.has(
-          messageRouter.getConnectionState(nodeId),
-        );
-    });
-  }
-
-  /**
-   * Collect non-terminal replica operations from local cache.
-   * Self-targeted operations (where targetNodeId matches this node),
-   * warming-node-targeted operations (where the target node is NOT in ACTIVE
-   * state), partition operations outside the canonical discovery-critical
-   * tables, and remote-to-remote priority control-plane recovery on already
-   * active peers are excluded to prevent join-readiness deadlock on unrelated
-   * recovery work.
-   * @param {Object|null} systemTableCache
-   * @return {{
-   *   inFlightOperations: Array<Object>,
-   *   excludedSelfTargetedCount: number,
-   *   excludedWarmingTargetCount: number,
-   *   excludedNonDiscoveryPartitionCount: number,
-   *   excludedRemotePriorityControlPlaneCount: number,
-   *   excludedRemotePriorityControlPlaneOperationDetails: Array<Object>,
-   * }}
-   */
-  collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return {
-        inFlightOperations: [],
-        excludedSelfTargetedCount: NUM.ZERO,
-        excludedWarmingTargetCount: NUM.ZERO,
-        excludedNonDiscoveryPartitionCount: NUM.ZERO,
-        excludedRemotePriorityControlPlaneCount: NUM.ZERO,
-        excludedRemotePriorityControlPlaneOperationDetails: [],
-      };
-    }
-
-    const activeNodeIds = new Set(
-      this.getCanonicalJoinActiveNodeIds(systemTableCache),
-    );
-    const discoveryCriticalPartitionIds =
-      this.resolveCanonicalDiscoveryCriticalPartitionIds(systemTableCache);
-
-    const rows =
-      systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
-    const serviceRows =
-      systemTableCache.getAll(TABLES.SERVICES) || [];
-    const inFlightOperations = [];
-    const excludedRemotePriorityControlPlaneOperationDetails = [];
-    let excludedSelfTargetedCount = NUM.ZERO;
-    let excludedWarmingTargetCount = NUM.ZERO;
-    let excludedNonDiscoveryPartitionCount = NUM.ZERO;
-    let excludedRemotePriorityControlPlaneCount = NUM.ZERO;
-    for (const row of rows) {
-      const normalizedOperation = normalizeReplicaOperationRecord(row);
-      if (isReplicaOperationInFlight(normalizedOperation, {serviceRows})) {
-        if (normalizedOperation.targetNodeId === this.nodeId) {
-          excludedSelfTargetedCount++;
-          continue;
-        }
-        if (!activeNodeIds.has(normalizedOperation.targetNodeId)) {
-          excludedWarmingTargetCount++;
-          continue;
-        }
-        if (
-          normalizedOperation.entityType === 'partition' &&
-          discoveryCriticalPartitionIds.size > NUM.ZERO &&
-          normalizedOperation.partitionGroupId.length > NUM.ZERO &&
-          !discoveryCriticalPartitionIds.has(
-            normalizedOperation.partitionGroupId,
-          )
-        ) {
-          excludedNonDiscoveryPartitionCount++;
-          continue;
-        }
-        const operationDetail =
-          this.buildCanonicalJoinReplicaOperationDetail(
-            normalizedOperation,
-            row,
-          );
-        if (this.isRemotePriorityControlPlaneRecoveryOperation(
-          normalizedOperation,
-          activeNodeIds,
-          discoveryCriticalPartitionIds,
-        )) {
-          excludedRemotePriorityControlPlaneCount++;
-          excludedRemotePriorityControlPlaneOperationDetails.push(
-            operationDetail,
-          );
-          continue;
-        }
-        inFlightOperations.push(operationDetail);
-      }
-    }
-    return {
-      inFlightOperations,
-      excludedSelfTargetedCount,
-      excludedWarmingTargetCount,
-      excludedNonDiscoveryPartitionCount,
-      excludedRemotePriorityControlPlaneCount,
-      excludedRemotePriorityControlPlaneOperationDetails,
-    };
-  }
-
-  /**
-   * @param {Object} normalizedOperation
-   * @param {Object} row
-   * @return {Object}
-   */
-  buildCanonicalJoinReplicaOperationDetail(
-    normalizedOperation,
-    row,
-  ) {
-    return {
-      operationId: normalizedOperation.operationId,
-      type: normalizedOperation.type,
-      partitionId: normalizedOperation.partitionGroupId,
-      replicaId: String(
-        row?.replica_id || row?.replicaId || '',
-      ),
-      sourceNodeId: normalizedOperation.sourceNodeId,
-      targetNodeId: normalizedOperation.targetNodeId,
-      status: normalizedOperation.status,
-      workflowStep: normalizedOperation.workflowStep,
-      completedAt: normalizedOperation.completedAt,
-      ageMs: normalizedOperation.ageMs,
-    };
-  }
-
-  /**
-   * Remote priority control-plane recovery between already-active peers should
-   * not strand a different joining node once discovery state is otherwise
-   * converged.
-   *
-   * @param {Object} normalizedOperation
-   * @param {Set<string>} activeNodeIds
-   * @param {Set<string>} discoveryCriticalPartitionIds
-   * @return {boolean}
-   */
-  isRemotePriorityControlPlaneRecoveryOperation(
-    normalizedOperation,
-    activeNodeIds,
-    discoveryCriticalPartitionIds,
-  ) {
-    if (!normalizedOperation ||
-        normalizedOperation.entityType !== 'partition') {
-      return false;
-    }
-    const partitionId = normalizedOperation.partitionGroupId;
-    if (!partitionId ||
-        !discoveryCriticalPartitionIds.has(partitionId) ||
-        !isPriorityControlPlanePartition({partitionId})) {
-      return false;
-    }
-    if (normalizedOperation.sourceNodeId === this.nodeId ||
-        normalizedOperation.targetNodeId === this.nodeId) {
-      return false;
-    }
-    return activeNodeIds.has(normalizedOperation.sourceNodeId) &&
-      activeNodeIds.has(normalizedOperation.targetNodeId);
-  }
-
-  /**
-   * Resolve the partition IDs that remain topology-critical for canonical join
-   * readiness. Join convergence must wait on discovery tables, but unrelated
-   * transaction-recovery partitions should not strand a joining node.
-   * @param {Object|null} systemTableCache
-   * @return {Set<string>}
-   * @private
-   */
-  resolveCanonicalDiscoveryCriticalPartitionIds(systemTableCache) {
-    const partitionIds = new Set();
-    for (const tableName of CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES) {
-      partitionIds.add(`${tableName}-p1`);
-    }
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return partitionIds;
-    }
-
-    const partitionRows = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-    for (const row of partitionRows) {
-      const tableName = String(
-        row?.[COLUMN.TABLE_NAME] ||
-        row?.table_name ||
-        row?.tableName ||
-        '',
-      ).trim().toLowerCase();
-      if (!CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES.has(tableName)) {
-        continue;
-      }
-      const partitionId = String(
-        row?.[COLUMN.PARTITION_ID] ||
-        row?.partition_id ||
-        row?.partitionId ||
-        '',
-      ).trim();
-      if (partitionId.length === NUM.ZERO) {
-        continue;
-      }
-      partitionIds.add(partitionId);
-    }
-    return partitionIds;
-  }
-
-  /**
-   * Resolve node IDs required for join-readiness diagnostics.
-   * @param {Object|null} systemTableCache
-   * @return {Array<string>}
-   */
-  resolveJoinReadinessRequiredNodeIds(systemTableCache) {
-    const nodeIds = [...new Set(
-      this.getCanonicalJoinActiveNodeIds(systemTableCache),
-    )];
-
-    if (!nodeIds.includes(this.nodeId)) {
-      nodeIds.push(this.nodeId);
-    }
-    return nodeIds;
-  }
-
-  /**
-   * Evaluate one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   */
-  evaluateCanonicalJoinReadinessSnapshot(snapshot) {
-    const normalized =
-      this.normalizeCanonicalJoinReadinessSnapshot(snapshot);
-    const reasons =
-      this.classifyCanonicalJoinReadinessReasons(normalized);
-    return {
-      ...normalized,
-      reasons,
-      ready: reasons.length === NUM.ZERO,
-    };
-  }
-
-  /**
-   * Classify canonical join-readiness reasons with stable precedence.
-   * @param {Object} snapshot
-   * @return {Array<string>}
-   */
-  classifyCanonicalJoinReadinessReasons(snapshot) {
-    const reasons = [];
-    if (snapshot?.routingReady !== true) {
-      reasons.push(JOIN_READINESS_REASON.ROUTING_NOT_READY);
-    }
-
-    const requiredVersion = normalizeJoinSchemaVersion(
-      snapshot?.requiredSchemaVersion,
-    );
-    const appliedVersion = normalizeJoinSchemaVersion(
-      snapshot?.appliedSchemaVersion,
-    );
-    if (!requiredVersion || !appliedVersion) {
-      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN);
-    } else if (compareJoinSchemaVersions(
-      appliedVersion,
-      requiredVersion,
-    ) < NUM.ZERO) {
-      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_LAG);
-    }
-
-    if (snapshot?.topologyReady !== true) {
-      reasons.push(JOIN_READINESS_REASON.TOPOLOGY_NOT_READY);
-    }
-
-    return reasons.sort((left, right) => {
-      const leftRank = this.getJoinReadinessReasonRank(left);
-      const rightRank = this.getJoinReadinessReasonRank(right);
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return String(left).localeCompare(String(right));
-    });
-  }
-
-  /**
-   * Normalize one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   */
-  normalizeCanonicalJoinReadinessSnapshot(snapshot) {
-    const source = snapshot && typeof snapshot === TYPEOF.OBJECT ?
-      snapshot :
-      {};
-    const requiredVersion = normalizeJoinSchemaVersion(
-      source.requiredSchemaVersion,
-    );
-    const appliedVersion = normalizeJoinSchemaVersion(
-      source.appliedSchemaVersion,
-    );
-    const requiredNodeIds = Array.isArray(source.requiredNodeIds) ?
-      source.requiredNodeIds.filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-      ) :
-      [this.nodeId];
-
-    return {
-      nodeId: source.nodeId || this.nodeId,
-      tableName:
-        source.tableName || this.resolveJoinReadinessTableName(),
-      routingReady: source.routingReady === true,
-      topologyReady: source.topologyReady === true,
-      requiredSchemaVersion: requiredVersion,
-      appliedSchemaVersion: appliedVersion,
-      requiredNodeIds,
-      topologySnapshotEpoch:
-        Number.isFinite(source.topologySnapshotEpoch) ?
-          Math.max(NUM.ZERO, Math.floor(source.topologySnapshotEpoch)) :
-          null,
-      appliedTopologyEpoch:
-        Number.isFinite(source.appliedTopologyEpoch) ?
-          Math.max(NUM.ZERO, Math.floor(source.appliedTopologyEpoch)) :
-          null,
-      missingLeaders:
-        source.missingLeaders &&
-        typeof source.missingLeaders === TYPEOF.OBJECT ?
-          source.missingLeaders :
-          null,
-      inFlightReplicaOperations:
-        Number.isFinite(source.inFlightReplicaOperations) ?
-          Math.max(
-            NUM.ZERO,
-            Math.floor(source.inFlightReplicaOperations),
-          ) :
-          NUM.ZERO,
-      inFlightReplicaOperationDetails:
-        Array.isArray(source.inFlightReplicaOperationDetails) ?
-          source.inFlightReplicaOperationDetails :
-          [],
-      excludedSelfTargetedCount:
-        Number.isFinite(source.excludedSelfTargetedCount) ?
-          Math.max(
-            NUM.ZERO,
-            Math.floor(source.excludedSelfTargetedCount),
-          ) :
-          NUM.ZERO,
-      excludedWarmingTargetCount:
-        Number.isFinite(source.excludedWarmingTargetCount) ?
-          Math.max(
-            NUM.ZERO,
-            Math.floor(source.excludedWarmingTargetCount),
-          ) :
-          NUM.ZERO,
-      excludedNonDiscoveryPartitionCount:
-        Number.isFinite(source.excludedNonDiscoveryPartitionCount) ?
-          Math.max(
-            NUM.ZERO,
-            Math.floor(source.excludedNonDiscoveryPartitionCount),
-          ) :
-          NUM.ZERO,
-      excludedRemotePriorityControlPlaneCount:
-        Number.isFinite(source.excludedRemotePriorityControlPlaneCount) ?
-          Math.max(
-            NUM.ZERO,
-            Math.floor(source.excludedRemotePriorityControlPlaneCount),
-          ) :
-          NUM.ZERO,
-      excludedRemotePriorityControlPlaneOperationDetails:
-        Array.isArray(
-          source.excludedRemotePriorityControlPlaneOperationDetails,
-        ) ?
-          source.excludedRemotePriorityControlPlaneOperationDetails :
-          [],
-      missingNodeEndpointNodeIds:
-        Array.isArray(source.missingNodeEndpointNodeIds) ?
-          source.missingNodeEndpointNodeIds.filter((value) =>
-            typeof value === TYPEOF.STRING &&
-            value.length > NUM.ZERO,
-          ) :
-          [],
-      missingPostgresWireNodeIds:
-        Array.isArray(source.missingPostgresWireNodeIds) ?
-          source.missingPostgresWireNodeIds.filter((value) =>
-            typeof value === TYPEOF.STRING &&
-            value.length > NUM.ZERO,
-          ) :
-          [],
-      controlPlaneTargetAddress:
-        typeof source.controlPlaneTargetAddress === TYPEOF.STRING &&
-        source.controlPlaneTargetAddress.length > NUM.ZERO ?
-          source.controlPlaneTargetAddress :
-          null,
-      controlPlaneTargetCandidates:
-        Array.isArray(source.controlPlaneTargetCandidates) ?
-          source.controlPlaneTargetCandidates.filter((value) =>
-            typeof value === TYPEOF.STRING &&
-            value.length > NUM.ZERO,
-          ) :
-          [],
-      controlPlaneTargetConnectionStates:
-        source.controlPlaneTargetConnectionStates &&
-        typeof source.controlPlaneTargetConnectionStates === TYPEOF.OBJECT ?
-          source.controlPlaneTargetConnectionStates :
-          null,
-      observedSchemaByNodeId:
-        source.observedSchemaByNodeId &&
-        typeof source.observedSchemaByNodeId === TYPEOF.OBJECT ?
-          source.observedSchemaByNodeId :
-          null,
-    };
-  }
-
-  /**
-   * Build per-node schema diagnostics for join timeout reporting.
-   * @param {Object} evaluation
-   * @return {Object}
-   */
-  buildJoinSchemaDiagnosticsByNode(evaluation) {
-    const requiredVersion =
-      evaluation?.requiredSchemaVersion || null;
-    const observedVersion =
-      evaluation?.appliedSchemaVersion || null;
-    const reasons = Array.isArray(evaluation?.reasons) ?
-      evaluation.reasons :
-      [];
-    const requiredNodeIds =
-      Array.isArray(evaluation?.requiredNodeIds) &&
-      evaluation.requiredNodeIds.length > NUM.ZERO ?
-        evaluation.requiredNodeIds :
-        [this.nodeId];
-    const observedByNodeId =
-      evaluation?.observedSchemaByNodeId &&
-      typeof evaluation.observedSchemaByNodeId === TYPEOF.OBJECT ?
-        evaluation.observedSchemaByNodeId :
-        {};
-
-    const diagnostics = {};
-    for (const nodeId of requiredNodeIds) {
-      diagnostics[nodeId] = {
-        requiredSchemaVersion: requiredVersion,
-        observedSchemaVersion:
-          normalizeJoinSchemaVersion(observedByNodeId[nodeId]) ||
-          observedVersion,
-        unmetReasons: reasons,
-      };
-    }
-    return diagnostics;
-  }
-
-  /**
-   * Emit throttled diagnostics while canonical readiness remains blocked.
-   * @param {Object|null} evaluation
-   * @param {Object} options
-   * @param {number} options.attempts
-   * @param {number} options.elapsedMs
-   * @param {Error|null} [options.snapshotError]
-   * @param {boolean} [options.force=false]
-   * @return {void}
-   */
-  logCanonicalJoinReadinessBlocked(evaluation, options = {}) {
-    if (!evaluation || evaluation.ready === true) {
-      return;
-    }
-
-    const nowMs = this.now();
-    const force = options.force === true;
-    if (!force &&
-        this.lastCanonicalJoinBlockedLogAtMs > NUM.ZERO &&
-        nowMs - this.lastCanonicalJoinBlockedLogAtMs <
-          CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS) {
-      return;
-    }
-
-    this.lastCanonicalJoinBlockedLogAtMs = nowMs;
-    this.delegates.getLogger().warn(
-      JOINING_LOG_MSG.CANONICAL_READINESS_BLOCKED,
-      {
-        nodeId: this.nodeId,
-        attempts: Number.isFinite(options.attempts) ?
-          options.attempts :
-          null,
-        elapsedMs: Number.isFinite(options.elapsedMs) ?
-          options.elapsedMs :
-          null,
-        reasons: evaluation.reasons,
-        routingReady: evaluation.routingReady,
-        topologyReady: evaluation.topologyReady,
-        requiredSchemaVersion: evaluation.requiredSchemaVersion,
-        appliedSchemaVersion: evaluation.appliedSchemaVersion,
-        missingLeaders: evaluation.missingLeaders,
-        inFlightReplicaOperations:
-          evaluation.inFlightReplicaOperations,
-        inFlightReplicaOperationDetails:
-          evaluation.inFlightReplicaOperationDetails,
-        excludedSelfTargetedCount:
-          evaluation.excludedSelfTargetedCount,
-        excludedWarmingTargetCount:
-          evaluation.excludedWarmingTargetCount,
-        excludedNonDiscoveryPartitionCount:
-          evaluation.excludedNonDiscoveryPartitionCount,
-        excludedRemotePriorityControlPlaneCount:
-          evaluation.excludedRemotePriorityControlPlaneCount,
-        excludedRemotePriorityControlPlaneOperationDetails:
-          evaluation.excludedRemotePriorityControlPlaneOperationDetails,
-        missingNodeEndpointNodeIds:
-          evaluation.missingNodeEndpointNodeIds,
-        missingPostgresWireNodeIds:
-          evaluation.missingPostgresWireNodeIds,
-        controlPlaneTargetAddress:
-          evaluation.controlPlaneTargetAddress,
-        controlPlaneTargetCandidates:
-          evaluation.controlPlaneTargetCandidates,
-        controlPlaneTargetConnectionStates:
-          evaluation.controlPlaneTargetConnectionStates,
-        topologySnapshotEpoch:
-          evaluation.topologySnapshotEpoch,
-        appliedTopologyEpoch:
-          evaluation.appliedTopologyEpoch,
-        snapshotError: options.snapshotError?.message || null,
-      },
-    );
-  }
-
-  /**
-   * Resolve the published bootstrap topology snapshot metadata.
-   * @return {Object|null}
-   * @private
-   */
-  resolveBootstrapTopologySnapshotMeta() {
-    const delegateMeta =
-      this.delegates.getBootstrapTopologySnapshotMeta?.();
-    if (delegateMeta && typeof delegateMeta === TYPEOF.OBJECT) {
-      return delegateMeta;
-    }
-
-    const bootstrapResponse = this.delegates.getBootstrapResponse?.();
-    const responseMeta = bootstrapResponse?.topologySnapshotMeta;
-    return responseMeta && typeof responseMeta === TYPEOF.OBJECT ?
-      responseMeta :
-      null;
-  }
-
-  /**
-   * Resolve active node IDs published with the bootstrap topology snapshot.
-   * @return {Array<string>}
-   * @private
-   */
-  resolveBootstrapTopologySnapshotActiveNodeIds() {
-    const topologySnapshotMeta =
-      this.resolveBootstrapTopologySnapshotMeta();
-    if (!Array.isArray(topologySnapshotMeta?.activeNodeIds)) {
-      return [];
-    }
-
-    return [...new Set(topologySnapshotMeta.activeNodeIds.filter((value) =>
-      typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-    ))];
-  }
-
-  /**
-   * Resolve the published bootstrap topology epoch.
-   * @return {number|null}
-   * @private
-   */
-  resolveBootstrapTopologySnapshotEpoch() {
-    const delegatedEpoch =
-      this.delegates.getBootstrapTopologySnapshotEpoch?.();
-    if (Number.isFinite(delegatedEpoch)) {
-      return Math.max(NUM.ZERO, Math.floor(delegatedEpoch));
-    }
-    const topologySnapshotMeta =
-      this.resolveBootstrapTopologySnapshotMeta();
-    if (Number.isFinite(topologySnapshotMeta?.topologyEpoch)) {
-      return Math.max(
-        NUM.ZERO,
-        Math.floor(topologySnapshotMeta.topologyEpoch),
-      );
-    }
-
-    const bootstrapResponse = this.delegates.getBootstrapResponse?.();
-    if (Number.isFinite(bootstrapResponse?.currentEpoch?.epoch)) {
-      return Math.max(
-        NUM.ZERO,
-        Math.floor(bootstrapResponse.currentEpoch.epoch),
-      );
-    }
-    return null;
-  }
-
-  /**
-   * Resolve the locally applied topology epoch watermark.
-   * @param {Object|null} systemTableCache
-   * @return {number}
-   * @private
-   */
-  resolveAppliedTopologyEpoch(systemTableCache) {
-    if (typeof systemTableCache?.getEpoch === TYPEOF.FUNCTION) {
-      const cacheEpoch = systemTableCache.getEpoch();
-      if (Number.isFinite(cacheEpoch)) {
-        return Math.max(NUM.ZERO, Math.floor(cacheEpoch));
-      }
-    }
-    return NUM.ZERO;
-  }
-
-  /**
-   * Determine whether the local cache has applied the bootstrap topology epoch.
-   * @param {Object} options
-   * @param {number|null} options.topologySnapshotEpoch
-   * @param {number} options.appliedTopologyEpoch
-   * @return {boolean}
-   * @private
-   */
-  isBootstrapTopologyEpochSatisfied(options = {}) {
-    if (!Number.isFinite(options.topologySnapshotEpoch)) {
-      return true;
-    }
-    return Number.isFinite(options.appliedTopologyEpoch) &&
-      options.appliedTopologyEpoch >= options.topologySnapshotEpoch;
-  }
-
-  /**
-   * Rank one join-readiness reason according to stable precedence.
-   * @param {string} reason
-   * @return {number}
-   */
-  getJoinReadinessReasonRank(reason) {
-    const index = JOIN_READINESS_REASON_PRECEDENCE.indexOf(reason);
-    return index >= NUM.ZERO ?
-      index :
-      JOIN_READINESS_REASON_PRECEDENCE.length;
-  }
 }
+
+Object.assign(
+  JoinReadinessEvaluator.prototype,
+  createJoinReadinessEvaluatorTailMethods({
+    joinReadinessReasonPrecedence: JOIN_READINESS_REASON_PRECEDENCE,
+    meshIneligibleNodeStates: MESH_INELIGIBLE_NODE_STATES,
+    meshConnectedOrInFlightStates: MESH_CONNECTED_OR_IN_FLIGHT_STATES,
+    canonicalJoinReadinessLogIntervalMs:
+      CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS,
+    canonicalJoinDiscoveryCriticalTables:
+      CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES,
+  }),
+);
 
 export {JoinReadinessEvaluator};

@@ -21,14 +21,17 @@ import {
   NODE_LIFECYCLE_NOW,
   NODE_LIFECYCLE_STATE,
   NODE_LIFECYCLE_TERMINAL_SUB_PHASE_ADVANCE,
+  NODE_LIFECYCLE_TRANSITION_OUTCOME,
   NODE_LIFECYCLE_SUB_PHASE_ROOT,
   NODE_LIFECYCLE_VALID_SUB_PHASES,
   NODE_LIFECYCLE_VALID_SUB_PHASE_TRANSITIONS,
   NODE_LIFECYCLE_VALID_TRANSITIONS,
+  resolveNodeLifecycleTransitionOutcome,
 } from './node-lifecycle-state-machine-constants.js';
 
 const NodeState = NODE_LIFECYCLE_STATE;
 const VALID_TRANSITIONS = NODE_LIFECYCLE_VALID_TRANSITIONS;
+const TransitionOutcome = NODE_LIFECYCLE_TRANSITION_OUTCOME;
 const VALID_SUB_PHASES = NODE_LIFECYCLE_VALID_SUB_PHASES;
 const VALID_SUB_PHASE_TRANSITIONS = NODE_LIFECYCLE_VALID_SUB_PHASE_TRANSITIONS;
 const TERMINAL_SUB_PHASE_ADVANCE = NODE_LIFECYCLE_TERMINAL_SUB_PHASE_ADVANCE;
@@ -139,14 +142,8 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * @return {boolean} True if transition is valid.
    */
   isValidTransition(fromState, toState) {
-    const validNextStates = VALID_TRANSITIONS[fromState];
-
-    // If fromState is not in the map, it's invalid
-    if (validNextStates === undefined) {
-      return false;
-    }
-
-    return validNextStates.includes(toState);
+    return resolveNodeLifecycleTransitionOutcome(fromState, toState) !==
+      TransitionOutcome.INVALID;
   }
 
   /**
@@ -157,14 +154,17 @@ class NodeLifecycleStateMachine extends EventEmitter {
    */
   transition(newState) {
     const currentState = this.state;
+    const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+      currentState,
+      newState,
+    );
 
-    if (currentState === NodeState.READY &&
-        newState === NodeState.READY) {
+    if (transitionOutcome === TransitionOutcome.IDEMPOTENT_NOOP) {
       return true;
     }
 
     // Validate transition
-    if (!this.isValidTransition(currentState, newState)) {
+    if (transitionOutcome === TransitionOutcome.INVALID) {
       const validTransitions = VALID_TRANSITIONS[currentState] || [];
 
       this.logger.error(NODE_LIFECYCLE_LOG_MSG.INVALID_TRANSITION_ATTEMPT, {
@@ -353,6 +353,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
 }
 
 export {
+  TransitionOutcome,
   VALID_SUB_PHASES,
   VALID_SUB_PHASE_TRANSITIONS,
   TERMINAL_SUB_PHASE_ADVANCE,
@@ -360,4 +361,5 @@ export {
   NodeState,
   VALID_TRANSITIONS,
   InvalidTransitionError,
+  resolveNodeLifecycleTransitionOutcome,
 };

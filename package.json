@@ -71,10 +71,14 @@
     "guard:guidelines:file": "node scripts/check-guidelines-llm.js",
     "audit:guideline:literals": "node scripts/check-guideline-literals.js",
     "audit:guideline:decision-boundaries": "node scripts/check-guideline-decision-boundaries.js",
+    "audit:guideline:boundary-mode-contracts": "node scripts/check-guideline-boundary-mode-contracts.js",
     "steering:llm:pack": "node scripts/generate-steering-llm-pack.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",
     "guard:guidelines:staged": "node scripts/check-guidelines-staged.js",
-    "hooks:install": "node scripts/install-git-hooks.js"
+    "hooks:install": "node scripts/install-git-hooks.js",
+    "test:unit": "tap $(find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' | sort)",
+    "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
+    "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery"
   },
   "keywords": [
     "distributed",

@@ -9,8 +9,9 @@ const SQL_FROM_SERVICES = 'FROM services';
 const SQL_FROM_TABLES = 'FROM tables';
 const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
 const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
-const LOAD_OPERATIONS = Object.freeze(['INSERT', 'SELECT', 'UPDATE', 'DELETE']);
+const LOAD_OPERATIONS = Object.freeze(['INSERT', 'SELECT']);
 const TABLE_POLICIES_JSON = JSON.stringify({
+  externalCdcAllowed: false,
   splitStorageThreshold: 16384,
   splitTrafficThreshold: 120,
   mergeStorageThreshold: 1,
@@ -178,7 +179,7 @@ describe('seven-node-read-write-load-distribution scenario', () => {
     assert.deepEqual(
       calls[2][1].operations,
       LOAD_OPERATIONS,
-      'scenario should run mixed read/write load operations',
+      'scenario should run the benchmark workload operation mix',
     );
     assert.equal(
       calls[2][1].opsPerSec,

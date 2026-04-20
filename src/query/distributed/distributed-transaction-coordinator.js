@@ -13,63 +13,23 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../../control-plane/control-plane-error-classification.js';
-import {DurableWorkflowCoordinator} from
-  '../../workflow/durable-workflow-coordinator.js';
-
-const TRANSACTION_STATUS = Object.freeze({
-  ACTIVE: 'ACTIVE',
-  PREPARING: 'PREPARING',
-  PREPARED: 'PREPARED',
-  COMMITTING: 'COMMITTING',
-  COMMITTED: 'COMMITTED',
-  ROLLING_BACK: 'ROLLING_BACK',
-  ROLLED_BACK: 'ROLLED_BACK',
-  FAILED: 'FAILED',
-});
-
-// Participants share the same lifecycle status vocabulary as transactions.
-const PARTICIPANT_STATUS = TRANSACTION_STATUS;
-
-const WRITE_OPERATION_STATUS = Object.freeze({
-  PENDING: 'PENDING',
-  SUCCEEDED: 'SUCCEEDED',
-  FAILED: 'FAILED',
-});
-
-const TERMINAL_TRANSACTION_STATUS = Object.freeze(new Set([
-  TRANSACTION_STATUS.COMMITTED,
-  TRANSACTION_STATUS.ROLLED_BACK,
-]));
-
-const RECOVERY_COMMIT_TRANSACTION_STATUS = Object.freeze(new Set([
-  TRANSACTION_STATUS.PREPARED,
-  TRANSACTION_STATUS.COMMITTING,
-]));
-
-const RECOVERY_ROLLBACK_TRANSACTION_STATUS = Object.freeze(new Set([
-  TRANSACTION_STATUS.ACTIVE,
-  TRANSACTION_STATUS.PREPARING,
-  TRANSACTION_STATUS.ROLLING_BACK,
-]));
-
-const PARTICIPANT_RETRY_DEFAULT = Object.freeze({
-  MAX_RETRIES: 3,
-  BASE_DELAY_MS: 10,
-  MAX_DELAY_MS: 250,
-});
-
-const PARTICIPANT_RETRY_LOG_MSG = 'Distributed transaction participant retry';
-const RECOVERY_SWEEP_LOG_MSG = 'Distributed transaction recovery sweep failed';
-const RECOVERY_SWEEP_DEFAULT_INTERVAL_MS = 1000;
-const RECOVERY_SWEEP_DEFER_BASE_MS = 1000;
-const RECOVERY_SWEEP_DEFER_MAX_MS = 30000;
-const TIMEOUT_ERROR_MESSAGES = new Set([
-  QUERY_ERROR_MSG.QUERY_TIMEOUT,
-  QUERY_ERROR_MSG.QUERY_TIMED_OUT,
-]);
-const IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES = new Set([
-  QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
-]);
+import {DurableWorkflowCoordinator} from '../../workflow/durable-workflow-coordinator.js';
+import {
+  IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES,
+  PARTICIPANT_RETRY_DEFAULT,
+  PARTICIPANT_RETRY_LOG_MSG,
+  PARTICIPANT_STATUS,
+  RECOVERY_COMMIT_TRANSACTION_STATUS,
+  RECOVERY_ROLLBACK_TRANSACTION_STATUS,
+  RECOVERY_SWEEP_DEFAULT_INTERVAL_MS,
+  RECOVERY_SWEEP_DEFER_BASE_MS,
+  RECOVERY_SWEEP_DEFER_MAX_MS,
+  RECOVERY_SWEEP_LOG_MSG,
+  TERMINAL_TRANSACTION_STATUS,
+  TIMEOUT_ERROR_MESSAGES,
+  TRANSACTION_STATUS,
+  WRITE_OPERATION_STATUS,
+} from './distributed-transaction-coordinator-constants.js';
 
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
@@ -1532,9 +1492,4 @@ class DistributedTransactionCoordinator {
   }
 }
 
-export {
-  DistributedTransactionCoordinator,
-  PARTICIPANT_STATUS,
-  TRANSACTION_STATUS,
-  WRITE_OPERATION_STATUS,
-};
+export {DistributedTransactionCoordinator, PARTICIPANT_STATUS, TRANSACTION_STATUS, WRITE_OPERATION_STATUS};

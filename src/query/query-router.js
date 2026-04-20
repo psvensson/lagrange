@@ -38,6 +38,10 @@ import {
   QUERY_ROUTER_LOG_MSG,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
+import {
+  resolveCanonicalPartitionLeaderObservation,
+  resolveCanonicalLeaderIdentitySnapshot,
+} from './canonical-leader-routing.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 
 /**
@@ -270,9 +274,24 @@ class QueryRouter {
       localGroupId,
       preferSameLatencyGroup,
     );
-    const canonicalLeaderNodeId = this.resolveCanonicalPartitionLeaderNodeId(
+    const partitionRecord = this.getPartitionRecord(partitionId);
+    const canonicalLeaderIdentity = this.resolveCanonicalPartitionLeaderIdentity(
       partitionId,
+      orderedServices,
+      partitionRecord,
     );
+    const canonicalLeaderObservation = resolveCanonicalPartitionLeaderObservation(
+      {
+        partition: partitionRecord,
+        partitionPresent: partitionRecord !== null,
+        serviceRows: orderedServices,
+        identitySnapshot: canonicalLeaderIdentity,
+      },
+    );
+    const canonicalLeaderNodeId =
+      typeof canonicalLeaderObservation.leaderNodeId === TYPEOF.STRING ?
+        canonicalLeaderObservation.leaderNodeId :
+        null;
     const candidates = [];
     const seen = new Set();
 
@@ -304,9 +323,6 @@ class QueryRouter {
           .filter((service) => service?.node_id === canonicalLeaderNodeId)
           .forEach(addService);
       }
-      // Add leaders first
-      const leaders = orderedServices.filter((s) => s.raft_role === RAFT_ROLE.LEADER);
-      leaders.forEach(addService);
     }
 
     // Add remaining services
@@ -330,49 +346,85 @@ class QueryRouter {
   }
 
   /**
-   * Resolve canonical leader node metadata for one partition.
-   * Prefer the owner-row leader_node_id when present and only fall back to
-   * services.raft_role when the owner row has not converged yet.
+   * Resolve canonical partition row metadata from cache.
    * @param {string} partitionId
-   * @return {string|null}
+   * @return {Object|null}
    * @private
    */
-  resolveCanonicalPartitionLeaderNodeId(partitionId) {
+  getPartitionRecord(partitionId) {
     if (typeof partitionId !== TYPEOF.STRING ||
       partitionId.length === NUM.ZERO) {
       return null;
     }
 
-    if (typeof this.bootstrapTopologySnapshotOwner
-      ?.resolveCanonicalPartitionLeaderNodeId === 'function') {
-      const ownerLeaderNodeId = this.bootstrapTopologySnapshotOwner
-        .resolveCanonicalPartitionLeaderNodeId(partitionId);
-      if (typeof ownerLeaderNodeId === TYPEOF.STRING &&
-        ownerLeaderNodeId.length > NUM.ZERO) {
-        return ownerLeaderNodeId;
+    if (typeof this.systemCache?.get === TYPEOF.FUNCTION) {
+      const partitionRow = this.systemCache.get(TABLES.PARTITIONS, partitionId);
+      if (partitionRow) {
+        return partitionRow;
       }
     }
 
-    let partitionRow = null;
-    if (typeof this.systemCache?.get === TYPEOF.FUNCTION) {
-      partitionRow = this.systemCache.get(TABLES.PARTITIONS, partitionId) || null;
-    }
-    if (!partitionRow &&
-      typeof this.systemCache?.filter === TYPEOF.FUNCTION) {
-      partitionRow = (this.systemCache.filter(TABLES.PARTITIONS, (partition) => {
+    if (typeof this.systemCache?.filter === TYPEOF.FUNCTION) {
+      return (this.systemCache.filter(TABLES.PARTITIONS, (partition) => {
         return partition?.[COLUMN.PARTITION_ID] === partitionId;
       }) || [])[NUM.ZERO] || null;
     }
 
-    const leaderNodeId =
-      partitionRow?.[COLUMN.LEADER_NODE_ID] ||
-      partitionRow?.leader_node_id ||
-      partitionRow?.leaderNodeId ||
-      null;
-    return typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO ?
-      leaderNodeId :
-      null;
+    return null;
+  }
+
+  /**
+   * Resolve one canonical leader-identity snapshot for a partition.
+   * Prefer the bootstrap owner's published authority answer, which may retain
+   * the last stable priority owner during convergence, and only derive from a
+   * unique leader-role service when owner evidence remains incomplete.
+   * @param {string} partitionId
+   * @param {Object[]} [serviceRows=[]]
+   * @return {Object}
+   * @private
+   */
+  resolveCanonicalPartitionLeaderIdentity(
+    partitionId,
+    serviceRows = [],
+    partitionRow = null,
+  ) {
+    const resolvedPartitionRow = partitionRow || this.getPartitionRecord(partitionId);
+    if (typeof this.bootstrapTopologySnapshotOwner
+      ?.resolveCanonicalPartitionLeaderIdentity === TYPEOF.FUNCTION) {
+      const ownerIdentity = this.bootstrapTopologySnapshotOwner
+        .resolveCanonicalPartitionLeaderIdentity(partitionId, serviceRows);
+      if (ownerIdentity && typeof ownerIdentity === TYPEOF.OBJECT) {
+        return ownerIdentity;
+      }
+    }
+
+    let ownerLeaderNodeId = null;
+    if (typeof this.bootstrapTopologySnapshotOwner
+      ?.resolveCanonicalPartitionLeaderNodeId === TYPEOF.FUNCTION) {
+      ownerLeaderNodeId = this.bootstrapTopologySnapshotOwner
+        .resolveCanonicalPartitionLeaderNodeId(partitionId);
+    }
+
+    return resolveCanonicalLeaderIdentitySnapshot({
+      partition: resolvedPartitionRow,
+      partitionPresent: resolvedPartitionRow !== null,
+      ownerLeaderNodeId,
+      serviceRows,
+    });
+  }
+
+  /**
+   * Resolve canonical leader node metadata for one partition.
+   * @param {string} partitionId
+   * @param {Object[]} [serviceRows=[]]
+   * @return {string|null}
+   * @private
+   */
+  resolveCanonicalPartitionLeaderNodeId(partitionId, serviceRows = []) {
+    return this.resolveCanonicalPartitionLeaderIdentity(
+      partitionId,
+      serviceRows,
+    ).leaderNodeId;
   }
 
   /**

@@ -16,6 +16,9 @@ import {
 import {
   buildMembershipPublicationActiveSnapshot,
 } from './active-node-projection.js';
+import {
+  buildPublicationRecoveryGateSnapshot,
+} from './publication-recovery-gate.js';
 
 const PARTICIPATION_REASON = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
@@ -434,6 +437,19 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     context.targetNodeId ?
       publishedMembershipIncludesTargetNode === false :
       false;
+  const recoveryProtocolState = resolveRecoveryProtocolState(context);
+  const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+    publicationEpoch: context.publicationEpoch,
+    publicationStatus: context.publicationStatus,
+    publicationObservationState,
+    recoveryProtocolState,
+    priorityRecoveryReasonCodes: buildPriorityRecoveryReasonCodes(context),
+    priorityPartitionSummary: context.priorityPartitionSummary,
+    requiredAckNodeIds: context.requiredAckNodeIds,
+    acknowledgedNodeIds: context.acknowledgedNodeIds,
+    missingPublishedRecoveryActiveNodeIds:
+      context.missingPublishedRecoveryActiveNodeIds,
+  });
 
   return Object.freeze({
     publicationEpoch: context.publicationEpoch,
@@ -462,13 +478,13 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     participationStateCounts: buildParticipationStateCounts(
       participationByNodeId,
     ),
-    recoveryProtocolState: resolveRecoveryProtocolState(context),
+    recoveryProtocolState,
     targetNodeId: context.targetNodeId,
     targetParticipation: context.targetNodeId ?
       participationByNodeId[context.targetNodeId] || null :
       null,
     publicationObservationState,
-    publicationPending,
+    publicationPending: publicationRecoveryGate.publicationPending,
     publicationExcludesTargetNode,
     publishedMembershipIncludesTargetNode,
     publishedPlanningEpoch:
@@ -477,7 +493,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
         Number.isInteger(context.publicationEpoch) ?
         context.publicationEpoch :
         null,
-    priorityRecoveryReasonCodes: buildPriorityRecoveryReasonCodes(context),
+    priorityRecoveryReasonCodes: publicationRecoveryGate.reasonCodes,
+    publicationRecoveryGate,
   });
 }
 

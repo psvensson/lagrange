@@ -1,0 +1,1116 @@
+import { UNIFIED_REBALANCER_SHARED } from "./unified-rebalancer-shared.js";
+import { UnifiedRebalancerSegment4 } from "./unified-rebalancer-segment-4.js";
+
+const {
+  CLUSTER_READINESS_TIMEOUT_MS,
+  COLUMN,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_PUBLICATION_STATUS,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
+  CRITICAL_SYSTEM_ENDPOINT_VISIBILITY_AUTHORITATIVE_READ,
+  CRITICAL_SYSTEM_TOPOLOGY_SETTLING_BLOCKER_REASON,
+  ConfigurationManager,
+  ControlPlaneReadinessService,
+  DEFAULT_MESSAGE_GROUP_POLICY,
+  DEFAULT_PRIORITY_RECOVERY_ACTIVITY_STALE_GRACE_MS,
+  DEFAULT_TABLE_POLICY,
+  ENDPOINT_STATUS,
+  ENDPOINT_SYNC_HEALTH,
+  EntityType,
+  EventEmitter,
+  LIFECYCLE_PHASE,
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+  LoggingService,
+  META_SERVICE_ID,
+  MovePlanner,
+  MoveType,
+  NUM,
+  NodeStatus,
+  OperationType,
+  OwnerKeyReconcileQueue,
+  PRESSURE_WORK_CLASS,
+  PRIORITY_BUDGET_BYPASS_COORDINATOR_OPTIONS,
+  PRIORITY_CONTROL_PLANE_RECOVERY_FALLBACK_REPLICA_COUNT,
+  PressureGovernor,
+  RAFT_ROLE,
+  READINESS_SKIP_DETAIL,
+  REBALANCER_BUDGET_READ_OPTIONS,
+  REBALANCER_CONCURRENT_BUDGET_READ_MODE,
+  REBALANCER_CONFIG_KEY,
+  REBALANCER_DEFAULT,
+  REBALANCER_DEFAULT_POLICY,
+  REBALANCER_ENTITY_TYPE,
+  REBALANCER_ERROR_MSG,
+  REBALANCER_EVENT,
+  REBALANCER_LOG_MSG,
+  REBALANCER_MOVE_TYPE,
+  REBALANCER_NODE_STATUS,
+  REBALANCER_QUEUE_NAME,
+  REBALANCER_RUNTIME_REASON,
+  REBALANCER_SKIP_REASON,
+  REBALANCER_SUBSYSTEM,
+  REBALANCER_TRIGGER,
+  RECONCILE_REASON,
+  REPLICA_OPERATION_SEMANTIC_PHASE,
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
+  ReplicaStatus,
+  SERVICE_STATUS,
+  SQL_BUDGET,
+  STABILIZATION_RESET_TRIGGER,
+  STATE,
+  SYSTEM_TABLE_NAME,
+  StartupRecoveryCoordinator,
+  StoragePressureBehavior,
+  TABLES,
+  TERMINAL_STATUSES,
+  TERMINAL_STATUS_SQL_CLAUSE,
+  TOPOLOGY_IN_FLIGHT_REPLICA_OPERATION_SOURCE,
+  TRANSPORT_TYPE,
+  TYPEOF,
+  TriggerType,
+  UNIFIED_REBALANCER_LITERAL,
+  WORKFLOW_STEP,
+  adjustToOddCount,
+  assertCritical,
+  buildControlPlaneWorkloadProfile,
+  buildPriorityRecoveryBlockedPartitions,
+  buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
+  buildPriorityRecoveryPartitionAssessment,
+  buildPublicationRecoveryGateSnapshot,
+  createControlPlaneRuntimeBundle,
+  getControlPlaneRetryAfterMs,
+  getLocalControlPlaneMutationReadinessBlocker,
+  getNextOddCount,
+  getPartitionRowFromCache,
+  getPreviousOddCount,
+  hasPriorityRecoverySpreadGap,
+  isBackgroundWorkLifecycleReadySnapshot,
+  isCoordinatorOwnedOperationType,
+  isCriticalTransportControlPlanePartitionTable,
+  isNodeReadyLeaseExplicitlyCleared,
+  isNodeReadyWithConnection,
+  isNodeReadyWithTransport,
+  isNodeRecordReady,
+  isOddReplicaCount,
+  isPriorityControlPlanePartition,
+  isReplaceRemoveDispatchPhase,
+  isReplicaOperationInFlight,
+  isReplicaOperationStale,
+  isRetryableControlPlaneError,
+  isSystemTablePartition,
+  isTerminalReplicaOperationSemanticPhase,
+  isTerminalStep,
+  isValidWorkflowStep,
+  normalizeNodeEndpointRow,
+  normalizeNodeRow,
+  normalizeReplicaOperationRecord,
+  normalizeServiceEndpointRow,
+  normalizeServiceRow,
+  resolvePriorityRecoveryActiveNodeCohort,
+  resolveReplicaOperationSemanticPhase,
+  resolveTrackedPriorityRecoveryAdmissionPlan,
+  shouldPriorityRecoveryOperationBlockPlanning,
+  wasNodeRecordReadyWhenWritten,
+} = UNIFIED_REBALANCER_SHARED;
+
+class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
+  scheduleNextCheck(overrideDelayMs = null) {
+    if (!this.isLeader || this.isShuttingDown) {
+      return;
+    }
+
+    this.cancelScheduledCheck();
+
+    let delay = null;
+    if (
+      typeof overrideDelayMs === UNIFIED_REBALANCER_LITERAL.NUMBER &&
+      Number.isFinite(overrideDelayMs) &&
+      overrideDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO
+    ) {
+      delay = Math.max(
+        UNIFIED_REBALANCER_LITERAL.THOUSAND,
+        Math.floor(overrideDelayMs),
+      );
+    } else {
+      // Add jitter: ±25% of interval to spread load
+      const jitter = this.periodicCheckJitterMs * (Math.random() - 0.5) * 2;
+      delay = Math.max(
+        UNIFIED_REBALANCER_LITERAL.THOUSAND,
+        this.currentInterval + jitter,
+      );
+    }
+
+    this.scheduledCheck = setTimeout(() => {
+      this.scheduledCheck = null;
+      this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+    }, delay);
+
+    this.logger.debug(REBALANCER_LOG_MSG.SCHEDULE_NEXT, {
+      entityId: this.entityId,
+      delayMs: Math.round(delay),
+    });
+  }
+
+  /**
+   * Cancel any scheduled check.
+   */
+  cancelScheduledCheck() {
+    if (this.scheduledCheck) {
+      clearTimeout(this.scheduledCheck);
+      this.scheduledCheck = null;
+    }
+  }
+
+  /**
+   * Cancel any pending stabilization check.
+   */
+  cancelStabilizationTimer() {
+    if (this.stabilizationTimer) {
+      clearTimeout(this.stabilizationTimer);
+      this.stabilizationTimer = null;
+    }
+  }
+
+  /**
+   * Enqueue one typed rebalance reconcile through the owner queue.
+   * Timers and live events must share this ingress so progression remains
+   * single-flight per entity.
+   *
+   * @param {string} reason
+   * @private
+   */
+  enqueueRebalanceCheck(reason = RECONCILE_REASON.PERIODIC_CHECK) {
+    if (!this.isLeader || this.isShuttingDown) {
+      return false;
+    }
+    return this.rebalanceCheckQueue.enqueue(this.entityId, reason);
+  }
+
+  /**
+   * Increase the periodic check interval without exceeding the configured cap.
+   * @param {number} multiplier
+   * @return {number}
+   * @private
+   */
+  increaseCurrentInterval(multiplier) {
+    this.currentInterval = Math.min(
+      this.currentInterval * multiplier,
+      this.maxInterval,
+    );
+    return this.currentInterval;
+  }
+
+  /**
+   * Resolve the logged follow-up delay for gates that use the priority-aware
+   * scheduler.
+   * @param {number} scheduleDelayMs
+   * @return {number}
+   * @private
+   */
+  getPriorityAwareDelayMs(scheduleDelayMs) {
+    if (this.isControlPlanePriorityPartition()) {
+      return this.getPriorityRetryDelayMs();
+    }
+    return scheduleDelayMs;
+  }
+
+  /**
+   * Retryable control-plane failures must preserve this entity's reconcile
+   * cadence. Priority recovery stays on the short loop, while ordinary
+   * entities back off only as far as the transient failure requests.
+   * @param {*} error
+   * @return {number}
+   * @private
+   */
+  getRetryableFailureRetryDelayMs(error) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(error);
+    if (this.isControlPlanePriorityPartition()) {
+      return Math.max(
+        this.getPriorityRetryDelayMs(),
+        Number.isFinite(retryAfterMs) &&
+          retryAfterMs > UNIFIED_REBALANCER_LITERAL.ZERO
+          ? Math.floor(retryAfterMs)
+          : UNIFIED_REBALANCER_LITERAL.ZERO,
+      );
+    }
+    if (
+      Number.isFinite(retryAfterMs) &&
+      retryAfterMs > UNIFIED_REBALANCER_LITERAL.ZERO
+    ) {
+      return Math.max(
+        UNIFIED_REBALANCER_LITERAL.THOUSAND,
+        Math.floor(retryAfterMs),
+      );
+    }
+    return this.increaseCurrentInterval(
+      UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE,
+    );
+  }
+
+  /**
+   * Keep periodic reconciliation alive after retryable control-plane failures
+   * so one transient scheduling/persist error cannot strand recovery until an
+   * unrelated CDC event arrives.
+   * @param {*} error
+   * @return {boolean}
+   * @private
+   */
+  handleRetryableCheckRebalanceFailure(error) {
+    if (!isRetryableControlPlaneError(error)) {
+      return false;
+    }
+    if (this.isShuttingDown) {
+      return true;
+    }
+    this.scheduleNextCheck(this.getRetryableFailureRetryDelayMs(error));
+    return true;
+  }
+
+  /**
+   * Evaluate cluster readiness gating before the first planning pass.
+   * Returns one deferred-check closure when rebalance planning must wait.
+   * @return {{apply: Function}|null}
+   * @private
+   */
+  evaluateClusterReadinessBlocker() {
+    if (this.clusterReadinessConfirmed) {
+      return null;
+    }
+
+    const now = Date.now();
+    if (this.clusterReadinessStartMs === null) {
+      this.clusterReadinessStartMs = now;
+    }
+
+    const result = this.clusterReadinessSignal.evaluate({
+      partitionServices: new Map(),
+      messageGroupServices: new Map(),
+      cdcSubscriptionsActive: true,
+    });
+
+    if (result.ready) {
+      this.clusterReadinessConfirmed = true;
+      this.logger.info(REBALANCER_LOG_MSG.CLUSTER_READINESS_CONFIRMED, {
+        entityId: this.entityId,
+      });
+      return null;
+    }
+
+    const elapsed = now - this.clusterReadinessStartMs;
+    if (elapsed >= this.clusterReadinessTimeoutMs) {
+      this.clusterReadinessConfirmed = true;
+      this.logger.warn(REBALANCER_LOG_MSG.CLUSTER_READINESS_TIMEOUT, {
+        entityId: this.entityId,
+        elapsedMs: elapsed,
+        unmetConditions: result.unmetConditions,
+      });
+      return null;
+    }
+
+    return {
+      apply: () => {
+        this.logger.info(REBALANCER_LOG_MSG.CLUSTER_NOT_READY, {
+          entityId: this.entityId,
+          unmetConditions: result.unmetConditions,
+        });
+        this.schedulePriorityAwareCheck();
+      },
+    };
+  }
+
+  /**
+   * Evaluate startup and readiness gates before running one rebalance pass.
+   * Returns one deferred-check closure when planning must wait.
+   * @return {Promise<{apply: Function}|null>}
+   * @private
+   */
+  async getCheckRebalanceBlocker() {
+    const clusterReadinessBlocker = this.evaluateClusterReadinessBlocker();
+    if (clusterReadinessBlocker) {
+      return clusterReadinessBlocker;
+    }
+
+    const timeUntilRebalanceEligibleMs =
+      this.getTimeUntilRebalanceStartEligible();
+    if (timeUntilRebalanceEligibleMs > UNIFIED_REBALANCER_LITERAL.ZERO) {
+      return {
+        apply: () => {
+          this.logger.debug(REBALANCER_LOG_MSG.WAIT_START_DELAY, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            remainingMs: timeUntilRebalanceEligibleMs,
+            isSystemPartition: this.isSystemPartitionEntity(),
+          });
+          this.scheduleNextCheck(timeUntilRebalanceEligibleMs);
+        },
+      };
+    }
+
+    if (!this.isStabilized()) {
+      return {
+        apply: () => {
+          this.logger.debug(REBALANCER_LOG_MSG.WAIT_STABILIZATION, {
+            entityId: this.entityId,
+            timeUntilStabilized: this.getTimeUntilStabilized(),
+          });
+          this.schedulePriorityAwareCheck();
+        },
+      };
+    }
+
+    const topologySettlingBlocker =
+      await this.revalidateCriticalSystemTopologySettlingBlocker(
+        this.getCriticalSystemTopologySettlingBlocker(),
+      );
+    if (topologySettlingBlocker) {
+      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
+      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            delayMs,
+            blockerReason: topologySettlingBlocker.reason || null,
+            connectedNodeId:
+              typeof topologySettlingBlocker.connectedNodeId ===
+                TYPEOF.STRING &&
+              topologySettlingBlocker.connectedNodeId.length > NUM.ZERO
+                ? topologySettlingBlocker.connectedNodeId
+                : null,
+            unreadyNodeIds: Array.isArray(
+              topologySettlingBlocker.unreadyNodeIds,
+            )
+              ? [...topologySettlingBlocker.unreadyNodeIds]
+              : [],
+            missingNodeEndpointNodeIds: Array.isArray(
+              topologySettlingBlocker.missingNodeEndpointNodeIds,
+            )
+              ? [...topologySettlingBlocker.missingNodeEndpointNodeIds]
+              : [],
+            missingPostgresWireNodeIds: Array.isArray(
+              topologySettlingBlocker.missingPostgresWireNodeIds,
+            )
+              ? [...topologySettlingBlocker.missingPostgresWireNodeIds]
+              : [],
+            endpointReadyNodeCount: Number.isFinite(
+              topologySettlingBlocker.endpointReadyNodeCount,
+            )
+              ? topologySettlingBlocker.endpointReadyNodeCount
+              : null,
+            requiredReadyNodeCount: Number.isFinite(
+              topologySettlingBlocker.requiredReadyNodeCount,
+            )
+              ? topologySettlingBlocker.requiredReadyNodeCount
+              : null,
+            inFlightReplicaOperations: Number.isFinite(
+              topologySettlingBlocker.inFlightReplicaOperations,
+            )
+              ? topologySettlingBlocker.inFlightReplicaOperations
+              : null,
+            inFlightReplicaOperationsSource:
+              topologySettlingBlocker.inFlightReplicaOperationsSource || null,
+          });
+          this.schedulePriorityAwareCheck(scheduleDelayMs);
+        },
+      };
+    }
+
+    const trafficReadinessBlocker =
+      this.getCriticalSystemTrafficReadinessBlocker();
+    if (trafficReadinessBlocker) {
+      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
+      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_TRAFFIC_READY, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            nodeId: this.nodeId,
+            delayMs,
+            readinessPhase: trafficReadinessBlocker.phase || null,
+            readinessReady: trafficReadinessBlocker.ready === true,
+            reasonCodes: Array.isArray(trafficReadinessBlocker.reasons)
+              ? [...trafficReadinessBlocker.reasons]
+              : [],
+            stableElapsedMs: Number.isFinite(
+              trafficReadinessBlocker.stableElapsedMs,
+            )
+              ? trafficReadinessBlocker.stableElapsedMs
+              : null,
+            stableWindowMs: Number.isFinite(
+              trafficReadinessBlocker.stableWindowMs,
+            )
+              ? trafficReadinessBlocker.stableWindowMs
+              : null,
+          });
+          this.schedulePriorityAwareCheck(scheduleDelayMs);
+        },
+      };
+    }
+
+    const localServeReadinessBlocker =
+      this.getCriticalSystemLocalServeReadinessBlocker();
+    if (localServeReadinessBlocker) {
+      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
+      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            nodeId: this.nodeId,
+            delayMs,
+            reasonCodes: Array.isArray(localServeReadinessBlocker.reasons)
+              ? localServeReadinessBlocker.reasons
+                  .map((reason) =>
+                    String(
+                      reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+                    ),
+                  )
+                  .filter(Boolean)
+              : [],
+          });
+          this.schedulePriorityAwareCheck(scheduleDelayMs);
+        },
+      };
+    }
+
+    const localMutationReadinessBlocker =
+      this.getLocalControlPlaneMutationReadinessBlocker();
+    if (localMutationReadinessBlocker) {
+      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
+      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            nodeId: this.nodeId,
+            delayMs,
+            failedDimensions: Array.isArray(
+              localMutationReadinessBlocker.failedDimensions,
+            )
+              ? [...localMutationReadinessBlocker.failedDimensions]
+              : [],
+            reasonCodes: Array.isArray(
+              localMutationReadinessBlocker.reasonCodes,
+            )
+              ? [...localMutationReadinessBlocker.reasonCodes]
+              : [],
+          });
+          this.schedulePriorityAwareCheck(scheduleDelayMs);
+        },
+      };
+    }
+
+    const controlPlanePriorityBlocker =
+      this.getControlPlanePrioritySpreadBlocker();
+    if (controlPlanePriorityBlocker) {
+      const blockedPartitions =
+        controlPlanePriorityBlocker.blockedPartitions || [];
+      const currentPriorityPartitionStillBlocked =
+        this.isControlPlanePriorityPartition() &&
+        blockedPartitions.some(
+          (partition) => partition?.partitionId === this.entityId,
+        );
+      if (currentPriorityPartitionStillBlocked) {
+        return null;
+      }
+      const largestSpreadGap = blockedPartitions.reduce(
+        (largestGap, partition) =>
+          Math.max(largestGap, Number(partition?.spreadGap) || NUM.ZERO),
+        NUM.ZERO,
+      );
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            delayMs: this.getPriorityRetryDelayMs(),
+            requiredDistinctNodeCount:
+              controlPlanePriorityBlocker.requiredDistinctNodeCount,
+            blockedPartitionCount: blockedPartitions.length,
+            largestSpreadGap,
+            blockedPartitions: blockedPartitions.map((partition) => ({
+              partitionId: partition.partitionId,
+              readyReplicaCount: partition.readyReplicaCount,
+              readyDistinctNodeCount: partition.readyDistinctNodeCount,
+              spreadGap: partition.spreadGap,
+            })),
+          });
+          this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+        },
+      };
+    }
+
+    const transportPressure = this.getTransportPressureSummary();
+    if (transportPressure?.backpressured === true) {
+      const isPriorityPartition = this.isControlPlanePriorityPartition();
+      const scheduleDelayMs = isPriorityPartition
+        ? this.currentInterval
+        : this.increaseCurrentInterval(1.5);
+      const delayMs = isPriorityPartition
+        ? this.getPriorityRetryDelayMs()
+        : scheduleDelayMs;
+      return {
+        apply: () => {
+          this.logger.info(REBALANCER_LOG_MSG.WAIT_TRANSPORT_BACKPRESSURE, {
+            entityId: this.entityId,
+            entityType: this.entityType,
+            saturatedNodeCount: transportPressure.saturatedNodeCount,
+            totalPending: transportPressure.totalPending,
+            maxPendingUtilization: transportPressure.maxPendingUtilization,
+            delayMs,
+          });
+          this.schedulePriorityAwareCheck(scheduleDelayMs);
+        },
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Update rebalance cadence after one evaluation/execution pass.
+   * @param {boolean} needsRebalance
+   * @return {Promise<boolean>} Whether to force a priority retry cadence.
+   * @private
+   */
+  async advanceCheckCadence(needsRebalance) {
+    let forcePriorityRetry = false;
+
+    if (needsRebalance) {
+      const rebalanceResult = await this.rebalance(TriggerType.PERIODIC);
+      const executedMoveCount = this.countExecutedMoves(rebalanceResult);
+
+      if (executedMoveCount > UNIFIED_REBALANCER_LITERAL.ZERO) {
+        this.currentInterval = this.isControlPlanePriorityPartition()
+          ? this.getPriorityRetryDelayMs()
+          : this.periodicCheckIntervalMs;
+      } else if (this.isControlPlanePriorityPartition()) {
+        this.currentInterval = this.getPriorityRetryDelayMs();
+        forcePriorityRetry = true;
+      } else {
+        this.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
+      }
+
+      return forcePriorityRetry;
+    }
+
+    if (this.isControlPlanePriorityPartition()) {
+      this.currentInterval = this.getPriorityRetryDelayMs();
+    } else {
+      this.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
+    }
+    return forcePriorityRetry;
+  }
+
+  /**
+   * Perform a rebalance check.
+   * Requirements: 2.2, 2.3, 2.4
+   * @return {Promise<void>}
+   */
+  async checkRebalance() {
+    if (!this.isLeader || this.isShuttingDown) {
+      return;
+    }
+
+    let forcePriorityRetry = false;
+    try {
+      const blocker = await this.getCheckRebalanceBlocker();
+      if (blocker) {
+        blocker.apply();
+        return;
+      }
+
+      // Re-evaluate state after stabilization (Requirement 2.4)
+      const needsRebalance = await this.evaluateState();
+      forcePriorityRetry = await this.advanceCheckCadence(needsRebalance);
+    } catch (error) {
+      this.logger.error(REBALANCER_LOG_MSG.REBALANCE_ERROR, {
+        entityId: this.entityId,
+        error: error.message,
+      });
+      if (this.handleRetryableCheckRebalanceFailure(error)) {
+        return;
+      }
+      throw error;
+    }
+
+    // Schedule next check
+    if (!this.isShuttingDown) {
+      if (forcePriorityRetry) {
+        this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+      } else {
+        this.scheduleNextCheck();
+      }
+    }
+  }
+
+  /**
+   * Return the local router's outbound pressure summary when available.
+   * @return {Object|null}
+   * @private
+   */
+  getTransportPressureSummary() {
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    }).getPressureSummary([
+      UNIFIED_REBALANCER_LITERAL.REBALANCER_COLON_SCHEDULE,
+    ]);
+  }
+
+  /**
+   * Count moves that actually scheduled work (not skipped/deferred).
+   * @param {Object} rebalanceResult - Result from rebalance().
+   * @return {number} Number of actionable moves.
+   * @private
+   */
+  countExecutedMoves(rebalanceResult) {
+    if (!rebalanceResult || !Array.isArray(rebalanceResult.moves)) {
+      return UNIFIED_REBALANCER_LITERAL.ZERO;
+    }
+
+    return rebalanceResult.moves.filter((move) => {
+      if (!move || move.skipped) {
+        return false;
+      }
+      return move.success !== false;
+    }).length;
+  }
+
+  /**
+   * Evaluate if rebalancing is needed.
+   * @return {Promise<boolean>} True if rebalancing is needed.
+   */
+  async evaluateState() {
+    const currentReplicas = this.getCurrentReplicas();
+    const policy = await this.getPolicy();
+    const availableNodes = this.getAvailableNodes();
+    const assessment = this.movePlanner.assessState(
+      currentReplicas,
+      policy,
+      availableNodes,
+    );
+    const {
+      actionableTarget,
+      critical,
+      criticalReason,
+      desiredTarget,
+      healthyReplicas,
+      suboptimal,
+    } = assessment;
+
+    this.logger.debug(REBALANCER_LOG_MSG.EVALUATING_STATE, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      currentReplicaCount: currentReplicas.length,
+      availableNodeCount: availableNodes.length,
+      hasCache: !!this.systemTableCache,
+      targetReplicaCount: desiredTarget,
+      actionableTargetReplicaCount: actionableTarget,
+    });
+
+    // Skip rebalancing if cache appears unpopulated (no nodes known)
+    // This prevents newly joined nodes from making incorrect decisions
+    // before their cache is synchronized with the cluster state
+    if (availableNodes.length === UNIFIED_REBALANCER_LITERAL.ZERO) {
+      this.logger.debug(REBALANCER_LOG_MSG.NO_AVAILABLE_NODES, {
+        entityId: this.entityId,
+        entityType: this.entityType,
+      });
+      this.lastSuboptimalSignal = null;
+      return false;
+    }
+
+    if (
+      availableNodes.length < desiredTarget &&
+      healthyReplicas.length >= actionableTarget
+    ) {
+      const degradedSignal = this.buildDegradedTargetSignal(
+        availableNodes,
+        desiredTarget,
+        actionableTarget,
+        healthyReplicas.length,
+      );
+      if (this.lastDegradedTargetSignal !== degradedSignal) {
+        this.lastDegradedTargetSignal = degradedSignal;
+        this.logger.info(REBALANCER_LOG_MSG.DEGRADED_TARGET, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          availableNodeCount: availableNodes.length,
+          desiredTargetReplicaCount: desiredTarget,
+          actionableTargetReplicaCount: actionableTarget,
+          healthyReplicaCount: healthyReplicas.length,
+        });
+      }
+    } else {
+      this.lastDegradedTargetSignal = null;
+    }
+
+    // Critical checks - trigger immediate rebalancing
+    if (critical) {
+      this.lastSuboptimalSignal = null;
+      this.logger.warn(REBALANCER_LOG_MSG.CRITICAL_STATE, {
+        entityId: this.entityId,
+        entityType: this.entityType,
+        reason: criticalReason,
+      });
+      return true;
+    }
+
+    // Opportunistic checks - can wait for periodic schedule
+    if (suboptimal) {
+      const suboptimalSignal = this.buildSuboptimalSignal(
+        availableNodes,
+        desiredTarget,
+        actionableTarget,
+        healthyReplicas.length,
+      );
+      if (this.lastSuboptimalSignal !== suboptimalSignal) {
+        this.lastSuboptimalSignal = suboptimalSignal;
+        this.logger.info(REBALANCER_LOG_MSG.SUBOPTIMAL_STATE, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          availableNodeCount: availableNodes.length,
+          desiredTargetReplicaCount: desiredTarget,
+          actionableTargetReplicaCount: actionableTarget,
+          healthyReplicaCount: healthyReplicas.length,
+        });
+      }
+      return true;
+    }
+
+    this.lastSuboptimalSignal = null;
+    return false;
+  }
+
+  /**
+   * Build a stable signal for degraded-target logging dedupe.
+   * @param {Array<Object>} availableNodes - Ready nodes currently visible.
+   * @param {number} desiredTarget - Policy target replica count.
+   * @param {number} actionableTarget - Target constrained by ready topology.
+   * @param {number} healthyReplicaCount - Current healthy replica count.
+   * @return {string} Stable topology signal.
+   * @private
+   */
+  buildDegradedTargetSignal(
+    availableNodes,
+    desiredTarget,
+    actionableTarget,
+    healthyReplicaCount,
+  ) {
+    const nodeSignature = availableNodes
+      .map((node) => node?.node_id || node?.id || "")
+      .filter(Boolean)
+      .sort()
+      .join(",");
+    return (
+      `${nodeSignature}|${desiredTarget}|${actionableTarget}|` +
+      `${healthyReplicaCount}`
+    );
+  }
+
+  /**
+   * Build a stable signal for suboptimal-state logging dedupe.
+   * @param {Array<Object>} availableNodes - Ready nodes currently visible.
+   * @param {number} desiredTarget - Policy target replica count.
+   * @param {number} actionableTarget - Target constrained by ready topology.
+   * @param {number} healthyReplicaCount - Current healthy replica count.
+   * @return {string} Stable suboptimal-state signal.
+   * @private
+   */
+  buildSuboptimalSignal(
+    availableNodes,
+    desiredTarget,
+    actionableTarget,
+    healthyReplicaCount,
+  ) {
+    const nodeSignature = availableNodes
+      .map((node) => node?.node_id || node?.id || "")
+      .filter(Boolean)
+      .sort()
+      .join(",");
+    return (
+      `${nodeSignature}|${desiredTarget}|${actionableTarget}|` +
+      `${healthyReplicaCount}`
+    );
+  }
+
+  /**
+   * Check if current state is critical (requires immediate action).
+   * @param {Array<Object>} replicas - Current replicas.
+   * @param {Object} policy - Applicable policy.
+   * @return {boolean} True if state is critical.
+   */
+  isCriticalState(replicas, policy, availableNodes = null) {
+    return this.movePlanner.isCriticalState(replicas, policy, availableNodes);
+  }
+
+  /**
+   * Get the reason for critical state.
+   * @param {Array<Object>} replicas - Current replicas.
+   * @param {Object} policy - Applicable policy.
+   * @return {string} Reason description.
+   */
+  getCriticalReason(replicas, policy, availableNodes = null) {
+    return this.movePlanner.getCriticalReason(replicas, policy, availableNodes);
+  }
+
+  /**
+   * Check if current state is suboptimal (can be improved).
+   * @param {Array<Object>} replicas - Current replicas.
+   * @param {Object} policy - Applicable policy.
+   * @return {boolean} True if state is suboptimal.
+   */
+  isSuboptimalState(replicas, policy, availableNodes = null) {
+    return this.movePlanner.isSuboptimalState(replicas, policy, availableNodes);
+  }
+
+  /**
+   * Check if multiple replicas are on the same node.
+   * @param {Array<Object>} replicas - Replicas to check.
+   * @return {boolean} True if duplicates exist.
+   */
+  hasMultipleReplicasOnSameNode(replicas) {
+    return this.movePlanner.hasMultipleReplicasOnSameNode(replicas);
+  }
+
+  /**
+   * Get nodes that don't have a local replica.
+   * @param {Array<Object>} replicas - Current replicas.
+   * @return {Array<string>} Node IDs without local replicas.
+   */
+  getNodesWithoutLocalReplica(replicas) {
+    return this.movePlanner.getNodesWithoutLocalReplica(replicas);
+  }
+
+  /**
+   * Trigger immediate check (called by CDC event handlers).
+   * @param {string} reason - Reason for immediate check.
+   */
+  triggerImmediateCheck(reason) {
+    if (!this.isLeader || this.isShuttingDown) {
+      return;
+    }
+
+    this.logger.info(REBALANCER_LOG_MSG.IMMEDIATE_TRIGGER, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      reason,
+    });
+
+    const reconcileReason = this.mapTriggerReason(reason);
+    this.enqueueRebalanceCheck(reconcileReason);
+  }
+
+  /**
+   * Map a trigger reason string to a typed RECONCILE_REASON constant.
+   * @param {string} reason - The trigger reason.
+   * @return {string} A RECONCILE_REASON constant.
+   * @private
+   */
+  mapTriggerReason(reason) {
+    switch (reason) {
+      case REBALANCER_RUNTIME_REASON.NODE_BECAME_READY:
+        return RECONCILE_REASON.NODE_BECAME_READY;
+      case REBALANCER_RUNTIME_REASON.NODE_LEFT_READY:
+        return RECONCILE_REASON.NODE_LEFT_READY;
+      case REBALANCER_RUNTIME_REASON.NODE_FAILED:
+        return RECONCILE_REASON.NODE_FAILED;
+      default:
+        return RECONCILE_REASON.PERIODIC_CHECK;
+    }
+  }
+
+  /**
+   * Reconcile callback for the rebalance check queue.
+   * Cancels any pending scheduled check and runs checkRebalance.
+   * @param {Array<string>} _reasons - Accumulated reason codes.
+   * @private
+   */
+  async reconcileRebalanceCheck(_reasons) {
+    this.cancelScheduledCheck();
+    this.cancelStabilizationTimer();
+    await this.checkRebalance();
+  }
+
+  /**
+   * Handle node state change notification from CDC.
+   * Called by CDCIntegrationService when a node's state changes.
+   * Emits 'nodeStateChange' event and optionally 'rebalanceNeeded' event.
+   * @param {string} nodeId - The node ID.
+   * @param {string} oldState - The previous state.
+   * @param {string} newState - The new state.
+   */
+  onNodeStateChange(nodeId, oldState, newState) {
+    // Always emit nodeStateChange event for observability
+    this.emit(REBALANCER_EVENT.NODE_STATE_CHANGE, {
+      nodeId,
+      oldState,
+      newState,
+      timestamp: Date.now(),
+    });
+
+    // Non-leaders still emit events but don't trigger rebalancing
+    if (!this.isLeader) {
+      return;
+    }
+
+    this.logger.debug(REBALANCER_LOG_MSG.NODE_STATE_CHANGE, {
+      entityId: this.entityId,
+      nodeId,
+      oldState,
+      newState,
+    });
+
+    const rebalanceDecision = this.resolveNodeStateChangeRebalanceDecision(
+      oldState,
+      newState,
+    );
+    if (rebalanceDecision.needed) {
+      // Record state change to reset stabilization timer
+      if (rebalanceDecision.stabilizationTrigger) {
+        this.recordStateChange(rebalanceDecision.stabilizationTrigger);
+      }
+
+      // Emit rebalanceNeeded event for observability
+      this.emit(REBALANCER_EVENT.REBALANCE_NEEDED, {
+        nodeId,
+        oldState,
+        newState,
+        reason: rebalanceDecision.reason,
+        timestamp: Date.now(),
+      });
+
+      this.triggerImmediateCheck(rebalanceDecision.reason);
+    }
+  }
+
+  /**
+   * Resolve one node-state-change rebalance decision.
+   * @param {string} oldState
+   * @param {string} newState
+   * @return {{
+   *   needed: boolean,
+   *   reason: string|null,
+   *   stabilizationTrigger: string|null,
+   * }}
+   * @private
+   */
+  resolveNodeStateChangeRebalanceDecision(oldState, newState) {
+    if (newState === NodeStatus.FAILED) {
+      return {
+        needed: true,
+        reason: REBALANCER_RUNTIME_REASON.NODE_FAILED,
+        stabilizationTrigger: STABILIZATION_RESET_TRIGGER.NODE_FAILED,
+      };
+    } else if (
+      newState === NodeStatus.ACTIVE &&
+      oldState !== NodeStatus.ACTIVE
+    ) {
+      return {
+        needed: true,
+        reason: REBALANCER_RUNTIME_REASON.NODE_BECAME_READY,
+        stabilizationTrigger: STABILIZATION_RESET_TRIGGER.NODE_JOINED,
+      };
+    } else if (
+      oldState === NodeStatus.ACTIVE &&
+      newState !== NodeStatus.ACTIVE
+    ) {
+      return {
+        needed: true,
+        reason: REBALANCER_RUNTIME_REASON.NODE_LEFT_READY,
+        stabilizationTrigger: STABILIZATION_RESET_TRIGGER.NODE_LEFT,
+      };
+    }
+    return {
+      needed: false,
+      reason: null,
+      stabilizationTrigger: null,
+    };
+  }
+
+  /**
+   * Check if a CDC event is critical.
+   * @param {Object} event - CDC event.
+   * @return {boolean} True if event is critical.
+   */
+  isCriticalCDCEvent(event) {
+    // Node failure is critical
+    if (
+      event.tableName === UNIFIED_REBALANCER_LITERAL.NODES &&
+      event.operation === UNIFIED_REBALANCER_LITERAL.UPDATE &&
+      event.data?.status === NodeStatus.FAILED
+    ) {
+      return this.affectsMyReplicas(event);
+    }
+
+    // Service failure is critical
+    if (
+      event.tableName === UNIFIED_REBALANCER_LITERAL.SERVICES &&
+      event.operation === UNIFIED_REBALANCER_LITERAL.UPDATE &&
+      event.data?.status === ReplicaStatus.FAILED
+    ) {
+      return (
+        event.data?.partition_id === this.entityId ||
+        event.data?.group_id === this.entityId ||
+        (this.entityType === EntityType.RUNTIME_SERVICE &&
+          event.data?.service_id === this.entityId)
+      );
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if an event affects this entity's replicas.
+   * @param {Object} event - CDC event.
+   * @return {boolean} True if event affects our replicas.
+   */
+  affectsMyReplicas(event) {
+    const replicas = this.getCurrentReplicas();
+    const nodeId = event.data?.node_id;
+
+    if (!nodeId) {
+      return false;
+    }
+
+    // Filter out replicas without node_id (defensive check)
+    return replicas.some((r) => r && r.node_id === nodeId);
+  }
+
+  /**
+   * Get rebalancer statistics.
+   * @return {Object} Statistics object.
+   */
+  getStats() {
+    const stats = {
+      entityId: this.entityId,
+      entityType: this.entityType,
+      isLeader: this.isLeader,
+      lastRebalanceTime: this.lastRebalanceTime,
+      rebalanceCount: this.rebalanceCount,
+      currentInterval: this.currentInterval,
+      initialized: this.initialized,
+      usingCoordinator: !!this.rebalanceCoordinator,
+    };
+
+    // Coordinator stats are fetched asynchronously via getStatsAsync()
+    // This method returns basic stats synchronously for backward compatibility
+
+    return stats;
+  }
+
+  /**
+   * Get rebalancer statistics including coordinator stats (async).
+   * @return {Promise<Object>} Statistics object with coordinator stats.
+   */
+}
+
+export { UnifiedRebalancerSegment5 };

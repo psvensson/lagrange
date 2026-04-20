@@ -7,6 +7,9 @@ import {
 import {ControlPlaneDiagnosticsLedger} from
   './control-plane-diagnostics-ledger.js';
 import {OperationLane} from '../workflow/operation-lane.js';
+import {
+  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+} from './control-plane-cache-reconcile-constants.js';
 
 const READINESS_DIAGNOSTICS_LEDGER_LIMIT = 128;
 const EMPTY_STRING = '';
@@ -25,22 +28,31 @@ const REPAIR_STAGE = Object.freeze({
 });
 const REPAIR_LANE_NAME = 'control-plane-readiness-repair';
 const REPAIR_CAUSE_PREFIX = 'readiness-authoritative-cache-repair:';
+const AUTHORITATIVE_REPAIR_INTENT = Object.freeze({
+  REFRESH_EVIDENCE: CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
+});
 const AUTHORITATIVE_REPAIR_STATE = Object.freeze({
   VIEW_UNAVAILABLE: 'view_unavailable',
   SNAPSHOT_UNAVAILABLE: 'snapshot_unavailable',
   REPAIRED: 'repaired',
   UNCHANGED: 'unchanged',
 });
-const AUTHORITATIVE_ROW_OBSERVATION = Object.freeze({
-  OBSERVED: 'observed',
+const AUTHORITATIVE_TABLE_EVIDENCE_STATE = Object.freeze({
   UNAVAILABLE: 'unavailable',
+  OBSERVED_ROWS: 'observed_rows',
+  OBSERVED_EMPTY_CONFIRMED: 'observed_empty_confirmed',
+  OBSERVED_EMPTY_UNCONFIRMED: 'observed_empty_unconfirmed',
+});
+const AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE = Object.freeze({
+  OWNER_RPC_LANE: 'owner_rpc_lane',
+  SQL_QUERY_ENGINE: 'sql_query_engine',
 });
 const REPAIR_OUTCOME_FAILED = 'failed';
 const REPAIR_OUTCOME_REPAIRED = 'repaired';
 const REPAIR_OUTCOME_UNCHANGED = 'unchanged';
 const REPAIR_FAILED_LOG_MESSAGE = 'Authoritative readiness repair failed';
 const REPAIR_APPLIED_LOG_MESSAGE =
-  'Repaired readiness cache from authoritative node/service rows';
+  'Repaired readiness cache from authoritative node/service/partition rows';
 const REPAIR_REQUIRED_DEPENDENCY_ERROR_PREFIX =
   'AuthoritativeNodeEvidenceReconciler requires ';
 const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY =
@@ -58,13 +70,61 @@ function buildRepairOutcome(options = {}) {
   return {
     repaired: options.repaired === true,
     outcome: options.outcome || REPAIR_OUTCOME_UNCHANGED,
+    repairIntent:
+      options.repairIntent || AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
     nodeRowCount: Number.isFinite(options.nodeRowCount) ?
       options.nodeRowCount :
       NUM.ZERO,
     serviceRowCount: Number.isFinite(options.serviceRowCount) ?
       options.serviceRowCount :
       NUM.ZERO,
+    partitionRowCount: Number.isFinite(options.partitionRowCount) ?
+      options.partitionRowCount :
+      NUM.ZERO,
+    nodeEvidenceState: options.nodeEvidenceState || null,
+    serviceEvidenceState: options.serviceEvidenceState || null,
+    partitionEvidenceState: options.partitionEvidenceState || null,
   };
+}
+
+function isConfirmedEmptyAuthoritativeRead(readResult = null) {
+  const source = String(readResult?.source || '');
+  return source === AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE.OWNER_RPC_LANE ||
+    source === AUTHORITATIVE_CONFIRMED_EMPTY_SOURCE.SQL_QUERY_ENGINE ||
+    readResult?.usedSqlFallback === true;
+}
+
+function resolveAuthoritativeTableEvidence(readResult = null) {
+  const rows = readResult?.success === true && Array.isArray(readResult?.rows) ?
+    readResult.rows :
+    EMPTY_REPAIR_ROWS;
+  const rowCount = rows.length;
+  if (readResult?.success !== true) {
+    return Object.freeze({
+      state: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
+      rows: EMPTY_REPAIR_ROWS,
+      rowCount: NUM.ZERO,
+    });
+  }
+  if (rowCount > NUM.ZERO) {
+    return Object.freeze({
+      state: AUTHORITATIVE_TABLE_EVIDENCE_STATE.OBSERVED_ROWS,
+      rows,
+      rowCount,
+    });
+  }
+  return Object.freeze({
+    state: isConfirmedEmptyAuthoritativeRead(readResult) ?
+      AUTHORITATIVE_TABLE_EVIDENCE_STATE.OBSERVED_EMPTY_CONFIRMED :
+      AUTHORITATIVE_TABLE_EVIDENCE_STATE.OBSERVED_EMPTY_UNCONFIRMED,
+    rows,
+    rowCount,
+  });
+}
+
+function shouldApplyAuthoritativeTableEvidence(tableEvidence = null) {
+  return tableEvidence?.state !==
+    AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE;
 }
 
 class AuthoritativeNodeEvidenceReconciler {
@@ -90,6 +150,10 @@ class AuthoritativeNodeEvidenceReconciler {
     this.readNodeServiceRows =
       typeof options.readNodeServiceRows === TYPEOF.FUNCTION ?
         options.readNodeServiceRows :
+        async () => [];
+    this.readNodePartitionRows =
+      typeof options.readNodePartitionRows === TYPEOF.FUNCTION ?
+        options.readNodePartitionRows :
         async () => [];
     this.resolveDecisionDimension =
       typeof options.resolveDecisionDimension === TYPEOF.FUNCTION ?
@@ -199,6 +263,7 @@ class AuthoritativeNodeEvidenceReconciler {
         stage: recordedEntry.stage || null,
         outcome: recordedEntry.outcome || null,
         repaired: recordedEntry.repaired === true,
+        repairIntent: recordedEntry.repairIntent || null,
         nodeRowCount:
           Number.isFinite(recordedEntry.nodeRowCount) ?
             recordedEntry.nodeRowCount :
@@ -207,6 +272,13 @@ class AuthoritativeNodeEvidenceReconciler {
           Number.isFinite(recordedEntry.serviceRowCount) ?
             recordedEntry.serviceRowCount :
             null,
+        partitionRowCount:
+          Number.isFinite(recordedEntry.partitionRowCount) ?
+            recordedEntry.partitionRowCount :
+            null,
+        nodeEvidenceState: recordedEntry.nodeEvidenceState || null,
+        serviceEvidenceState: recordedEntry.serviceEvidenceState || null,
+        partitionEvidenceState: recordedEntry.partitionEvidenceState || null,
         decisionDimension: recordedEntry.decisionDimension || null,
         error: recordedEntry.error || null,
         recordedAt: recordedEntry.recordedAt || null,
@@ -307,6 +379,7 @@ class AuthoritativeNodeEvidenceReconciler {
       stage: REPAIR_STAGE.SCHEDULED,
       allowAuthoritativeRefresh: options.allowAuthoritativeRefresh === true,
       requireFreshOnIneligible: options.requireFreshOnIneligible === true,
+      repairIntent: AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
       decisionDimension: this.resolveDecisionDimension(options),
     });
     return this.repairLane.run(
@@ -346,8 +419,14 @@ class AuthoritativeNodeEvidenceReconciler {
             decisionDimension: this.resolveDecisionDimension(options),
             outcome: normalizedRepairResult.outcome,
             repaired: normalizedRepairResult.repaired === true,
+            repairIntent: normalizedRepairResult.repairIntent,
             nodeRowCount: normalizedRepairResult.nodeRowCount,
             serviceRowCount: normalizedRepairResult.serviceRowCount,
+            partitionRowCount: normalizedRepairResult.partitionRowCount,
+            nodeEvidenceState: normalizedRepairResult.nodeEvidenceState,
+            serviceEvidenceState: normalizedRepairResult.serviceEvidenceState,
+            partitionEvidenceState:
+              normalizedRepairResult.partitionEvidenceState,
           });
           return normalizedRepairResult.repaired === true;
         } catch (error) {
@@ -362,6 +441,7 @@ class AuthoritativeNodeEvidenceReconciler {
             decisionDimension: this.resolveDecisionDimension(options),
             repaired: false,
             outcome: REPAIR_OUTCOME_FAILED,
+            repairIntent: AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
             error: error?.message || String(error),
           });
           this.logger.warn(
@@ -369,6 +449,12 @@ class AuthoritativeNodeEvidenceReconciler {
             {
               nodeId,
               error: error?.message || String(error),
+              stack:
+                String(error?.message || error || '').includes(
+                  'Maximum call stack size exceeded',
+                ) ?
+                  (error?.stack || null) :
+                  null,
             },
           );
           return false;
@@ -386,13 +472,20 @@ class AuthoritativeNodeEvidenceReconciler {
 
   async collectRepairNodeEvidenceContext(nodeId) {
     const causeId = `${REPAIR_CAUSE_PREFIX}${nodeId}:${Date.now()}`;
+    const repairIntent = AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE;
     const authoritativeControlPlaneView = this.getAuthoritativeControlPlaneView();
     if (!authoritativeControlPlaneView) {
       return {
         state: AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE,
+        repairIntent,
         repairedRowCount: NUM.ZERO,
         nodeRowCount: NUM.ZERO,
         serviceRowCount: NUM.ZERO,
+        partitionRowCount: NUM.ZERO,
+        nodeEvidenceState: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
+        serviceEvidenceState: AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
+        partitionEvidenceState:
+          AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE,
       };
     }
 
@@ -402,48 +495,56 @@ class AuthoritativeNodeEvidenceReconciler {
         queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
       },
     );
-    const nodeRowObservation =
-      snapshot?.tables?.nodes?.success === true ?
-        AUTHORITATIVE_ROW_OBSERVATION.OBSERVED :
-        AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
-    const serviceRowObservation =
-      snapshot?.tables?.services?.success === true ?
-        AUTHORITATIVE_ROW_OBSERVATION.OBSERVED :
-        AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
-    const nodeRows =
-      nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED &&
-        Array.isArray(snapshot?.nodeRows) ?
-        snapshot.nodeRows :
-        EMPTY_REPAIR_ROWS;
-    const serviceRows =
-      serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED &&
-        Array.isArray(snapshot?.serviceRows) ?
-        snapshot.serviceRows :
-        EMPTY_REPAIR_ROWS;
-    const nodeRowCount = nodeRows.length;
-    const serviceRowCount = serviceRows.length;
+    const nodeTableEvidence = resolveAuthoritativeTableEvidence(
+      snapshot?.tables?.nodes,
+    );
+    const serviceTableEvidence = resolveAuthoritativeTableEvidence(
+      snapshot?.tables?.services,
+    );
+    const partitionTableEvidence = resolveAuthoritativeTableEvidence(
+      snapshot?.tables?.partitions,
+    );
+    const nodeRowCount = nodeTableEvidence.rowCount;
+    const serviceRowCount = serviceTableEvidence.rowCount;
+    const partitionRowCount = partitionTableEvidence.rowCount;
     const snapshotUnavailable =
-      nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE &&
-      serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.UNAVAILABLE;
+      nodeTableEvidence.state ===
+        AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE &&
+      serviceTableEvidence.state ===
+        AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE &&
+      partitionTableEvidence.state ===
+        AUTHORITATIVE_TABLE_EVIDENCE_STATE.UNAVAILABLE;
     let repairedRowCount = NUM.ZERO;
 
     if (!snapshotUnavailable) {
       const cachedNodeRow = await this.readNodeRow(nodeId);
       const cachedServiceRows = await this.readNodeServiceRows(nodeId);
-      if (nodeRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED) {
+      const cachedPartitionRows = await this.readNodePartitionRows(nodeId);
+      if (shouldApplyAuthoritativeTableEvidence(nodeTableEvidence)) {
         repairedRowCount += await this.applyAuthoritativeRows(
           TABLES.NODES,
-          nodeRows,
+          nodeTableEvidence,
           cachedNodeRow ? [cachedNodeRow] : EMPTY_REPAIR_ROWS,
           causeId,
+          repairIntent,
         );
       }
-      if (serviceRowObservation === AUTHORITATIVE_ROW_OBSERVATION.OBSERVED) {
+      if (shouldApplyAuthoritativeTableEvidence(serviceTableEvidence)) {
         repairedRowCount += await this.applyAuthoritativeRows(
           TABLES.SERVICES,
-          serviceRows,
+          serviceTableEvidence,
           cachedServiceRows,
           causeId,
+          repairIntent,
+        );
+      }
+      if (shouldApplyAuthoritativeTableEvidence(partitionTableEvidence)) {
+        repairedRowCount += await this.applyAuthoritativeRows(
+          TABLES.PARTITIONS,
+          partitionTableEvidence,
+          cachedPartitionRows,
+          causeId,
+          repairIntent,
         );
       }
     }
@@ -456,9 +557,14 @@ class AuthoritativeNodeEvidenceReconciler {
 
     return {
       state: repairState,
+      repairIntent,
       repairedRowCount,
       nodeRowCount,
       serviceRowCount,
+      partitionRowCount,
+      nodeEvidenceState: nodeTableEvidence.state,
+      serviceEvidenceState: serviceTableEvidence.state,
+      partitionEvidenceState: partitionTableEvidence.state,
     };
   }
 
@@ -466,28 +572,49 @@ class AuthoritativeNodeEvidenceReconciler {
     switch (repairContext.state) {
       case AUTHORITATIVE_REPAIR_STATE.VIEW_UNAVAILABLE:
       case AUTHORITATIVE_REPAIR_STATE.SNAPSHOT_UNAVAILABLE:
-        return buildRepairOutcome({outcome: REPAIR_OUTCOME_FAILED});
+        return buildRepairOutcome({
+          outcome: REPAIR_OUTCOME_FAILED,
+          repairIntent: repairContext.repairIntent,
+          nodeEvidenceState: repairContext.nodeEvidenceState,
+          serviceEvidenceState: repairContext.serviceEvidenceState,
+          partitionEvidenceState: repairContext.partitionEvidenceState,
+        });
       case AUTHORITATIVE_REPAIR_STATE.REPAIRED:
         this.logger.warn(
           REPAIR_APPLIED_LOG_MESSAGE,
           {
             nodeId,
+            repairIntent: repairContext.repairIntent,
             repairedRowCount: repairContext.repairedRowCount,
             repairedNodeRowCount: repairContext.nodeRowCount,
             repairedServiceRowCount: repairContext.serviceRowCount,
+            repairedPartitionRowCount: repairContext.partitionRowCount,
+            nodeEvidenceState: repairContext.nodeEvidenceState,
+            serviceEvidenceState: repairContext.serviceEvidenceState,
+            partitionEvidenceState: repairContext.partitionEvidenceState,
           },
         );
         return buildRepairOutcome({
           repaired: true,
           outcome: REPAIR_OUTCOME_REPAIRED,
+          repairIntent: repairContext.repairIntent,
           nodeRowCount: repairContext.nodeRowCount,
           serviceRowCount: repairContext.serviceRowCount,
+          partitionRowCount: repairContext.partitionRowCount,
+          nodeEvidenceState: repairContext.nodeEvidenceState,
+          serviceEvidenceState: repairContext.serviceEvidenceState,
+          partitionEvidenceState: repairContext.partitionEvidenceState,
         });
       case AUTHORITATIVE_REPAIR_STATE.UNCHANGED:
         return buildRepairOutcome({
           outcome: REPAIR_OUTCOME_UNCHANGED,
+          repairIntent: repairContext.repairIntent,
           nodeRowCount: repairContext.nodeRowCount,
           serviceRowCount: repairContext.serviceRowCount,
+          partitionRowCount: repairContext.partitionRowCount,
+          nodeEvidenceState: repairContext.nodeEvidenceState,
+          serviceEvidenceState: repairContext.serviceEvidenceState,
+          partitionEvidenceState: repairContext.partitionEvidenceState,
         });
       default:
         throw new Error(
@@ -502,12 +629,21 @@ class AuthoritativeNodeEvidenceReconciler {
       return buildRepairOutcome({
         repaired: repairResult.repaired === true,
         outcome: String(repairResult.outcome || REPAIR_OUTCOME_UNCHANGED),
+        repairIntent:
+          repairResult.repairIntent ||
+          AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
         nodeRowCount: Number.isFinite(repairResult.nodeRowCount) ?
           repairResult.nodeRowCount :
           NUM.ZERO,
         serviceRowCount: Number.isFinite(repairResult.serviceRowCount) ?
           repairResult.serviceRowCount :
           NUM.ZERO,
+        partitionRowCount: Number.isFinite(repairResult.partitionRowCount) ?
+          repairResult.partitionRowCount :
+          NUM.ZERO,
+        nodeEvidenceState: repairResult.nodeEvidenceState || null,
+        serviceEvidenceState: repairResult.serviceEvidenceState || null,
+        partitionEvidenceState: repairResult.partitionEvidenceState || null,
       });
     }
     return buildRepairOutcome({
@@ -529,15 +665,23 @@ class AuthoritativeNodeEvidenceReconciler {
     return this.authoritativeReadinessRepairNoChangeCooldownMs;
   }
 
-  async applyAuthoritativeRows(tableName, rows, cachedRows, causeId) {
+  async applyAuthoritativeRows(
+    tableName,
+    tableEvidence,
+    cachedRows,
+    causeId,
+    repairIntent,
+  ) {
     const gateway = this.getControlPlaneSystemTableGateway();
     const result = await gateway.reconcileAuthoritativeCacheRows(
       tableName,
-      rows,
+      tableEvidence?.rows || EMPTY_REPAIR_ROWS,
       {
         causeId,
         cachedRows,
         cacheMutationTarget: this.cacheMutationTarget,
+        reconcileIntent:
+          repairIntent || AUTHORITATIVE_REPAIR_INTENT.REFRESH_EVIDENCE,
         systemTableCache: this.systemTableCache,
       },
     );

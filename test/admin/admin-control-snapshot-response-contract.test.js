@@ -73,3 +73,53 @@ test('AdminControlSnapshot exposes explicit publication response state when unav
       'absence should be encoded explicitly instead of returning null',
     );
   });
+
+test('AdminControlSnapshot preserves revisioned snapshot metadata from the shared owner contract',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      controlPlaneSnapshotOwner: {
+        async resolveControlSnapshot(localSnapshot) {
+          return {
+            ...localSnapshot,
+            snapshotObservation: {
+              state: 'stale_usable',
+              revision: 22,
+              revisionState: 'stale_usable',
+              resumeToken: 'control-plane-revision:captured_at:22',
+            },
+            snapshotRevision: 22,
+            snapshotRevisionState: 'stale_usable',
+            snapshotResumeToken: 'control-plane-revision:captured_at:22',
+            snapshotObservedAt: '2026-04-16T12:00:00.000Z',
+            snapshotObservedAtMs: 1776331200000,
+          };
+        },
+      },
+    });
+    snapshot.buildLocalControlSnapshot = async () => ({
+      nodeId: 'node-1',
+      capturedAt: 1000,
+    });
+
+    const result = await snapshot.buildControlSnapshotQueryResult();
+
+    t.match(
+      result.rows[0],
+      {
+        snapshotObservation: {
+          state: 'stale_usable',
+          revision: 22,
+          revisionState: 'stale_usable',
+          resumeToken: 'control-plane-revision:captured_at:22',
+        },
+        snapshotRevision: 22,
+        snapshotRevisionState: 'stale_usable',
+        snapshotResumeToken: 'control-plane-revision:captured_at:22',
+        snapshotObservedAt: '2026-04-16T12:00:00.000Z',
+        snapshotObservedAtMs: 1776331200000,
+      },
+      'query-result rows should preserve the revisioned snapshot owner contract',
+    );
+  });

@@ -21,6 +21,9 @@ import {
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {REBALANCER_SKIP_REASON} from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+} from '../../src/rebalancer/replica-operation-repository.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
@@ -685,6 +688,105 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       } finally {
         coordinator.repository.queryAuthoritativeOperationById =
           originalQueryAuthoritativeOperationById;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'priority recent intent is pruned when entity visibility only shows the terminal row',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: 'control_plane_publications-p1',
+        entityType: 'partition',
+        entityId: 'control_plane_publications-p1',
+        nodeId: 'node-2',
+        sourceNodeId: 'seed-node',
+        replicaId: 'control_plane_publications-p1-r1',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'control_plane_publications-p1',
+      );
+      const cachedOperation = {
+        operationId: 'stale-priority-op',
+        type: OperationType.REPLACE,
+        partitionId: 'control_plane_publications-p1',
+        entityType: 'partition',
+        entityId: 'control_plane_publications-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'control_plane_publications-p1-r4',
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: cachedOperation,
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalGetOperationsByEntityAuthoritativeObservation =
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => ({
+          state: INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+          operationCount: 1,
+          operations: [{
+            ...cachedOperation,
+            status: ReplicaStatus.REMOVED,
+            workflowStep: WORKFLOW_STEP.REMOVED,
+            updatedAt: Date.now(),
+          }],
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+
+        t.equal(
+          result.operationId,
+          'replacement-op',
+          'entity-level authoritative terminal visibility should stop stale recent-intent reuse',
+        );
+        t.equal(
+          createdOperationCount,
+          1,
+          'stale recent intent should allow a fresh recovery operation to be created',
+        );
+        t.equal(
+          coordinator.recentOperationIntents.has(dedupeKey),
+          false,
+          'terminal entity visibility should prune the stale recent-intent entry',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          originalGetOperationsByEntityAuthoritativeObservation;
         coordinator.createOperationInternal = originalCreateOperationInternal;
         await coordinator.shutdown();
       }

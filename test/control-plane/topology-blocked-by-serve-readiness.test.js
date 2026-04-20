@@ -1,13 +1,13 @@
 /**
  * Regression: internal topology actions (rebalance add, split
- * provisioning) gate on repairEligible only and are NOT blocked by
+ * provisioning) gate on provisioningEligible and are NOT blocked by
  * serve-only readiness dimensions.
  *
  * Validates the readiness stratification fix from
  * topology-workflow-single-owner-stabilization §5 / task 6.2:
- *   StorageAdmissionService.collectFailedDimensions checks
- *   repairEligible instead of all dimensions.
- *   A node that is repair-eligible but NOT serve-eligible (e.g.
+ *   StorageAdmissionService now consumes the convergence-safe
+ *   provisioning projection instead of the stricter repair gate.
+ *   A node that is provisioning-eligible but NOT serve-eligible (e.g.
  *   loadReady = false while warming up) is correctly admitted for
  *   internal topology work.
  *
@@ -33,19 +33,20 @@ import {
 /**
  * Fixture constants for node and capacity identities.
  */
-const FIXTURE_NODE_ID = 'node-repair-eligible';
+const FIXTURE_NODE_ID = 'node-provisioning-eligible';
 const FIXTURE_ESTIMATED_BYTES = NUM.THOUSAND;
 const FIXTURE_BUDGET_BYTES = NUM.THOUSAND * NUM.THOUSAND;
 
 /**
- * Build a readiness snapshot where the node is repair-eligible but NOT
- * serve-eligible. repairEligible = true, serveEligible = false.
+ * Build a readiness snapshot where the node is provisioning-eligible but NOT
+ * serve-eligible. repairEligible = true, provisioningEligible = true,
+ * serveEligible = false.
  * loadReady = false simulates a node still warming up.
  *
  * @param {string} nodeId
  * @return {Object} Readiness snapshot.
  */
-function buildRepairEligibleNotServeEligible(nodeId) {
+function buildProvisioningEligibleNotServeEligible(nodeId) {
   return {
     nodeId,
     dimensions: {
@@ -55,6 +56,7 @@ function buildRepairEligibleNotServeEligible(nodeId) {
       [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
         true,
       [CONTROL_PLANE_READINESS_DIMENSION
@@ -82,11 +84,11 @@ function createReadinessService(snapshot) {
   return {
     getNodeReadinessSync: (nodeId) => {
       if (nodeId === FIXTURE_NODE_ID) return snapshot;
-      return buildRepairEligibleNotServeEligible(nodeId);
+      return buildProvisioningEligibleNotServeEligible(nodeId);
     },
     getNodeReadiness: async (nodeId) => {
       if (nodeId === FIXTURE_NODE_ID) return snapshot;
-      return buildRepairEligibleNotServeEligible(nodeId);
+      return buildProvisioningEligibleNotServeEligible(nodeId);
     },
     getAllNodeReadiness: async () => [snapshot],
     getNodeRow: () => null,
@@ -132,17 +134,17 @@ function initEnv() {
   }
 }
 
-// ── Regression: repair-eligible nodes admitted for topology work ─────
+// ── Regression: provisioning-eligible nodes admitted for topology work ─────
 
-test('rebalance add admission allows repair-eligible node even when ' +
+test('rebalance add admission allows provisioning-eligible node even when ' +
   'not serve-eligible ' +
   '(uses StorageAdmissionService.collectFailedDimensions with ' +
-  'repairEligible gate)',
+  'provisioningEligible gate)',
 async (t) => {
   initEnv();
 
   const snapshot =
-    buildRepairEligibleNotServeEligible(FIXTURE_NODE_ID);
+    buildProvisioningEligibleNotServeEligible(FIXTURE_NODE_ID);
   const readinessService = createReadinessService(snapshot);
   const accounting = createMockAccounting();
 
@@ -152,15 +154,15 @@ async (t) => {
     controlPlaneReadinessService: readinessService,
   });
 
-  // ── Precondition: node is repair-eligible but not serve-eligible ──
-  await t.test('precondition: repair-eligible, not serve-eligible',
+  // ── Precondition: node is provisioning-eligible but not serve-eligible ──
+  await t.test('precondition: provisioning-eligible, not serve-eligible',
     async (t) => {
       t.equal(
         snapshot.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+          CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE
         ],
         true,
-        'node must be repair-eligible',
+        'node must be provisioning-eligible',
       );
       t.equal(
         snapshot.dimensions[
@@ -178,9 +180,9 @@ async (t) => {
       );
     });
 
-  // ── Rebalance add: internal topology work gates on repairEligible ──
+  // ── Rebalance add: internal topology work gates on provisioningEligible ──
   await t.test('rebalance add admission succeeds for ' +
-    'repair-eligible node', async (t) => {
+    'provisioning-eligible node', async (t) => {
     const result = await admission.checkAdd({
       targetNodeId: FIXTURE_NODE_ID,
       estimatedBytes: FIXTURE_ESTIMATED_BYTES,
@@ -189,7 +191,7 @@ async (t) => {
     t.equal(
       result.allowed,
       true,
-      'repair-eligible node must be admitted for rebalance add',
+      'provisioning-eligible node must be admitted for rebalance add',
     );
 
     const ineligible = result.ineligibleNodes || [];
@@ -201,15 +203,15 @@ async (t) => {
   });
 });
 
-test('split provisioning admission allows repair-eligible node even ' +
+test('split provisioning admission allows provisioning-eligible node even ' +
   'when not serve-eligible ' +
   '(uses StorageAdmissionService.collectFailedDimensions with ' +
-  'repairEligible gate)',
+  'provisioningEligible gate)',
 async (t) => {
   initEnv();
 
   const snapshot =
-    buildRepairEligibleNotServeEligible(FIXTURE_NODE_ID);
+    buildProvisioningEligibleNotServeEligible(FIXTURE_NODE_ID);
   const readinessService = createReadinessService(snapshot);
   const accounting = createMockAccounting();
 
@@ -226,17 +228,17 @@ async (t) => {
   });
 
   t.equal(
-    result.allowed,
-    true,
-    'repair-eligible node must be admitted for split provisioning',
+      result.allowed,
+      true,
+      'provisioning-eligible node must be admitted for split provisioning',
   );
 });
 
-// ── Negative: not-repair-eligible node is still blocked ─────────────
+// ── Negative: not-provisioning-eligible node is still blocked ───────
 
-test('admission blocks node that is not repair-eligible ' +
+test('admission blocks node that is not provisioning-eligible ' +
   '(uses StorageAdmissionService.collectFailedDimensions with ' +
-  'repairEligible gate)',
+  'provisioningEligible gate)',
 async (t) => {
   initEnv();
 
@@ -249,6 +251,7 @@ async (t) => {
       [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
       [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+      [CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE]: false,
       [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
         false,
       [CONTROL_PLANE_READINESS_DIMENSION
@@ -282,10 +285,10 @@ async (t) => {
   });
 
   t.equal(
-    result.allowed,
-    false,
-    'not-repair-eligible node must be blocked',
-  );
+      result.allowed,
+      false,
+      'not-provisioning-eligible node must be blocked',
+    );
 
   const ineligible = result.ineligibleNodes || [];
   t.ok(

@@ -12,12 +12,17 @@
 
 import { LoggingService } from '../logging/logging-service.js';
 import { SYSTEM_TABLE_NAME } from '../bootstrap/system-table-schemas-constants.js';
-import { getPartitionRowFromCache, isPriorityControlPlanePartition } from '../bootstrap/system-partition-classification.js';
+import {
+  getPartitionRowFromCache,
+  isPriorityControlPlanePartition,
+  isSystemTablePartition,
+} from '../bootstrap/system-partition-classification.js';
 import { NUM, WORKFLOW_STEP } from '../constants/index.js';
 import { ADJUST_DIRECTION, ReplicaStatus } from './replica-status.js';
 import { adjustToOddCount, getNextOddCount, getPreviousOddCount, isOddReplicaCount } from './odd-replica-count.js';
 import { MOVE_REASON, PLACEMENT_DEGRADED_REASON, REBALANCER_ENTITY_TYPE, REBALANCER_LOG_MSG, REBALANCER_MOVE_TYPE, MOVE_PLANNER_ERROR_MSG, REBALANCER_SUBSYSTEM } from './rebalancer-constants.js';
 import { ADMISSION_DECISION, MOVE_CRITICALITY, PRESSURE_BEHAVIOR_DECISION, STORAGE_CAPACITY_LOG_MSG } from './storage-capacity-constants.js';
+import {createMovePlannerStateMethods} from './move-planner-state-methods.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: "MovePlanner requires entityId",
   MOVEPLANNER_REQUIRES_ENTITYTYPE: "MovePlanner requires entityType",
@@ -90,6 +95,26 @@ function buildMessageGroupPlacementResult(options = {}) {
     capacityDiagnostics: options.capacityDiagnostics
   };
 }
+
+const MOVE_PLANNER_STATE_METHODS = createMovePlannerStateMethods({
+  ADJUST_DIRECTION,
+  EntityType,
+  MOVE_PLANNER_LITERAL,
+  MOVE_PLANNER_REBALANCE_REASON,
+  NUM,
+  ReplicaStatus,
+  SYSTEM_TABLE_NAME,
+  WORKFLOW_STEP,
+  adjustToOddCount,
+  applyAdditionalRebalancingReason,
+  buildReplicaCountPolicyDecision,
+  getNextOddCount,
+  getPartitionRowFromCache,
+  getPreviousOddCount,
+  isOddReplicaCount,
+  isPriorityControlPlanePartition,
+  isSystemTablePartition,
+});
 
 /**
  * MovePlanner calculates replica placement and moves for partitions,
@@ -170,6 +195,7 @@ class MovePlanner {
     const nodes = this.moveStateProvider.getAvailableNodes();
     const targetReplicaCount = policy.targetReplicaCount || policy.replicaCount || NUM.THREE;
     const estimatedBytes = this.getEstimatedBytesForEntity();
+    const transitionSnapshot = this.buildTopologyTransitionSnapshot();
     const {
       feasibleNodes,
       diagnostics
@@ -177,351 +203,24 @@ class MovePlanner {
 
     // For message groups: ensure every node has local access
     if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      return this.calculateMessageGroupPlacement(feasibleNodes, targetReplicaCount, policy, diagnostics);
+      return this.calculateMessageGroupPlacement(
+        feasibleNodes,
+        targetReplicaCount,
+        policy,
+        diagnostics,
+        transitionSnapshot,
+      );
     }
 
     // For partitions and runtime services: spread across nodes by
     // policy with cluster-global replica count target.
-    return this.calculatePartitionPlacement(feasibleNodes, targetReplicaCount, policy, diagnostics);
-  }
-
-  /**
-   * Validate and adjust replica count to an entity-safe target.
-   * Raft-backed entities require odd replica counts; runtime services do not.
-   * @param {number} count
-   * @param {Object} policy
-   * @return {number}
-   */
-  validateReplicaCount(count, policy) {
-    const defaultMin = this.entityType === EntityType.RUNTIME_SERVICE ? NUM.ONE : NUM.THREE;
-    const defaultMax = this.entityType === EntityType.RUNTIME_SERVICE ? Math.max(defaultMin, count || defaultMin) : NUM.SEVEN;
-    const min = policy.minReplicaCount || defaultMin;
-    const max = policy.maxReplicaCount || defaultMax;
-    let adjusted = Math.max(min, Math.min(max, count));
-    if (this.entityType === EntityType.RUNTIME_SERVICE) {
-      return adjusted;
-    }
-    if (!isOddReplicaCount(adjusted)) {
-      adjusted = adjustToOddCount(adjusted, ADJUST_DIRECTION.UP);
-      if (adjusted > max) {
-        adjusted = adjustToOddCount(count, ADJUST_DIRECTION.DOWN);
-      }
-    }
-    return adjusted;
-  }
-
-  /**
-   * Get desired replica target from policy.
-   * @param {Object} policy
-   * @return {number}
-   */
-  getPolicyTargetReplicaCount(policy) {
-    const defaultTarget = this.entityType === EntityType.RUNTIME_SERVICE ? NUM.ONE : NUM.THREE;
-    return policy.targetReplicaCount || policy.replicaCount || defaultTarget;
-  }
-
-  /**
-   * Get actionable target based on currently available ready nodes.
-   * @param {Object} policy
-   * @param {Array<Object>} availableNodes
-   * @return {number}
-   */
-  getActionableTargetReplicaCount(policy, availableNodes) {
-    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
-    const availableCount = Array.isArray(availableNodes) ? availableNodes.length : NUM.ZERO;
-    return Math.min(desiredTarget, availableCount);
-  }
-
-  /**
-   * Calculate target replica count based on policy and current state.
-   * @param {Array<Object>} currentReplicas
-   * @param {Object} policy
-   * @return {number}
-   */
-  calculateTargetReplicaCount(currentReplicas, policy) {
-    const healthyCount = this.getHealthyReplicas(currentReplicas).length;
-    const targetCount = this.getPolicyTargetReplicaCount(policy);
-    const minCount = policy.minReplicaCount || NUM.THREE;
-    const maxCount = policy.maxReplicaCount || NUM.SEVEN;
-    if (this.entityType === EntityType.RUNTIME_SERVICE) {
-      return this.validateReplicaCount(targetCount, policy);
-    }
-    const validTarget = this.validateReplicaCount(targetCount, policy);
-    if (healthyCount < minCount) {
-      return this.validateReplicaCount(minCount, policy);
-    }
-    if (healthyCount > maxCount) {
-      return this.validateReplicaCount(maxCount, policy);
-    }
-    if (healthyCount < validTarget) {
-      const nextCount = getNextOddCount(healthyCount, maxCount);
-      return Math.min(nextCount, validTarget);
-    }
-    if (healthyCount > validTarget) {
-      const prevCount = getPreviousOddCount(healthyCount, minCount);
-      return Math.max(prevCount, validTarget);
-    }
-    return validTarget;
-  }
-
-  /**
-   * Check if multiple replicas are on the same node.
-   * @param {Array<Object>} replicas
-   * @return {boolean}
-   */
-  hasMultipleReplicasOnSameNode(replicas) {
-    const nodeIds = replicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id);
-    if (nodeIds.length === NUM.ZERO) {
-      return false;
-    }
-    return new Set(nodeIds).size < nodeIds.length;
-  }
-
-  /**
-   * Get nodes that do not have a local replica.
-   * @param {Array<Object>} replicas
-   * @return {Array<string>}
-   */
-  getNodesWithoutLocalReplica(replicas) {
-    const allNodes = this.moveStateProvider.getAvailableNodes();
-    let localAccessReplicas = replicas;
-    const cache = this.moveStateProvider.systemTableCache;
-    if (this.entityType === EntityType.MESSAGE_GROUP && cache && typeof cache.filter === MOVE_PLANNER_LITERAL.FUNCTION) {
-      localAccessReplicas = cache.filter(SYSTEM_TABLE_NAME.SERVICES, service => {
-        return service?.service_type === EntityType.MESSAGE_GROUP && service?.status === ReplicaStatus.ACTIVE && typeof service?.node_id === MOVE_PLANNER_LITERAL.STRING && service.node_id.length > NUM.ZERO;
-      });
-    }
-    const nodesWithReplicas = new Set(localAccessReplicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id));
-    return allNodes.map(node => node?.node_id || null).filter(nodeId => nodeId && !nodesWithReplicas.has(nodeId));
-  }
-
-  /**
-   * Check whether this planner owns one of the startup-critical control-plane
-   * partitions that must fan out promptly after bootstrap.
-   * @return {boolean}
-   */
-  isControlPlanePriorityPartition() {
-    if (this.entityType !== EntityType.PARTITION) {
-      return false;
-    }
-    const systemTableCache = this.moveStateProvider?.systemTableCache || null;
-    const partitionRow = getPartitionRowFromCache(systemTableCache, this.entityId);
-    return isPriorityControlPlanePartition({
-      partitionId: this.entityId,
-      partitionRow
-    });
-  }
-
-  /**
-   * Resolve whether placement admission should run with critical-system
-   * semantics for this entity.
-   *
-   * Critical-system classification is provider-owned. MovePlanner should not
-   * keep a second local detector alive for the same semantic question.
-   *
-   * @return {boolean}
-   * @private
-   */
-  isCriticalAdmissionEntity() {
-    if (this.moveStateProvider && typeof this.moveStateProvider.isCriticalSystemPartition === MOVE_PLANNER_LITERAL.FUNCTION) {
-      return this.moveStateProvider.isCriticalSystemPartition() === true;
-    }
-    return false;
-  }
-
-  /**
-   * Check whether healthy replicas are concentrated on too few nodes even
-   * though ready nodes exist to spread them.
-   * @param {Array<Object>} replicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {boolean}
-   */
-  hasSpreadableReplicaConcentration(replicas, policy, availableNodes = null) {
-    const prioritySpread = this.analyzePrioritySpread(replicas, policy, availableNodes);
-    if (prioritySpread.requiresSpread !== true) {
-      return false;
-    }
-    return prioritySpread.satisfied !== true && prioritySpread.hasUnusedReadyNodes === true;
-  }
-
-  /**
-   * Analyze the priority control-plane spread invariant for this entity.
-   * @param {Array<Object>} replicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {Object}
-   */
-  analyzePrioritySpread(replicas, policy, availableNodes = null) {
-    const readyNodes = Array.isArray(availableNodes) ? availableNodes : this.moveStateProvider.getAvailableNodes();
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const distinctNodeIds = new Set(healthyReplicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id));
-    const requiresSpread = this.isControlPlanePriorityPartition() && policy?.placementConstraints?.spreadAcrossNodes === true;
-    const requiredDistinctNodeCount = requiresSpread ? Math.min(NUM.THREE, readyNodes.length) : NUM.ZERO;
-    const hasUnusedReadyNodes = readyNodes.some(node => node && node.node_id && !distinctNodeIds.has(node.node_id));
-    return {
-      isPriorityPartition: this.isControlPlanePriorityPartition(),
-      requiresSpread,
-      requiredDistinctNodeCount,
-      actualDistinctNodeCount: distinctNodeIds.size,
-      hasUnusedReadyNodes,
-      satisfied: requiresSpread !== true || requiredDistinctNodeCount <= NUM.ONE || distinctNodeIds.size >= requiredDistinctNodeCount
-    };
-  }
-
-  /**
-   * Check if current state is critical.
-   * @param {Array<Object>} replicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {boolean}
-   */
-  isCriticalState(replicas, policy, availableNodes = null) {
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ? availableNodes : this.moveStateProvider.getAvailableNodes();
-    const minReplicas = policy.minReplicaCount || NUM.THREE;
-    if (healthyReplicas.length < minReplicas && readyNodes.length >= minReplicas) {
-      return true;
-    }
-    if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      return this.getNodesWithoutLocalReplica(replicas).length > NUM.ZERO;
-    }
-    if (this.hasSpreadableReplicaConcentration(replicas, policy, readyNodes)) {
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Get the reason for critical state.
-   * @param {Array<Object>} replicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {string}
-   */
-  getCriticalReason(replicas, policy, availableNodes = null) {
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ? availableNodes : this.moveStateProvider.getAvailableNodes();
-    const minReplicas = policy.minReplicaCount || NUM.THREE;
-    if (healthyReplicas.length < minReplicas && readyNodes.length >= minReplicas) {
-      return `replica_count_below_minimum: ${healthyReplicas.length} < ` + `${minReplicas}`;
-    }
-    if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      const nodesWithoutLocalReplica = this.getNodesWithoutLocalReplica(replicas);
-      if (nodesWithoutLocalReplica.length > NUM.ZERO) {
-        return MOVE_PLANNER_LITERAL.NODES_WITHOUT_LOCAL_REPLICA + nodesWithoutLocalReplica.join(MOVE_PLANNER_LITERAL.EMPTY);
-      }
-    }
-    if (this.hasSpreadableReplicaConcentration(replicas, policy, readyNodes)) {
-      const distinctNodeCount = new Set(healthyReplicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id)).size;
-      return MOVE_PLANNER_LITERAL.CONTROL_PLANE_REPLICAS_NOT_SPREAD + `${distinctNodeCount}/${readyNodes.length}`;
-    }
-    return MOVE_PLANNER_LITERAL.UNKNOWN;
-  }
-
-  /**
-   * Check if current state is suboptimal.
-   * @param {Array<Object>} replicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {boolean}
-   */
-  isSuboptimalState(replicas, policy, availableNodes = null) {
-    const targetCount = this.getPolicyTargetReplicaCount(policy);
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ? availableNodes : this.moveStateProvider.getAvailableNodes();
-    const actionableTarget = this.getActionableTargetReplicaCount(policy, readyNodes);
-    if (healthyReplicas.length < actionableTarget || healthyReplicas.length > targetCount) {
-      return true;
-    }
-    if (policy.placementConstraints?.spreadAcrossNodes && this.hasMultipleReplicasOnSameNode(healthyReplicas)) {
-      const usedNodeIds = new Set(healthyReplicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id));
-      const unusedNodes = readyNodes.filter(node => node && node.node_id && !usedNodeIds.has(node.node_id));
-      if (unusedNodes.length > NUM.ZERO) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Apply policy to determine if rebalancing is needed.
-   * @param {Object} policy
-   * @return {Object}
-   */
-  applyPolicy(policy) {
-    const currentReplicas = this.getCurrentReplicas();
-    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
-    const availableNodes = this.moveStateProvider.getAvailableNodes();
-    const actionableTarget = this.getActionableTargetReplicaCount(policy, availableNodes);
-    const targetCount = this.calculateTargetReplicaCount(currentReplicas, policy);
-    const replicaCountDecision = buildReplicaCountPolicyDecision({
-      healthyReplicaCount: healthyReplicas.length,
-      actionableTarget,
-      targetCount
-    });
-    let decision = {
-      ...replicaCountDecision,
-      currentCount: healthyReplicas.length,
-      targetCount,
-      policy
-    };
-    const usedNodeIds = new Set(healthyReplicas.filter(replica => replica && replica.node_id).map(replica => replica.node_id));
-    const spreadAcrossNodesBlocked = policy.placementConstraints?.spreadAcrossNodes && this.hasMultipleReplicasOnSameNode(healthyReplicas);
-    const unusedNodes = spreadAcrossNodesBlocked ? availableNodes.filter(node => node && node.node_id && !usedNodeIds.has(node.node_id)) : [];
-    const enforceLocalAccess = this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess;
-    const nodesWithoutReplica = enforceLocalAccess ? this.getNodesWithoutLocalReplica(currentReplicas) : [];
-    decision = applyAdditionalRebalancingReason(decision, unusedNodes.length > NUM.ZERO, MOVE_PLANNER_REBALANCE_REASON.REPLICAS_NOT_SPREAD);
-    decision = applyAdditionalRebalancingReason(decision, nodesWithoutReplica.length > NUM.ZERO, MOVE_PLANNER_REBALANCE_REASON.NODES_WITHOUT_LOCAL_REPLICA);
-    return decision;
-  }
-
-  /**
-   * Assess the current state for logging and scheduling.
-   * @param {Array<Object>} currentReplicas
-   * @param {Object} policy
-   * @param {Array<Object>|null} [availableNodes]
-   * @return {Object}
-   */
-  assessState(currentReplicas, policy, availableNodes = null) {
-    const readyNodes = Array.isArray(availableNodes) ? availableNodes : this.moveStateProvider.getAvailableNodes();
-    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
-    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
-    const actionableTarget = this.getActionableTargetReplicaCount(policy, readyNodes);
-    const critical = this.isCriticalState(currentReplicas, policy, readyNodes);
-    return {
-      healthyReplicas,
-      desiredTarget,
-      actionableTarget,
-      critical,
-      criticalReason: critical ? this.getCriticalReason(currentReplicas, policy, readyNodes) : null,
-      suboptimal: !critical && this.isSuboptimalState(currentReplicas, policy, readyNodes)
-    };
-  }
-
-  /**
-   * Read current replicas from the owner provider.
-   * @return {Array<Object>}
-   * @private
-   */
-  getCurrentReplicas() {
-    if (typeof this.moveStateProvider.getCurrentReplicas !== MOVE_PLANNER_LITERAL.FUNCTION) {
-      return [];
-    }
-    return this.moveStateProvider.getCurrentReplicas();
-  }
-
-  /**
-   * Read healthy replicas through the owner provider.
-   * @param {Array<Object>} replicas
-   * @return {Array<Object>}
-   * @private
-   */
-  getHealthyReplicas(replicas) {
-    if (typeof this.moveStateProvider.getHealthyReplicas !== MOVE_PLANNER_LITERAL.FUNCTION) {
-      return Array.isArray(replicas) ? replicas : [];
-    }
-    return this.moveStateProvider.getHealthyReplicas(replicas);
+    return this.calculatePartitionPlacement(
+      feasibleNodes,
+      targetReplicaCount,
+      policy,
+      diagnostics,
+      transitionSnapshot,
+    );
   }
 
   /**
@@ -669,7 +368,13 @@ class MovePlanner {
    * @param {Object} diagnostics - Capacity filter diagnostics.
    * @return {Object} Target placement state.
    */
-  calculateMessageGroupPlacement(nodes, targetCount, policy, diagnostics) {
+  calculateMessageGroupPlacement(
+    nodes,
+    targetCount,
+    policy,
+    diagnostics,
+    transitionSnapshot = null,
+  ) {
     const targetNodes = [];
     const diag = diagnostics || {
       totalCandidates: nodes ? nodes.length : NUM.ZERO,
@@ -708,11 +413,17 @@ class MovePlanner {
         });
       }
       const effectiveCount = Math.min(targetCount, sortedNodes.length);
-
-      // Select target nodes — one replica per node, no wrapping
-      for (let i = NUM.ZERO; i < effectiveCount; i++) {
-        targetNodes.push(sortedNodes[i].node_id);
-      }
+      const reservedTargetNodeIds = this.resolveReservedPlacementTargetNodeIds(
+        sortedNodes,
+        transitionSnapshot,
+        effectiveCount,
+      );
+      targetNodes.push(
+        ...this.resolvePlacementTargetNodeIds(sortedNodes, {
+          targetCount: effectiveCount,
+          reservedNodeIds: reservedTargetNodeIds,
+        }),
+      );
       return buildMessageGroupPlacementResult({
         targetReplicaCount: targetCount,
         targetNodes,
@@ -740,7 +451,13 @@ class MovePlanner {
    * @param {Object} diagnostics - Capacity filter diagnostics.
    * @return {Object} Target placement state.
    */
-  calculatePartitionPlacement(nodes, targetCount, policy, diagnostics) {
+  calculatePartitionPlacement(
+    nodes,
+    targetCount,
+    policy,
+    diagnostics,
+    transitionSnapshot = null,
+  ) {
     const targetNodes = [];
     const diag = diagnostics || {
       totalCandidates: nodes ? nodes.length : NUM.ZERO,
@@ -774,11 +491,25 @@ class MovePlanner {
     // Keep desired replica target independent of current node count.
     // Placement assigns at most one replica per available node.
     const effectiveCount = Math.min(targetCount, sortedNodes.length);
-
-    // Select target nodes — one replica per node, no wrapping
-    for (let i = NUM.ZERO; i < effectiveCount; i++) {
-      targetNodes.push(sortedNodes[i].node_id);
-    }
+    const reservedTargetNodeIds = this.resolveReservedPlacementTargetNodeIds(
+      sortedNodes,
+      transitionSnapshot,
+      effectiveCount,
+    );
+    const deferredTargetNodeIds = this.isSystemPartitionEntity() ?
+      this.resolveDeferredPlacementTargetNodeIds(
+        sortedNodes,
+        transitionSnapshot,
+        reservedTargetNodeIds,
+      ) :
+      [];
+    targetNodes.push(
+      ...this.resolvePlacementTargetNodeIds(sortedNodes, {
+        targetCount: effectiveCount,
+        reservedNodeIds: reservedTargetNodeIds,
+        deferredNodeIds: deferredTargetNodeIds,
+      }),
+    );
     const degradedReason = this.getDegradedReason(totalReadyNodes, sortedNodes.length, effectiveCount, targetCount, diag);
     const prioritySpread = this.analyzePrioritySpread(targetNodes.map(nodeId => ({
       node_id: nodeId,
@@ -869,6 +600,179 @@ class MovePlanner {
       }
       return scoreA - scoreB;
     });
+  }
+
+  /**
+   * Keep transitional add targets inside the canonical placement target set
+   * while bootstrap/replacement work is still in flight. Without this,
+   * recalculating target nodes from live suitability alone can retarget a
+   * still-bootstrapping replica to a second node and mint an extra ADD.
+   *
+   * @param {Array<Object>} sortedNodes
+   * @param {Object|null} transitionSnapshot
+   * @param {number} targetCount
+   * @return {string[]}
+   * @private
+   */
+  resolveReservedPlacementTargetNodeIds(
+    sortedNodes,
+    transitionSnapshot,
+    targetCount,
+  ) {
+    const normalizedTargetCount =
+      Number.isInteger(targetCount) && targetCount > NUM.ZERO ?
+        targetCount :
+        NUM.ZERO;
+    if (!Array.isArray(sortedNodes) ||
+        sortedNodes.length === NUM.ZERO ||
+        normalizedTargetCount === NUM.ZERO) {
+      return [];
+    }
+
+    const rankedNodeIds = sortedNodes
+      .map((node) => node?.node_id)
+      .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+        nodeId.length > NUM.ZERO);
+    if (rankedNodeIds.length === NUM.ZERO) {
+      return [];
+    }
+
+    const transitionalNodeIds =
+      transitionSnapshot?.nodesWithEntityAddTransitional instanceof Set ?
+        transitionSnapshot.nodesWithEntityAddTransitional :
+        new Set();
+    return rankedNodeIds
+      .filter((nodeId) => transitionalNodeIds.has(nodeId))
+      .slice(NUM.ZERO, normalizedTargetCount);
+  }
+
+  /**
+   * Deprioritize cluster-global transitional system-add targets during
+   * canonical placement selection so system partitions can still choose
+   * alternative eligible nodes before move emission blocks the occupied
+   * target later in the pipeline.
+   *
+   * Reserved same-entity transitional targets are excluded from this deferred
+   * set because they must remain stable while the owning workflow converges.
+   *
+   * @param {Array<Object>} sortedNodes
+   * @param {Object|null} transitionSnapshot
+   * @param {string[]} [reservedNodeIds=[]]
+   * @return {string[]}
+   * @private
+   */
+  resolveDeferredPlacementTargetNodeIds(
+    sortedNodes,
+    transitionSnapshot,
+    reservedNodeIds = [],
+  ) {
+    if (!Array.isArray(sortedNodes) || sortedNodes.length === NUM.ZERO) {
+      return [];
+    }
+
+    const rankedNodeIds = sortedNodes
+      .map((node) => node?.node_id)
+      .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+        nodeId.length > NUM.ZERO);
+    if (rankedNodeIds.length === NUM.ZERO) {
+      return [];
+    }
+
+    const reservedNodeIdSet = new Set(
+      (Array.isArray(reservedNodeIds) ? reservedNodeIds : [])
+        .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+          nodeId.length > NUM.ZERO),
+    );
+    const deferredNodeIdSet =
+      transitionSnapshot?.nodesWithGlobalSystemAddTransitional instanceof Set ?
+        transitionSnapshot.nodesWithGlobalSystemAddTransitional :
+        new Set();
+    return rankedNodeIds.filter((nodeId) =>
+      deferredNodeIdSet.has(nodeId) &&
+      !reservedNodeIdSet.has(nodeId),
+    );
+  }
+
+  /**
+   * Select one canonical target cohort from ranked placement candidates while
+   * preserving any reserved transitional nodes in the final target set.
+   *
+   * @param {Array<Object>} sortedNodes
+   * @param {Object} [options={}]
+   * @param {number} [options.targetCount]
+   * @param {string[]} [options.reservedNodeIds]
+   * @param {string[]} [options.deferredNodeIds]
+   * @return {string[]}
+   * @private
+   */
+  resolvePlacementTargetNodeIds(sortedNodes, options = {}) {
+    const normalizedTargetCount =
+      Number.isInteger(options?.targetCount) && options.targetCount > NUM.ZERO ?
+        options.targetCount :
+        NUM.ZERO;
+    if (!Array.isArray(sortedNodes) ||
+        sortedNodes.length === NUM.ZERO ||
+        normalizedTargetCount === NUM.ZERO) {
+      return [];
+    }
+
+    const rankedNodeIds = sortedNodes
+      .map((node) => node?.node_id)
+      .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+        nodeId.length > NUM.ZERO);
+    if (rankedNodeIds.length === NUM.ZERO) {
+      return [];
+    }
+
+    const reservedNodeIdSet = new Set(
+      (Array.isArray(options?.reservedNodeIds) ?
+        options.reservedNodeIds :
+        [])
+        .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+          nodeId.length > NUM.ZERO),
+    );
+    const reservedNodeIds = rankedNodeIds
+      .filter((nodeId) => reservedNodeIdSet.has(nodeId))
+      .slice(NUM.ZERO, normalizedTargetCount);
+    const deferredNodeIdSet = new Set(
+      (Array.isArray(options?.deferredNodeIds) ?
+        options.deferredNodeIds :
+        [])
+        .filter((nodeId) => typeof nodeId === MOVE_PLANNER_LITERAL.STRING &&
+          nodeId.length > NUM.ZERO),
+    );
+    const deferredNodeIds = rankedNodeIds
+      .filter((nodeId) =>
+        deferredNodeIdSet.has(nodeId) &&
+        !reservedNodeIdSet.has(nodeId),
+      )
+      .slice(NUM.ZERO, normalizedTargetCount);
+    const selectedNodeIds = [...reservedNodeIds];
+
+    for (const nodeId of rankedNodeIds) {
+      if (selectedNodeIds.length >= normalizedTargetCount) {
+        break;
+      }
+      if (reservedNodeIdSet.has(nodeId)) {
+        continue;
+      }
+      if (deferredNodeIdSet.has(nodeId)) {
+        continue;
+      }
+      selectedNodeIds.push(nodeId);
+    }
+
+    for (const nodeId of deferredNodeIds) {
+      if (selectedNodeIds.length >= normalizedTargetCount) {
+        break;
+      }
+      selectedNodeIds.push(nodeId);
+    }
+
+    const selectedNodeIdSet = new Set(selectedNodeIds);
+    return rankedNodeIds
+      .filter((nodeId) => selectedNodeIdSet.has(nodeId))
+      .slice(NUM.ZERO, normalizedTargetCount);
   }
 
   /**
@@ -1002,30 +906,13 @@ class MovePlanner {
     });
     const targetNodeIds = targetState.targetNodes;
     const isDegradedPlacement = !!targetState?.degraded;
-    const inFlightOperations = typeof this.moveStateProvider.getTopologyBlockingInFlightOperations === 'function' ? this.moveStateProvider.getTopologyBlockingInFlightOperations() : this.moveStateProvider.getInFlightOperations();
-    const transitionalReplicas = [...inFlightOperations.map(op => ({
-      replicaId: op.replica_id,
-      partitionId: op.partition_id,
-      nodeId: op.target_node_id,
-      step: op.workflow_step || null,
-      state: op.workflow_step ? op.workflow_step.toLowerCase() : op.status
-    }))];
-
-    // Build sets for quick lookup of transitional replicas
-    const nodesWithAddTransitional = new Set();
-    const replicasInRemoving = new Set();
-    for (const replica of transitionalReplicas) {
-      const isAddTransitional = replica.state === ReplicaStatus.PENDING || replica.state === ReplicaStatus.CREATING || replica.state === ReplicaStatus.SYNCING || replica.step && replica.step === WORKFLOW_STEP.SENDING;
-      if (isAddTransitional) {
-        if (replica.partitionId === this.entityId) {
-          nodesWithAddTransitional.add(replica.nodeId);
-        }
-      }
-      if (replica.state === ReplicaStatus.REMOVING || replica.step && replica.step === WORKFLOW_STEP.STOPPING) {
-        replicasInRemoving.add(replica.replicaId);
-      }
-    }
-    const pendingCount = inFlightOperations.length;
+    const transitionSnapshot = this.buildTopologyTransitionSnapshot();
+    const nodesWithAddTransitional =
+      transitionSnapshot.nodesWithEntityAddTransitional;
+    const nodesWithGlobalSystemAddTransitional =
+      transitionSnapshot.nodesWithGlobalSystemAddTransitional;
+    const replicasInRemoving = transitionSnapshot.replicasInRemoving;
+    const pendingCount = transitionSnapshot.pendingCount;
     if (pendingCount > NUM.ZERO) {
       // Operation lifecycle is owned by replica_operations. Service-row status
       // can be stale (for example bootstrap-local syncing followers), so we only
@@ -1109,6 +996,14 @@ class MovePlanner {
           this.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
             entityId: this.entityId,
             nodeId
+          });
+          continue;
+        }
+        if (nodesWithGlobalSystemAddTransitional.has(nodeId)) {
+          this.logger.debug(REBALANCER_LOG_MSG.SKIP_ADD_TRANSITIONAL, {
+            entityId: this.entityId,
+            nodeId,
+            globalSystemTargetOccupancy: true,
           });
           continue;
         }
@@ -1391,4 +1286,7 @@ class MovePlanner {
     return MOVE_CRITICALITY.NON_CRITICAL;
   }
 }
+
+Object.assign(MovePlanner.prototype, MOVE_PLANNER_STATE_METHODS);
+
 export { MovePlanner };

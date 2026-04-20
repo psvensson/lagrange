@@ -1,11 +1,14 @@
-import {NUM, TYPEOF} from '../constants/index.js';
+import {ADDRESS, ENTITY_TYPE, NUM, TYPEOF} from '../constants/index.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
 import {
+  INITIAL_MESSAGE_GROUP_ID,
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from './system-table-schemas-constants.js';
 
 const PARTITION_ID_CANONICAL_PATTERN = /^(.+)-p\d+$/;
 const PARTITION_ID_SPLIT_SEPARATOR = '_p_';
+const REPLICA_ID_SUFFIX_PATTERN = /-r\d+$/;
 
 const SYSTEM_TABLE_IDS = new Set(Object.values(SYSTEM_TABLE_NAME));
 
@@ -21,6 +24,19 @@ const CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
 ]);
+
+const CRITICAL_TRANSPORT_TARGET_REASON = Object.freeze({
+  INVALID_TARGET_ADDRESS: 'invalid_target_address',
+  INITIAL_MESSAGE_GROUP: 'initial_message_group',
+  CRITICAL_CONTROL_PLANE_PARTITION: 'critical_control_plane_partition',
+  NON_CRITICAL_TARGET: 'non_critical_target',
+});
+
+const SYSTEM_TABLE_MUTATION_TRANSPORT_REASON = Object.freeze({
+  INVALID_TABLE_NAME: 'invalid_table_name',
+  CRITICAL_TRANSPORT_PARTITION: 'critical_transport_partition',
+  NON_CRITICAL_SYSTEM_TABLE: 'non_critical_system_table',
+});
 
 const INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID = new Map(
   Object.entries(INITIAL_PARTITION_IDS).map(([tableId, partitionId]) => [
@@ -114,6 +130,125 @@ function isCriticalTransportControlPlanePartition(options = {}) {
   const tableId = resolvePartitionTableId(options);
   return tableId !== null &&
     CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS.has(tableId);
+}
+
+function isInitialMessageGroupEntityId(entityId) {
+  const normalizedEntityId = normalizeNonEmptyString(entityId);
+  return normalizedEntityId === INITIAL_MESSAGE_GROUP_ID ||
+    normalizedEntityId?.startsWith(`${INITIAL_MESSAGE_GROUP_ID}-r`) === true;
+}
+
+function resolveCriticalTransportTargetSnapshot(options = {}) {
+  const normalizedTargetAddress = normalizeNonEmptyString(
+    options.targetAddress,
+  );
+  if (!normalizedTargetAddress) {
+    return Object.freeze({
+      criticalTransport: false,
+      entityId: null,
+      entityType: null,
+      partitionId: null,
+      reasonCode: CRITICAL_TRANSPORT_TARGET_REASON.INVALID_TARGET_ADDRESS,
+      targetAddress: null,
+    });
+  }
+
+  const addressSegments = normalizedTargetAddress.split(ADDRESS.SEPARATOR);
+  if (addressSegments.length < 3) {
+    return Object.freeze({
+      criticalTransport: false,
+      entityId: null,
+      entityType: null,
+      partitionId: null,
+      reasonCode: CRITICAL_TRANSPORT_TARGET_REASON.INVALID_TARGET_ADDRESS,
+      targetAddress: normalizedTargetAddress,
+    });
+  }
+
+  const entityType = normalizeNonEmptyString(addressSegments[1]);
+  const entityId = normalizeNonEmptyString(
+    addressSegments.slice(2).join(ADDRESS.SEPARATOR),
+  );
+  const partitionId = entityType === ENTITY_TYPE.PARTITION && entityId ?
+    entityId.replace(REPLICA_ID_SUFFIX_PATTERN, '') :
+    null;
+
+  if (entityType === ENTITY_TYPE.MESSAGE_GROUP &&
+      isInitialMessageGroupEntityId(entityId)) {
+    return Object.freeze({
+      criticalTransport: true,
+      entityId,
+      entityType,
+      partitionId: null,
+      reasonCode: CRITICAL_TRANSPORT_TARGET_REASON.INITIAL_MESSAGE_GROUP,
+      targetAddress: normalizedTargetAddress,
+    });
+  }
+
+  if (entityType === ENTITY_TYPE.PARTITION &&
+      isCriticalTransportControlPlanePartition({partitionId})) {
+    return Object.freeze({
+      criticalTransport: true,
+      entityId,
+      entityType,
+      partitionId,
+      reasonCode:
+        CRITICAL_TRANSPORT_TARGET_REASON.CRITICAL_CONTROL_PLANE_PARTITION,
+      targetAddress: normalizedTargetAddress,
+    });
+  }
+
+  return Object.freeze({
+    criticalTransport: false,
+    entityId,
+    entityType,
+    partitionId,
+    reasonCode: CRITICAL_TRANSPORT_TARGET_REASON.NON_CRITICAL_TARGET,
+    targetAddress: normalizedTargetAddress,
+  });
+}
+
+function isCriticalTransportTargetAddress(options = {}) {
+  return resolveCriticalTransportTargetSnapshot(options).criticalTransport ===
+    true;
+}
+
+function resolveSystemTableMutationTransportSnapshot(options = {}) {
+  const tableName = normalizeNonEmptyString(options.tableName);
+  if (!tableName || !SYSTEM_TABLE_IDS.has(tableName)) {
+    return Object.freeze({
+      criticalTransport: false,
+      deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
+      partitionId: null,
+      reasonCode: SYSTEM_TABLE_MUTATION_TRANSPORT_REASON.INVALID_TABLE_NAME,
+      tableName,
+    });
+  }
+
+  const partitionId = normalizeNonEmptyString(INITIAL_PARTITION_IDS[tableName]);
+  if (partitionId &&
+      isCriticalTransportControlPlanePartition({partitionId})) {
+    return Object.freeze({
+      criticalTransport: true,
+      deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.CRITICAL,
+      partitionId,
+      reasonCode:
+        SYSTEM_TABLE_MUTATION_TRANSPORT_REASON.CRITICAL_TRANSPORT_PARTITION,
+      tableName,
+    });
+  }
+
+  return Object.freeze({
+    criticalTransport: false,
+    deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
+    partitionId,
+    reasonCode: SYSTEM_TABLE_MUTATION_TRANSPORT_REASON.NON_CRITICAL_SYSTEM_TABLE,
+    tableName,
+  });
+}
+
+function resolveSystemTableMutationDeliveryPriority(options = {}) {
+  return resolveSystemTableMutationTransportSnapshot(options).deliveryPriority;
 }
 
 function getPartitionRowFromCache(systemTableCache, partitionId) {
@@ -243,12 +378,18 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
 
 export {
   CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS,
+  CRITICAL_TRANSPORT_TARGET_REASON,
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   buildPartitionRowByPartitionId,
   getPartitionRowFromCache,
   isCriticalTransportControlPlanePartition,
+  isCriticalTransportTargetAddress,
   isPriorityControlPlanePartition,
   isSystemTablePartition,
+  resolveCriticalTransportTargetSnapshot,
   resolvePartitionTableId,
   resolvePriorityControlPlanePartitionIds,
+  resolveSystemTableMutationDeliveryPriority,
+  resolveSystemTableMutationTransportSnapshot,
+  SYSTEM_TABLE_MUTATION_TRANSPORT_REASON,
 };

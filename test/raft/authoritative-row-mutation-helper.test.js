@@ -52,6 +52,8 @@ test('AuthoritativeRowMutationHelper - flush persists pending owner-row update',
         success: true,
         outcome: 'applied',
         completionState: 'applied',
+        contractState: 'ready',
+        nextAction: 'proceed',
       },
       reason: 'applied',
     }, 'should return structured success metadata');

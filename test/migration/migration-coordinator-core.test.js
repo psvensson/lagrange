@@ -412,7 +412,6 @@ function harnessTableId(stage) {
 function harnessTableName(stage) {
   return `users_${String(stage).replaceAll('_', '-')}`;
 }
-
 test('Property 1: Migration record creation completeness', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -445,7 +444,6 @@ test('Property 1: Migration record creation completeness', async (t) => {
   );
   t.pass('migration record creation includes required fields');
 });
-
 test('Property 2: Active migration exclusion', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -486,7 +484,6 @@ test('Property 2: Active migration exclusion', async (t) => {
   );
   t.pass('active migrations are rejected with conflict id');
 });
-
 test('Property 3: Partition migration record enumeration', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -517,7 +514,6 @@ test('Property 3: Partition migration record enumeration', async (t) => {
   );
   t.pass('partition rows are created for every table partition');
 });
-
 test('Property 18: Monotonic stage transitions', async (t) => {
   const harness = createCoordinatorHarness();
   await fc.assert(
@@ -533,7 +529,6 @@ test('Property 18: Monotonic stage transitions', async (t) => {
   );
   t.pass('transition validation enforces monotonic ordering with terminal exceptions');
 });
-
 test('Property 20: Timeout budget derivation', async (t) => {
   await fc.assert(
     fc.property(
@@ -570,7 +565,6 @@ test('Property 20: Timeout budget derivation', async (t) => {
   );
   t.pass('child budget is derived from remaining parent time');
 });
-
 test('Property 4: Dual-write schema shape acceptance', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -642,7 +636,6 @@ test('Property 4: Dual-write schema shape acceptance', async (t) => {
   );
   t.pass('dual-write accepts both legacy and expanded write shapes');
 });
-
 test('Property 5: Dual-write default application and query inclusion', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -707,7 +700,6 @@ test('Property 5: Dual-write default application and query inclusion', async (t)
   );
   t.pass('dual-write writes without new columns persist defaults and remain queryable');
 });
-
 test('Property 7: Partition operation retry with backoff and recording', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -760,7 +752,6 @@ test('Property 7: Partition operation retry with backoff and recording', async (
   );
   t.pass('retry path records retry_count and respects retry budget');
 });
-
 test('Property 8: Aggregate partition completion triggers parent transition', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -807,7 +798,6 @@ test('Property 8: Aggregate partition completion triggers parent transition', as
   );
   t.pass('parent transitions complete once all partition rows reach completion stage');
 });
-
 test('Property 9: Backfill batch size enforcement', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -857,7 +847,6 @@ test('Property 9: Backfill batch size enforcement', async (t) => {
   );
   t.pass('backfill scan requests and batches respect configured batch size');
 });
-
 test('Property 10: Backfill cursor resumption round trip', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -968,7 +957,6 @@ test('Property 10: Backfill cursor resumption round trip', async (t) => {
   );
   t.pass('backfill cursor resumption converges to uninterrupted final row set');
 });
-
 test('Property 12: Atomic cutover via distributed transaction', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -1062,7 +1050,6 @@ test('Property 12: Atomic cutover via distributed transaction', async (t) => {
   );
   t.pass('cutover updates table schema and partition rows atomically');
 });
-
 test('Property 21: Cancellation transitions and stops new work', async (t) => {
   const cancellableStages = [...MIGRATION_CANCELLABLE_STAGES];
   await fc.assert(
@@ -1139,7 +1126,6 @@ test('Property 21: Cancellation transitions and stops new work', async (t) => {
   );
   t.pass('cancellation transitions and prevents new backfill batch scans');
 });
-
 test('Property 23: Cancel rejection for post-cutover migrations', async (t) => {
   await fc.assert(
     fc.asyncProperty(
@@ -1191,7 +1177,6 @@ test('Property 23: Cancel rejection for post-cutover migrations', async (t) => {
   );
   t.pass('cancel requests reject once migrations reach post-cutover stages');
 });
-
 test('initiation supports all migration types', async (t) => {
   for (const migrationType of Object.values(MIGRATION_TYPE)) {
     const harness = createCoordinatorHarness({

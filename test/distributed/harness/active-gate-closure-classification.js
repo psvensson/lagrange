@@ -2,6 +2,9 @@ import {
   hasStartupAdminClosureWitness,
   isTimeoutShapedProbeError,
 } from './startup-readiness-evidence.js';
+import {
+  buildPublicationRecoveryGateSnapshot,
+} from '../../../src/control-plane/publication-recovery-gate.js';
 
 const ZERO = 0;
 const ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -94,6 +97,30 @@ export function classifyActiveGateClosureWitness({
       publicationConvergenceGate?.publicationStatus ||
       publicationConvergence?.publicationStatus,
   );
+  const publicationRecoveryGate =
+    progressSnapshot?.publicationRecoveryGate &&
+      typeof progressSnapshot.publicationRecoveryGate === 'object' ?
+      progressSnapshot.publicationRecoveryGate :
+      buildPublicationRecoveryGateSnapshot({
+        publicationStatus,
+        recoveryProtocolState:
+          progressSnapshot?.recoveryProtocolState ||
+          publicationConvergenceGate?.recoveryProtocolState ||
+          publicationConvergence?.recoveryProtocolState,
+        priorityRecoveryReasonCodes:
+          progressSnapshot?.priorityRecoveryReasonCodes ||
+          publicationConvergenceGate?.priorityRecoveryReasonCodes ||
+          publicationConvergence?.priorityRecoveryReasonCodes,
+        priorityPartitionSummary:
+          progressSnapshot?.priorityPartitionSummary ||
+          publicationConvergenceGate?.priorityPartitionSummary ||
+          publicationConvergence?.priorityPartitionSummary,
+        pendingAckNodeIds:
+          publicationConvergence?.pendingAckNodeIds ||
+          publicationConvergenceGate?.pendingAckNodeIds,
+        missingPublishedNodeIds:
+          publicationConvergenceGate?.missingPublishedNodeIds,
+      });
 
   const startupPublicationLagWitness =
     readinessMode === 'startup' &&
@@ -108,8 +135,7 @@ export function classifyActiveGateClosureWitness({
     progressSnapshot.snapshotCoverageNodeCount > ZERO &&
     gateReasons.length === ZERO &&
     publicationStatus === ACTIVE_WAIT_PUBLICATION_STATUS_PUBLISHED &&
-    Number.isInteger(progressSnapshot?.pendingAckCount) &&
-    progressSnapshot.pendingAckCount === ZERO &&
+    publicationRecoveryGate.pendingAckCount === ZERO &&
     Number.isInteger(progressSnapshot?.missingPublishedCount) &&
     progressSnapshot.missingPublishedCount > ZERO &&
     !isTimeoutShapedProbeError(progressSnapshot?.selectedSnapshotError) &&
@@ -140,19 +166,14 @@ export function classifyActiveGateClosureWitness({
 
   const pendingAckCount = Number.isInteger(progressSnapshot?.pendingAckCount) ?
     progressSnapshot.pendingAckCount :
-    normalizeDistinctStringArray(
-      publicationConvergence?.pendingAckNodeIds ||
-        publicationConvergenceGate?.pendingAckNodeIds,
-    ).length;
+    publicationRecoveryGate.pendingAckCount;
   if (pendingAckCount > ZERO) {
     return null;
   }
 
   const missingPublishedCount = Number.isInteger(progressSnapshot?.missingPublishedCount) ?
     progressSnapshot.missingPublishedCount :
-    normalizeDistinctStringArray(
-      publicationConvergenceGate?.missingPublishedNodeIds,
-    ).length;
+    publicationRecoveryGate.missingPublishedCount;
   if (missingPublishedCount > ZERO) {
     return null;
   }

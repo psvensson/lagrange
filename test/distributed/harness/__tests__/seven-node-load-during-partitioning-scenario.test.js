@@ -9,9 +9,11 @@ const SQL_FROM_SERVICES = 'FROM services';
 const SQL_FROM_TABLES = 'FROM tables';
 const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATIONS =
-  Object.freeze(['INSERT', 'SELECT', 'UPDATE', 'DELETE']);
+  Object.freeze(['INSERT', 'SELECT']);
 const MOCK_TABLE_ID = 'tbl-logs-001';
+const SPLIT_PROGRESS_QUERY_LANE = 'snapshot';
 const TABLE_POLICIES_JSON = JSON.stringify({
+  externalCdcAllowed: false,
   splitStorageThreshold: 16384,
   splitTrafficThreshold: 120,
   mergeStorageThreshold: 1,
@@ -71,11 +73,28 @@ describe('seven-node-load-during-partitioning scenario', () => {
       let loadCancelled = false;
       let metricTotal = 0;
       let tablePoliciesApplied = false;
+      const controlSnapshotOptions = [];
       const calls = [];
 
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
+        getControlSnapshot: async (options = {}) => {
+          controlSnapshotOptions.push(options);
+          return {
+            rows: [{
+              controlPlaneDiagnostics: {
+                workflowAdmissionsByWorkflowId: {
+                  'wf-1': {
+                    workflowId: 'wf-1',
+                    tableId: MOCK_TABLE_ID,
+                  },
+                },
+                placementEligibilityByNodeId: {},
+              },
+            }],
+          };
+        },
         query: async (sql) => {
           if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
             tablePoliciesApplied = true;
@@ -194,6 +213,11 @@ describe('seven-node-load-during-partitioning scenario', () => {
       assert.ok(
         result.partitioningEvidence.operationsAfterPartitioning >= 15,
       );
+      assert.ok(
+        controlSnapshotOptions.some((options) =>
+          options?.lane === SPLIT_PROGRESS_QUERY_LANE),
+        'scenario should probe split progress on the snapshot lane',
+      );
       assert.equal(result.loadMetrics.total, 200);
       assert.ok(result.successRate >= 0.7);
       assert.deepEqual(calls[0], 'waitForConvergence');
@@ -213,7 +237,7 @@ describe('seven-node-load-during-partitioning scenario', () => {
       assert.deepEqual(
         calls[2][1].operations,
         LOAD_OPERATIONS,
-        'scenario should begin with mixed load',
+        'scenario should begin with the benchmark workload operation mix',
       );
       assert.equal(
         calls[2][1].opsPerSec,

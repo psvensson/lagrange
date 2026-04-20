@@ -1,9 +1,0 @@
-# Keep the distributed runtime image build context minimal.
-# If the Dockerfile needs additional inputs, add them here explicitly.
-**
-!.dockerignore
-!Dockerfile
-!package.json
-!package-lock.json
-!src/
-!src/**

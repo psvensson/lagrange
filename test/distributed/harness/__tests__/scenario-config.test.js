@@ -58,5 +58,13 @@ describe('scenario-config defaults', () => {
       transactionRecovery.preRestartDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
     );
+    assert.equal(
+      distribution.workloadProfile,
+      'benchmark_events_mixed',
+    );
+    assert.deepEqual(
+      distribution.loadOperations,
+      ['INSERT', 'SELECT'],
+    );
   });
 });

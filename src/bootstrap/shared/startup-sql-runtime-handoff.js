@@ -25,6 +25,33 @@ function attachSqlRuntimeToStartupOwner(options) {
 
   owner.sqlQueryEngine = sqlQueryEngine;
 
+  const bootstrapTopologySnapshotOwner =
+    owner.bootstrapTopologySnapshotOwner ||
+    (typeof owner.getBootstrapTopologySnapshotOwner === 'function' ?
+      owner.getBootstrapTopologySnapshotOwner() :
+      null);
+  if (bootstrapTopologySnapshotOwner &&
+      typeof sqlQueryEngine.queryExecutor?.setBootstrapTopologySnapshotOwner ===
+        'function') {
+    sqlQueryEngine.queryExecutor.setBootstrapTopologySnapshotOwner(
+      bootstrapTopologySnapshotOwner,
+    );
+  }
+
+  const bootstrapSystemTableSnapshots =
+    owner.bootstrapResponse?.systemTableSnapshots ||
+    owner.systemTableSnapshots ||
+    (typeof owner.getBootstrapSystemTableSnapshots === 'function' ?
+      owner.getBootstrapSystemTableSnapshots() :
+      null);
+  if (bootstrapSystemTableSnapshots &&
+      typeof sqlQueryEngine.seedBootstrapRoutingOverlayFromSnapshots ===
+        'function') {
+    sqlQueryEngine.seedBootstrapRoutingOverlayFromSnapshots(
+      bootstrapSystemTableSnapshots,
+    );
+  }
+
   const cdcIntegrationService = owner.cdcIntegrationService || null;
   if (cdcIntegrationService) {
     CDCIntegrationSetup.upgrade({

@@ -15,7 +15,7 @@ import {
 } from './metric-check-helpers.js';
 
 const TARGET_THRESHOLD = 20;
-const BASELINE_COUNT = 147;
+const BASELINE_COUNT = 146;
 const STRICT_FLAG = '--strict';
 const SONAR_RULE_ID = 'sonarjs/cognitive-complexity';
 const SONAR_PLUGIN_NAME = 'sonarjs';

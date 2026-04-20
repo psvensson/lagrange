@@ -1,4 +1,11 @@
-import {NUM, STRING, TIME_MS, TYPEOF, WORKFLOW_STEP} from '../constants/index.js';
+import {
+  ERRNO,
+  NUM,
+  STRING,
+  TIME_MS,
+  TYPEOF,
+  WORKFLOW_STEP,
+} from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 
@@ -8,6 +15,7 @@ const REPLICA_HANDLER_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   DATA_DIR: STORAGE_DEFAULT.DATA_DIR,
   SYNC_TIMEOUT_MS: TIME_MS.MINUTE,
+  STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.TWO,
 });
 
 const REPLICA_HANDLER_ADDRESS = Object.freeze({
@@ -41,12 +49,21 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_NOT_FOUND: 'Replica not found for removal',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
+  STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
+  STEP_DOWN_MISSING_FIELDS: 'STEP_DOWN_REPLICA missing required fields',
+  STEP_DOWN_NOT_FOUND: 'Replica not found for leader handoff',
+  STEP_DOWN_COMPLETED: 'Replica leader handoff completed',
+  STEP_DOWN_FAILED: 'Replica leader handoff failed',
   ASYNC_REMOVE_FAILED: 'Async replica removal failed',
   GRACEFUL_SHUTDOWN: 'Initiating graceful shutdown',
   DELETE_SERVICE_ROW_FAILED: 'Failed to delete service row',
+  LOCAL_CLEANUP_RETRY_REQUIRED:
+    'Replica local cleanup requires retry after durable removal',
   REMOVE_COMPLETED: 'Replica removal completed',
   REMOVE_FAILED: 'Replica removal failed',
   UPDATE_STATUS: 'Updating replica status',
+  UPDATE_STATUS_RETRY:
+    'Retrying replica status persistence after retryable control-plane failure',
   CDC_UNAVAILABLE: 'CDC integration service not available',
   UPDATE_STATUS_FAILED: 'Failed to update replica status via CDC',
   PARSE_STEPS_HISTORY_FAILED: 'Failed to parse steps_history',
@@ -70,6 +87,10 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CDC_REQUIRED: 'ReplicaHandler requires cdcIntegrationService',
   REMOVE_REQUIRED_FIELDS:
     'REMOVE_REPLICA requires operationId, partitionId, and replicaId',
+  STEP_DOWN_REQUIRED_FIELDS:
+    'STEP_DOWN_REPLICA requires operationId, partitionId, and replicaId',
+  STEP_DOWN_NOT_SUPPORTED:
+    'STEP_DOWN_REPLICA requires a tracked partition service with raft ownership',
   CACHE_NOT_AVAILABLE: 'System table cache not available',
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>
@@ -107,6 +128,10 @@ const REPLICA_HANDLER_SERVICE = Object.freeze({
   TYPE: SERVICE_TYPE.PARTITION,
 });
 
+const REPLICA_HANDLER_ERRNO = Object.freeze({
+  ENOENT: ERRNO.ENOENT,
+});
+
 const REPLICA_HANDLER_TYPEOF = Object.freeze({
   FUNCTION: TYPEOF.FUNCTION,
   OBJECT: TYPEOF.OBJECT,
@@ -121,6 +146,7 @@ export {
   REPLICA_HANDLER_ADDRESS,
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_ERRNO,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_NUM,

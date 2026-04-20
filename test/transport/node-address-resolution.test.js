@@ -1,7 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import os from 'os';
 import {
-  NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY,
+  NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_REASON,
   NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE,
   parseAddressPartsResult,
@@ -104,8 +105,11 @@ test('resolveNodeWebSocketAddress uses authoritative node_endpoints rows',
       {
         state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
         address: 'ws://172.20.0.11:8082',
-        source:
-          NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE
+        authority:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+            .CANONICAL_NODE_ENDPOINT,
+        evidenceSource:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE
             .BOOTSTRAP_SNAPSHOT_NODE_ENDPOINTS,
       },
       'node_endpoints snapshot should be the canonical peer websocket authority',
@@ -166,7 +170,11 @@ test('resolveNodeWebSocketAddress reads canonical websocket metadata from cache'
       {
         state: NODE_WEBSOCKET_ADDRESS_RESOLUTION_STATE.RESOLVED,
         address: 'ws://172.20.0.12:8082',
-        source: NODE_WEBSOCKET_ADDRESS_RESOLUTION_SOURCE.CACHE_NODE_ENDPOINTS,
+        authority:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_AUTHORITY
+            .CANONICAL_NODE_ENDPOINT,
+        evidenceSource:
+          NODE_WEBSOCKET_ADDRESS_RESOLUTION_EVIDENCE_SOURCE.SYSTEM_TABLE_CACHE,
       },
       'cache-backed node_endpoints rows should resolve peer websocket addresses',
     );

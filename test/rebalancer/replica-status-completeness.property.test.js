@@ -15,18 +15,22 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
   ReplicaStatus,
+  REPLICA_OPERATION_SEMANTIC_PHASE,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
   ADD_WORKFLOW_STEPS,
   REMOVE_WORKFLOW_STEPS,
   REPLACE_WORKFLOW_STEPS,
+  buildReplicaOperationSemanticWitnesses,
   getWorkflowSteps,
   isValidWorkflowStep,
   getNextWorkflowStep,
+  isTerminalReplicaOperationSemanticPhase,
   isTerminalStep,
   createOperation,
   getAllStatusValues,
   isValidStatus,
+  resolveReplicaOperationSemanticPhase,
 } from '../../src/rebalancer/replica-status.js';
 
 /**
@@ -327,4 +331,124 @@ test('Property: ReplicaStatus enum contains all required values', async (t) => {
     t.equal(OperationType.REMOVE, 'REMOVE', 'REMOVE operation type should be REMOVE');
     t.equal(OperationType.REPLACE, 'REPLACE', 'REPLACE operation type should be REPLACE');
   });
+
+  await t.test('semantic phase contract stays smaller than workflow-step contract',
+    async (t) => {
+      t.same(
+        REPLICA_OPERATION_SEMANTIC_PHASE,
+        {
+          UNKNOWN: 'unknown',
+          ACCEPTED: 'accepted',
+          TARGET_READY: 'target_ready',
+          SOURCE_RETIRING: 'source_retiring',
+          SETTLED: 'settled',
+          FAILED: 'failed',
+        },
+        'semantic phases should remain the shared compact lifecycle grammar',
+      );
+
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.ADD, 'SYNCING', 'syncing'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.ACCEPTED,
+        'pre-activation ADD work should stay in accepted phase',
+      );
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.REPLACE, 'ACTIVE', 'active'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY,
+        'replace promotion should be normalized to target_ready',
+      );
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.REPLACE, 'STOPPING', 'removing'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING,
+        'replace source removal should use the shared source_retiring phase',
+      );
+      t.equal(
+        resolveReplicaOperationSemanticPhase(OperationType.REMOVE, 'REMOVED', 'removed'),
+        REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+        'terminal success should normalize to settled',
+      );
+      t.ok(
+        isTerminalReplicaOperationSemanticPhase(
+          REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+        ),
+        'settled phase should be terminal',
+      );
+      t.ok(
+        isTerminalReplicaOperationSemanticPhase(
+          REPLICA_OPERATION_SEMANTIC_PHASE.FAILED,
+        ),
+        'failed phase should be terminal',
+      );
+      t.notOk(
+        isTerminalReplicaOperationSemanticPhase(
+          REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY,
+        ),
+        'target_ready should remain in-flight',
+      );
+    });
+
+  await t.test('semantic witnesses classify activation, retirement, and settlement',
+    async (t) => {
+      const acceptedWitnesses = buildReplicaOperationSemanticWitnesses(
+        OperationType.ADD,
+        'SYNCING',
+        'syncing',
+      );
+      const targetReadyWitnesses = buildReplicaOperationSemanticWitnesses(
+        OperationType.REPLACE,
+        'ACTIVE',
+        'active',
+      );
+      const retiringWitnesses = buildReplicaOperationSemanticWitnesses(
+        OperationType.REPLACE,
+        'STOPPING',
+        'removing',
+      );
+      const settledWitnesses = buildReplicaOperationSemanticWitnesses(
+        OperationType.REMOVE,
+        'REMOVED',
+        'removed',
+      );
+
+      t.same(
+        acceptedWitnesses,
+        {
+          activationWitness: false,
+          sourceRetirementWitness: false,
+          settlementWitness: false,
+          failureWitness: false,
+        },
+        'accepted work should not claim later lifecycle witnesses',
+      );
+      t.same(
+        targetReadyWitnesses,
+        {
+          activationWitness: true,
+          sourceRetirementWitness: false,
+          settlementWitness: false,
+          failureWitness: false,
+        },
+        'target_ready should expose only activation witness',
+      );
+      t.same(
+        retiringWitnesses,
+        {
+          activationWitness: true,
+          sourceRetirementWitness: true,
+          settlementWitness: false,
+          failureWitness: false,
+        },
+        'source_retiring should show both activation and retirement witnesses',
+      );
+      t.same(
+        settledWitnesses,
+        {
+          activationWitness: true,
+          sourceRetirementWitness: true,
+          settlementWitness: true,
+          failureWitness: false,
+        },
+        'settled work should expose all success witnesses',
+      );
+    });
 });

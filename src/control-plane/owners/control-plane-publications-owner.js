@@ -1,5 +1,11 @@
 import {TABLES} from '../../constants/index.js';
-import {PRESSURE_WORK_CLASS} from '../pressure-governor.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane-readiness-constants.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane-workload-profile.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
 class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
@@ -7,16 +13,33 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   static TABLE_NAME = TABLES.CONTROL_PLANE_PUBLICATIONS;
 
   buildPublicationMutationOptions(options = {}) {
+    const workloadProfile = buildControlPlaneWorkloadProfile(
+      CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+    );
     return {
       ...options,
-      allowPressureDefer: false,
+      allowPressureDefer: workloadProfile.allowPressureDefer,
       deliveryPriority: 'critical',
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      workloadClass: workloadProfile.workloadClass,
+      workClass: workloadProfile.workClass,
+    };
+  }
+
+  buildPublicationReadOptions(options = {}) {
+    return {
+      ...options,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     };
   }
 
   async getPublication(publicationId, options = {}) {
-    return this.readByPrimaryKey(publicationId, options);
+    return this.readByPrimaryKey(
+      publicationId,
+      this.buildPublicationReadOptions(options),
+    );
   }
 
   async getPublicationFromCache(publicationId, options = {}) {
@@ -24,7 +47,7 @@ class ControlPlanePublicationsOwner extends SystemMetadataOwnerBase {
   }
 
   async listPublications(options = {}) {
-    return this.listRows(options);
+    return this.listRows(this.buildPublicationReadOptions(options));
   }
 
   async listPublicationsFromCache(options = {}) {

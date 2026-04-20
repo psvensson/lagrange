@@ -1,7 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
-
 test('DurableWorkflowCoordinator - single-flights execution by owner key',
   async (t) => {
     const coordinator = new DurableWorkflowCoordinator();
@@ -10,7 +9,6 @@ test('DurableWorkflowCoordinator - single-flights execution by owner key',
       resolveExecution = resolve;
     });
     let executionCount = 0;
-
     const firstExecution = coordinator.runExclusive('owner-1', async () => {
       executionCount += 1;
       await executionBarrier;
@@ -33,7 +31,6 @@ test('DurableWorkflowCoordinator - single-flights execution by owner key',
     t.same(result, {attempt: 1});
     t.equal(executionCount, 1);
   });
-
 test('DurableWorkflowCoordinator - persists participant stage transitions',
   async (t) => {
     const persistedWorkflows = [];
@@ -54,7 +51,6 @@ test('DurableWorkflowCoordinator - persists participant stage transitions',
       },
       now: () => 1000,
     });
-
     const workflow = await coordinator.registerWorkflow({
       workflowId: 'wf-1',
       ownerKey: 'owner-1',
@@ -78,7 +74,6 @@ test('DurableWorkflowCoordinator - persists participant stage transitions',
       updatedAt: 1000,
     });
     await coordinator.persistParticipants('wf-1', ['p1', 'p2']);
-
     const failedParticipants = await coordinator.executeParticipantStage(
       'wf-1',
       'RUNNING',
@@ -111,7 +106,6 @@ test('DurableWorkflowCoordinator - persists participant stage transitions',
       'failed participant should be persisted with the failure status',
     );
   });
-
 test('DurableWorkflowCoordinator - recovers workflows and participants from rows',
   async (t) => {
     const coordinator = new DurableWorkflowCoordinator();
@@ -148,7 +142,6 @@ test('DurableWorkflowCoordinator - recovers workflows and participants from rows
         updatedAt: row.updated_at,
       }),
     });
-
     const workflow = coordinator.getWorkflowByOwnerKey('owner-2');
     t.ok(workflow, 'workflow should be recovered by owner key');
     t.equal(workflow.workflowId, 'wf-2');
@@ -158,7 +151,6 @@ test('DurableWorkflowCoordinator - recovers workflows and participants from rows
 
 import {WORKFLOW_TRANSITION_FIELD} from
   '../../src/workflow/workflow-constants.js';
-
 test('DurableWorkflowCoordinator - transitionStep persists canonical ' +
   'transition fields', async (t) => {
   const persistedWorkflows = [];
@@ -186,11 +178,9 @@ test('DurableWorkflowCoordinator - transitionStep persists canonical ' +
     nextStep: 'SENDING',
     reason: 'dispatch_sending',
   });
-
   const workflow = coordinator.getWorkflowById('wf-transition');
   t.equal(workflow.step, 'SENDING', 'step should be updated');
   t.equal(workflow.transitionHistory.length, 1);
-
   const entry = workflow.transitionHistory[0];
   t.equal(
     entry[WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP],
@@ -223,7 +213,6 @@ test('DurableWorkflowCoordinator - transitionStep persists canonical ' +
     'workflow should be persisted on register and transition',
   );
 });
-
 test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
   'nextStep', async (t) => {
   const coordinator = new DurableWorkflowCoordinator();
@@ -238,7 +227,6 @@ test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
     'transitionStep must reject when nextStep is missing',
   );
 });
-
 test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
   'reason', async (t) => {
   const coordinator = new DurableWorkflowCoordinator();
@@ -253,7 +241,6 @@ test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
     'transitionStep must reject when reason is missing',
   );
 });
-
 test('DurableWorkflowCoordinator - transitionStep merges extra ' +
   'metadata into history entry', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -271,7 +258,6 @@ test('DurableWorkflowCoordinator - transitionStep merges extra ' +
     reason: 'test_reason',
     metadata: {errorMessage: 'something broke'},
   });
-
   const workflow = coordinator.getWorkflowById('wf-meta');
   const entry = workflow.transitionHistory[0];
   t.equal(entry.errorMessage, 'something broke');
@@ -303,7 +289,6 @@ const ACK_LAST_APPLIED_DELTA = 456;
 // ===================================================================
 // acknowledgeParticipant — topology executor acknowledgements
 // ===================================================================
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
   'valid acknowledgement and persists participant state ' +
   '(uses DurableWorkflowCoordinator.persistParticipant)',
@@ -329,7 +314,6 @@ async (t) => {
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant('wf-ack-1', {
     participantKey: 'child-left',
     status: ACK_STATUS_ACKNOWLEDGED,
@@ -338,7 +322,6 @@ async (t) => {
   t.equal(result.result, PARTICIPANT_ACK_RESULT.ACCEPTED);
   t.equal(result.participantKey, 'child-left');
   t.equal(result.acknowledgedAt, ACK_FIXED_NOW);
-
   const participant = workflow.participants.get('child-left');
   t.equal(participant.status, ACK_STATUS_ACKNOWLEDGED);
   t.equal(participant.acknowledgedAt, ACK_FIXED_NOW);
@@ -347,7 +330,6 @@ async (t) => {
     'participant should be persisted through the coordinator callback',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
   'stale fence token', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -368,7 +350,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant('wf-ack-stale', {
     participantKey: 'source-partition',
     status: ACK_STATUS_ACKNOWLEDGED,
@@ -379,7 +360,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
   t.equal(result.participantKey, 'source-partition');
   t.equal(result.currentFenceToken, ACK_FENCE_EPOCH_10);
   t.equal(result.receivedFenceToken, ACK_FENCE_EPOCH_5);
-
   const participant = workflow.participants.get('source-partition');
   t.equal(
     participant.status,
@@ -387,7 +367,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
     'participant status must not change on stale fence rejection',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
   'duplicate acknowledgement for same status', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -408,7 +387,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant('wf-ack-dup', {
     participantKey: 'child-right',
     status: ACK_STATUS_ACKNOWLEDGED,
@@ -417,7 +395,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant rejects ' +
   t.equal(result.result, PARTICIPANT_ACK_RESULT.DUPLICATE);
   t.equal(result.participantKey, 'child-right');
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant returns ' +
   'not-found for unknown participant', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -428,7 +405,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant returns ' +
     workflowId: 'wf-ack-missing',
     ownerKey: 'owner-ack-missing',
   });
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-ack-missing',
     {
@@ -440,7 +416,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant returns ' +
   t.equal(result.result, PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND);
   t.equal(result.participantKey, 'nonexistent-participant');
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant persists ' +
   'checkpoint data alongside participant state', async (t) => {
   const persistedParticipants = [];
@@ -464,12 +439,10 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant persists ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const checkpoint = {
     snapshotRevision: ACK_SNAPSHOT_REVISION,
     lastAppliedDelta: ACK_LAST_APPLIED_DELTA,
   };
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-ack-checkpoint',
     {
@@ -480,11 +453,9 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant persists ' +
   );
 
   t.equal(result.result, PARTICIPANT_ACK_RESULT.ACCEPTED);
-
   const participant = workflow.participants.get('source-partition');
   t.equal(participant.status, ACK_STATUS_CATCHUP_READY);
   t.same(participant.checkpoint, checkpoint);
-
   const lastPersisted =
     persistedParticipants[persistedParticipants.length - 1];
   t.same(
@@ -493,7 +464,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant persists ' +
     'checkpoint must be persisted through the participant callback',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
   'equal fence token', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -514,7 +484,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-ack-equal-fence',
     {
@@ -526,7 +495,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
 
   t.equal(result.result, PARTICIPANT_ACK_RESULT.ACCEPTED);
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
   'higher fence token and updates participant fence', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -547,7 +515,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-ack-higher-fence',
     {
@@ -558,7 +525,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
   );
 
   t.equal(result.result, PARTICIPANT_ACK_RESULT.ACCEPTED);
-
   const participant = workflow.participants.get('child-right');
   t.equal(
     participant.fenceToken,
@@ -566,7 +532,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant accepts ' +
     'participant fence token must advance to the higher value',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant throws ' +
   'when participantKey is missing', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -586,7 +551,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant throws ' +
     'must reject when participantKey is missing',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant throws ' +
   'when status is missing', async (t) => {
   const coordinator = new DurableWorkflowCoordinator({
@@ -606,7 +570,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant throws ' +
     'must reject when status is missing',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant allows ' +
   'different status after prior acknowledgement (status advance, ' +
   'not duplicate)', async (t) => {
@@ -628,7 +591,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant allows ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-ack-advance',
     {
@@ -642,7 +604,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant allows ' +
     PARTICIPANT_ACK_RESULT.ACCEPTED,
     'advancing to a different status must be accepted, not duplicate',
   );
-
   const participant = workflow.participants.get('source-partition');
   t.equal(participant.status, ACK_STATUS_CATCHUP_READY);
 });
@@ -654,7 +615,6 @@ import {
 // ===================================================================
 // acknowledgeParticipant — rejection diagnostic emission
 // ===================================================================
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   'typed diagnostic on stale fence rejection', async (t) => {
   const diagnostics = [];
@@ -720,7 +680,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   );
   t.ok(Object.isFrozen(diag), 'diagnostic record must be frozen');
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   'typed diagnostic on duplicate rejection', async (t) => {
   const diagnostics = [];
@@ -782,7 +741,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   );
   t.ok(Object.isFrozen(diag), 'diagnostic record must be frozen');
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   'typed diagnostic on participant-not-found rejection', async (t) => {
   const diagnostics = [];
@@ -821,7 +779,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant emits ' +
   );
   t.ok(Object.isFrozen(diag), 'diagnostic record must be frozen');
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant does not ' +
   'emit diagnostic on accepted acknowledgement', async (t) => {
   const diagnostics = [];
@@ -843,7 +800,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant does not ' +
     createdAt: ACK_FIXED_NOW,
     updatedAt: ACK_FIXED_NOW,
   });
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-diag-accept',
     {
@@ -859,7 +815,6 @@ test('DurableWorkflowCoordinator - acknowledgeParticipant does not ' +
     'no diagnostic must be emitted for accepted acknowledgements',
   );
 });
-
 test('DurableWorkflowCoordinator - acknowledgeParticipant works ' +
   'without onAckRejection callback (no diagnostic emitted)',
 async (t) => {
@@ -1040,10 +995,8 @@ test('DurableWorkflowCoordinator - stale fence rejection does not ' +
       },
     ],
   });
-
   const wfBefore = snapshotWorkflowState(workflow);
   const pBefore = snapshotParticipants(workflow);
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-state-stale-rebalance',
     {
@@ -1089,7 +1042,6 @@ test('DurableWorkflowCoordinator - stale fence rejection does not ' +
   'state (split payload)', async (t) => {
   const sourceKey = SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION;
   const leftKey = SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD;
-
   const {coordinator, workflow, persistedParticipants,
     persistedWorkflows, diagnostics} = buildStatefulWorkflow({
     workflowId: 'wf-state-stale-split',
@@ -1113,10 +1065,8 @@ test('DurableWorkflowCoordinator - stale fence rejection does not ' +
       },
     ],
   });
-
   const wfBefore = snapshotWorkflowState(workflow);
   const pBefore = snapshotParticipants(workflow);
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-state-stale-split',
     {
@@ -1127,11 +1077,9 @@ test('DurableWorkflowCoordinator - stale fence rejection does not ' +
   );
 
   t.equal(result.result, PARTICIPANT_ACK_RESULT.STALE_FENCE);
-
   const wfAfter = snapshotWorkflowState(workflow);
   t.same(wfAfter, wfBefore,
     'workflow state must be unchanged after stale split ack');
-
   const pAfter = snapshotParticipants(workflow);
   t.same(pAfter, pBefore,
     'all participant state must be unchanged after stale split ack');
@@ -1178,10 +1126,8 @@ test('DurableWorkflowCoordinator - duplicate rejection does not ' +
       },
     ],
   });
-
   const wfBefore = snapshotWorkflowState(workflow);
   const pBefore = snapshotParticipants(workflow);
-
   const result = await coordinator.acknowledgeParticipant(
     'wf-state-dup-rebalance',
     {

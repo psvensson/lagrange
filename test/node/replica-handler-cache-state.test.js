@@ -19,6 +19,10 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 
+const TEST_ACTIVE_CACHE_OPERATION_ID = 'active-cache-op';
+const TEST_ACTIVE_CACHE_PARTITION_ID = 'partition-1';
+const TEST_ACTIVE_CACHE_REPLICA_ID = 'replica-1';
+
 /**
  * Create a mock CDC integration service.
  * @param {SystemTableCache} [cache] - Optional cache to update.
@@ -105,6 +109,22 @@ function createSeededCache(options = {}) {
   });
 
   return cache;
+}
+
+/**
+ * Wait for a replica event or failure.
+ * @param {ReplicaHandler} handler - Replica handler.
+ * @param {string} successEvent - Success event name.
+ * @param {string} failureEvent - Failure event name.
+ * @return {Promise<Object>} Event payload.
+ */
+function waitForReplicaEvent(handler, successEvent, failureEvent) {
+  return new Promise((resolve, reject) => {
+    handler.once(successEvent, resolve);
+    handler.once(failureEvent, (event) => {
+      reject(new Error(event?.error || 'operation failed'));
+    });
+  });
 }
 
 test('ReplicaHandler cache-based state access', async (t) => {
@@ -265,16 +285,17 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const cache = createSeededCache();
     const mockCDC = createMockCDCService(cache);
     const nodeId = 'test-node';
+    const createCalls = [];
 
     // Seed cache with ACTIVE replica
     cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-      service_id: 'replica-1',
+      service_id: TEST_ACTIVE_CACHE_REPLICA_ID,
       service_type: 'partition',
-      partition_id: 'partition-1',
+      partition_id: TEST_ACTIVE_CACHE_PARTITION_ID,
       node_id: nodeId,
       raft_role: 'follower',
       status: ReplicaStatus.ACTIVE,
-      address: `${nodeId}/partition/replica-1`,
+      address: `${nodeId}/partition/${TEST_ACTIVE_CACHE_REPLICA_ID}`,
       created_at: Date.now(),
       updated_at: Date.now(),
     });
@@ -284,21 +305,35 @@ test('ReplicaHandler cache-based state access', async (t) => {
       dataDir: tempDir,
       systemTableCache: cache,
       cdcIntegrationService: mockCDC,
-      createPartitionService: createMockPartitionServiceFactory(),
+      createPartitionService: async (options) => {
+        createCalls.push(options);
+        return createMockPartitionServiceFactory()(options);
+      },
     });
 
     handler.initialize();
 
+    const created = waitForReplicaEvent(
+      handler,
+      'replicaCreated',
+      'replicaCreationFailed',
+    );
+
     const request = {
-      operationId: 'op-1',
-      partitionId: 'partition-1',
-      replicaId: 'replica-1',
+      operationId: TEST_ACTIVE_CACHE_OPERATION_ID,
+      partitionId: TEST_ACTIVE_CACHE_PARTITION_ID,
+      replicaId: TEST_ACTIVE_CACHE_REPLICA_ID,
     };
 
     const response = await handler.handleCreateReplica(request);
 
-    t.equal(response.status, ReplicaOperationResponseStatus.ALREADY_EXISTS,
-      'returns ALREADY_EXISTS for ACTIVE replica');
+    t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'cache-only ACTIVE replica should initiate local runtime repair');
+
+    await created;
+
+    t.equal(createCalls.length, 1,
+      'cache-only ACTIVE replica should recreate one local service');
 
     handler.shutdown();
   });

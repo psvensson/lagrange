@@ -38,6 +38,18 @@ const NODE_LIFECYCLE_VALID_TRANSITIONS = Object.freeze({
   [NODE_LIFECYCLE_STATE.STOPPED]: Object.freeze([]),
 });
 
+const NODE_LIFECYCLE_TRANSITION_OUTCOME = Object.freeze({
+  INVALID: 'invalid',
+  STATE_CHANGE: 'state_change',
+  IDEMPOTENT_NOOP: 'idempotent_noop',
+});
+
+const NODE_LIFECYCLE_IDEMPOTENT_TRANSITIONS = Object.freeze({
+  [NODE_LIFECYCLE_STATE.READY]: Object.freeze([
+    NODE_LIFECYCLE_STATE.READY,
+  ]),
+});
+
 const NODE_LIFECYCLE_VALID_SUB_PHASES = Object.freeze({
   [NODE_LIFECYCLE_STATE.STARTING]: Object.freeze([
     BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE,
@@ -125,8 +137,25 @@ function isRepairOnlyNodeLifecycleState(state) {
   return NODE_LIFECYCLE_REPAIR_ONLY_STATES.includes(String(state || ''));
 }
 
+function resolveNodeLifecycleTransitionOutcome(fromState, toState) {
+  const validStateChanges = NODE_LIFECYCLE_VALID_TRANSITIONS[fromState];
+  if (Array.isArray(validStateChanges) &&
+      validStateChanges.includes(toState)) {
+    return NODE_LIFECYCLE_TRANSITION_OUTCOME.STATE_CHANGE;
+  }
+
+  const validIdempotentTargets = NODE_LIFECYCLE_IDEMPOTENT_TRANSITIONS[fromState];
+  if (Array.isArray(validIdempotentTargets) &&
+      validIdempotentTargets.includes(toState)) {
+    return NODE_LIFECYCLE_TRANSITION_OUTCOME.IDEMPOTENT_NOOP;
+  }
+
+  return NODE_LIFECYCLE_TRANSITION_OUTCOME.INVALID;
+}
+
 export {
   NODE_LIFECYCLE_DEFAULT_OPTIONS,
+  NODE_LIFECYCLE_IDEMPOTENT_TRANSITIONS,
   NODE_LIFECYCLE_LOAD_READY_STATES,
   NODE_LIFECYCLE_NO_SUB_PHASE,
   NODE_LIFECYCLE_NOW,
@@ -134,9 +163,11 @@ export {
   NODE_LIFECYCLE_STATE,
   NODE_LIFECYCLE_SUB_PHASE_ROOT,
   NODE_LIFECYCLE_TERMINAL_SUB_PHASE_ADVANCE,
+  NODE_LIFECYCLE_TRANSITION_OUTCOME,
   NODE_LIFECYCLE_VALID_SUB_PHASES,
   NODE_LIFECYCLE_VALID_SUB_PHASE_TRANSITIONS,
   NODE_LIFECYCLE_VALID_TRANSITIONS,
   isLoadReadyNodeLifecycleState,
   isRepairOnlyNodeLifecycleState,
+  resolveNodeLifecycleTransitionOutcome,
 };

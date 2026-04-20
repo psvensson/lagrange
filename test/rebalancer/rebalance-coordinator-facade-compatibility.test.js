@@ -64,6 +64,14 @@ function createFacadeCoordinator(overrides = {}) {
       calls.repository.push(['getOperationsByEntity', entityType, entityId]);
       return [{entityType, entityId}];
     },
+    async getOperationsByEntityAuthoritative(entityType, entityId) {
+      calls.repository.push([
+        'getOperationsByEntityAuthoritative',
+        entityType,
+        entityId,
+      ]);
+      return [{entityType, entityId, authoritative: true}];
+    },
   };
 
   const workflowOwner = {
@@ -256,6 +264,30 @@ test('RebalanceCoordinator facade delegates workflow contract methods',
       'getTimeoutForStep',
     ]);
   });
+
+test(
+  'RebalanceCoordinator facade delegates authoritative entity-operation reads',
+  async (t) => {
+    const {coordinator, calls} = createFacadeCoordinator();
+
+    const byEntity = await coordinator.getOperationsByEntity(
+      'partition',
+      'partition-1',
+      {visibilityReadMode: 'owner_rpc_required'},
+    );
+
+    t.equal(byEntity.length, 1);
+    t.equal(byEntity[0].authoritative, true);
+    t.same(
+      calls.repository[calls.repository.length - 1],
+      [
+        'getOperationsByEntityAuthoritative',
+        'partition',
+        'partition-1',
+      ],
+    );
+  },
+);
 
 test('RebalanceCoordinator facade delegates provisioning policy methods',
   async (t) => {

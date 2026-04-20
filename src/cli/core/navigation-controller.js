@@ -26,6 +26,85 @@ const VALID_VIEWS = [
   'operations',
 ];
 
+const VIEW_DISPLAY_NAME = Object.freeze({
+  'nodes': 'Nodes',
+  'services': 'Services',
+  'tables': 'Tables',
+  'partitions': 'Partitions',
+  'message_groups': 'Message Groups',
+  'sql': 'SQL Query',
+  'logs': 'Logs',
+  'config': 'Config',
+  'contexts': 'Contexts',
+  'replicas': 'Replicas',
+  'operations': 'Operations',
+});
+
+function formatNodeBreadcrumb(context = {}) {
+  return context.nodeId ? `Node: ${context.nodeId}` : VIEW_DISPLAY_NAME.nodes;
+}
+
+function formatServicesBreadcrumb(context = {}) {
+  if (context.nodeId) {
+    return `Services (${context.nodeId})`;
+  }
+  if (context.serviceId) {
+    return `Service: ${context.serviceId}`;
+  }
+  return VIEW_DISPLAY_NAME.services;
+}
+
+function formatTablesBreadcrumb(context = {}) {
+  if (context.tableName) {
+    return `Table: ${context.tableName}`;
+  }
+  if (context.tableId) {
+    return `Table: ${context.tableId}`;
+  }
+  return VIEW_DISPLAY_NAME.tables;
+}
+
+function formatPartitionsBreadcrumb(context = {}) {
+  if (context.partitionId) {
+    return `Partition: ${context.partitionId}`;
+  }
+  if (context.tableId || context.tableName) {
+    return `Partitions (${context.tableName || context.tableId})`;
+  }
+  return VIEW_DISPLAY_NAME.partitions;
+}
+
+function formatReplicasBreadcrumb(context = {}) {
+  const replicaOwnerId =
+    context.serviceId ||
+    context.nodeId ||
+    context.groupId ||
+    context.partitionId;
+  return replicaOwnerId ?
+    `Replicas (${replicaOwnerId})` :
+    VIEW_DISPLAY_NAME.replicas;
+}
+
+function formatOperationsBreadcrumb(context = {}) {
+  return context.operationId ?
+    `Operation: ${context.operationId.substring(0, 8)}...` :
+    VIEW_DISPLAY_NAME.operations;
+}
+
+const BREADCRUMB_FORMATTER = Object.freeze({
+  'message_groups': (context = {}) => {
+    return context.groupId ?
+      `MG: ${context.groupId}` :
+      VIEW_DISPLAY_NAME.message_groups;
+  },
+  'nodes': formatNodeBreadcrumb,
+  'operations': formatOperationsBreadcrumb,
+  'partitions': formatPartitionsBreadcrumb,
+  'replicas': formatReplicasBreadcrumb,
+  'services': formatServicesBreadcrumb,
+  'tables': formatTablesBreadcrumb,
+});
+
 /**
  * NavigationController class for hierarchical navigation
  */
@@ -91,61 +170,8 @@ export class NavigationController {
       return this.formatViewName(view);
     }
 
-    switch (view) {
-    case 'nodes':
-      return context.nodeId ? `Node: ${context.nodeId}` : 'Nodes';
-    case 'services':
-      if (context.nodeId) {
-        return `Services (${context.nodeId})`;
-      }
-      if (context.serviceId) {
-        return `Service: ${context.serviceId}`;
-      }
-      return 'Services';
-    case 'tables':
-      return context.tableName ?
-        `Table: ${context.tableName}` :
-        (context.tableId ? `Table: ${context.tableId}` : 'Tables');
-    case 'partitions':
-      if (context.partitionId) {
-        return `Partition: ${context.partitionId}`;
-      }
-      if (context.tableId || context.tableName) {
-        return `Partitions (${context.tableName || context.tableId})`;
-      }
-      return 'Partitions';
-    case 'message_groups':
-      return context.groupId ?
-        `MG: ${context.groupId}` :
-        'Message Groups';
-    case 'replicas':
-      if (context.serviceId) {
-        return `Replicas (${context.serviceId})`;
-      }
-      if (context.nodeId) {
-        return `Replicas (${context.nodeId})`;
-      }
-      if (context.groupId) {
-        return `Replicas (${context.groupId})`;
-      }
-      return context.partitionId ?
-        `Replicas (${context.partitionId})` :
-        'Replicas';
-    case 'operations':
-      return context.operationId ?
-        `Operation: ${context.operationId.substring(0, 8)}...` :
-        'Operations';
-    case 'sql':
-      return 'SQL Query';
-    case 'logs':
-      return 'Logs';
-    case 'config':
-      return 'Config';
-    case 'contexts':
-      return 'Contexts';
-    default:
-      return this.formatViewName(view);
-    }
+    const formatter = BREADCRUMB_FORMATTER[view];
+    return formatter ? formatter(context) : this.formatViewName(view);
   }
 
   /**
@@ -154,20 +180,7 @@ export class NavigationController {
    * @return {string} Formatted view name
    */
   formatViewName(view) {
-    const names = {
-      'nodes': 'Nodes',
-      'services': 'Services',
-      'tables': 'Tables',
-      'partitions': 'Partitions',
-      'message_groups': 'Message Groups',
-      'sql': 'SQL Query',
-      'logs': 'Logs',
-      'config': 'Config',
-      'contexts': 'Contexts',
-      'replicas': 'Replicas',
-      'operations': 'Operations',
-    };
-    return names[view] || view;
+    return VIEW_DISPLAY_NAME[view] || view;
   }
 
   /**

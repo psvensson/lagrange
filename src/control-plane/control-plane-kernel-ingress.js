@@ -3,11 +3,113 @@ import {
   STATE,
   TYPEOF,
 } from '../constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
+import {
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
+} from '../query/query-constants.js';
+import {
+  CANONICAL_LEADER_ROUTING_GAP_STATE,
+  resolveCanonicalLeaderRoutingGapState,
+} from '../query/canonical-leader-routing.js';
 
 const CONTROL_PLANE_KERNEL_INGRESS_DEFAULT = Object.freeze({
   LEASE_MS: 30000,
   SUPPRESSION_MS: 5000,
 });
+
+const CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE = Object.freeze({
+  ANY_REPLICA: 'any_replica',
+  LEADER_ONLY: 'leader_only',
+});
+
+const CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION = Object.freeze({
+  DEFAULT: CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+  NODE_STATE_UPDATE:
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+});
+
+const CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE = Object.freeze({
+  NO_REQUIRED_TABLES: 'no_required_tables',
+  OWNER_UNAVAILABLE: 'owner_unavailable',
+  ROUTABLE: 'routable',
+  RECOVERY_ROUTABLE: 'recovery_routable',
+  PARTITION_MISSING: 'partition_missing',
+  NO_SERVICE_ROWS: QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+  CANONICAL_LEADER_OWNER_MISSING: 'canonical_leader_owner_missing',
+  CANONICAL_LEADER_SERVICE_GAP: 'canonical_leader_service_gap',
+  NOT_ROUTABLE: 'not_routable',
+});
+
+const CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_STATE = Object.freeze({
+  ELIGIBLE: 'eligible',
+  ELIGIBLE_WITHOUT_ROUTING_OWNER: 'eligible_without_routing_owner',
+  INGRESS_NOT_READY: 'ingress_not_ready',
+  ROUTING_NOT_READY: 'routing_not_ready',
+});
+
+function normalizeRequiredTables(requiredTables) {
+  return [...new Set(
+    (Array.isArray(requiredTables) ? requiredTables : [])
+      .filter((tableName) => {
+        return typeof tableName === TYPEOF.STRING &&
+          tableName.length > NUM.ZERO;
+      }),
+  )];
+}
+
+function normalizeLocalTargetMode(localTargetMode) {
+  return localTargetMode ===
+    CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE.ANY_REPLICA ?
+    CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE.ANY_REPLICA :
+    CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE.LEADER_ONLY;
+}
+
+function normalizeRoutingReadinessDimension(routingReadinessDimension) {
+  return routingReadinessDimension ===
+    CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION.NODE_STATE_UPDATE ?
+    CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION.NODE_STATE_UPDATE :
+    CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION.DEFAULT;
+}
+
+function buildLocalRoutingDecision(
+  state,
+  ready,
+  ownerAvailable,
+  tableDecisions = [],
+) {
+  return Object.freeze({
+    state,
+    ready,
+    ownerAvailable,
+    tableDecisions: Object.freeze([...tableDecisions]),
+  });
+}
+
+function buildLocalTableRoutingDecision(
+  tableName,
+  partitionId,
+  state,
+  ready,
+  routingSnapshot = null,
+) {
+  return Object.freeze({
+    tableName,
+    partitionId,
+    state,
+    ready,
+    routingSnapshot,
+  });
+}
+
+function buildLocalTargetDecision(state, eligible, routingDecision) {
+  return Object.freeze({
+    state,
+    eligible,
+    routingDecision,
+  });
+}
 
 function pushUniqueAddress(targets, address) {
   if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
@@ -52,6 +154,10 @@ class ControlPlaneKernelIngress {
       typeof options.getMessageGroupServices === TYPEOF.FUNCTION ?
         options.getMessageGroupServices :
         () => new Map();
+    this.getSqlQueryEngine =
+      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
+        options.getSqlQueryEngine :
+        () => null;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
@@ -77,13 +183,10 @@ class ControlPlaneKernelIngress {
   resolveNodeStateUpdateTargetCandidates(options = {}) {
     const sharedOptions = {
       allowBootstrapHints: options.allowBootstrapHints !== false,
-      localTargetMode:
-        options.localTargetMode === 'any_replica' ?
-          'any_replica' :
-          'leader_only',
-      requiredTables: Array.isArray(options.requiredTables) ?
-        options.requiredTables :
-        [],
+      localTargetMode: normalizeLocalTargetMode(options.localTargetMode),
+      requiredTables: normalizeRequiredTables(options.requiredTables),
+      routingReadinessDimension:
+        CONTROL_PLANE_KERNEL_INGRESS_ROUTING_DIMENSION.NODE_STATE_UPDATE,
     };
     const isReadyHeartbeatPublication =
       options.state === STATE.READY &&
@@ -129,18 +232,19 @@ class ControlPlaneKernelIngress {
     const allowDisconnectedTargets =
       options.allowDisconnectedTargets === true;
     const requiredTables = Array.isArray(options.requiredTables) ?
-      options.requiredTables :
+      normalizeRequiredTables(options.requiredTables) :
       [];
-    const localTargetMode =
-      options.localTargetMode === 'any_replica' ?
-        'any_replica' :
-        'leader_only';
+    const localTargetMode = normalizeLocalTargetMode(options.localTargetMode);
+    const routingReadinessDimension = normalizeRoutingReadinessDimension(
+      options.routingReadinessDimension,
+    );
     const assignment = this.getBootstrapResponse()?.messageGroupAssignment ||
       null;
     const localTargetAddress = allowSelfTarget ?
       this.resolveLocalTargetAddress(assignment, {
         localTargetMode,
         requiredTables,
+        routingReadinessDimension,
       }) :
       null;
     const pushOrderedTarget = (address) => {
@@ -226,13 +330,15 @@ class ControlPlaneKernelIngress {
     if (!(services instanceof Map) || services.size === NUM.ZERO) {
       return null;
     }
-    const requiredTables = Array.isArray(options.requiredTables) ?
-      options.requiredTables :
-      [];
-    const localTargetMode =
-      options.localTargetMode === 'any_replica' ?
-        'any_replica' :
-        'leader_only';
+    const requiredTables = normalizeRequiredTables(options.requiredTables);
+    const localTargetMode = normalizeLocalTargetMode(options.localTargetMode);
+    const routingReadinessDimension = normalizeRoutingReadinessDimension(
+      options.routingReadinessDimension,
+    );
+    const localRoutingDecision =
+      this.resolveLocalRequiredTableRoutingDecision(requiredTables, {
+        routingReadinessDimension,
+      });
 
     const groupId = assignment?.groupId || null;
     let replicaFallback = null;
@@ -246,25 +352,263 @@ class ControlPlaneKernelIngress {
 
       const isLeader = typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
         service.isLeaderReplica() === true;
-      const ingressReady =
-        typeof service.isMetadataIngressReady === TYPEOF.FUNCTION &&
-        service.isMetadataIngressReady({requiredTables});
+      const localTargetDecision = this.resolveLocalTargetEligibilityDecision(
+        service,
+        {
+          requiredTables,
+          localRoutingDecision,
+        },
+      );
       if (isLeader) {
-        if (!ingressReady) {
+        if (localTargetDecision.eligible !== true) {
           continue;
         }
         return this.isTargetSuppressed(service.unifiedAddress) ?
           null :
           service.unifiedAddress;
       }
-      if (localTargetMode === 'any_replica' &&
-          ingressReady &&
+      if (localTargetMode ===
+            CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE.ANY_REPLICA &&
+          localTargetDecision.eligible === true &&
           replicaFallback === null &&
           !this.isTargetSuppressed(service.unifiedAddress)) {
         replicaFallback = service.unifiedAddress;
       }
     }
     return replicaFallback;
+  }
+
+  resolveLocalTargetEligibilityDecision(service, options = {}) {
+    const requiredTables = normalizeRequiredTables(options.requiredTables);
+    const localRoutingDecision =
+      options.localRoutingDecision ||
+      this.resolveLocalRequiredTableRoutingDecision(requiredTables);
+    const ingressReady =
+      typeof service?.isMetadataIngressReady === TYPEOF.FUNCTION &&
+      service.isMetadataIngressReady({requiredTables}) === true;
+
+    if (!ingressReady) {
+      return buildLocalTargetDecision(
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_STATE.INGRESS_NOT_READY,
+        false,
+        localRoutingDecision,
+      );
+    }
+
+    if (localRoutingDecision.ownerAvailable !== true) {
+      return buildLocalTargetDecision(
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_STATE
+          .ELIGIBLE_WITHOUT_ROUTING_OWNER,
+        true,
+        localRoutingDecision,
+      );
+    }
+
+    if (localRoutingDecision.ready !== true) {
+      return buildLocalTargetDecision(
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_STATE.ROUTING_NOT_READY,
+        false,
+        localRoutingDecision,
+      );
+    }
+
+    return buildLocalTargetDecision(
+      CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_STATE.ELIGIBLE,
+      true,
+      localRoutingDecision,
+    );
+  }
+
+  resolveLocalRequiredTableRoutingDecision(requiredTables = [], options = {}) {
+    const normalizedRequiredTables = normalizeRequiredTables(requiredTables);
+    const routingReadinessDimension = normalizeRoutingReadinessDimension(
+      options.routingReadinessDimension,
+    );
+    if (normalizedRequiredTables.length === NUM.ZERO) {
+      return buildLocalRoutingDecision(
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.NO_REQUIRED_TABLES,
+        true,
+        false,
+      );
+    }
+
+    const sqlQueryEngine = this.getSqlQueryEngine();
+    const queryExecutor = sqlQueryEngine?.queryExecutor || null;
+    if (typeof sqlQueryEngine?.getTablePartitions !== TYPEOF.FUNCTION ||
+        typeof queryExecutor?.getPartitionRoutingSnapshot !== TYPEOF.FUNCTION) {
+      return buildLocalRoutingDecision(
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.OWNER_UNAVAILABLE,
+        true,
+        false,
+      );
+    }
+
+    const tableDecisions = normalizedRequiredTables.map((tableName) => {
+      return this.resolveLocalTableRoutingDecision(
+        sqlQueryEngine,
+        tableName,
+        routingReadinessDimension,
+      );
+    });
+    const blockingDecision = tableDecisions.find((decision) => {
+      return decision.ready !== true;
+    }) || null;
+
+    if (!blockingDecision) {
+      const recoveryRoutableDecision = tableDecisions.find((decision) => {
+        return decision.state ===
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+            .RECOVERY_ROUTABLE;
+      }) || null;
+      return buildLocalRoutingDecision(
+        recoveryRoutableDecision ?
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+            .RECOVERY_ROUTABLE :
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.ROUTABLE,
+        true,
+        true,
+        tableDecisions,
+      );
+    }
+
+    return buildLocalRoutingDecision(
+      blockingDecision.state,
+      false,
+      true,
+      tableDecisions,
+    );
+  }
+
+  resolveLocalTableRoutingDecision(
+    sqlQueryEngine,
+    tableName,
+    routingReadinessDimension,
+  ) {
+    const partitions =
+      typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION ?
+        sqlQueryEngine.getTablePartitions(tableName) :
+        [];
+    if (!Array.isArray(partitions) || partitions.length === NUM.ZERO) {
+      return buildLocalTableRoutingDecision(
+        tableName,
+        null,
+        CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.PARTITION_MISSING,
+        false,
+      );
+    }
+
+    for (const partition of partitions) {
+      const partitionId =
+        partition?.partition_id ||
+        partition?.partitionId ||
+        null;
+      if (typeof partitionId !== TYPEOF.STRING ||
+          partitionId.length === NUM.ZERO) {
+        return buildLocalTableRoutingDecision(
+          tableName,
+          null,
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.PARTITION_MISSING,
+          false,
+        );
+      }
+      const queryExecutor = sqlQueryEngine?.queryExecutor || null;
+      const normalizedRoutingReadinessDimension =
+        normalizeRoutingReadinessDimension(routingReadinessDimension);
+      const routingSnapshot =
+        queryExecutor.getPartitionRoutingSnapshot(
+          partitionId,
+          normalizedRoutingReadinessDimension,
+        );
+      const canonicalLeaderRoutingGapState =
+        resolveCanonicalLeaderRoutingGapState(routingSnapshot);
+      const canonicalLeaderGapRecoveryRoutingContract =
+        typeof queryExecutor?.resolveCanonicalLeaderGapRecoveryRoutingContract ===
+          TYPEOF.FUNCTION ?
+          queryExecutor.resolveCanonicalLeaderGapRecoveryRoutingContract(
+            partitionId,
+            routingSnapshot,
+            normalizedRoutingReadinessDimension,
+            false,
+          ) :
+          null;
+      const serviceRowCount = Number(routingSnapshot?.serviceRowCount);
+      const routableServiceCount = Number(routingSnapshot?.routableServiceCount);
+      if (routingSnapshot?.reasonCode ===
+            QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS ||
+          !(serviceRowCount > NUM.ZERO)) {
+        return buildLocalTableRoutingDecision(
+          tableName,
+          partitionId,
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.NO_SERVICE_ROWS,
+          false,
+          routingSnapshot,
+        );
+      }
+      if (canonicalLeaderRoutingGapState ===
+            CANONICAL_LEADER_ROUTING_GAP_STATE.OWNER_MISSING) {
+        if (canonicalLeaderGapRecoveryRoutingContract
+          ?.recoveryCandidateWidening === true &&
+            routableServiceCount > NUM.ZERO) {
+          return buildLocalTableRoutingDecision(
+            tableName,
+            partitionId,
+            CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+              .RECOVERY_ROUTABLE,
+            true,
+            routingSnapshot,
+          );
+        }
+        return buildLocalTableRoutingDecision(
+          tableName,
+          partitionId,
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+            .CANONICAL_LEADER_OWNER_MISSING,
+          false,
+          routingSnapshot,
+        );
+      }
+      if (canonicalLeaderRoutingGapState ===
+            CANONICAL_LEADER_ROUTING_GAP_STATE.SERVICE_MISSING) {
+        if (canonicalLeaderGapRecoveryRoutingContract
+          ?.recoveryCandidateWidening === true &&
+            routableServiceCount > NUM.ZERO) {
+          return buildLocalTableRoutingDecision(
+            tableName,
+            partitionId,
+            CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+              .RECOVERY_ROUTABLE,
+            true,
+            routingSnapshot,
+          );
+        }
+        return buildLocalTableRoutingDecision(
+          tableName,
+          partitionId,
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE
+            .CANONICAL_LEADER_SERVICE_GAP,
+          false,
+          routingSnapshot,
+        );
+      }
+      if (!(routableServiceCount > NUM.ZERO)) {
+        return buildLocalTableRoutingDecision(
+          tableName,
+          partitionId,
+          CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.NOT_ROUTABLE,
+          false,
+          routingSnapshot,
+        );
+      }
+    }
+
+    const firstPartition = partitions[NUM.ZERO];
+    return buildLocalTableRoutingDecision(
+      tableName,
+      firstPartition?.partition_id || firstPartition?.partitionId || null,
+      CONTROL_PLANE_KERNEL_INGRESS_LOCAL_ROUTING_STATE.ROUTABLE,
+      true,
+      null,
+    );
   }
 
   resolveBootstrapTargetAddresses(assignment = null, options = {}) {
@@ -375,5 +719,6 @@ class ControlPlaneKernelIngress {
 
 export {
   ControlPlaneKernelIngress,
+  CONTROL_PLANE_KERNEL_INGRESS_LOCAL_TARGET_MODE,
   parseMessageGroupAddress,
 };

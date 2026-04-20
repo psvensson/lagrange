@@ -5,6 +5,14 @@ import {
   prepareBenchmarkPartitioningTable,
 } from '../../scenarios/table-distribution-helpers.js';
 
+const EXPECTED_DEFAULT_TABLE_POLICIES = Object.freeze({
+  externalCdcAllowed: false,
+  splitStorageThreshold: 16384,
+  splitTrafficThreshold: 120,
+  mergeStorageThreshold: 1,
+  mergeTrafficThreshold: 1,
+});
+
 test('table-distribution-helpers split policy precondition accepts table ' +
   'preparations with applied policy by default', async () => {
   const preparation = {
@@ -61,6 +69,16 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
           rows: [{partition_id: 'tbl-benchmark-events-1-p1'}],
         };
       }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-1-p1',
+            node_id: 'seed-1',
+            raft_role: 'leader',
+            status: 'active',
+          }],
+        };
+      }
       if (sql.includes('UPDATE tables SET table_policies')) {
         return {changes: 0};
       }
@@ -102,6 +120,70 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
   );
 });
 
+test('table-distribution-helpers can prepare table policies once the ' +
+  'benchmark partition exists even if service topology is not yet routable',
+async () => {
+  let serviceQueryCount = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        return {rows: []};
+      }
+      if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-bootstrap-policy'}],
+        };
+      }
+      if (sql.includes('FROM partitions WHERE table_id')) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-bootstrap-policy-p1'}],
+        };
+      }
+      if (sql.includes('FROM services')) {
+        serviceQueryCount += 1;
+        return {rows: []};
+      }
+      if (sql.includes('UPDATE tables SET table_policies')) {
+        return {changes: 1};
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
+        return {
+          rows: [{table_policies: JSON.stringify(
+            EXPECTED_DEFAULT_TABLE_POLICIES,
+          )}],
+        };
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_id')) {
+        return {
+          rows: [{table_policies: JSON.stringify(
+            EXPECTED_DEFAULT_TABLE_POLICIES,
+          )}],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+  });
+
+  assert.equal(
+    preparation.tableId,
+    'tbl-benchmark-events-bootstrap-policy',
+  );
+  assert.equal(
+    preparation.tablePoliciesApplyWarning,
+    undefined,
+  );
+  assert.equal(
+    serviceQueryCount,
+    0,
+    'policy preparation should defer routable topology checks to the later load-admission owner',
+  );
+});
+
 test('table-distribution-helpers repairs table policy visibility from ' +
   'authoritative control snapshot before failing', async () => {
   let repairCount = 0;
@@ -122,6 +204,16 @@ test('table-distribution-helpers repairs table policy visibility from ' +
       if (sql.includes('FROM partitions WHERE table_id')) {
         return {
           rows: [{partition_id: 'tbl-benchmark-events-repair-policy-p1'}],
+        };
+      }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-repair-policy-p1',
+            node_id: 'seed-1',
+            raft_role: 'leader',
+            status: 'active',
+          }],
         };
       }
       if (sql.includes('UPDATE tables SET table_policies')) {
@@ -186,6 +278,16 @@ test('table-distribution-helpers preserves deferred policy visibility ' +
           rows: [{partition_id: 'tbl-benchmark-events-deferred-policy-p1'}],
         };
       }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-deferred-policy-p1',
+            node_id: 'seed-1',
+            raft_role: 'leader',
+            status: 'active',
+          }],
+        };
+      }
       if (sql.includes('UPDATE tables SET table_policies')) {
         return {
           changes: 1,
@@ -235,5 +337,105 @@ test('table-distribution-helpers preserves deferred policy visibility ' +
   assert.equal(
     preparation.tablePoliciesApplyVisibilityRetryAfterMs,
     7,
+  );
+});
+
+test('table-distribution-helpers preserves authority-establishment deferred ' +
+  'policy errors without forced repair', async () => {
+  let repairCount = 0;
+  let applyAttemptCount = 0;
+  let policyLookupCount = 0;
+  const expectedReasonCode = 'publication_epoch_pending';
+  const expectedPolicies = {
+    splitStorageThreshold: 4096,
+  };
+  const seedNode = {
+    id: 'seed-1',
+    async queryWithTimeout(sql) {
+      if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
+        return {rows: []};
+      }
+      if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+        return {
+          rows: [{table_id: 'tbl-benchmark-events-authority-deferred'}],
+        };
+      }
+      if (sql.includes('FROM partitions WHERE table_id')) {
+        return {
+          rows: [{partition_id: 'tbl-benchmark-events-authority-deferred-p1'}],
+        };
+      }
+      if (sql.includes('FROM services')) {
+        return {
+          rows: [{
+            partition_id: 'tbl-benchmark-events-authority-deferred-p1',
+            node_id: 'seed-1',
+            raft_role: 'leader',
+            status: 'active',
+          }],
+        };
+      }
+      if (sql.includes('UPDATE tables SET table_policies')) {
+        applyAttemptCount += 1;
+        if (applyAttemptCount === 1) {
+          const error = new Error('Message timeout');
+          error.code = 'QUERY_TIMEOUT';
+          error.retryAfterMs = 1;
+          error.outcome = 'deferred';
+          error.reasonCode = expectedReasonCode;
+          error.reasonCodes = [expectedReasonCode];
+          error.failedDimensions = ['publishedConvergencePending'];
+          error.runtimeAuthority = {
+            state: 'establishing',
+            visibility: {
+              state: 'pending_publication',
+            },
+          };
+          throw error;
+        }
+        return {changes: 1};
+      }
+      if (sql.includes('control_snapshot_local(true)')) {
+        repairCount += 1;
+        return {rows: [{scope: 'local'}]};
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
+        policyLookupCount += 1;
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              policyLookupCount >= 2 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      if (sql.includes('SELECT table_policies FROM tables WHERE table_id')) {
+        policyLookupCount += 1;
+        return {
+          rows: [{
+            table_policies: JSON.stringify(
+              policyLookupCount >= 2 ? expectedPolicies : {},
+            ),
+          }],
+        };
+      }
+      return {rows: []};
+    },
+  };
+
+  const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+    tablePolicies: expectedPolicies,
+  });
+
+  assert.equal(repairCount, 0);
+  assert.equal(preparation.tablePoliciesApplyWarning, undefined);
+  assert.equal(
+    preparation.tablePoliciesApplyVisibilityState,
+    null,
+  );
+  assert.equal(
+    preparation.tablePoliciesApplyVisibilityRetryAfterMs,
+    1,
   );
 });

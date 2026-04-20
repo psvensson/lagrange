@@ -1,3 +1,0 @@
-test/integration/pgwire-bootstrap.integration.test.js
-test/integration/pgwire-rebalance.integration.test.js
-test/compatibility/pgwire-client-compat.test.js

@@ -12,6 +12,7 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Outbound queue for node',
   'No connection to node',
   'Connection to node',
+  'No handler registered for address',
   'Message timeout',
   'Cache update not observed for',
   'query_admission_deferred',
@@ -20,6 +21,43 @@ const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Transaction already active on this partition',
   'No active transaction to commit',
 ]);
+
+const CONTROL_PLANE_FAILURE_REASON = Object.freeze({
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE:
+    'authoritative_row_source_unavailable',
+  DISTRIBUTED_PARTICIPANT_FAILURE:
+    'distributed_participant_failure',
+  RECONNECT_DELIVERY_FAILURE:
+    'reconnect_delivery_failure',
+  PRESSURE_DEGRADED:
+    'control_plane_pressure_degraded',
+  UNKNOWN:
+    'unknown',
+});
+
+const CONTROL_PLANE_FAILURE_FRAGMENT = Object.freeze({
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE:
+    'authoritative_row_source_unavailable',
+  DISTRIBUTED_PARTICIPANT_FAILURE:
+    'Distributed operation failed due to participant failures',
+  NO_CONNECTION_TO_NODE:
+    'No connection to node',
+  CONNECTION_TO_NODE:
+    'Connection to node',
+  OUTBOUND_QUEUE_FOR_NODE:
+    'Outbound queue for node',
+  NO_HANDLER_REGISTERED_FOR_ADDRESS:
+    'No handler registered for address',
+  CONTROL_PLANE_PRESSURE_DEGRADED:
+    'control_plane_pressure_degraded',
+});
+
+const CONTROL_PLANE_FAILURE_ERROR_CODE = Object.freeze({
+  DISTRIBUTED_PARTICIPANT_FAILURE:
+    'DISTRIBUTED_PARTICIPANT_FAILURE',
+  CONTROL_PLANE_PRESSURE_DEGRADED:
+    PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED,
+});
 
 const MAX_LINKED_CONTROL_PLANE_FAILURES = NUM.EIGHT;
 
@@ -138,8 +176,78 @@ function isRetryableControlPlaneError(value) {
   return false;
 }
 
+function getControlPlaneFailureSummary(value) {
+  const summary = {
+    primaryReason: CONTROL_PLANE_FAILURE_REASON.UNKNOWN,
+    linkedFailureCount: NUM.ZERO,
+    retryable: isRetryableControlPlaneError(value),
+    authoritativeRowSourceUnavailableCount: NUM.ZERO,
+    distributedParticipantFailureCount: NUM.ZERO,
+    reconnectDeliveryFailureCount: NUM.ZERO,
+    pressureDegradedCount: NUM.ZERO,
+  };
+
+  for (const candidate of collectLinkedControlPlaneFailures(value)) {
+    summary.linkedFailureCount += NUM.ONE;
+    const message = getDirectControlPlaneErrorMessage(candidate);
+    const errorCode = getDirectControlPlaneErrorCode(candidate);
+
+    if (message.includes(
+      CONTROL_PLANE_FAILURE_FRAGMENT.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+    )) {
+      summary.authoritativeRowSourceUnavailableCount += NUM.ONE;
+    }
+    if (
+      message.includes(
+        CONTROL_PLANE_FAILURE_FRAGMENT.DISTRIBUTED_PARTICIPANT_FAILURE,
+      ) ||
+      errorCode ===
+        CONTROL_PLANE_FAILURE_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE
+    ) {
+      summary.distributedParticipantFailureCount += NUM.ONE;
+    }
+    if (
+      message.includes(CONTROL_PLANE_FAILURE_FRAGMENT.NO_CONNECTION_TO_NODE) ||
+      message.includes(CONTROL_PLANE_FAILURE_FRAGMENT.CONNECTION_TO_NODE) ||
+      message.includes(CONTROL_PLANE_FAILURE_FRAGMENT.OUTBOUND_QUEUE_FOR_NODE) ||
+      message.includes(
+        CONTROL_PLANE_FAILURE_FRAGMENT.NO_HANDLER_REGISTERED_FOR_ADDRESS,
+      )
+    ) {
+      summary.reconnectDeliveryFailureCount += NUM.ONE;
+    }
+    if (
+      message.includes(
+        CONTROL_PLANE_FAILURE_FRAGMENT.CONTROL_PLANE_PRESSURE_DEGRADED,
+      ) ||
+      errorCode ===
+        CONTROL_PLANE_FAILURE_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED
+    ) {
+      summary.pressureDegradedCount += NUM.ONE;
+    }
+  }
+
+  if (summary.authoritativeRowSourceUnavailableCount > NUM.ZERO) {
+    summary.primaryReason =
+      CONTROL_PLANE_FAILURE_REASON.AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE;
+  } else if (summary.distributedParticipantFailureCount > NUM.ZERO) {
+    summary.primaryReason =
+      CONTROL_PLANE_FAILURE_REASON.DISTRIBUTED_PARTICIPANT_FAILURE;
+  } else if (summary.reconnectDeliveryFailureCount > NUM.ZERO) {
+    summary.primaryReason =
+      CONTROL_PLANE_FAILURE_REASON.RECONNECT_DELIVERY_FAILURE;
+  } else if (summary.pressureDegradedCount > NUM.ZERO) {
+    summary.primaryReason =
+      CONTROL_PLANE_FAILURE_REASON.PRESSURE_DEGRADED;
+  }
+
+  return summary;
+}
+
 export {
+  CONTROL_PLANE_FAILURE_REASON,
   getControlPlaneErrorCode,
+  getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,

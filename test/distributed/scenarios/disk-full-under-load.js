@@ -5,11 +5,9 @@
  * releases pressure, and verifies convergence + consistency.
  */
 
-import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
-import {
-  resolveDiskFullUnderLoadScenarioConfig,
-} from '../harness/scenario-config.js';
+import assert from "node:assert/strict";
+import { CONVERGENCE_DEFAULTS } from "../harness/constants.js";
+import { resolveDiskFullUnderLoadScenarioConfig } from "../harness/scenario-config.js";
 
 const ZERO = 0;
 
@@ -45,14 +43,16 @@ async function run(cluster, options = {}) {
   } = resolveDiskFullUnderLoadScenarioConfig(options);
 
   const nodes = cluster.getNodes();
-  const nonSeedNode = nodes.find((node) => node.role !== 'seed') || null;
+  const nonSeedNode = nodes.find((node) => node.role !== "seed") || null;
   const fallbackNodeId =
-    typeof cluster.randomNonSeed === 'function' ?
-      cluster.randomNonSeed() :
-      null;
-  const victimNodeId =
-    nonSeedNode?.id || fallbackNodeId;
-  assert.ok(victimNodeId, 'Scenario requires one non-seed node for disk pressure');
+    typeof cluster.randomNonSeed === "function"
+      ? cluster.randomNonSeed()
+      : null;
+  const victimNodeId = nonSeedNode?.id || fallbackNodeId;
+  assert.ok(
+    victimNodeId,
+    "Scenario requires one non-seed node for disk pressure",
+  );
 
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
@@ -87,20 +87,23 @@ async function run(cluster, options = {}) {
   });
   assert.ok(
     convergence.settledAfterMs <= convergenceTimeoutMs,
-    'Cluster did not converge after disk pressure release: ' +
-    convergence.settledAfterMs + 'ms',
+    "Cluster did not converge after disk pressure release: " +
+      convergence.settledAfterMs +
+      "ms",
   );
 
   const metrics = await loadRun.waitComplete();
-  assert.ok(metrics.total > ZERO, 'Expected at least one load operation');
+  assert.ok(metrics.total > ZERO, "Expected at least one load operation");
 
-  const successRate = metrics.total > ZERO ?
-    metrics.success / metrics.total :
-    ZERO;
+  const successRate =
+    metrics.total > ZERO ? metrics.success / metrics.total : ZERO;
   assert.ok(
     successRate >= minSuccessRate,
-    'Success rate below threshold after disk pressure: ' +
-    successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
+    "Success rate below threshold after disk pressure: " +
+      successRate.toFixed(3) +
+      " (expected >= " +
+      minSuccessRate +
+      ")",
   );
 
   await cluster.waitForConsistencyConvergence();
@@ -117,4 +120,4 @@ async function run(cluster, options = {}) {
   };
 }
 
-export {run};
+export { run };

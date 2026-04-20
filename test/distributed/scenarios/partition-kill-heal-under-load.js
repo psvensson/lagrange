@@ -6,11 +6,9 @@
  * acceptable load success.
  */
 
-import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
-import {
-  resolvePartitionKillHealUnderLoadScenarioConfig,
-} from '../harness/scenario-config.js';
+import assert from "node:assert/strict";
+import { CONVERGENCE_DEFAULTS } from "../harness/constants.js";
+import { resolvePartitionKillHealUnderLoadScenarioConfig } from "../harness/scenario-config.js";
 
 const MIN_NODE_COUNT = 3;
 const ZERO = 0;
@@ -35,7 +33,7 @@ function splitNodeGroups(nodes) {
   const midpoint = Math.ceil(nodes.length / 2);
   const groupA = nodes.slice(0, midpoint).map((node) => node.id);
   const groupB = nodes.slice(midpoint).map((node) => node.id);
-  return {groupA, groupB};
+  return { groupA, groupB };
 }
 
 /**
@@ -71,30 +69,26 @@ async function run(cluster, options = {}) {
   const nodes = cluster.getNodes();
   assert.ok(
     nodes.length >= MIN_NODE_COUNT,
-    'Scenario requires at least ' + MIN_NODE_COUNT +
-    ' nodes, got ' + nodes.length,
+    "Scenario requires at least " +
+      MIN_NODE_COUNT +
+      " nodes, got " +
+      nodes.length,
   );
 
-  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
-  assert.ok(seedNode, 'Seed node should be available');
+  const seedNode = nodes.find((node) => node.role === "seed") || nodes[0];
+  assert.ok(seedNode, "Seed node should be available");
 
-  const loadNodesById = new Map(
-    nodes.map((node) => [String(node.id), node]),
-  );
-  const availableLoadNodeIds = new Set(
-    nodes.map((node) => String(node.id)),
-  );
+  const loadNodesById = new Map(nodes.map((node) => [String(node.id), node]));
+  const availableLoadNodeIds = new Set(nodes.map((node) => String(node.id)));
   const resolveLoadNodes = () =>
     Array.from(availableLoadNodeIds)
       .map((nodeId) => loadNodesById.get(nodeId))
-      .filter((node) => node && typeof node.query === 'function');
+      .filter((node) => node && typeof node.query === "function");
 
-  const {groupA, groupB} = splitNodeGroups(nodes);
-  assert.ok(groupA.length > ZERO, 'groupA must be non-empty');
-  assert.ok(groupB.length > ZERO, 'groupB must be non-empty');
-  const seedPartitionGroup = groupA.includes(seedNode.id) ?
-    groupA :
-    groupB;
+  const { groupA, groupB } = splitNodeGroups(nodes);
+  assert.ok(groupA.length > ZERO, "groupA must be non-empty");
+  assert.ok(groupB.length > ZERO, "groupB must be non-empty");
+  const seedPartitionGroup = groupA.includes(seedNode.id) ? groupA : groupB;
 
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
@@ -108,9 +102,9 @@ async function run(cluster, options = {}) {
   setAvailableLoadNodeIds(availableLoadNodeIds, seedPartitionGroup);
   await sleep(partitionHoldMs);
 
-  const victimId = groupA.find((nodeId) => nodeId !== seedNode.id) ||
-    cluster.randomNonSeed();
-  assert.ok(victimId, 'Could not identify non-seed victim node');
+  const victimId =
+    groupA.find((nodeId) => nodeId !== seedNode.id) || cluster.randomNonSeed();
+  assert.ok(victimId, "Could not identify non-seed victim node");
 
   await cluster.killNode(victimId);
   availableLoadNodeIds.delete(String(victimId));
@@ -124,8 +118,9 @@ async function run(cluster, options = {}) {
   });
   assert.ok(
     convergence.settledAfterMs <= convergenceTimeoutMs,
-    'Cluster did not converge after compound fault: ' +
-    convergence.settledAfterMs + 'ms',
+    "Cluster did not converge after compound fault: " +
+      convergence.settledAfterMs +
+      "ms",
   );
 
   setAvailableLoadNodeIds(
@@ -136,15 +131,17 @@ async function run(cluster, options = {}) {
   );
 
   const metrics = await loadRun.waitComplete();
-  assert.ok(metrics.total > ZERO, 'Expected at least one load operation');
+  assert.ok(metrics.total > ZERO, "Expected at least one load operation");
 
-  const successRate = metrics.total > ZERO ?
-    metrics.success / metrics.total :
-    ZERO;
+  const successRate =
+    metrics.total > ZERO ? metrics.success / metrics.total : ZERO;
   assert.ok(
     successRate >= minSuccessRate,
-    'Success rate below threshold after compound fault: ' +
-    successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
+    "Success rate below threshold after compound fault: " +
+      successRate.toFixed(3) +
+      " (expected >= " +
+      minSuccessRate +
+      ")",
   );
 
   await cluster.waitForConsistencyConvergence();
@@ -159,4 +156,4 @@ async function run(cluster, options = {}) {
   };
 }
 
-export {run};
+export { run };

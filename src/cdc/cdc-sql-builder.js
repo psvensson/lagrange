@@ -148,10 +148,6 @@ class CDCSqlBuilder {
    * @param {string|number|null} value - Default value.
    * @return {Object} Explicit normalization result.
    */
-  normalizeDefaultValue(value) {
-    return this.normalizeDefaultValueResult(value);
-  }
-
   /**
    * Normalize one default value into an explicit result state.
    * @param {string|number|null} value

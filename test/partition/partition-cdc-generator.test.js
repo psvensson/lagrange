@@ -7,7 +7,10 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
 import Database from 'better-sqlite3';
-import {PartitionCDCGenerator} from '../../src/partition/partition-cdc-generator.js';
+import {
+  PARTITION_CDC_EVENT_BUILD_STATE,
+  PartitionCDCGenerator,
+} from '../../src/partition/partition-cdc-generator.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {EventEmitter} from 'events';
 
@@ -236,6 +239,50 @@ describe('PartitionCDCGenerator', () => {
 
       assert.strictEqual(emittedEvents.length, 1);
     });
+  });
+
+  describe('shared build contract', () => {
+    it('should suppress no-op writes when requested by the caller', () => {
+      const envelopeResult = generator.resolveEventEnvelope({
+        type: 'UPDATE',
+        tableName: 'test_table',
+        data: {name: 'updated'},
+        whereClause: {id: 'noop-1'},
+        changes: 0,
+        timestamp: Date.now(),
+      }, {
+        suppressNoOpWrite: true,
+      });
+
+      assert.strictEqual(
+        envelopeResult.state,
+        PARTITION_CDC_EVENT_BUILD_STATE.SKIPPED,
+      );
+    });
+
+    it('should attach a supplied sequence number when hydrating an envelope',
+      () => {
+        const entry = {
+          type: 'INSERT',
+          tableName: 'test_table',
+          data: {id: 'seq-1', name: 'sequenced'},
+          timestamp: Date.now(),
+        };
+
+        const envelopeResult = generator.resolveEventEnvelope(entry);
+        assert.strictEqual(
+          envelopeResult.state,
+          PARTITION_CDC_EVENT_BUILD_STATE.BUILT,
+        );
+
+        const cdcEvent = generator.hydrateEventEnvelope(entry, envelopeResult, {
+          sequenceNumber: 7,
+        });
+
+        assert.strictEqual(cdcEvent.sequenceNumber, 7);
+        assert.strictEqual(cdcEvent.tableName, 'test_table');
+        assert.strictEqual(cdcEvent.operation, CDC_OPERATION.INSERT);
+      });
   });
 
   describe('SQL parsing for QUERY type entries', () => {

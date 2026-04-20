@@ -1,6 +1,7 @@
 import {ControlPlanePublicationsOwner} from './control-plane-publications-owner.js';
 import {LogsOwner} from './logs-owner.js';
 import {MessageGroupsOwner} from './message-groups-owner.js';
+import {NodeEndpointsOwner} from './node-endpoints-owner.js';
 import {NodesOwner} from './nodes-owner.js';
 import {PartitionsOwner} from './partitions-owner.js';
 import {ReplicaOperationsOwner} from './replica-operations-owner.js';
@@ -21,6 +22,7 @@ function createSystemMetadataOwners(options = {}) {
   return Object.freeze({
     controlPlanePublicationsOwner: new ControlPlanePublicationsOwner(ownerOptions),
     nodesOwner: new NodesOwner(ownerOptions),
+    nodeEndpointsOwner: new NodeEndpointsOwner(ownerOptions),
     servicesOwner: new ServicesOwner(ownerOptions),
     partitionsOwner: new PartitionsOwner(ownerOptions),
     messageGroupsOwner: new MessageGroupsOwner(ownerOptions),

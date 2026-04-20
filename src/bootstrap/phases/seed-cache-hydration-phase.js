@@ -15,6 +15,9 @@ import {TablePolicyService} from '../../policy/table-policy-service.js';
 import {assertCritical} from '../../utils/assert.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {
+  buildPartitionCdcPropagationSubscriber,
+} from '../shared/partition-cdc-propagation-subscriber.js';
+import {
   subscribeToSystemTableCacheChanges,
   waitForStartupConvergence,
 } from '../shared/startup-convergence-gate.js';
@@ -224,6 +227,7 @@ class SeedCacheHydrationPhase {
       defaultRoutingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       migrationAutoWire: false,
+      unrefRetryDelayTimers: true,
     });
     wireMigrationWorkflowOwners({
       sqlCore: cdcQueryEngine,
@@ -591,14 +595,26 @@ class SeedCacheHydrationPhase {
           replicaId,
           messageGroup?.groupId || 'message-group',
         ].join(':');
-        const cdcSubscriber = async (cdcEvent) => {
-          if (cdcEvent.tableName === tableName) {
-            logger.debug(
-              BOOTSTRAP_LOG_MSG.CDC_EVENT_RECEIVED, {
-                tableName: cdcEvent.tableName,
-                operation: cdcEvent.operation,
-                sourceReplica: replicaId,
-              });
+        const cdcSubscriber = buildPartitionCdcPropagationSubscriber({
+          tableName,
+          partitionId,
+          replicaId,
+          logger,
+          eventLogMessage: BOOTSTRAP_LOG_MSG.CDC_EVENT_RECEIVED,
+          preferredService: messageGroup,
+          resolveOperationalMessageGroupSelection: (selectionOptions = {}) =>
+            d.resolveOperationalMessageGroupSelection(
+              selectionOptions,
+            ),
+          resolveOperationalMessageGroupSelectionAsync: (selectionOptions = {}) =>
+            d.resolveOperationalMessageGroupSelectionAsync(
+              selectionOptions,
+            ),
+          buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
+            d.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
+          propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
+            d.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
+          beforePropagation: async (cdcEvent) => {
             const cdcData = cdcEvent?.data &&
               typeof cdcEvent.data === 'object' ?
               cdcEvent.data : {};
@@ -618,45 +634,13 @@ class SeedCacheHydrationPhase {
                 cdcEvent, previousNodeRow,
               );
             }
-
-            const propagationMgs =
-              await this.resolveCdcPropagationMessageGroup(
-                messageGroup,
-                {
-                  requiredTables: [tableName],
-                },
-              );
-            if (propagationMgs) {
-              await d.propagatePartitionCDCEvent(
-                propagationMgs, cdcEvent,
-              );
-
-              if (tableName === TABLES.CONFIG) {
-                d.applyCurrentEpochFromCache();
-              }
-            } else {
-              const propagationSelection =
-                await (
-                  d.resolveOperationalMessageGroupSelectionAsync ?
-                    d.resolveOperationalMessageGroupSelectionAsync({
-                      requiredTables: [tableName],
-                      preferredService: messageGroup,
-                    }) :
-                    d.resolveOperationalMessageGroupSelection({
-                      requiredTables: [tableName],
-                    })
-                );
-              throw d.buildMessageGroupOwnerNotReadyError(
-                propagationSelection,
-                {
-                  message:
-                    `Operational message-group ingress not ready ` +
-                    `for ${tableName} CDC propagation`,
-                },
-              );
+          },
+          afterPropagation: async () => {
+            if (tableName === TABLES.CONFIG) {
+              d.applyCurrentEpochFromCache();
             }
-          }
-        };
+          },
+        });
         const handshake =
           await partition.subscribeToCDCWithHandshake(
             cdcSubscriber,
@@ -862,6 +846,7 @@ class SeedCacheHydrationPhase {
           options.requiredTables :
           [],
         preferredService: preferredMessageGroupService,
+        reuseCapturedIngress: true,
       });
       return selection.service || null;
     }

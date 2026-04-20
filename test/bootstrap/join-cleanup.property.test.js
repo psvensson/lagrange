@@ -16,8 +16,12 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {JOINING_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  JOINING_CLEANUP_STEP,
+} from '../../src/bootstrap/node-joining-constants.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
 import {TABLES, COLUMN, STATE} from '../../src/constants/index.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 
 /**
  * Joining phases that represent real failure points.
@@ -70,6 +74,7 @@ function createTrackedJoiningService(cleanupContext) {
     directNodeDeletes: 0,
     directServiceDeletes: 0,
     nodeStateUpdates: [],
+    membershipPublicationReconciles: [],
     messageGroupsShutdown: new Set(),
     routerShutdown: false,
     transportShutdown: false,
@@ -101,6 +106,18 @@ function createTrackedJoiningService(cleanupContext) {
   };
   service.joinCleanupHandler.delegates.getRegisteredJoinNodeId = () =>
     cleanupContext.registeredNodeId;
+  service.rebalanceCoordinator = {
+    controlPlaneReadinessService: {
+      membershipPublicationService: {
+        enqueueClusterMembershipReconcile: (reason, context) => {
+          tracking.membershipPublicationReconciles.push({
+            reason,
+            context,
+          });
+        },
+      },
+    },
+  };
 
   // Mock message group services
   const messageGroupServices = new Map();
@@ -171,7 +188,25 @@ test('Property 4: Join failure cleanup', async (t) => {
               if (!disconnectedUpdate) {
                 return false;
               }
+              if (tracking.membershipPublicationReconciles.length !== 1) {
+                return false;
+              }
+              const reconcile =
+                tracking.membershipPublicationReconciles[0];
+              if (reconcile.reason !== RECONCILE_REASON.NODE_FAILED) {
+                return false;
+              }
+              if (reconcile.context?.registeredNodeId !==
+                  context.registeredNodeId) {
+                return false;
+              }
+              if (reconcile.context?.cleanupStep !==
+                  JOINING_CLEANUP_STEP.QUERYING_STATE) {
+                return false;
+              }
             } else if (tracking.nodeStateUpdates.length > 0) {
+              return false;
+            } else if (tracking.membershipPublicationReconciles.length > 0) {
               return false;
             }
 

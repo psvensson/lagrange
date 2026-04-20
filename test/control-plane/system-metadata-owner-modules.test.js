@@ -4,6 +4,12 @@ import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+import {
   ControlPlanePublicationsOwner,
   createSystemMetadataOwners,
   LogsOwner,
@@ -15,6 +21,10 @@ import {
   ServiceEndpointsOwner,
   ServicesOwner,
 } from '../../src/control-plane/owners/index.js';
+
+const TEST_PUBLICATION_READ_PROFILE_DIAGNOSTICS = 'diagnostics';
+const TEST_PUBLICATION_READ_PROFILE_PLANNING = 'planning';
+const TEST_PUBLICATION_ID = 'publication-1';
 
 test('System metadata owner modules exist for each shared metadata family',
   async (t) => {
@@ -118,6 +128,65 @@ test('ControlPlanePublicationsOwner marks publication mutations as ' +
     gatewayCalls[0]?.options?.allowPressureDefer,
     false,
     'publication mutations should not defer behind transport pressure',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'publication mutations should route through recovery-eligible readiness',
+  );
+  t.equal(
+    gatewayCalls[0]?.options?.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.PUBLICATION_MUTATION,
+    'publication mutations should carry the shared membership-publication workload class',
+  );
+});
+
+test('ControlPlanePublicationsOwner routes authoritative publication reads ' +
+  'through recovery-eligible readiness', async (t) => {
+  const gatewayCalls = [];
+  const gateway = {
+    async readAuthoritativeRows(tableName, sql, params, options) {
+      gatewayCalls.push({
+        tableName,
+        sql,
+        params,
+        options,
+      });
+      return {success: true, rows: []};
+    },
+  };
+
+  const owner = new ControlPlanePublicationsOwner({
+    controlPlaneSystemTableGateway: gateway,
+  });
+
+  await owner.listPublications({
+    readProfile: TEST_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
+  });
+  await owner.getPublication(TEST_PUBLICATION_ID, {
+    readProfile: TEST_PUBLICATION_READ_PROFILE_PLANNING,
+  });
+
+  t.equal(
+    gatewayCalls.length,
+    2,
+    'publication owner should route both list and get reads through the gateway',
+  );
+  t.equal(
+    gatewayCalls.every((call) =>
+      call?.options?.routingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE),
+    true,
+    'publication reads should use recovery-eligible routing semantics',
+  );
+  t.same(
+    gatewayCalls.map((call) => call?.options?.readProfile),
+    [
+      TEST_PUBLICATION_READ_PROFILE_DIAGNOSTICS,
+      TEST_PUBLICATION_READ_PROFILE_PLANNING,
+    ],
+    'publication reads should preserve the caller read profile',
   );
 });
 

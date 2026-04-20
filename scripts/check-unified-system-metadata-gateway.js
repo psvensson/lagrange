@@ -61,6 +61,58 @@ const TRANSPORT_PRESSURE_SENSOR_ALLOWLIST = [
   'src/control-plane/pressure-governor.js',
   'src/transport/message-router.js',
 ];
+const VIOLATION_RULES = Object.freeze([
+  {
+    type: 'direct-system-table-writer',
+    predicate: (relativePath, content) => {
+      return DIRECT_WRITER_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, DIRECT_WRITER_ALLOWLIST);
+    },
+  },
+  {
+    type: 'direct-system-table-read',
+    predicate: (relativePath, content) => {
+      return DIRECT_SQL_PATTERN.test(content) &&
+        SYSTEM_TABLE_REFERENCE_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, DIRECT_SQL_ALLOWLIST);
+    },
+  },
+  {
+    type: 'direct-authoritative-read-bypass',
+    predicate: (relativePath, content) => {
+      return DIRECT_AUTHORITATIVE_READ_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, DIRECT_AUTHORITATIVE_READ_ALLOWLIST);
+    },
+  },
+  {
+    type: 'direct-cache-mutation',
+    predicate: (relativePath, content) => {
+      return DIRECT_CACHE_APPLY_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, DIRECT_CACHE_APPLY_ALLOWLIST);
+    },
+  },
+  {
+    type: 'bootstrap-only-runtime-import',
+    predicate: (relativePath, content) => {
+      return BOOTSTRAP_ONLY_RUNTIME_IMPORT_PATTERN.test(content) &&
+        !relativePath.startsWith('src/bootstrap/');
+    },
+  },
+  {
+    type: 'duplicate-pressure-admission-policy',
+    predicate: (relativePath, content) => {
+      return PRESSURE_FAILURE_HELPER_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, PRESSURE_FAILURE_HELPER_ALLOWLIST);
+    },
+  },
+  {
+    type: 'direct-transport-pressure-sensor',
+    predicate: (relativePath, content) => {
+      return TRANSPORT_PRESSURE_SENSOR_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, TRANSPORT_PRESSURE_SENSOR_ALLOWLIST);
+    },
+  },
+]);
 
 function parseRootFromArgs(argv) {
   for (let index = 0; index < argv.length; index++) {
@@ -125,68 +177,27 @@ function buildSystemTableReferencePattern() {
 
 const SYSTEM_TABLE_REFERENCE_PATTERN = buildSystemTableReferencePattern();
 
+function collectFileViolations(relativePath, content) {
+  const violations = [];
+  for (const rule of VIOLATION_RULES) {
+    if (!rule.predicate(relativePath, content)) {
+      continue;
+    }
+
+    violations.push({
+      type: rule.type,
+      path: relativePath,
+    });
+  }
+  return violations;
+}
+
 function collectViolations(rootDir) {
   const violations = [];
   for (const relativePath of walkFiles(rootDir)) {
     const absolutePath = path.join(rootDir, relativePath);
     const content = fs.readFileSync(absolutePath, 'utf8');
-
-    if (DIRECT_WRITER_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, DIRECT_WRITER_ALLOWLIST)) {
-      violations.push({
-        type: 'direct-system-table-writer',
-        path: relativePath,
-      });
-    }
-
-    if (DIRECT_SQL_PATTERN.test(content) &&
-        SYSTEM_TABLE_REFERENCE_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, DIRECT_SQL_ALLOWLIST)) {
-      violations.push({
-        type: 'direct-system-table-read',
-        path: relativePath,
-      });
-    }
-
-    if (DIRECT_AUTHORITATIVE_READ_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, DIRECT_AUTHORITATIVE_READ_ALLOWLIST)) {
-      violations.push({
-        type: 'direct-authoritative-read-bypass',
-        path: relativePath,
-      });
-    }
-
-    if (DIRECT_CACHE_APPLY_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, DIRECT_CACHE_APPLY_ALLOWLIST)) {
-      violations.push({
-        type: 'direct-cache-mutation',
-        path: relativePath,
-      });
-    }
-
-    if (BOOTSTRAP_ONLY_RUNTIME_IMPORT_PATTERN.test(content) &&
-        !relativePath.startsWith('src/bootstrap/')) {
-      violations.push({
-        type: 'bootstrap-only-runtime-import',
-        path: relativePath,
-      });
-    }
-
-    if (PRESSURE_FAILURE_HELPER_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, PRESSURE_FAILURE_HELPER_ALLOWLIST)) {
-      violations.push({
-        type: 'duplicate-pressure-admission-policy',
-        path: relativePath,
-      });
-    }
-
-    if (TRANSPORT_PRESSURE_SENSOR_PATTERN.test(content) &&
-        !matchesAllowlist(relativePath, TRANSPORT_PRESSURE_SENSOR_ALLOWLIST)) {
-      violations.push({
-        type: 'direct-transport-pressure-sensor',
-        path: relativePath,
-      });
-    }
+    violations.push(...collectFileViolations(relativePath, content));
   }
   return violations;
 }

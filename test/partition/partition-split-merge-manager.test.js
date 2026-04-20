@@ -20,6 +20,7 @@ import {
 } from '../../src/partition/partition-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {PRESSURE_WORK_CLASS} from '../../src/control-plane/pressure-governor.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -913,6 +914,147 @@ test('PartitionSplitMergeManager - defers split evaluation under local ' +
     manager.getEvaluationDiagnostics().requestedEvaluationPending,
     true,
     'manager should keep one deferred evaluation queued for retry',
+  );
+
+  manager.shutdown();
+});
+
+test('PartitionSplitMergeManager - executes reactive write-activity split ' +
+  'evaluation despite local control-plane pressure', async (t) => {
+  const REACTIVE_TRIGGER = 'reactive_request';
+  const WRITE_ACTIVITY_REASON_CODE = 'write_activity';
+  const EXPECTED_EXECUTION_OPTIONS = {
+    allowPressureDefer: false,
+    workClass: PRESSURE_WORK_CLASS.CRITICAL,
+  };
+  let executeCalls = 0;
+  let lastExecutionOptions = null;
+  const manager = new PartitionSplitMergeManager({
+    pressureGovernor: {
+      evaluate() {
+        return {
+          action: 'defer',
+          retryAfterMs: 25,
+          summary: {backpressured: true},
+        };
+      },
+    },
+    listPartitions: async () => [{
+      partition_id: 'users-p1',
+      size_bytes: 256,
+    }],
+    getPartitionMetrics: async () => ({
+      sizeBytes: 256,
+      queriesPerMinute: 0,
+    }),
+    executeSplitCandidate: async (partitionId, executionOptions) => {
+      executeCalls += 1;
+      lastExecutionOptions = executionOptions;
+      return {
+        success: true,
+        partitionId,
+      };
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
+  });
+
+  const results = await manager.evaluateAllPartitions({
+    triggerReason: REACTIVE_TRIGGER,
+    reasonCodes: [WRITE_ACTIVITY_REASON_CODE],
+    partitionIds: ['users-p1'],
+  });
+
+  t.equal(
+    results.evaluated,
+    true,
+    'reactive write-activity evaluation should inspect split candidates even while background work is deferred',
+  );
+  t.same(results.splitCandidates, ['users-p1']);
+  t.equal(results.executedSplits.length, 1);
+  t.equal(results.executedSplits[0]?.success, true);
+  t.equal(
+    executeCalls,
+    1,
+    'reactive write-activity pressure bypass should execute one managed split candidate',
+  );
+  t.same(
+    lastExecutionOptions,
+    EXPECTED_EXECUTION_OPTIONS,
+    'reactive write-activity bypass should carry one explicit non-deferable execution profile into the workflow',
+  );
+
+  manager.shutdown();
+});
+
+test('PartitionSplitMergeManager - does not slide deferred write-activity ' +
+  'reactive evaluation later under repeated pressure-deferred requests',
+async (t) => {
+  const WRITE_ACTIVITY_REASON_CODE = 'write_activity';
+  const RETRY_AFTER_MS = 50;
+  let executeCalls = 0;
+  const manager = new PartitionSplitMergeManager({
+    reactiveEvaluationDebounceMs: 0,
+    pressureGovernor: {
+      evaluate() {
+        return {
+          action: 'defer',
+          retryAfterMs: RETRY_AFTER_MS,
+          summary: {backpressured: true},
+        };
+      },
+    },
+    listPartitions: async () => [{
+      partition_id: 'users-p1',
+      size_bytes: 256,
+    }],
+    getPartitionMetrics: async () => ({
+      sizeBytes: 256,
+      queriesPerMinute: 0,
+    }),
+    executeSplitCandidate: async (partitionId) => {
+      executeCalls += 1;
+      return {
+        success: true,
+        partitionId,
+      };
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
+  });
+
+  manager.requestEvaluation({
+    reasonCode: WRITE_ACTIVITY_REASON_CODE,
+    partitionId: 'users-p1',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  manager.requestEvaluation({
+    reasonCode: WRITE_ACTIVITY_REASON_CODE,
+    partitionId: 'users-p1',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  manager.requestEvaluation({
+    reasonCode: WRITE_ACTIVITY_REASON_CODE,
+    partitionId: 'users-p1',
+  });
+  await new Promise((resolve) => setTimeout(resolve, 35));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  t.equal(
+    executeCalls,
+    1,
+    'the earliest deferred retry window should still execute once instead of sliding indefinitely under new write triggers',
+  );
+  t.equal(
+    manager.getEvaluationDiagnostics().requestedEvaluationPending,
+    false,
+    'the queued reactive evaluation should be drained once the first retry window expires',
   );
 
   manager.shutdown();

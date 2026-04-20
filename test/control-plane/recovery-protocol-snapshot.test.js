@@ -67,6 +67,11 @@ test('buildRecoveryProtocolSnapshot derives one canonical participation state pe
       ],
       'the shared protocol should preserve both publication and spread blockers',
     );
+    t.match(snapshot.publicationRecoveryGate, {
+      state: 'ack_pending',
+      ready: false,
+      pendingAckCount: 1,
+    });
     t.match(snapshot.participationByNodeId, {
       'node-a': {
         state: NODE_PARTICIPATION_STATE.PUBLISHED_ACTIVE,

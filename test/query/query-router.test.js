@@ -14,6 +14,15 @@ import {
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
+const TEST_RETAINED_RUNTIME_LEADER_STATE = 'retained_runtime';
+const TEST_RETAINED_CACHE_OWNER_STABILIZATION =
+  'retained_cache_owner';
+const TEST_PARTITION_ID = 'partition-1';
+const TEST_FOLLOWER_ADDRESS = 'ws://follower:8080';
+const TEST_LEADER_ADDRESS = 'ws://leader:8080';
+const TEST_NODE_A_ADDRESS = 'ws://node-a:8080';
+const TEST_NODE_B_ADDRESS = 'ws://node-b:8080';
+
 /**
  * Create a mock system cache with configurable services.
  * @param {Array} services - Array of service objects
@@ -148,17 +157,17 @@ describe('QueryRouter', () => {
       assert.strictEqual(candidates[0].address, 'ws://node1:8080');
     });
 
-    it('should prioritize leader when preferLeader is true', () => {
+    it('should preserve service order when preferLeader is true but owner metadata is missing', () => {
       const services = [
         createService({
           service_id: 'follower-1',
           raft_role: RAFT_ROLE.FOLLOWER,
-          address: 'ws://follower:8080',
+          address: TEST_FOLLOWER_ADDRESS,
         }),
         createService({
           service_id: 'leader-1',
           raft_role: RAFT_ROLE.LEADER,
-          address: 'ws://leader:8080',
+          address: TEST_LEADER_ADDRESS,
         }),
       ];
 
@@ -169,8 +178,8 @@ describe('QueryRouter', () => {
 
       const candidates = router.findServiceCandidates('partition-1', true);
       assert.strictEqual(candidates.length, 2);
-      assert.strictEqual(candidates[0].address, 'ws://leader:8080');
-      assert.strictEqual(candidates[0].isLeader, true);
+      assert.strictEqual(candidates[0].address, TEST_FOLLOWER_ADDRESS);
+      assert.strictEqual(candidates[1].address, TEST_LEADER_ADDRESS);
     });
 
     it('should prefer canonical leader_node_id before stale service roles', () => {
@@ -201,6 +210,129 @@ describe('QueryRouter', () => {
       const candidates = router.findServiceCandidates('partition-1', true);
       assert.strictEqual(candidates.length, 2);
       assert.strictEqual(candidates[0].address, 'ws://canonical:8080');
+    });
+
+    it('should fail closed on leader prioritization when owner metadata lacks leader_node_id', () => {
+      const services = [
+        createService({
+          service_id: 'partition-1-r1',
+          node_id: 'node-a',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: TEST_NODE_A_ADDRESS,
+        }),
+        createService({
+          service_id: 'partition-1-r2',
+          node_id: 'node-b',
+          raft_role: RAFT_ROLE.LEADER,
+          address: TEST_NODE_B_ADDRESS,
+        }),
+      ];
+      const partitions = [{
+        partition_id: TEST_PARTITION_ID,
+        leader_node_id: null,
+      }];
+
+      const router = new QueryRouter({
+        systemCache: createMockSystemCache(services, [], partitions),
+        messageRouter: createMockMessageRouter(() => ({})),
+      });
+
+      const candidates = router.findServiceCandidates(TEST_PARTITION_ID, true);
+      assert.strictEqual(candidates.length, 2);
+      assert.strictEqual(candidates[0].address, TEST_NODE_A_ADDRESS);
+      assert.strictEqual(candidates[1].address, TEST_NODE_B_ADDRESS);
+    });
+
+    it('should honor the richer bootstrap leader identity owner surface before stale service-role witnesses', () => {
+      const services = [
+        createService({
+          service_id: 'stale-leader',
+          node_id: 'node-stale',
+          raft_role: RAFT_ROLE.LEADER,
+          address: 'ws://stale:8080',
+        }),
+        createService({
+          service_id: 'retained-leader',
+          node_id: 'node-retained',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: 'ws://retained:8080',
+        }),
+      ];
+      const partitions = [{
+        partition_id: 'partition-1',
+        leader_node_id: null,
+      }];
+
+      const router = new QueryRouter({
+        systemCache: createMockSystemCache(services, [], partitions),
+        messageRouter: createMockMessageRouter(() => ({})),
+        bootstrapTopologySnapshotOwner: {
+          resolveCanonicalPartitionLeaderIdentity(receivedPartitionId) {
+            assert.strictEqual(
+              receivedPartitionId,
+              'partition-1',
+              'router should consult the shared bootstrap leader-identity owner',
+            );
+            return {
+              leaderNodeId: 'node-retained',
+              state: TEST_RETAINED_RUNTIME_LEADER_STATE,
+              source: TEST_RETAINED_RUNTIME_LEADER_STATE,
+              bootstrapLeaderStabilizationState:
+                TEST_RETAINED_CACHE_OWNER_STABILIZATION,
+            };
+          },
+        },
+      });
+
+      const candidates = router.findServiceCandidates('partition-1', true);
+      assert.strictEqual(candidates.length, 2);
+      assert.strictEqual(
+        candidates[0].address,
+        'ws://retained:8080',
+        'router should prefer the owner-provided retained leader over stale service-role witnesses',
+      );
+    });
+
+    it('should not re-prioritize stale service-role leaders when the shared owner still reports a leader gap', () => {
+      const services = [
+        createService({
+          service_id: 'follower-first',
+          node_id: 'node-follower',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: 'ws://follower:8080',
+        }),
+        createService({
+          service_id: 'stale-leader',
+          node_id: 'node-stale',
+          raft_role: RAFT_ROLE.LEADER,
+          address: 'ws://stale:8080',
+        }),
+      ];
+      const partitions = [{
+        partition_id: 'partition-1',
+        leader_node_id: null,
+      }];
+
+      const router = new QueryRouter({
+        systemCache: createMockSystemCache(services, [], partitions),
+        messageRouter: createMockMessageRouter(() => ({})),
+        bootstrapTopologySnapshotOwner: {
+          resolveCanonicalPartitionLeaderIdentity() {
+            return {
+              state: 'missing',
+              source: 'none',
+            };
+          },
+        },
+      });
+
+      const candidates = router.findServiceCandidates('partition-1', true);
+      assert.strictEqual(candidates.length, 2);
+      assert.strictEqual(
+        candidates[0].address,
+        'ws://follower:8080',
+        'router should preserve the existing service order instead of re-deriving leader priority from stale service-role witnesses',
+      );
     });
 
     it('should filter out services without addresses', () => {

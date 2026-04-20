@@ -126,6 +126,15 @@ function createReadiness(nodeId, overrides = {}) {
       dimensions.metadataPublicationHealthy === true &&
       dimensions.controlPlanePublished !== false;
   }
+  if (!Object.prototype.hasOwnProperty.call(
+    overrideDimensions,
+    'provisioningEligible',
+  )) {
+    dimensions.provisioningEligible =
+      dimensions.repairEligible === true ||
+      (dimensions.controlPlaneRecoveryEligible === true &&
+        dimensions.controlPlanePublished === false);
+  }
   return Object.freeze({
     nodeId,
     dimensions,
@@ -512,6 +521,7 @@ test('checkSplit - returns blocked result when too few nodes are eligible',
         'controlPlaneWritable',
         'repairEligible',
         'controlPlaneRecoveryEligible',
+        'provisioningEligible',
       ],
       reasonCodes: [
         STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
@@ -594,7 +604,7 @@ test('checkSplit - defers when publication mode is degraded', async (t) => {
   t.end();
 });
 
-test('checkSplit - requests fresh repair-eligibility readiness snapshots',
+test('checkSplit - requests fresh provisioning-eligibility readiness snapshots',
   async (t) => {
     initializeConfig();
     const cache = new SystemTableCache();
@@ -636,7 +646,7 @@ test('checkSplit - requests fresh repair-eligibility readiness snapshots',
         allowStaleOnCacheChange: true,
         maxCachedAgeMs: 10000,
         decisionDimension:
-          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
       },
     });
     t.end();
@@ -825,6 +835,68 @@ test('checkAdd - critical admission requests control-plane recovery readiness',
     t.end();
   });
 
+test('checkAdd - admits provisioning-convergence grace nodes when ' +
+  'recovery stays open but repair remains closed', async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-convergence-grace',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService({
+        'node-convergence-grace': createReadiness(
+          'node-convergence-grace',
+          {
+            dimensions: {
+              clusterMemberHealthy: false,
+              controlPlaneWritable: false,
+              controlPlanePublished: false,
+              controlPlaneRecoveryEligible: true,
+              repairEligible: false,
+              provisioningEligible: true,
+              placementEligible: true,
+            },
+          },
+        ),
+      }),
+    });
+
+    const result = await admission.checkAdd({
+      targetNodeId: 'node-convergence-grace',
+      estimatedBytes: NUM.TEN,
+    });
+
+    t.equal(
+      result.allowed,
+      true,
+      'ordinary provisioning should honor the convergence-safe projection',
+    );
+    t.equal(
+      result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+      'convergence grace should stay on the admitted path',
+    );
+    t.same(
+      result.eligibleNodeIds,
+      ['node-convergence-grace'],
+      'the grace node should remain in the admitted cohort',
+    );
+    t.same(
+      result.ineligibleNodes,
+      [],
+      'the grace node should not be classified as ineligible',
+    );
+    t.end();
+  });
+
 test('checkAdd reuses cached readiness snapshots for background admission',
   async (t) => {
     initializeConfig();
@@ -857,7 +929,8 @@ test('checkAdd reuses cached readiness snapshots for background admission',
         preferBackgroundRefreshOnIneligible: true,
         allowStaleOnCacheChange: true,
         maxCachedAgeMs: 4321,
-        decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        decisionDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
       },
     }, 'background admission should reuse cached readiness and refresh in background');
     t.end();

@@ -10,6 +10,14 @@ const MESSAGE_GROUP_SELECTION_ROUTE = Object.freeze({
   RELAY: 'relay',
 });
 
+const MESSAGE_GROUP_SELECTION_STATE = Object.freeze({
+  DEFER_OWNER_NOT_READY: 'defer_owner_not_ready',
+  LEADER_READY: 'leader_ready',
+  PREFERRED_CAPTURED: 'preferred_captured',
+  PREFERRED_READY: 'preferred_ready',
+  RELAY_READY: 'relay_ready',
+});
+
 function normalizeRequiredTables(requiredTables) {
   return [...new Set(
     (Array.isArray(requiredTables) ? requiredTables : [])
@@ -56,6 +64,14 @@ function normalizeSelectionReadiness(readiness, fallbackReason) {
 
 function isMessageGroupInitialized(service) {
   return service?.initialized !== false;
+}
+
+function canReuseCapturedIngressOwner(service) {
+  return isMessageGroupInitialized(service) === true &&
+    (
+      typeof service?.subscribeToCDC === TYPEOF.FUNCTION ||
+      typeof service?.sendMessage === TYPEOF.FUNCTION
+    );
 }
 
 function resolveLeaderReadiness(service, requiredTables) {
@@ -114,14 +130,19 @@ function buildOperationalMessageGroupSelection(
   retryAfterMs,
   reason,
   route,
+  state,
 ) {
-  return {
+  const selection = {
     service,
     ready,
     retryAfterMs,
     reason,
     route,
   };
+  if (typeof state === TYPEOF.STRING && state.length > NUM.ZERO) {
+    selection.state = state;
+  }
+  return selection;
 }
 
 function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
@@ -139,6 +160,7 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
       retryAfterMs: NUM.ZERO,
       reason: null,
       route: MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+      state: MESSAGE_GROUP_SELECTION_STATE.LEADER_READY,
     };
   }
 
@@ -155,6 +177,9 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
       route: service?.isLeaderReplica?.() === true ?
         MESSAGE_GROUP_SELECTION_ROUTE.LEADER :
         MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+      state: service?.isLeaderReplica?.() === true ?
+        MESSAGE_GROUP_SELECTION_STATE.LEADER_READY :
+        MESSAGE_GROUP_SELECTION_STATE.RELAY_READY,
     };
   }
 
@@ -164,6 +189,7 @@ function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
     retryAfterMs: NUM.ZERO,
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     route: null,
+    state: MESSAGE_GROUP_SELECTION_STATE.DEFER_OWNER_NOT_READY,
   };
 }
 
@@ -261,6 +287,7 @@ function resolveOperationalMessageGroupSelection(
         readiness.retryAfterMs,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+        MESSAGE_GROUP_SELECTION_STATE.LEADER_READY,
       );
     }
     deferredSummary = recordNotReadyCandidate(
@@ -281,6 +308,7 @@ function resolveOperationalMessageGroupSelection(
         readiness.retryAfterMs,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+        MESSAGE_GROUP_SELECTION_STATE.RELAY_READY,
       );
     }
     deferredSummary = recordNotReadyCandidate(
@@ -295,6 +323,7 @@ function resolveOperationalMessageGroupSelection(
     deferredSummary.retryAfterMs,
     deferredSummary.reason,
     null,
+    MESSAGE_GROUP_SELECTION_STATE.DEFER_OWNER_NOT_READY,
   );
 }
 
@@ -305,6 +334,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
   const services = listMessageGroupServices(messageGroupServices);
   const requiredTables = normalizeRequiredTables(options.requiredTables);
   const preferredService = options.preferredService || null;
+  const reuseCapturedIngress = options.reuseCapturedIngress === true;
   let deferredSummary = {
     reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
     retryAfterMs: NUM.ZERO,
@@ -329,6 +359,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
         readiness.retryAfterMs,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+        MESSAGE_GROUP_SELECTION_STATE.LEADER_READY,
       );
     }
     deferredSummary = recordNotReadyCandidate(
@@ -338,6 +369,17 @@ async function resolveOperationalMessageGroupSelectionAsync(
   }
 
   if (preferredService) {
+    if (reuseCapturedIngress === true &&
+        canReuseCapturedIngressOwner(preferredService) === true) {
+      return buildOperationalMessageGroupSelection(
+        preferredService,
+        true,
+        NUM.ZERO,
+        null,
+        MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
+        MESSAGE_GROUP_SELECTION_STATE.PREFERRED_CAPTURED,
+      );
+    }
     const readiness =
       requiredTables.length > NUM.ZERO ?
         await resolveMetadataIngressReadinessAsync(
@@ -355,6 +397,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
         readiness.retryAfterMs,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
+        MESSAGE_GROUP_SELECTION_STATE.PREFERRED_READY,
       );
     }
     deferredSummary = recordNotReadyCandidate(
@@ -385,6 +428,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
         readiness.retryAfterMs,
         null,
         MESSAGE_GROUP_SELECTION_ROUTE.RELAY,
+        MESSAGE_GROUP_SELECTION_STATE.RELAY_READY,
       );
     }
     deferredSummary = recordNotReadyCandidate(
@@ -399,6 +443,7 @@ async function resolveOperationalMessageGroupSelectionAsync(
     deferredSummary.retryAfterMs,
     deferredSummary.reason,
     null,
+    MESSAGE_GROUP_SELECTION_STATE.DEFER_OWNER_NOT_READY,
   );
 }
 
@@ -440,6 +485,7 @@ function buildMessageGroupOwnerNotReadyError(
 export {
   buildMessageGroupOwnerNotReadyError,
   getBootstrapMessageGroupService,
+  MESSAGE_GROUP_SELECTION_STATE,
   resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync,
   resolveQueryTransportMessageGroupSelection,

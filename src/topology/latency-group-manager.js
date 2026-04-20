@@ -310,6 +310,67 @@ class LatencyGroupManager extends EventEmitter {
   }
 
   /**
+   * Build a new latency group row for this node.
+   * @return {Object}
+   * @private
+   */
+  buildCreatedGroupRow() {
+    const now = this.now();
+    const groupId = this.buildGroupId(now);
+    return {
+      [COLUMN.GROUP_ID]: groupId,
+      [COLUMN.REPRESENTATIVE_NODE_ID]: this.nodeId,
+      [COLUMN.COORDINATOR_NODE_ID]: this.nodeId,
+      [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
+      [COLUMN.CREATED_AT]: now,
+      [COLUMN.UPDATED_AT]: now,
+    };
+  }
+
+  /**
+   * Resolve the assignment reason for the current measurement snapshot.
+   * @param {Object} options
+   * @return {string}
+   * @private
+   */
+  resolveAssignmentReason(options) {
+    const currentGroupId = options.currentGroupId;
+    const nearestEligible = options.nearestEligible;
+    if (!currentGroupId && nearestEligible) {
+      return LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP;
+    }
+    if (options.shouldCreateNewGroup) {
+      return LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP;
+    }
+    if (!nearestEligible || nearestEligible.groupId === currentGroupId) {
+      return LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP;
+    }
+
+    const currentRttMs = Number(options.currentGroupMeasurement?.rttMs);
+    return !Number.isFinite(currentRttMs) || nearestEligible.rttMs < currentRttMs ?
+      LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP :
+      LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP;
+  }
+
+  /**
+   * Resolve the target latency group from a reason.
+   * @param {Object} options
+   * @return {string|null}
+   * @private
+   */
+  resolveAssignmentTargetGroupId(options) {
+    const reason = options.reason;
+    if (reason === LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP ||
+        reason === LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP) {
+      return options.nearestEligible.groupId;
+    }
+    if (reason === LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP) {
+      return options.createdGroupRow[COLUMN.GROUP_ID];
+    }
+    return options.currentGroupId;
+  }
+
+  /**
    * Determine the assignment target for the local node.
    * @param {Object} localNodeRow
    * @param {Object[]} groupRows
@@ -326,40 +387,19 @@ class LatencyGroupManager extends EventEmitter {
       currentGroupId,
     );
     const shouldCreateNewGroup = !currentGroupId && !nearestEligible;
-    const createdGroupRow = shouldCreateNewGroup ?
-      (() => {
-        const now = this.now();
-        const groupId = this.buildGroupId(now);
-        return {
-          [COLUMN.GROUP_ID]: groupId,
-          [COLUMN.REPRESENTATIVE_NODE_ID]: this.nodeId,
-          [COLUMN.COORDINATOR_NODE_ID]: this.nodeId,
-          [COLUMN.STATE]: LATENCY_GROUP_STATE.ACTIVE,
-          [COLUMN.CREATED_AT]: now,
-          [COLUMN.UPDATED_AT]: now,
-        };
-      })() :
-      null;
-    const currentRttMs = Number(currentGroupMeasurement?.rttMs);
-    const reason = !currentGroupId && nearestEligible ?
-      LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP :
-      shouldCreateNewGroup ?
-        LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP :
-        !nearestEligible ?
-          LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP :
-          nearestEligible.groupId === currentGroupId ?
-            LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP :
-            !Number.isFinite(currentRttMs) ||
-              nearestEligible.rttMs < currentRttMs ?
-              LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP :
-              LATENCY_GROUP_MANAGER_REASON.KEEP_CURRENT_GROUP;
-    const targetGroupId =
-      reason === LATENCY_GROUP_MANAGER_REASON.JOIN_NEAREST_GROUP ||
-      reason === LATENCY_GROUP_MANAGER_REASON.REASSIGN_TO_BETTER_GROUP ?
-        nearestEligible.groupId :
-        reason === LATENCY_GROUP_MANAGER_REASON.CREATE_NEW_GROUP ?
-          createdGroupRow[COLUMN.GROUP_ID] :
-          currentGroupId;
+    const createdGroupRow = shouldCreateNewGroup ? this.buildCreatedGroupRow() : null;
+    const reason = this.resolveAssignmentReason({
+      currentGroupId,
+      nearestEligible,
+      currentGroupMeasurement,
+      shouldCreateNewGroup,
+    });
+    const targetGroupId = this.resolveAssignmentTargetGroupId({
+      currentGroupId,
+      createdGroupRow,
+      nearestEligible,
+      reason,
+    });
 
     return {
       reason,

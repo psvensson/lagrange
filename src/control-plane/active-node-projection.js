@@ -9,6 +9,7 @@ import {
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
+  RUNTIME_AUTHORITY_STATE,
 } from './control-plane-readiness-constants.js';
 import {
   normalizeNodeEndpointRow,
@@ -31,6 +32,13 @@ const PROJECTION_READINESS_DECISION_MODE = Object.freeze({
   CLUSTER_MEMBER_HEALTHY_ONLY: 'cluster_member_healthy_only',
   CLUSTER_MEMBER_OR_RECOVERY_ELIGIBLE:
     'cluster_member_or_recovery_eligible',
+});
+const PROJECTION_AUTHORITY_SOURCE = Object.freeze({
+  CLUSTER_MEMBER_HEALTHY: 'cluster_member_healthy',
+  LEGACY_RECOVERY_ELIGIBLE: 'legacy_recovery_eligible',
+  NONE: 'none',
+  RUNTIME_AUTHORITY_CONFIRMED: 'runtime_authority_confirmed',
+  RUNTIME_AUTHORITY_ESTABLISHING: 'runtime_authority_establishing',
 });
 const ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published_membership',
@@ -302,17 +310,58 @@ function hasRuntimeTransportEvidence(nodeId, options = {}) {
 }
 
 function evaluateProjectionReadinessDimensions(
-  readinessDimensions = null,
+  readinessEntry = null,
   options = {},
 ) {
+  const readinessDimensions = readinessEntry?.dimensions &&
+    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+    readinessEntry.dimensions :
+    null;
+  const runtimeAuthority = readinessEntry?.runtimeAuthority &&
+    typeof readinessEntry.runtimeAuthority === TYPEOF.OBJECT ?
+    readinessEntry.runtimeAuthority :
+    null;
+  const hasDimensionEvidence = Boolean(
+    readinessDimensions &&
+    Object.keys(readinessDimensions).length > NUM.ZERO,
+  );
+  const hasReadinessEvidence = hasDimensionEvidence || Boolean(runtimeAuthority);
   if (!readinessDimensions ||
       typeof readinessDimensions !== TYPEOF.OBJECT ||
       Object.keys(readinessDimensions).length === NUM.ZERO) {
+    if (runtimeAuthority &&
+        options.allowControlPlaneRecoveryEligibleProjection === true &&
+        runtimeAuthority.provisioning?.eligible === true) {
+      if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
+        return {
+          hasReadinessEvidence: true,
+          projectionEligible: true,
+          projectedByRecoveryEligibility: false,
+          projectedByRuntimeAuthority: true,
+          clusterMemberHealthyMissing: true,
+          authoritySource: PROJECTION_AUTHORITY_SOURCE
+            .RUNTIME_AUTHORITY_CONFIRMED,
+        };
+      }
+      if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
+        return {
+          hasReadinessEvidence: true,
+          projectionEligible: true,
+          projectedByRecoveryEligibility: false,
+          projectedByRuntimeAuthority: true,
+          clusterMemberHealthyMissing: true,
+          authoritySource: PROJECTION_AUTHORITY_SOURCE
+            .RUNTIME_AUTHORITY_ESTABLISHING,
+        };
+      }
+    }
     return {
-      hasReadinessEvidence: false,
+      hasReadinessEvidence,
       projectionEligible: null,
       projectedByRecoveryEligibility: false,
+      projectedByRuntimeAuthority: false,
       clusterMemberHealthyMissing: false,
+      authoritySource: PROJECTION_AUTHORITY_SOURCE.NONE,
     };
   }
   if (readinessDimensions[
@@ -322,8 +371,36 @@ function evaluateProjectionReadinessDimensions(
       hasReadinessEvidence: true,
       projectionEligible: true,
       projectedByRecoveryEligibility: false,
+      projectedByRuntimeAuthority: false,
       clusterMemberHealthyMissing: false,
+      authoritySource: PROJECTION_AUTHORITY_SOURCE.CLUSTER_MEMBER_HEALTHY,
     };
+  }
+  if (options.allowControlPlaneRecoveryEligibleProjection === true &&
+      runtimeAuthority &&
+      runtimeAuthority.provisioning?.eligible === true) {
+    if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.CONFIRMED) {
+      return {
+        hasReadinessEvidence: true,
+        projectionEligible: true,
+        projectedByRecoveryEligibility: false,
+        projectedByRuntimeAuthority: true,
+        clusterMemberHealthyMissing: true,
+        authoritySource: PROJECTION_AUTHORITY_SOURCE
+          .RUNTIME_AUTHORITY_CONFIRMED,
+      };
+    }
+    if (runtimeAuthority.state === RUNTIME_AUTHORITY_STATE.ESTABLISHING) {
+      return {
+        hasReadinessEvidence: true,
+        projectionEligible: true,
+        projectedByRecoveryEligibility: false,
+        projectedByRuntimeAuthority: true,
+        clusterMemberHealthyMissing: true,
+        authoritySource: PROJECTION_AUTHORITY_SOURCE
+          .RUNTIME_AUTHORITY_ESTABLISHING,
+      };
+    }
   }
   const controlPlaneRecoveryEligible = readinessDimensions[
     CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
@@ -335,7 +412,11 @@ function evaluateProjectionReadinessDimensions(
     hasReadinessEvidence: true,
     projectionEligible: projectedByRecoveryEligibility,
     projectedByRecoveryEligibility,
+    projectedByRuntimeAuthority: false,
     clusterMemberHealthyMissing: true,
+    authoritySource: projectedByRecoveryEligibility ?
+      PROJECTION_AUTHORITY_SOURCE.LEGACY_RECOVERY_ELIGIBLE :
+      PROJECTION_AUTHORITY_SOURCE.NONE,
   };
 }
 
@@ -405,12 +486,8 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
 
   const readinessByNodeId = buildReadinessByNodeId(options);
   const readinessEntry = readinessByNodeId?.[normalizedNode.nodeId] || null;
-  const readinessDimensions = readinessEntry?.dimensions &&
-    typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
-    readinessEntry.dimensions :
-    null;
   const readinessProjection = evaluateProjectionReadinessDimensions(
-    readinessDimensions,
+    readinessEntry,
     options,
   );
   const allowLivenessFallbackProjection =
@@ -433,10 +510,11 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
   const nodeEndpointRows = Array.isArray(options.nodeEndpointRows) ?
     options.nodeEndpointRows :
     [];
-  const projectedByRecoveryEligibility =
-    readinessProjection.projectedByRecoveryEligibility === true &&
-    options.allowControlPlaneRecoveryEligibleProjection === true;
-  if (!projectedByRecoveryEligibility) {
+  const projectedByAuthorityConvergence =
+    options.allowControlPlaneRecoveryEligibleProjection === true &&
+    (readinessProjection.projectedByRecoveryEligibility === true ||
+      readinessProjection.projectedByRuntimeAuthority === true);
+  if (!projectedByAuthorityConvergence) {
     if (hasCanonicalWebSocketEndpoints(nodeEndpointRows) &&
         !hasCanonicalWebSocketEndpoint(
           normalizedNode.nodeId,
@@ -462,6 +540,7 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   const readinessByNodeId = buildReadinessByNodeId(options);
   const nodeRowsById = new Map();
   const recoveryEligibleIncludedNodeIds = new Set();
+  const runtimeAuthorityIncludedNodeIds = new Set();
   const livenessFallbackIncludedNodeIds = new Set();
   const readinessExcludedNodeIds = new Set();
   const clusterMemberUnhealthyExcludedNodeIds = new Set();
@@ -486,12 +565,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
   for (const nodeId of candidateNodeIds) {
     const nodeRow = nodeRowsById.get(nodeId) || null;
     const readinessEntry = readinessByNodeId?.[nodeId] || null;
-    const readinessDimensions = readinessEntry?.dimensions &&
-      typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
-      readinessEntry.dimensions :
-      null;
     const readinessProjection = evaluateProjectionReadinessDimensions(
-      readinessDimensions,
+      readinessEntry,
       options,
     );
     const allowLivenessFallbackProjection =
@@ -522,6 +597,9 @@ function resolveProjectedActiveNodeSelection(options = {}) {
         activeNodeIds.push(nodeId);
         if (readinessProjection.projectedByRecoveryEligibility) {
           recoveryEligibleIncludedNodeIds.add(nodeId);
+        }
+        if (readinessProjection.projectedByRuntimeAuthority) {
+          runtimeAuthorityIncludedNodeIds.add(nodeId);
         }
         if (allowLivenessFallbackProjection) {
           livenessFallbackIncludedNodeIds.add(nodeId);
@@ -570,6 +648,9 @@ function resolveProjectedActiveNodeSelection(options = {}) {
     if (readinessProjection.projectedByRecoveryEligibility) {
       recoveryEligibleIncludedNodeIds.add(nodeId);
     }
+    if (readinessProjection.projectedByRuntimeAuthority) {
+      runtimeAuthorityIncludedNodeIds.add(nodeId);
+    }
     if (allowLivenessFallbackProjection) {
       livenessFallbackIncludedNodeIds.add(nodeId);
     }
@@ -591,6 +672,8 @@ function resolveProjectedActiveNodeSelection(options = {}) {
       options.allowControlPlaneRecoveryEligibleProjection === true,
     recoveryEligibleIncludedNodeIds:
       Object.freeze([...recoveryEligibleIncludedNodeIds].sort()),
+    runtimeAuthorityIncludedNodeIds:
+      Object.freeze([...runtimeAuthorityIncludedNodeIds].sort()),
     livenessFallbackIncludedNodeIds:
       Object.freeze([...livenessFallbackIncludedNodeIds].sort()),
     readinessExcludedNodeIds:
@@ -696,6 +779,9 @@ function resolveActiveNodeViews(options = {}) {
         projectedActiveNodeSelection.recoveryEligibleProjectionEnabled === true,
       recoveryEligibleIncludedNodeIds: Object.freeze([
         ...projectedActiveNodeSelection.recoveryEligibleIncludedNodeIds,
+      ]),
+      runtimeAuthorityIncludedNodeIds: Object.freeze([
+        ...projectedActiveNodeSelection.runtimeAuthorityIncludedNodeIds,
       ]),
       livenessFallbackIncludedNodeIds: Object.freeze([
         ...projectedActiveNodeSelection.livenessFallbackIncludedNodeIds,
@@ -815,11 +901,7 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
 
   let activeNodeIds = [];
   let source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE;
-  if (explicitRecoveryActiveNodeIds.length > NUM.ZERO) {
-    activeNodeIds = explicitRecoveryActiveNodeIds;
-    source = explicitRecoveryActiveNodeSource ||
-      ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
-  } else if (shouldUseProjectionCohort && locallyEligibleNodeIds.length > NUM.ZERO) {
+  if (shouldUseProjectionCohort && locallyEligibleNodeIds.length > NUM.ZERO) {
     activeNodeIds = buildProjectionCohortNodeIds(locallyEligibleNodeIds);
     source = ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
   } else if (
@@ -848,6 +930,17 @@ function resolvePriorityRecoveryActiveNodeCohort(publicationConvergence = null) 
     activeNodeIds = recoveryEligibleIncludedNodeIds;
     source =
       ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.RECOVERY_ELIGIBLE_PROJECTION;
+  }
+
+  if (explicitRecoveryActiveNodeIds.length > NUM.ZERO) {
+    activeNodeIds = normalizeNodeIdList([
+      ...activeNodeIds,
+      ...explicitRecoveryActiveNodeIds,
+    ]);
+    if (source === ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.NONE) {
+      source = explicitRecoveryActiveNodeSource ||
+        ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE.LOCALLY_ELIGIBLE_PROJECTION;
+    }
   }
 
   return Object.freeze({

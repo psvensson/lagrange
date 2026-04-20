@@ -11,6 +11,7 @@ const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
 const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATION_INSERT = 'INSERT';
 const TABLE_POLICIES_JSON = JSON.stringify({
+  externalCdcAllowed: false,
   splitStorageThreshold: 16384,
   splitTrafficThreshold: 120,
   mergeStorageThreshold: 1,

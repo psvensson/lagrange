@@ -36,14 +36,17 @@ test('AdminWebSocketAPI classifies timed out queries with structured ' +
     t.equal(scheduledTimeoutMs, 30000);
     t.equal(
       error.timeoutClassification.classification,
-      TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT,
+      TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
     );
     t.equal(
       error.timeoutClassification.originalClassification,
-      TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
+      null,
     );
-    t.equal(error.timeoutClassification.boundaryHit, true);
-    t.equal(error.timeoutClassification.configuredBudgetMs, 30000);
+    t.equal(error.timeoutClassification.boundaryHit, false);
+    t.ok(
+      error.timeoutClassification.configuredBudgetMs < 30000,
+      'inner SQL timeout budget should leave completion margin before the outer timeout fires',
+    );
     t.equal(
       error.timeoutClassification.nestedOperation,
       'admin_sql_query',
@@ -90,6 +93,77 @@ test('AdminWebSocketAPI forwards query-level timeout override through ' +
     1234,
     'query result should come from the timeout-overridden execution path',
   );
+});
+
+test('AdminWebSocketAPI returns one canonical deferred result when a ' +
+  'timed-out CREATE TABLE request is still blocked on control-plane authority',
+async (t) => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let nowMs = 3000;
+
+  globalThis.setTimeout = (callback, timeoutMs) => {
+    nowMs += timeoutMs;
+    globalThis.queueMicrotask(callback);
+    return 1;
+  };
+  globalThis.clearTimeout = () => {};
+
+  const api = new AdminWebSocketAPI({
+    sqlQueryEngine: {
+      async executeRequest() {
+        return new Promise(() => {});
+      },
+      buildTimedOutSqlRequestFailure(sqlRequest, error) {
+        return {
+          success: false,
+          error: 'query_admission_deferred',
+          errorCode: 'QUERY_TIMEOUT',
+          deferRetry: true,
+          retryAfterMs: 225,
+          outcome: 'deferred',
+          visibilityState: 'deferred_by_pressure',
+          contractState: 'deferred',
+          nextAction: 'retry',
+          reasonCode: 'control_plane_write_unhealthy',
+          reasonCodes: ['control_plane_write_unhealthy'],
+          failedDimensions: ['controlPlaneWritable'],
+          runtimeAuthority: {
+            state: 'establishing',
+          },
+          details: {
+            statement: sqlRequest.statement,
+            cause: error.message,
+          },
+        };
+      },
+    },
+    nowFn: () => nowMs,
+  });
+
+  try {
+    const result = await api.executeSqlRequestWithTimeout(
+      createSqlRequest({
+        statement: 'CREATE TABLE users (id TEXT PRIMARY KEY)',
+      }),
+      6000,
+    );
+    t.equal(result.success, false);
+    t.equal(result.error, 'query_admission_deferred');
+    t.equal(result.visibilityState, 'deferred_by_pressure');
+    t.equal(result.contractState, 'deferred');
+    t.equal(result.nextAction, 'retry');
+    t.equal(result.retryAfterMs, 225);
+    t.equal(result.reasonCode, 'control_plane_write_unhealthy');
+    t.equal(result.runtimeAuthority?.state, 'establishing');
+    t.equal(
+      result.details?.statement,
+      'CREATE TABLE users (id TEXT PRIMARY KEY)',
+    );
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });
 
 test('AdminWebSocketAPI cancels in-flight SQL request when timeout fires',
@@ -174,9 +248,14 @@ test('executeSqlRequestWithTimeout uses QUERY_TIMEOUT classification ' +
       ),
     );
     t.equal(
-      error.timeoutClassification.originalClassification,
+      error.timeoutClassification.classification,
       TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
       'query timeout should use QUERY_TIMEOUT, not REMOTE_CALL_TIMEOUT',
+    );
+    t.equal(
+      error.timeoutClassification.originalClassification,
+      null,
+      'trimmed inner timeout budget should classify directly as QUERY_TIMEOUT',
     );
     t.equal(
       error.timeoutClassification.nestedOperation,

@@ -1,7 +1,13 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  AUTHORITY_DESCRIPTOR_STATE,
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROVISIONING_ELIGIBILITY_STATE,
   READINESS_SNAPSHOT_KEY,
+  RUNTIME_AUTHORITY_PUBLICATION_STATE,
+  RUNTIME_AUTHORITY_REPAIR_STATE,
+  RUNTIME_AUTHORITY_STATE,
+  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   compactEligibilitySnapshot,
@@ -33,6 +39,39 @@ test('EligibilitySnapshot reuses one immutable readiness object for repair ' +
       {code: 'load_not_ready'},
       {code: 'storage_budget_unavailable'},
     ],
+    runtimeAuthority: {
+      state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+      authorityAvailable: true,
+      ready: false,
+      processAlive: true,
+      clusterMemberHealthy: false,
+      routingReady: true,
+      writeEligible: false,
+      recoveryEligible: true,
+      repairEligible: false,
+      publication: {
+        state: RUNTIME_AUTHORITY_PUBLICATION_STATE.HEALTHY,
+        healthy: true,
+      },
+      visibility: {
+        state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+        published: false,
+        observedAt: FIXTURE_OBSERVED_AT,
+      },
+      repair: {
+        state: RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED,
+        applied: false,
+      },
+      provisioning: {
+        state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+        eligible: true,
+      },
+      failure: {
+        state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
+        reason: 'control_plane_publication_pending',
+      },
+      reasonCodes: ['control_plane_publication_pending'],
+    },
   });
 
   const repairDecision = evaluateEligibilityDecision(
@@ -72,5 +111,20 @@ test('EligibilitySnapshot reuses one immutable readiness object for repair ' +
   t.equal(
     compact[READINESS_SNAPSHOT_KEY.DECISION_DIMENSION],
     CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+  );
+  t.match(
+    compact[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY],
+    {
+      state: RUNTIME_AUTHORITY_STATE.ESTABLISHING,
+      visibility: {
+        state: RUNTIME_AUTHORITY_VISIBILITY_STATE.PENDING_PUBLICATION,
+      },
+      provisioning: {
+        state: PROVISIONING_ELIGIBILITY_STATE.CONVERGENCE_GRACE,
+      },
+      failure: {
+        state: AUTHORITY_DESCRIPTOR_STATE.KNOWN,
+      },
+    },
   );
 });

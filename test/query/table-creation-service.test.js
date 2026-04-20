@@ -1,11 +1,26 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TableCreationService} from '../../src/query/table-creation-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
+} from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
+import {
+  OWNER_CONTRACT_NEXT_ACTION,
+  OWNER_CONTRACT_STATE,
+} from '../../src/control-plane/owner-contract-outcome.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
 }
+
+const TABLE_CREATION_TEST_COMPLETION_STATE = Object.freeze({
+  PENDING_CREATION: 'pending_creation',
+});
+const TABLE_CREATION_TEST_COMPLETION_REASON = Object.freeze({
+  METADATA_VISIBILITY_PENDING: 'metadata_visibility_pending',
+  REPLICA_CONVERGENCE_PENDING: 'replica_convergence_pending',
+});
 
 function createCreateTableAst() {
   return {
@@ -365,6 +380,43 @@ test('TableCreationService - re-provisions initial partition on ' +
   t.equal(provisionCalls[0]?.replicaCount, 3);
 });
 
+test('TableCreationService - forwards timeout budget to fresh initial ' +
+  'partition provisioning', async (t) => {
+  const provisionCalls = [];
+  const timeoutBudget = {deadlineMs: 4321};
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        return {success: true};
+      },
+    },
+    partitionProvisioner: async (context) => {
+      provisionCalls.push(context);
+      return {
+        requestedReplicaCount: 3,
+        resolvedReplicaCount: 3,
+        minimumRoutableReplicaCount: 2,
+        routableReplicaCount: 2,
+      };
+    },
+  });
+
+  const result = await service.createTable(
+    createCreateTableAst(),
+    {timeoutBudget},
+  );
+
+  t.equal(result.success, true);
+  t.equal(provisionCalls.length, 1);
+  t.equal(provisionCalls[0]?.timeoutBudget, timeoutBudget);
+});
+
 test('TableCreationService - uses authoritative metadata reads to avoid ' +
   'duplicate CREATE TABLE IF NOT EXISTS under cache lag', async (t) => {
   const provisionCalls = [];
@@ -422,6 +474,48 @@ test('TableCreationService - uses authoritative metadata reads to avoid ' +
     'authoritative retries should still reconcile initial partition provisioning');
   t.equal(provisionCalls[0]?.tableId, 'tbl-users');
   t.equal(provisionCalls[0]?.partitionId, 'tbl-users-p1');
+});
+
+test('TableCreationService - forwards timeout budget through CREATE TABLE IF ' +
+  'NOT EXISTS reconciliation provisioning', async (t) => {
+  const provisionCalls = [];
+  const timeoutBudget = {deadlineMs: 9876};
+  const service = new TableCreationService({
+    systemCache: {
+      find(tableName, predicate) {
+        if (tableName === 'tables') {
+          return [{
+            table_id: 'tbl-users',
+            table_name: 'users',
+          }].find(predicate) || null;
+        }
+        if (tableName === 'partitions') {
+          return [{
+            partition_id: 'tbl-users-p1',
+            table_id: 'tbl-users',
+            table_name: 'users',
+            replica_count: 3,
+          }].find(predicate) || null;
+        }
+        return null;
+      },
+    },
+    partitionProvisioner: async (context) => {
+      provisionCalls.push(context);
+    },
+  });
+
+  const result = await service.createTable({
+    ...createCreateTableAst(),
+    ifNotExists: true,
+  }, {
+    timeoutBudget,
+  });
+
+  t.equal(result.success, true);
+  t.equal(result.skipped, true);
+  t.equal(provisionCalls.length, 1);
+  t.equal(provisionCalls[0]?.timeoutBudget, timeoutBudget);
 });
 
 test('TableCreationService - rejects duplicate CREATE TABLE when ' +
@@ -595,8 +689,16 @@ test('TableCreationService - CREATE TABLE IF NOT EXISTS restores missing ' +
   t.equal(result.success, true);
   t.equal(result.skipped, true);
   t.equal(result.partitionMetadataCreated, true);
-  t.equal(result.completionState, 'pending_creation');
-  t.equal(result.completionReason, 'replica_convergence_pending');
+  t.equal(
+    result.completionState,
+    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+  );
+  t.equal(
+    result.completionReason,
+    TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+  );
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
   t.equal(submittedMutations.length, 1);
   t.equal(submittedMutations[0].tableName, 'partitions');
   t.equal(submittedMutations[0].row.partition_id, 'tbl-users-p1');
@@ -617,7 +719,11 @@ test('TableCreationService - CREATE TABLE opts metadata writes into pending visi
       controlPlaneSystemTableGateway: {
         async submitMutation(mutation, options) {
           submittedMutations.push({mutation, options});
-          return {success: true, visibilityState: 'pending_visibility'};
+          return {
+            success: true,
+            visibilityState:
+              CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
+          };
         },
       },
       partitionProvisioner: async () => {},
@@ -638,17 +744,113 @@ test('TableCreationService - CREATE TABLE opts metadata writes into pending visi
     );
     t.equal(
       result.visibilityState,
-      'pending_visibility',
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY,
       'create table should surface that metadata commit succeeded while visibility is still converging',
     );
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
     t.equal(result.visibilityPending, true);
     t.equal(
       result.completionState,
-      'pending_creation',
+      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
       'create table should not claim full convergence when provisioning exposes no replica evidence',
     );
-    t.equal(result.completionReason, 'metadata_visibility_pending');
+    t.equal(
+      result.completionReason,
+      TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
+    );
   });
+
+
+test('TableCreationService - CREATE TABLE preserves authoritative confirmation pending visibility state',
+  async (t) => {
+    const submittedMutations = [];
+    const service = new TableCreationService({
+      systemCache: {
+        find() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {},
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation, options) {
+          submittedMutations.push({mutation, options});
+          return {
+            success: true,
+            visibilityState:
+              mutation.tableName === 'tables' ?
+                CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
+                  .AUTHORITATIVE_CONFIRMATION_PENDING :
+                CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
+          };
+        },
+      },
+      partitionProvisioner: async () => {},
+    });
+
+    const result = await service.createTable(createCreateTableAst());
+
+    t.equal(submittedMutations.length, 2);
+    t.equal(
+      result.visibilityState,
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
+        .AUTHORITATIVE_CONFIRMATION_PENDING,
+      'create table should preserve the strongest pending metadata visibility state',
+    );
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(result.visibilityPending, true);
+    t.equal(
+      result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    );
+    t.equal(
+      result.completionReason,
+      TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
+    );
+  });
+
+test('TableCreationService - CREATE TABLE preserves deferred metadata ' +
+  'visibility as a retryable contract',
+async (t) => {
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {},
+    controlPlaneSystemTableGateway: {
+      async submitMutation() {
+        return {
+          success: true,
+          visibilityState:
+            CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE
+              .DEFERRED_BY_PRESSURE,
+        };
+      },
+    },
+    partitionProvisioner: async () => {},
+  });
+
+  const result = await service.createTable(createCreateTableAst());
+
+  t.equal(
+    result.visibilityState,
+    CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE,
+  );
+  t.equal(result.contractState, OWNER_CONTRACT_STATE.DEFERRED);
+  t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.RETRY);
+  t.equal(result.visibilityPending, true);
+  t.equal(
+    result.completionState,
+    TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+  );
+  t.equal(
+    result.completionReason,
+    TABLE_CREATION_TEST_COMPLETION_REASON.METADATA_VISIBILITY_PENDING,
+  );
+});
 
 test('TableCreationService - CREATE TABLE stays pending when only the minimum routable cohort is converged',
   async (t) => {
@@ -675,9 +877,20 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
 
     const result = await service.createTable(createCreateTableAst());
 
-    t.equal(result.completionState, 'pending_creation');
-    t.equal(result.completionReason, 'replica_convergence_pending');
-    t.equal(result.visibilityState, 'visible');
+    t.equal(
+      result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    );
+    t.equal(
+      result.completionReason,
+      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+    );
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
+    t.equal(
+      result.visibilityState,
+      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
+    );
     t.equal(result.visibilityPending, false);
     t.same(
       result.provisioningSummary,
@@ -687,6 +900,10 @@ test('TableCreationService - CREATE TABLE stays pending when only the minimum ro
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
         fullReplicaCountConverged: false,
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        reasonCodes: [],
+        retryAfterMs: 0,
       },
       'table creation should surface that write quorum exists while full replica convergence is still pending',
     );
@@ -710,8 +927,16 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
 
     const result = await service.createTable(createCreateTableAst());
 
-    t.equal(result.completionState, 'pending_creation');
-    t.equal(result.completionReason, 'replica_convergence_pending');
+    t.equal(
+      result.completionState,
+      TABLE_CREATION_TEST_COMPLETION_STATE.PENDING_CREATION,
+    );
+    t.equal(
+      result.completionReason,
+      TABLE_CREATION_TEST_COMPLETION_REASON.REPLICA_CONVERGENCE_PENDING,
+    );
+    t.equal(result.contractState, OWNER_CONTRACT_STATE.PENDING);
+    t.equal(result.nextAction, OWNER_CONTRACT_NEXT_ACTION.WAIT);
     t.same(
       result.provisioningSummary,
       {
@@ -720,6 +945,10 @@ test('TableCreationService - CREATE TABLE without provisioning detail stays pend
         minimumRoutableReplicaCount: 2,
         routableReplicaCount: 2,
         fullReplicaCountConverged: false,
+        contractState: OWNER_CONTRACT_STATE.PENDING,
+        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
+        reasonCodes: [],
+        retryAfterMs: 0,
       },
       'table creation should default to the quorum-sized routable contract when the provisioner does not report convergence detail',
     );

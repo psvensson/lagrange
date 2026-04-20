@@ -2,6 +2,7 @@ import {ADDRESS} from '../constants/index.js';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
 import {isCriticalTransportControlPlanePartition} from
   '../bootstrap/system-partition-classification.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const RAFT_PACKET_TYPE = Object.freeze({
   VOTE: 'vote',
@@ -136,12 +137,39 @@ function resolvePriorityControlPlanePartitionId(packet = null) {
     null;
 }
 
+function resolveNormalizedTargetReplicaStatus(packet = null) {
+  const targetReplicaStatus = packet?.targetReplicaStatus;
+  if (typeof targetReplicaStatus !== 'string') {
+    return null;
+  }
+  const normalizedTargetReplicaStatus = targetReplicaStatus.trim().toLowerCase();
+  return normalizedTargetReplicaStatus.length > 0 ?
+    normalizedTargetReplicaStatus :
+    null;
+}
+
+function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null) {
+  const packetType = typeof packet?.type === 'string' ?
+    packet.type.toLowerCase() :
+    null;
+  if (packetType !== RAFT_PACKET_TYPE.APPEND) {
+    return false;
+  }
+  if (!Array.isArray(packet?.data) || packet.data.length === 0) {
+    return false;
+  }
+  return resolveNormalizedTargetReplicaStatus(packet) === ReplicaStatus.SYNCING;
+}
+
 function resolveRaftTransportDeliveryOptions(packet = null) {
   const packetType = typeof packet?.type === 'string' ?
     packet.type.toLowerCase() :
     null;
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
   if (resolvePriorityControlPlanePartitionId(packet)) {
+    if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
+      return RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
+    }
     return RAFT_TRANSPORT_DELIVERY_OPTIONS;
   }
   const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&

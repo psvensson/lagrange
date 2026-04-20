@@ -123,6 +123,55 @@ function countInParams(query) {
   return placeholders;
 }
 
+function collectNestedCallSignals(normalizedQuery) {
+  const hasIn = IN_CLAUSE_RE.test(normalizedQuery);
+  const hasAny = ANY_CLAUSE_RE.test(normalizedQuery);
+  return Object.freeze({
+    hasAny,
+    hasIn,
+    hasJoin: JOIN_RE.test(normalizedQuery),
+    hasLimit: LIMIT_RE.test(normalizedQuery),
+    hasRange: RANGE_OP_RE.test(normalizedQuery),
+    hasSubquery: SUBQUERY_RE.test(normalizedQuery),
+    hasWhere: WHERE_RE.test(normalizedQuery),
+    paramCount: hasIn ? countInParams(normalizedQuery) : 1,
+  });
+}
+
+function isBoundedInClause(signals) {
+  return (signals.hasIn || signals.hasAny) &&
+    signals.paramCount >= 0 &&
+    signals.paramCount <= NESTED_CALL_MAX_IN_PARAMS;
+}
+
+function isPointLookup(signals) {
+  return !signals.hasRange && !signals.hasIn && !signals.hasAny;
+}
+
+function resolveNestedCallDecision(signals) {
+  if (signals.hasJoin) {
+    return NESTED_CALL_DECISION.JOIN_DETECTED;
+  }
+  if (signals.hasSubquery) {
+    return NESTED_CALL_DECISION.SUBQUERY_DETECTED;
+  }
+  if (!signals.hasWhere) {
+    return NESTED_CALL_DECISION.FULL_TABLE_SCAN;
+  }
+  if (isBoundedInClause(signals)) {
+    return NESTED_CALL_DECISION.BOUNDED_IN_CLAUSE;
+  }
+  if (signals.hasRange && !signals.hasLimit) {
+    return NESTED_CALL_DECISION.RANGE_SCAN_NO_LIMIT;
+  }
+  if (isPointLookup(signals)) {
+    return NESTED_CALL_DECISION.PK_POINT_LOOKUP;
+  }
+  return signals.hasLimit ?
+    NESTED_CALL_DECISION.INDEXED_LIMIT_QUERY :
+    NESTED_CALL_DECISION.CONSERVATIVE_DEFAULT;
+}
+
 /**
  * Classify a nested ctx.call SQL query as bounded or unbounded.
  *
@@ -135,31 +184,9 @@ function classifyNestedCall(query) {
   }
 
   const normalized = query.trim();
-  const hasJoin = JOIN_RE.test(normalized);
-  const hasSubquery = SUBQUERY_RE.test(normalized);
-  const hasWhere = WHERE_RE.test(normalized);
-  const hasLimit = LIMIT_RE.test(normalized);
-  const hasIn = IN_CLAUSE_RE.test(normalized);
-  const hasAny = ANY_CLAUSE_RE.test(normalized);
-  const hasRange = RANGE_OP_RE.test(normalized);
-  const paramCount = hasIn ? countInParams(normalized) : 1;
-  const decision = hasJoin ?
-    NESTED_CALL_DECISION.JOIN_DETECTED :
-    hasSubquery ?
-      NESTED_CALL_DECISION.SUBQUERY_DETECTED :
-      !hasWhere ?
-        NESTED_CALL_DECISION.FULL_TABLE_SCAN :
-        (hasIn || hasAny) &&
-          paramCount >= 0 &&
-          paramCount <= NESTED_CALL_MAX_IN_PARAMS ?
-          NESTED_CALL_DECISION.BOUNDED_IN_CLAUSE :
-          hasRange && !hasLimit ?
-            NESTED_CALL_DECISION.RANGE_SCAN_NO_LIMIT :
-            !hasRange && !hasIn && !hasAny ?
-              NESTED_CALL_DECISION.PK_POINT_LOOKUP :
-              hasLimit ?
-                NESTED_CALL_DECISION.INDEXED_LIMIT_QUERY :
-                NESTED_CALL_DECISION.CONSERVATIVE_DEFAULT;
+  const decision = resolveNestedCallDecision(
+    collectNestedCallSignals(normalized),
+  );
 
   return {...NESTED_CALL_OUTCOME_BY_DECISION[decision]};
 }

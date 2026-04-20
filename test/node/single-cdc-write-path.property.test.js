@@ -5,9 +5,10 @@
  *
  * **Validates: Requirements 5.4**
  *
- * *For any* replica state transition, exactly one CDC write to the
- * services system table shall occur, and it shall originate from
- * the ReplicaStateMachine.
+ * *For any* replica state transition, one authoritative services-row
+ * mutation shall occur through ReplicaStateMachine. Partition replicas that
+ * become non-routable may emit one additional canonical partitions-row leader
+ * clear, but only through the same owner path.
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
@@ -22,6 +23,14 @@ import {
 import {TABLES} from '../../src/constants/tables.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  buildReplicaStatePropertyContext,
+  CANONICAL_PARTITION_LEADER_CLEAR_STATES,
+  getCanonicalPartitionLeaderClearCalls,
+  getExpectedReplicaStateMutationBundleCount,
+  getServiceMutationCalls,
+  PROPERTY_TEST_NODE_ID,
+} from './replica-state-machine-property-helpers.js';
 
 /**
  * All valid transition sequences through the replica lifecycle.
@@ -97,11 +106,12 @@ test('Property 10: Single CDC write path for replica state changes',
   async (t) => {
     /**
      * Property: For any valid transition sequence, exactly one
-     * CDC write to the services table occurs per transition.
-     * No duplicate writes, no missing writes.
+     * authoritative services-row mutation occurs per transition, with one
+     * additional canonical partition-leader clear only for stable non-routable
+     * partition states.
      */
     t.test(
-      'exactly one CDC write per state transition',
+      'canonical mutation bundle count matches each transition sequence',
       async (t) => {
         await fc.assert(
           fc.asyncProperty(
@@ -117,11 +127,9 @@ test('Property 10: Single CDC write path for replica state changes',
 
               for (const state of sequence) {
                 const result = await sm.transition(
-                  replicaId, state, {
-                    partitionId,
-                    nodeId: 'test-node',
-                    reason: 'property-test',
-                  },
+                  replicaId,
+                  state,
+                  buildReplicaStatePropertyContext(partitionId),
                 );
                 if (!result) {
                   sm.clear();
@@ -131,25 +139,30 @@ test('Property 10: Single CDC write path for replica state changes',
 
               sm.clear();
 
-              // Exactly one CDC write per transition
-              return mockCdc.calls.length === sequence.length;
+              const serviceCalls =
+                getServiceMutationCalls(mockCdc.calls);
+              return serviceCalls.length === sequence.length &&
+                mockCdc.calls.length ===
+                  getExpectedReplicaStateMutationBundleCount(sequence);
             },
           ),
           {numRuns: 10},
         );
 
         t.pass(
-          'exactly one CDC write occurs per state transition',
+          'canonical mutation bundle count matches each transition sequence',
         );
       },
     );
 
     /**
      * Property: For any valid transition, every CDC write
-     * targets the services system table exclusively.
+     * targets either the services system table or the canonical partitions
+     * leader-clear row, and the additional partitions-row writes only occur
+     * for stable non-routable partition states.
      */
     t.test(
-      'all CDC writes target the services table',
+      'all CDC writes stay within the canonical replica-state mutation bundle',
       async (t) => {
         await fc.assert(
           fc.asyncProperty(
@@ -164,30 +177,50 @@ test('Property 10: Single CDC write path for replica state changes',
               });
 
               for (const state of sequence) {
-                await sm.transition(replicaId, state, {
-                  partitionId,
-                  nodeId: 'test-node',
-                  reason: 'property-test',
-                });
+                await sm.transition(
+                  replicaId,
+                  state,
+                  buildReplicaStatePropertyContext(partitionId),
+                );
               }
 
               sm.clear();
 
-              // Every CDC call must target the services table
+              const serviceCalls =
+                getServiceMutationCalls(mockCdc.calls);
+              const partitionLeaderClearCalls =
+                getCanonicalPartitionLeaderClearCalls(
+                  mockCdc.calls,
+                  partitionId,
+                );
+              const expectedPartitionLeaderClearCount =
+                sequence.filter((state) =>
+                  CANONICAL_PARTITION_LEADER_CLEAR_STATES.has(state),
+                ).length;
+
               for (const call of mockCdc.calls) {
-                if (call.tableName !== TABLES.SERVICES) {
+                if (call.tableName !== TABLES.SERVICES &&
+                    !(
+                      call.tableName === TABLES.PARTITIONS &&
+                      call.whereClause?.partition_id === partitionId &&
+                      call.whereClause?.leader_node_id ===
+                        PROPERTY_TEST_NODE_ID &&
+                      call.data?.leader_node_id === null
+                    )) {
                   return false;
                 }
               }
 
-              return true;
+              return serviceCalls.length === sequence.length &&
+                partitionLeaderClearCalls.length ===
+                  expectedPartitionLeaderClearCount;
             },
           ),
           {numRuns: 10},
         );
 
         t.pass(
-          'all CDC writes target the services system table',
+          'all CDC writes stay within the canonical replica-state mutation bundle',
         );
       },
     );
@@ -213,23 +246,25 @@ test('Property 10: Single CDC write path for replica state changes',
               });
 
               for (const state of sequence) {
-                await sm.transition(replicaId, state, {
-                  partitionId,
-                  nodeId: 'test-node',
-                  reason: 'property-test',
-                });
+                await sm.transition(
+                  replicaId,
+                  state,
+                  buildReplicaStatePropertyContext(partitionId),
+                );
               }
 
               sm.clear();
 
-              if (mockCdc.calls.length !== sequence.length) {
+              const serviceCalls =
+                getServiceMutationCalls(mockCdc.calls);
+              if (serviceCalls.length !== sequence.length) {
                 return false;
               }
 
-              // Each CDC write's status must match the
+              // Each authoritative service-row mutation's status must match the
               // corresponding transition target state
               for (let i = 0; i < sequence.length; i++) {
-                const call = mockCdc.calls[i];
+                const call = serviceCalls[i];
                 const data = call.data;
                 if (data.status !== sequence[i]) {
                   return false;
@@ -276,20 +311,12 @@ test('Property 10: Single CDC write path for replica state changes',
               await sm.transition(
                 replicaA,
                 REPLICA_STATE_MACHINE_STATE.PENDING,
-                {
-                  partitionId,
-                  nodeId: 'test-node',
-                  reason: 'property-test',
-                },
+                buildReplicaStatePropertyContext(partitionId),
               );
               await sm.transition(
                 replicaB,
                 REPLICA_STATE_MACHINE_STATE.PENDING,
-                {
-                  partitionId,
-                  nodeId: 'test-node',
-                  reason: 'property-test',
-                },
+                buildReplicaStatePropertyContext(partitionId),
               );
 
               sm.clear();
@@ -332,11 +359,11 @@ test('Property 10: Single CDC write path for replica state changes',
               });
 
               for (const state of sequence) {
-                await sm.transition(replicaId, state, {
-                  partitionId,
-                  nodeId: 'test-node',
-                  reason: 'property-test',
-                });
+                await sm.transition(
+                  replicaId,
+                  state,
+                  buildReplicaStatePropertyContext(partitionId),
+                );
               }
 
               sm.clear();
@@ -350,7 +377,8 @@ test('Property 10: Single CDC write path for replica state changes',
               // writing to services table)
               const externalWrites = externalCdc.calls.length;
 
-              return smWrites === sequence.length &&
+              return smWrites ===
+                getExpectedReplicaStateMutationBundleCount(sequence) &&
                 externalWrites === 0;
             },
           ),

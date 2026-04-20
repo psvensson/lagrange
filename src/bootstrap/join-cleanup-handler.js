@@ -24,6 +24,7 @@ import {
   STATE,
   TYPEOF,
 } from '../constants/index.js';
+import {RECONCILE_REASON} from '../workflow/reconcile-queue-constants.js';
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -51,6 +52,10 @@ const JOINING_CLEANUP_STEPS_REVERSE = Object.freeze([
   JOINING_CLEANUP_STEP.MESSAGE_GROUP,
   JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET,
 ]);
+
+const JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT = Object.freeze({
+  CLEANUP_STEP: JOINING_CLEANUP_STEP.QUERYING_STATE,
+});
 
 /**
  * Handles failure cleanup and resource teardown for a joining node.
@@ -254,6 +259,8 @@ class JoinCleanupHandler {
         }
       }
 
+      this.enqueueMembershipPublicationReconcile(cleanupContext);
+
       logger.info(
         JOINING_LOG_MSG
           .FAILED_JOIN_CLEANUP_QUERYING_STATE_DONE, {
@@ -270,6 +277,45 @@ class JoinCleanupHandler {
         });
       return CLEANUP_RESULT.ERROR;
     }
+  }
+
+  resolveMembershipPublicationService() {
+    if (typeof this.delegates.getRebalanceCoordinator !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const rebalanceCoordinator =
+      this.delegates.getRebalanceCoordinator();
+    const readinessService =
+      rebalanceCoordinator?.controlPlaneReadinessService;
+    const membershipPublicationService =
+      readinessService?.membershipPublicationService;
+    return membershipPublicationService &&
+      typeof membershipPublicationService.enqueueClusterMembershipReconcile ===
+        TYPEOF.FUNCTION ?
+      membershipPublicationService :
+      null;
+  }
+
+  enqueueMembershipPublicationReconcile(cleanupContext) {
+    if (typeof cleanupContext?.registeredNodeId !== TYPEOF.STRING ||
+        cleanupContext.registeredNodeId.length === NUM.ZERO) {
+      return false;
+    }
+    const membershipPublicationService =
+      this.resolveMembershipPublicationService();
+    if (!membershipPublicationService) {
+      return false;
+    }
+    membershipPublicationService.enqueueClusterMembershipReconcile(
+      RECONCILE_REASON.NODE_FAILED,
+      {
+        nodeId: this.nodeId,
+        registeredNodeId: cleanupContext.registeredNodeId,
+        cleanupStep:
+          JOIN_CLEANUP_MEMBERSHIP_PUBLICATION_CONTEXT.CLEANUP_STEP,
+      },
+    );
+    return true;
   }
 
   /**

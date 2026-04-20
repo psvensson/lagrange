@@ -161,6 +161,8 @@ const JOINING_LOG_MSG = Object.freeze({
   SEED_WS_CONNECT_FAILED: '[JOIN-DEBUG] Failed to connect to seed node via WebSocket',
   SEED_WS_MISSING: '[JOIN-DEBUG] No seed node WebSocket address provided',
   NODE_STATE_UPDATE_SENT: 'Sent NODE_STATE_UPDATE to control plane',
+  NODE_STATE_UPDATE_DEFERRED:
+    'Deferred NODE_STATE_UPDATE while control-plane publication pressure recovers',
   CONNECTED_STATE_UPDATE_DEFERRED:
     'Deferring connected NODE_STATE_UPDATE until later join phases',
   NODE_STATE_UPDATE_RETRYING:

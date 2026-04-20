@@ -24,9 +24,31 @@ import {
   isRetryableControlPlaneError,
   getControlPlaneRetryAfterMs,
 } from '../../control-plane/control-plane-error-classification.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../../cache/system-cache-key-descriptor.js';
 
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS = 250;
 const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS = 5000;
+const MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY = 'id';
+
+function normalizeMoveReplicaAssignmentObservedRowKey(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > NUM.ZERO ? normalized : null;
+}
+
+function readMoveReplicaAssignmentObservedRowKey(tableName, row) {
+  const keyField = getSystemCachePrimaryKeyFieldOrFallback(
+    tableName,
+    MOVE_REPLICA_ASSIGNMENT_ROW_FALLBACK_PRIMARY_KEY,
+  );
+  return normalizeMoveReplicaAssignmentObservedRowKey(
+    row?.[keyField] ?? row?.id ?? null,
+  );
+}
 
 class MoveReplicaAssignmentOwner {
   constructor(options = {}) {
@@ -41,6 +63,17 @@ class MoveReplicaAssignmentOwner {
 
   getSystemTableCache() {
     return this.delegates.getSystemTableCache?.() || null;
+  }
+
+  getBootstrapAuthoritativeTableRows(tableName) {
+    return this.delegates.getBootstrapAuthoritativeTableRows?.(tableName) || [];
+  }
+
+  isBootstrapAuthoritativeTableRowNewer(candidate, existing) {
+    return this.delegates.isBootstrapAuthoritativeTableRowNewer?.(
+      candidate,
+      existing,
+    ) === true;
   }
 
   getMessageGroupServices() {
@@ -608,13 +641,46 @@ class MoveReplicaAssignmentOwner {
     return this.getMessageGroupServices()?.has?.(reservation.replicaId) === true;
   }
 
+  resolveObservedMoveReplicaAssignmentTableRow(tableName, rowKey) {
+    const normalizedRowKey =
+      normalizeMoveReplicaAssignmentObservedRowKey(rowKey);
+    if (!normalizedRowKey) {
+      return null;
+    }
+
+    const authoritativeRows = this.getBootstrapAuthoritativeTableRows(tableName);
+    const authoritativeRow =
+      Array.isArray(authoritativeRows) && authoritativeRows.length > NUM.ZERO ?
+        authoritativeRows.find((row) => {
+          return readMoveReplicaAssignmentObservedRowKey(tableName, row) ===
+            normalizedRowKey;
+        }) || null :
+        null;
+    const cacheRow =
+      this.getSystemTableCache()?.get?.(tableName, normalizedRowKey) || null;
+    if (!authoritativeRow) {
+      return cacheRow;
+    }
+    if (!cacheRow) {
+      return authoritativeRow;
+    }
+    return this.isBootstrapAuthoritativeTableRowNewer(
+      authoritativeRow,
+      cacheRow,
+    ) ?
+      authoritativeRow :
+      cacheRow;
+  }
+
   evaluateMoveReplicaAssignmentReservationOwnership(
     reservation,
     now = Date.now(),
   ) {
-    const systemTableCache = this.getSystemTableCache();
     const existingServiceRow =
-      systemTableCache?.get(TABLES.SERVICES, reservation?.replicaId) || null;
+      this.resolveObservedMoveReplicaAssignmentTableRow(
+        TABLES.SERVICES,
+        reservation?.replicaId || null,
+      );
     const existingStatus = String(
       existingServiceRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
     ).toLowerCase();
@@ -626,10 +692,16 @@ class MoveReplicaAssignmentOwner {
       existingStatus === SERVICE_STATUS.ACTIVE &&
       existingNodeId === (reservation?.targetNodeId || null);
     const sourceNodeRow = reservation?.sourceNodeId ?
-      systemTableCache?.get(TABLES.NODES, reservation.sourceNodeId) || null :
+      this.resolveObservedMoveReplicaAssignmentTableRow(
+        TABLES.NODES,
+        reservation.sourceNodeId,
+      ) :
       null;
     const targetNodeRow = reservation?.targetNodeId ?
-      systemTableCache?.get(TABLES.NODES, reservation.targetNodeId) || null :
+      this.resolveObservedMoveReplicaAssignmentTableRow(
+        TABLES.NODES,
+        reservation.targetNodeId,
+      ) :
       null;
     const sourceNodeReady = !sourceNodeRow ||
       isNodeRecordReady(sourceNodeRow, {now});

@@ -156,6 +156,11 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
     nodes: ['node-local'],
     partitions: [],
     leaders: {},
+    snapshotRevision: 22,
+    snapshotRevisionState: 'stale_usable',
+    snapshotExpectedMinimumRevision: 24,
+    snapshotRevisionGap: 2,
+    snapshotResumeToken: 'control-plane-revision:captured_at:22',
     cdcTelemetry: {
       subscriberCount: 2,
       bufferedEvents: 0,
@@ -169,6 +174,16 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
       inFlightCount: 0,
       statusHistogram: {},
       partitionGroupInFlight: {},
+      rows: [{
+        operationId: 'replace-1',
+        partitionId: 'nodes-p1',
+        type: 'REPLACE',
+        status: 'active',
+        workflowStep: 'ACTIVE',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'nodes-p1-r4',
+      }],
       operationTimelineById: {
         'op-1': [{
           eventType: 'state',

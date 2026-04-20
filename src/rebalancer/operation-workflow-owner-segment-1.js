@@ -1,0 +1,1054 @@
+import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
+
+const {
+  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_PUBLICATION_STATUS,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
+  ControlPlaneField,
+  ControlPlaneMessageType,
+  ControlPlaneReadinessService,
+  DEFAULT_MIN_REPLICA_COUNT,
+  DIRECT_TRANSITION_PERSIST_PARTITION_IDS,
+  DISPATCH_RETRY_DELAY_MS,
+  EXECUTOR_OUTCOME_ACTION,
+  EXECUTOR_OUTCOME_ACTION_MAP,
+  EXECUTOR_OUTCOME_FIELD,
+  FAILURE_LOG_LEVEL,
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  INITIAL_PARTITION_IDS,
+  METRICS_LOG_TAG,
+  NUM,
+  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
+  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
+  OBSERVED_PROGRESS_RETRY_DELAY_MS,
+  OPERATION_HANDLER,
+  OPERATION_LIFECYCLE_ACTION,
+  OPERATION_METADATA_KEY,
+  OPERATION_OWNER_ACTION,
+  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
+  OPERATION_SINGLE_FLIGHT_SCOPE,
+  OPERATION_TRANSITION_REASON,
+  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
+  OPERATION_WORKFLOW_OWNER_LITERAL,
+  OPERATION_WORKFLOW_OWNER_REASON,
+  OperationType,
+  PARTITION_SERVICE_ERROR_MSG,
+  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
+  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
+  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
+  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
+  QUERY_ERROR_MSG,
+  RAFT_ROLE,
+  REBALANCER_SKIP_REASON,
+  REBALANCE_COORDINATOR_DEFER_REASON,
+  REBALANCE_COORDINATOR_ERROR_MSG,
+  REBALANCE_COORDINATOR_EVENT,
+  REBALANCE_COORDINATOR_LOG_MSG,
+  RECOVERABLE_TRANSITION_COMMIT_STATUS,
+  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
+  REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
+  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+  REMOVE_SAFETY_READINESS_DIMENSION,
+  REMOVE_SAFETY_READ_QUERY_OPTIONS,
+  REMOVE_SAFETY_SQL,
+  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
+  ReplicaOperationField,
+  ReplicaOperationMessageType,
+  ReplicaOperationResponseStatus,
+  ReplicaStatus,
+  SAFETY_DEFERRED_LOG_THROTTLE_MS,
+  SAFETY_DEFERRED_RETRY_DELAY_MS,
+  SERVICE_TYPE,
+  SQL_RECONCILIATION_REASON,
+  SYSTEM_TABLE_NAME,
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  TIMEOUT_BUDGET_DEFAULT,
+  TIME_MS,
+  TRANSACTION_STATUS,
+  TRANSITION_RECOVERY_READ_OPTIONS,
+  TRANSITION_RECOVERY_SQL,
+  TRANSITION_RETRY_DELAY_MS,
+  TRANSITION_STEP_OPTIONS,
+  TYPEOF,
+  UNIFIED_SERVICE_TYPE,
+  WORKFLOW_STEP,
+  WORKFLOW_STEP_TO_STATUS,
+  buildControlPlaneQueryOptions,
+  buildPriorityRecoveryBlockedPartitionIds,
+  buildPriorityRecoveryCompletion,
+  buildPriorityRecoveryOperationAssessment,
+  buildSelectRowsByTransactionIdsSql,
+  buildTimeoutClassification,
+  classifyTransportDeliveryOutcome,
+  createChildTimeoutBudget,
+  createTopLevelOperationBudget,
+  getControlPlaneRetryAfterMs,
+  getWorkflowSteps,
+  hasPriorityRecoverySpreadGap,
+  isCoordinatorOwnedOperationType,
+  isDeliveredTransportDeliveryOutcome,
+  isPriorityControlPlanePartition,
+  isRetryableControlPlaneError,
+  isSystemTablePartition,
+  normalizeNodeIdList,
+  normalizeReplicaRowNodeIds,
+  readAuthoritativeControlPlaneRows,
+  resolvePriorityRecoveryActiveNodeCohort,
+} = OPERATION_WORKFLOW_OWNER_SHARED;
+
+class OperationWorkflowOwnerSegment1 {
+  /**
+   * @param {Function} options.allocateCanonicalReplicaId -
+   *   Replica ID allocation callback.
+   * @param {Function} options.getActualReplicaStatus -
+   *   Authoritative replica status read callback.
+   * @param {Function} [options.setTimeoutFn] - Deferred retry timer factory.
+   * @param {Function} [options.clearTimeoutFn] - Deferred retry timer cleanup.
+   */
+  constructor(options) {
+    this.repository = options.repository;
+    this.operationLane = options.operationLane;
+    this.operationWorkflowCoordinator = options.operationWorkflowCoordinator;
+    this.operationWorkflowRunExclusive = this.operationLane.run.bind(
+      this.operationLane,
+    );
+    this.controlPlaneReadinessService = options.controlPlaneReadinessService;
+    this.messageRouter = options.messageRouter;
+    this.tablePolicyService = options.tablePolicyService;
+    this.transactionCoordinator = options.transactionCoordinator || null;
+    this.logger = options.logger;
+    this.emitter = options.emitter;
+    this.config = options.config;
+    this.nodeId = options.nodeId;
+    this.stats = options.stats;
+    this._isShuttingDown = options.isShuttingDown;
+    this._isInitialized = options.isInitialized;
+    this.releaseReservationForOperation =
+      options.releaseReservationForOperation;
+    this.reconcileReservations = options.reconcileReservations;
+    this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
+    this.getActualReplicaStatus = options.getActualReplicaStatus;
+    this.setTimeoutFn =
+      typeof options.setTimeoutFn === TYPEOF.FUNCTION
+        ? options.setTimeoutFn
+        : setTimeout;
+    this.clearTimeoutFn =
+      typeof options.clearTimeoutFn === TYPEOF.FUNCTION
+        ? options.clearTimeoutFn
+        : clearTimeout;
+    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.incompleteOperationQueryEmptyBackoffMs =
+      options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
+    this.safetyDeferredLogStateByOperationId = new Map();
+    this.safetyDeferredRetryTimerByOperationId = new Map();
+    this.observedProgressRetryTimerByOperationId = new Map();
+    this.dispatchRetryTimerByOperationId = new Map();
+    this.priorityActiveReplaceRetryTimerByOperationId = new Map();
+    this.createdOperationHandoffRetryTimerByOperationId = new Map();
+    this.transitionRetryTimerByOperationId = new Map();
+    this.transitionRetryGraceDeadlineByOperationId = new Map();
+    this.transitionExecutionAttemptByStepOwnerKey = new Map();
+
+    if (
+      typeof this.getActualReplicaStatus !==
+      OPERATION_WORKFLOW_OWNER_LITERAL.FUNCTION
+    ) {
+      throw new Error(
+        OPERATION_WORKFLOW_OWNER_LITERAL.OPERATIONWORKFLOWOWNER_REQUIRES_GETACTUALREPLICASTATUS_OPEN_PAREN_CLOSE_PAREN,
+      );
+    }
+  }
+
+  /** @return {boolean} */
+  get isShuttingDown() {
+    return this._isShuttingDown();
+  }
+
+  /** @return {boolean} */
+  get isInitialized() {
+    return this._isInitialized();
+  }
+
+  /**
+   * Release owner-local deferred retry state.
+   */
+  shutdown() {
+    for (const timerHandle of this.safetyDeferredRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.safetyDeferredRetryTimerByOperationId.clear();
+    for (const timerHandle of this.observedProgressRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.observedProgressRetryTimerByOperationId.clear();
+    for (const timerHandle of this.dispatchRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.dispatchRetryTimerByOperationId.clear();
+    for (const timerHandle of this.priorityActiveReplaceRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.priorityActiveReplaceRetryTimerByOperationId.clear();
+    for (const timerHandle of this.createdOperationHandoffRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.createdOperationHandoffRetryTimerByOperationId.clear();
+    for (const timerHandle of this.transitionRetryTimerByOperationId.values()) {
+      this.clearTimeoutFn(timerHandle);
+    }
+    this.transitionRetryTimerByOperationId.clear();
+    this.transitionRetryGraceDeadlineByOperationId.clear();
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearObservedProgressRetry(operationId) {
+    const timerHandle =
+      this.observedProgressRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.observedProgressRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearSafetyDeferredRetry(operationId) {
+    const timerHandle =
+      this.safetyDeferredRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.safetyDeferredRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearDispatchRetry(operationId) {
+    const timerHandle = this.dispatchRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.dispatchRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearPriorityActiveReplaceRetry(operationId) {
+    const timerHandle =
+      this.priorityActiveReplaceRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.priorityActiveReplaceRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearCreatedOperationHandoffRetry(operationId) {
+    const timerHandle =
+      this.createdOperationHandoffRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string} operationId
+   */
+  clearTransitionRetry(operationId) {
+    const timerHandle = this.transitionRetryTimerByOperationId.get(operationId);
+    if (!timerHandle) {
+      this.transitionRetryGraceDeadlineByOperationId.delete(operationId);
+      return;
+    }
+    this.clearTimeoutFn(timerHandle);
+    this.transitionRetryTimerByOperationId.delete(operationId);
+    this.transitionRetryGraceDeadlineByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {Object} [context={}]
+   * @param {number} [delayMs=0]
+   * @return {void}
+   * @private
+   */
+  recordTransitionRetryGrace(operationId, context = {}, delayMs = NUM.ZERO) {
+    if (!operationId) {
+      return;
+    }
+    const workflowStep =
+      typeof context.workflowStep === TYPEOF.STRING &&
+      context.workflowStep.length > NUM.ZERO
+        ? context.workflowStep
+        : WORKFLOW_STEP.PENDING;
+    const partitionId = context.partitionId || null;
+    const stepTimeout = this.getTimeoutForStep(
+      workflowStep,
+      partitionId ? { partitionId } : null,
+    );
+    const retryDelayMs =
+      Number.isFinite(delayMs) && delayMs > NUM.ZERO ? delayMs : NUM.ZERO;
+    const requestedGraceDeadlineMs = Date.now() + retryDelayMs;
+    const durableProgressAtMs = Number.isFinite(context.updatedAt)
+      ? context.updatedAt
+      : Number.isFinite(context.createdAt)
+        ? context.createdAt
+        : null;
+    const timeoutCeilingMs = Number.isFinite(durableProgressAtMs)
+      ? durableProgressAtMs + stepTimeout
+      : null;
+    const graceDeadlineMs = Number.isFinite(timeoutCeilingMs)
+      ? Math.min(timeoutCeilingMs, requestedGraceDeadlineMs)
+      : requestedGraceDeadlineMs;
+    const existingDeadlineMs = Number(
+      this.transitionRetryGraceDeadlineByOperationId.get(operationId),
+    );
+    this.transitionRetryGraceDeadlineByOperationId.set(
+      operationId,
+      Number.isFinite(timeoutCeilingMs) && Number.isFinite(existingDeadlineMs)
+        ? Math.min(
+            timeoutCeilingMs,
+            Math.max(existingDeadlineMs, graceDeadlineMs),
+          )
+        : Number.isFinite(existingDeadlineMs)
+          ? Math.max(existingDeadlineMs, graceDeadlineMs)
+          : graceDeadlineMs,
+    );
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  hasActiveTransitionRetryGrace(operationId, now = Date.now()) {
+    if (!operationId) {
+      return false;
+    }
+    const deadlineMs = Number(
+      this.transitionRetryGraceDeadlineByOperationId.get(operationId),
+    );
+    if (!Number.isFinite(deadlineMs)) {
+      return false;
+    }
+    if (deadlineMs <= now) {
+      this.transitionRetryGraceDeadlineByOperationId.delete(operationId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Critical system-partition recovery must not fail terminally on transient
+   * control-plane dispatch pressure. Keep the same operation alive and retry
+   * through the owner lane instead of churning new failed rows.
+   *
+   * @param {Object} operation
+   * @param {Error|Object} errorLike
+   * @return {boolean}
+   * @private
+   */
+  shouldDeferRetryableDispatchFailure(operation, errorLike) {
+    if (!operation || !isRetryableControlPlaneError(errorLike)) {
+      return false;
+    }
+    return this.isCriticalSystemPartition(operation.partitionId);
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isDispatchRetryableWorkflowStep(operation) {
+    if (!operation) {
+      return false;
+    }
+    const workflowStep = operation.workflowStep;
+    if (this.repository.isReplaceRemoveDispatchPhase(operation)) {
+      return (
+        workflowStep === WORKFLOW_STEP.ACTIVE ||
+        workflowStep === WORKFLOW_STEP.STOPPING
+      );
+    }
+    if (
+      operation.type === OperationType.REMOVE &&
+      workflowStep === WORKFLOW_STEP.STOPPING
+    ) {
+      return true;
+    }
+    if (this.isCreateRearmDispatchPhase(operation)) {
+      return true;
+    }
+    return (
+      workflowStep === WORKFLOW_STEP.PENDING ||
+      workflowStep === WORKFLOW_STEP.SENDING
+    );
+  }
+
+  /**
+   * Critical add-side create dispatch must be replayable from CREATING when
+   * durable state still lacks any observed target visibility.
+   *
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isCreateRearmDispatchPhase(operation) {
+    if (!operation || !this.isCriticalSystemPartition(operation.partitionId)) {
+      return false;
+    }
+    if (operation.workflowStep !== WORKFLOW_STEP.CREATING) {
+      return false;
+    }
+    if (this.repository.isReplaceRemoveDispatchPhase(operation)) {
+      return false;
+    }
+    return (
+      operation.type === OperationType.ADD ||
+      operation.type === OperationType.REPLACE
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isRemoveInitialDispatchPhase(operation) {
+    return (
+      operation?.type === OperationType.REMOVE &&
+      (operation?.workflowStep === WORKFLOW_STEP.PENDING ||
+        operation?.workflowStep === WORKFLOW_STEP.SENDING)
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isSafetyDeferredRetryableOperation(operation) {
+    if (!operation) {
+      return false;
+    }
+    return (
+      this.isRemoveInitialDispatchPhase(operation) ||
+      this.repository.isReplaceRemoveDispatchPhase(operation)
+    );
+  }
+
+  /**
+   * Critical control-plane operations must not rely only on timeout expiry to
+   * retry first-hop dispatch progression. When observed replica status is
+   * still absent in the initial dispatch or critical create-rearm phases,
+   * proactively re-arm dispatch through the canonical owner path.
+   *
+   * @param {Object} operation
+   * @param {string|null} actualStatus
+   * @return {boolean}
+   * @private
+   */
+  shouldRearmDispatchFromProgressReconcile(operation, actualStatus) {
+    if (!operation) {
+      return false;
+    }
+    const normalizedActualStatus =
+      typeof actualStatus === TYPEOF.STRING
+        ? actualStatus.toLowerCase()
+        : actualStatus;
+    const createRearmPhase = this.isCreateRearmDispatchPhase(operation);
+    if (
+      normalizedActualStatus === ReplicaStatus.CREATING &&
+      !createRearmPhase
+    ) {
+      return false;
+    }
+    if (
+      normalizedActualStatus === ReplicaStatus.SYNCING ||
+      normalizedActualStatus === ReplicaStatus.ACTIVE ||
+      normalizedActualStatus === ReplicaStatus.FAILED
+    ) {
+      return false;
+    }
+    if (!this.isDispatchRetryableWorkflowStep(operation)) {
+      return false;
+    }
+    if (this.isOperationStepTimedOut(operation)) {
+      return false;
+    }
+    return this.isCriticalSystemPartition(operation.partitionId);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Error|Object} errorLike
+   * @return {boolean}
+   * @private
+   */
+  deferDispatchRetry(operation, errorLike) {
+    const operationId = operation?.operationId || null;
+    if (
+      !operationId ||
+      !this.shouldDeferRetryableDispatchFailure(operation, errorLike)
+    ) {
+      return false;
+    }
+    if (this.dispatchRetryTimerByOperationId.has(operationId)) {
+      return true;
+    }
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    const delayMs =
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
+        ? retryAfterMs
+        : DISPATCH_RETRY_DELAY_MS;
+    const errorMessage = this.normalizeErrorMessage(
+      errorLike,
+      REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
+    );
+
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_DEFERRED,
+      {
+        operationId,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+        workflowStep: operation.workflowStep,
+        delayMs,
+        errorMessage,
+      },
+    );
+
+    const timerHandle = this.setTimeoutFn(() => {
+      this.dispatchRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        async () => {
+          const currentOperation =
+            await this.getDeferredDispatchRetryOperation(operationId);
+          if (
+            !currentOperation ||
+            this.repository.isOperationTerminal(currentOperation) ||
+            !this.repository.isOperationLocallyOwned(currentOperation) ||
+            !this.isDispatchRetryableWorkflowStep(currentOperation)
+          ) {
+            return;
+          }
+          await this.runOperationOwnerAction(
+            OPERATION_OWNER_ACTION.DISPATCH,
+            currentOperation,
+            {
+              boundary: "dispatch_retry",
+              workflowStep: currentOperation.workflowStep || null,
+              partitionId: currentOperation.partitionId || null,
+              runInlineWhenOwnerLaneHeld: true,
+            },
+          );
+        },
+      ).catch((retryError) => {
+        this.handleDeferredDispatchRetryFailure(operation, retryError);
+      });
+    }, delayMs);
+    this.dispatchRetryTimerByOperationId.set(operationId, timerHandle);
+    return true;
+  }
+
+  /**
+   * Deferred dispatch retries must tolerate cache-lagged reads after durable
+   * replica_operations writes. Prefer the authoritative owner row before
+   * falling back to the lighter query path so retry timers cannot silently
+   * abandon freshly persisted PENDING operations.
+   *
+   * @param {string} operationId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async getDeferredDispatchRetryOperation(operationId) {
+    const visibilityObservation =
+      await this.repository.getOperationByIdVisibilityObservation(operationId, {
+        requireOwnerRpcRead: false,
+        allowPriorityRecoveryDeferredVisibility: true,
+      });
+    return visibilityObservation?.operation || null;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {Error|Object} error
+   */
+  handleDeferredDispatchRetryFailure(operation, error) {
+    if (this.deferDispatchRetry(operation, error)) {
+      return;
+    }
+    if (
+      this.deferTransitionRetry(operation?.operationId || null, error, {
+        boundary: OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH_RETRY,
+        partitionId: operation?.partitionId || null,
+        workflowStep: operation?.workflowStep || null,
+        updatedAt: operation?.updatedAt,
+        createdAt: operation?.createdAt,
+      })
+    ) {
+      return;
+    }
+    this.logger.error(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_FAILED,
+      {
+        operationId: operation?.operationId || null,
+        partitionId: operation?.partitionId || null,
+        workflowStep: operation?.workflowStep || null,
+        error: error?.message || error?.error || String(error),
+      },
+    );
+  }
+
+  /**
+   * Re-enter remove-like operations that were deferred by safety policy.
+   * Safety blockers are transient cluster state, not terminal workflow faults.
+   *
+   * @param {Object} operation
+   * @param {string} deferReason
+   * @param {string} errorMessage
+   * @return {boolean}
+   * @private
+   */
+  scheduleDeferredSafetyRetry(operation, deferReason, errorMessage) {
+    const operationId = operation?.operationId || null;
+    if (!operationId || !this.isSafetyDeferredRetryableOperation(operation)) {
+      return false;
+    }
+    if (this.safetyDeferredRetryTimerByOperationId.has(operationId)) {
+      return true;
+    }
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_DEFERRED,
+      {
+        operationId,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+        workflowStep: operation.workflowStep,
+        delayMs: SAFETY_DEFERRED_RETRY_DELAY_MS,
+        deferReason,
+        errorMessage,
+      },
+    );
+
+    const timerHandle = this.setTimeoutFn(() => {
+      this.safetyDeferredRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        async () => {
+          const visibilityObservation =
+            await this.repository.getOperationByIdVisibilityObservation(
+              operationId,
+              {
+                requireOwnerRpcRead: false,
+                allowPriorityRecoveryDeferredVisibility: true,
+              },
+            );
+          const currentOperation = visibilityObservation?.operation || null;
+          if (
+            !currentOperation ||
+            this.repository.isOperationTerminal(currentOperation) ||
+            !this.repository.isOperationLocallyOwned(currentOperation) ||
+            !this.isSafetyDeferredRetryableOperation(currentOperation)
+          ) {
+            return;
+          }
+          await this.runOperationOwnerAction(
+            OPERATION_OWNER_ACTION.EXECUTE,
+            currentOperation,
+            {
+              boundary: "safety_retry",
+              workflowStep: currentOperation.workflowStep || null,
+              partitionId: currentOperation.partitionId || null,
+              runInlineWhenOwnerLaneHeld: true,
+            },
+          );
+        },
+      ).catch((retryError) => {
+        if (
+          this.deferTransitionRetry(operationId, retryError, {
+            boundary: "safety_retry",
+            partitionId: operation?.partitionId || null,
+            workflowStep: operation?.workflowStep || null,
+            updatedAt: operation?.updatedAt,
+            createdAt: operation?.createdAt,
+          })
+        ) {
+          return;
+        }
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DISPATCH_RETRY_FAILED,
+          {
+            operationId,
+            partitionId: operation?.partitionId || null,
+            workflowStep: operation?.workflowStep || null,
+            deferReason,
+            error:
+              retryError?.message || retryError?.error || String(retryError),
+          },
+        );
+      });
+    }, SAFETY_DEFERRED_RETRY_DELAY_MS);
+    this.safetyDeferredRetryTimerByOperationId.set(operationId, timerHandle);
+    return true;
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  isOperationStepTimedOut(operation, now = Date.now()) {
+    if (!operation) {
+      return false;
+    }
+    if (this.hasActiveTransitionRetryGrace(operation.operationId, now)) {
+      return false;
+    }
+    const updatedAt = Number(operation.updatedAt);
+    if (!Number.isFinite(updatedAt)) {
+      return false;
+    }
+    return (
+      now - updatedAt >=
+      this.getTimeoutForStep(operation.workflowStep, operation)
+    );
+  }
+
+  /**
+   * Resume one operation through the canonical owner path after a deferred
+   * retryable transition failure.
+   * @param {string} operationId
+   * @return {Promise<void>}
+   * @private
+   */
+  async resumeDeferredTransitionOperation(operationId) {
+    const visibilityObservation =
+      await this.repository.getOperationByIdVisibilityObservation(operationId, {
+        requireOwnerRpcRead: false,
+        allowPriorityRecoveryDeferredVisibility: true,
+      });
+    const operation = visibilityObservation?.operation || null;
+    if (
+      !operation ||
+      this.repository.isOperationTerminal(operation) ||
+      !this.repository.isOperationLocallyOwned(operation)
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      this.isDispatchRetryableWorkflowStep(operation) &&
+      (this.hasActiveTransitionRetryGrace(operationId, now) ||
+        !this.isOperationStepTimedOut(operation, now))
+    ) {
+      await this.runOperationOwnerAction(
+        OPERATION_OWNER_ACTION.DISPATCH,
+        operation,
+        {
+          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.TRANSITION_RETRY_RESUME,
+          workflowStep: operation.workflowStep || null,
+          partitionId: operation.partitionId || null,
+          runInlineWhenOwnerLaneHeld: true,
+        },
+      );
+      return;
+    }
+    await this.reconcileTimeoutOperation(operation, now);
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {Error|Object} errorLike
+   * @param {Object} [context]
+   * @return {boolean}
+   * @private
+   */
+  deferTransitionRetry(operationId, errorLike, context = {}) {
+    if (!operationId || !isRetryableControlPlaneError(errorLike)) {
+      return false;
+    }
+    const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
+    const delayMs =
+      Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO
+        ? retryAfterMs
+        : TRANSITION_RETRY_DELAY_MS;
+    this.recordTransitionRetryGrace(operationId, context, delayMs);
+    if (this.transitionRetryTimerByOperationId.has(operationId)) {
+      return true;
+    }
+    const errorMessage = this.normalizeErrorMessage(
+      errorLike,
+      "Retryable control-plane transition failure",
+    );
+
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_DEFERRED,
+      {
+        operationId,
+        boundary: context.boundary || null,
+        partitionId: context.partitionId || null,
+        workflowStep: context.workflowStep || null,
+        delayMs,
+        errorMessage,
+      },
+    );
+
+    const timerHandle = this.setTimeoutFn(() => {
+      this.transitionRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.resumeDeferredTransitionOperation(operationId),
+      ).catch((retryError) => {
+        this.handleDeferredTransitionRetryFailure(
+          operationId,
+          retryError,
+          context,
+        );
+      });
+    }, delayMs);
+    this.transitionRetryTimerByOperationId.set(operationId, timerHandle);
+    return true;
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @param {Error|Object} error
+   * @param {Object} [context]
+   */
+  handleDeferredTransitionRetryFailure(operationId, error, context = {}) {
+    if (this.deferTransitionRetry(operationId, error, context)) {
+      return;
+    }
+    this.logger.error(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TRANSITION_RETRY_FAILED,
+      {
+        operationId,
+        boundary: context.boundary || null,
+        partitionId: context.partitionId || null,
+        workflowStep: context.workflowStep || null,
+        error: error?.message || error?.error || String(error),
+      },
+    );
+  }
+
+  /**
+   * Clone one operation snapshot so owner-side priming can reconcile against
+   * the created record without mutating the caller's inserted snapshot.
+   * @param {Object|null} operation
+   * @return {Object|null}
+   * @private
+   */
+  cloneOperationSnapshot(operation) {
+    if (!operation || typeof operation !== TYPEOF.OBJECT) {
+      return null;
+    }
+    return {
+      ...operation,
+      stepsHistory: Array.isArray(operation.stepsHistory)
+        ? [...operation.stepsHistory]
+        : [],
+    };
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {string|null}
+   * @private
+   */
+  resolveCoordinatorCreatedOperationOwnerNodeId(operation) {
+    if (
+      !operation ||
+      typeof this.repository?.resolveOperationOwnerNodeId !== TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    return this.repository.resolveOperationOwnerNodeId(operation);
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  isCoordinatorCreatedOperationLocallyOwned(operation) {
+    const ownerNodeId =
+      this.resolveCoordinatorCreatedOperationOwnerNodeId(operation);
+    return (
+      typeof ownerNodeId === TYPEOF.STRING &&
+      ownerNodeId.length > NUM.ZERO &&
+      ownerNodeId === this.nodeId
+    );
+  }
+
+  /**
+   * @param {string|null} nodeId
+   * @return {string|null}
+   * @private
+   */
+  buildCoordinatorCreatedDispatchIngress(nodeId) {
+    const normalizedNodeId = String(nodeId || "").trim();
+    if (normalizedNodeId.length === NUM.ZERO) {
+      return null;
+    }
+    return `${normalizedNodeId}/service/replica-dispatch`;
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {Object}
+   * @private
+   */
+  buildCoordinatorCreatedDispatchRow(operation) {
+    let stepsHistory = operation?.stepsHistory;
+    if (typeof stepsHistory !== TYPEOF.STRING) {
+      stepsHistory = Array.isArray(stepsHistory)
+        ? JSON.stringify(stepsHistory)
+        : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_JSON_ARRAY;
+    }
+
+    return {
+      operation_id: operation?.operationId || null,
+      type: operation?.type || null,
+      partition_id: operation?.partitionId || null,
+      replica_id: operation?.replicaId,
+      source_node_id: operation?.sourceNodeId,
+      target_node_id: operation?.targetNodeId,
+      status: operation?.status,
+      workflow_step: operation?.workflowStep || null,
+      created_at: operation?.createdAt,
+      updated_at: operation?.updatedAt,
+      completed_at: operation?.completedAt,
+      error_message: operation?.errorMessage,
+      steps_history: stepsHistory,
+      entity_type: operation?.entityType,
+      entity_id: operation?.entityId,
+    };
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {boolean}
+   * @private
+   */
+  shouldRetryCoordinatorCreatedRemoteHandoff(operation) {
+    return this.isCriticalSystemPartition(operation?.partitionId || null);
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {number} delayMs
+   * @return {boolean}
+   * @private
+   */
+  canContinueCoordinatorCreatedRemoteHandoff(operation, delayMs) {
+    const operationId = operation?.operationId || null;
+    if (!operationId) {
+      return false;
+    }
+    this.recordTransitionRetryGrace(
+      operationId,
+      {
+        boundary:
+          OPERATION_WORKFLOW_OWNER_LITERAL.COORDINATOR_CREATED_REMOTE_HANDOFF,
+        partitionId: operation?.partitionId,
+        workflowStep: operation?.workflowStep,
+        updatedAt: operation?.updatedAt,
+        createdAt: operation?.createdAt,
+      },
+      delayMs,
+    );
+    return this.hasActiveTransitionRetryGrace(operationId);
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @param {number} delayMs
+   * @param {Object} [options={}]
+   * @param {boolean} [options.replaceExisting]
+   * @return {boolean}
+   * @private
+   */
+  scheduleCoordinatorCreatedRemoteHandoffFollowUp(
+    operation,
+    delayMs,
+    options = {},
+  ) {
+    const operationId = operation?.operationId || null;
+    if (
+      !operationId ||
+      !this.shouldRetryCoordinatorCreatedRemoteHandoff(operation) ||
+      !this.canContinueCoordinatorCreatedRemoteHandoff(operation, delayMs)
+    ) {
+      return false;
+    }
+
+    const replaceExisting = options.replaceExisting === true;
+    if (this.createdOperationHandoffRetryTimerByOperationId.has(operationId)) {
+      if (!replaceExisting) {
+        return true;
+      }
+      this.clearCreatedOperationHandoffRetry(operationId);
+    }
+
+    const operationSnapshot = this.cloneOperationSnapshot(operation) || {
+      operationId,
+    };
+    const timerHandle = this.setTimeoutFn(() => {
+      this.createdOperationHandoffRetryTimerByOperationId.delete(operationId);
+      if (this.isShuttingDown || !this.isInitialized) {
+        return;
+      }
+      return this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.armCoordinatorCreatedOperation(operationSnapshot),
+      ).catch((retryError) => {
+        this.handleDeferredCoordinatorCreatedRemoteHandoffRetryFailure(
+          operationSnapshot,
+          retryError,
+        );
+      });
+    }, delayMs);
+    this.createdOperationHandoffRetryTimerByOperationId.set(
+      operationId,
+      timerHandle,
+    );
+    return true;
+  }
+}
+
+export { OperationWorkflowOwnerSegment1 };

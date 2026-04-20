@@ -5,6 +5,7 @@ import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
   RAFT_TRANSPORT_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
+import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 test('RaftTransportAdapter keeps append-entry replication off the critical lane',
   async (t) => {
@@ -129,6 +130,102 @@ test('RaftTransportAdapter keeps control-plane publication append traffic critic
 
     t.same(receivedOptions, RAFT_TRANSPORT_DELIVERY_OPTIONS,
       'publication append traffic should remain critical');
+  });
+
+test('RaftTransportAdapter keeps syncing replica_operations append traffic off the critical lane',
+  async (t) => {
+    let receivedOptions = null;
+    const systemTableCache = {
+      get(tableName, key) {
+        if (tableName === 'services' && key === 'replica_operations-p1-r2') {
+          return {status: ReplicaStatus.SYNCING};
+        }
+        return null;
+      },
+    };
+    const messageRouter = {
+      async deliver(_address, _message, options) {
+        receivedOptions = options;
+        return {acknowledged: true};
+      },
+    };
+    const adapter = new RaftTransportAdapter({
+      messageRouter,
+      entityType: 'partition',
+      nodeId: 'node-1',
+      systemTableCache,
+    });
+    const packet = {
+      type: RAFT_PACKET_TYPE.APPEND,
+      term: 7,
+      address: 'node-1/partition/replica_operations-p1-r1',
+      state: 'leader',
+      leader: 'replica_operations-p1-r1',
+      last: {index: 12, term: 7},
+      data: [{index: 12, term: 7, command: {type: 'QUERY'}}],
+      destination: 'node-2/partition/replica_operations-p1-r2',
+    };
+
+    await new Promise((resolve, reject) => {
+      adapter.write(packet, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    t.same(receivedOptions, RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+      'syncing replica_operations append traffic should use the background delivery lane');
+  });
+
+test('RaftTransportAdapter keeps active replica_operations append traffic critical',
+  async (t) => {
+    let receivedOptions = null;
+    const systemTableCache = {
+      get(tableName, key) {
+        if (tableName === 'services' && key === 'replica_operations-p1-r2') {
+          return {status: ReplicaStatus.ACTIVE};
+        }
+        return null;
+      },
+    };
+    const messageRouter = {
+      async deliver(_address, _message, options) {
+        receivedOptions = options;
+        return {acknowledged: true};
+      },
+    };
+    const adapter = new RaftTransportAdapter({
+      messageRouter,
+      entityType: 'partition',
+      nodeId: 'node-1',
+      systemTableCache,
+    });
+    const packet = {
+      type: RAFT_PACKET_TYPE.APPEND,
+      term: 7,
+      address: 'node-1/partition/replica_operations-p1-r1',
+      state: 'leader',
+      leader: 'replica_operations-p1-r1',
+      last: {index: 12, term: 7},
+      data: [{index: 12, term: 7, command: {type: 'QUERY'}}],
+      destination: 'node-2/partition/replica_operations-p1-r2',
+    };
+
+    await new Promise((resolve, reject) => {
+      adapter.write(packet, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+
+    t.same(receivedOptions, RAFT_TRANSPORT_DELIVERY_OPTIONS,
+      'active replica_operations append traffic should remain critical');
   });
 
 test('RaftTransportAdapter keeps sql transaction append traffic off the critical lane',

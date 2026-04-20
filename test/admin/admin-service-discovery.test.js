@@ -4,14 +4,26 @@ import {AdminServiceDiscovery} from '../../src/admin/admin-service-discovery.js'
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
-import {PRESSURE_WORK_CLASS} from
-  '../../src/control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+
+const TEST_DISCOVERY_NODE_ID = 'node-a';
+const TEST_TRIGGER_CODES = ['discovery_node_coverage_gap'];
+const TEST_DISCOVERY_SNAPSHOT_REASON = 'service_discovery_snapshot';
+const TEST_DISCOVERY_TABLE_NAME = TABLES.SERVICES;
+const TEST_DISCOVERY_TABLE_ID = 'services-p1';
+const TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID = 'benchmark_events-p1';
+const TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
 
 test('AdminServiceDiscovery routes authoritative cache repair through the ' +
   'gateway instead of mutating the cache directly', async (t) => {
-  const repairCalls = [];
-  const discovery = new AdminServiceDiscovery({
-    nodeId: 'node-a',
+    const repairCalls = [];
+    const discovery = new AdminServiceDiscovery({
+    nodeId: TEST_DISCOVERY_NODE_ID,
     systemTableCache: {
       getAll() {
         return [];
@@ -43,13 +55,132 @@ test('AdminServiceDiscovery routes authoritative cache repair through the ' +
     'admin-discovery:test',
     'service discovery should preserve the repair cause',
   );
+  t.equal(
+    repairCalls[0].options.reconcileIntent,
+    CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
+    'service discovery repairs should preserve missing rows during refresh',
+  );
 });
+
+test('AdminServiceDiscovery routes shared snapshot resolution through the injected control-plane snapshot owner',
+  async (t) => {
+    const ownerResult = {
+      serviceCount: 1,
+      snapshotObservation: {
+        state: 'fresh',
+      },
+      snapshotRevision: 14,
+      snapshotRevisionState: 'current',
+      snapshotResumeToken: 'control-plane-revision:captured_at:14',
+    };
+    const ownerCalls = [];
+    const localSnapshot = {
+      serviceCount: 0,
+    };
+    const discovery = new AdminServiceDiscovery({
+      nodeId: TEST_DISCOVERY_NODE_ID,
+      controlPlaneSnapshotOwner: {
+        async resolveServiceDiscoverySnapshot(receivedSnapshot, options) {
+          ownerCalls.push({
+            receivedSnapshot,
+            options,
+          });
+          return ownerResult;
+        },
+      },
+    });
+    discovery.buildLocalServiceDiscoverySnapshot = () => localSnapshot;
+
+    const result = await discovery.resolveServiceDiscoverySnapshot({
+      allowAuthoritativeRepair: true,
+      tableName: TEST_DISCOVERY_TABLE_NAME,
+      tableId: TEST_DISCOVERY_TABLE_ID,
+    });
+
+    t.equal(
+      ownerCalls.length,
+      1,
+      'service discovery should delegate shared snapshot resolution exactly once',
+    );
+    t.equal(
+      ownerCalls[0].receivedSnapshot,
+      localSnapshot,
+      'service discovery should pass the local snapshot to the shared owner',
+    );
+    t.same(
+      ownerCalls[0].options,
+      {
+        allowAuthoritativeRepair: true,
+        tableName: TEST_DISCOVERY_TABLE_NAME,
+        tableId: TEST_DISCOVERY_TABLE_ID,
+      },
+      'service discovery should preserve scope when delegating to the shared owner',
+    );
+    t.equal(
+      result,
+      ownerResult,
+      'service discovery should return the shared owner result verbatim',
+    );
+  });
+
+test('AdminServiceDiscovery follows the shared routing owner-gap state instead of local advisory leader roles',
+  async (t) => {
+    const discovery = new AdminServiceDiscovery({
+      nodeId: TEST_DISCOVERY_NODE_ID,
+      sqlQueryEngine: {
+        queryExecutor: {
+          getPartitionRoutingSnapshot(receivedPartitionId) {
+            t.equal(
+              receivedPartitionId,
+              TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID,
+              'discovery should consult the shared routing snapshot for leader stability',
+            );
+            return {
+              partitionId: receivedPartitionId,
+              canonicalLeaderNodeId: null,
+              canonicalLeaderRoutingGapState:
+                TEST_DISCOVERY_ROUTING_GAP_OWNER_MISSING,
+              serviceRowCount: 2,
+              activeAddressedServiceCount: 2,
+            };
+          },
+        },
+      },
+    });
+
+    const leadershipStable = discovery.resolveDiscoveryLeadershipStable(
+      new Set([TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID]),
+      [{
+        partition_id: TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID,
+        leader_node_id: null,
+      }],
+      [{
+        service_type: 'partition',
+        partition_id: TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID,
+        node_id: 'node-a',
+        status: 'active',
+        raft_role: 'leader',
+      }, {
+        service_type: 'partition',
+        partition_id: TEST_DISCOVERY_OWNER_MISSING_PARTITION_ID,
+        node_id: 'node-b',
+        status: 'active',
+        raft_role: 'follower',
+      }],
+    );
+
+    t.equal(
+      leadershipStable,
+      false,
+      'discovery should not rebuild a local leader-stable answer once the shared routing owner reports an owner gap',
+    );
+  });
 
 test('AdminServiceDiscovery authoritative cache repair reads use control-plane recovery semantics',
   async (t) => {
     const readCalls = [];
     const discovery = new AdminServiceDiscovery({
-      nodeId: 'node-a',
+      nodeId: TEST_DISCOVERY_NODE_ID,
       systemTableCache: {
         getAll() {
           return [];
@@ -63,6 +194,7 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
           readCalls.push({
             tableName: readIntent?.tableName,
             routingReadinessDimension: options?.routingReadinessDimension,
+            workloadClass: options?.workloadClass,
           });
           return {
             success: true,
@@ -78,7 +210,7 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
 
     await discovery.ensureAuthoritativeDiscoveryCacheRepair({
       reason: 'unit-test-recovery-routing',
-      triggerCodes: ['discovery_node_coverage_gap'],
+      triggerCodes: TEST_TRIGGER_CODES,
     });
 
     t.equal(readCalls.length > 0, true);
@@ -90,13 +222,21 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
       true,
       'authoritative discovery repair should route gateway reads as control-plane recovery work',
     );
+    t.equal(
+      readCalls.every((call) =>
+        call.workloadClass ===
+          CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
+      ),
+      true,
+      'service-discovery repair reads should carry the shared workload class',
+    );
   });
 
 test('AdminServiceDiscovery control snapshot repair reads bypass pressure degradation',
   async (t) => {
     const readCalls = [];
     const discovery = new AdminServiceDiscovery({
-      nodeId: 'node-a',
+      nodeId: TEST_DISCOVERY_NODE_ID,
       systemTableCache: {
         getAll() {
           return [];
@@ -110,6 +250,7 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
           readCalls.push({
             tableName: readIntent?.tableName,
             allowPressureDegrade: options?.allowPressureDegrade,
+            workloadClass: options?.workloadClass,
             workClass: options?.workClass,
             deliveryPriority: options?.deliveryPriority,
             routingReadinessDimension: options?.routingReadinessDimension,
@@ -128,7 +269,7 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
 
     await discovery.ensureAuthoritativeDiscoveryCacheRepair({
       reason: 'control_snapshot',
-      triggerCodes: ['discovery_node_coverage_gap'],
+      triggerCodes: TEST_TRIGGER_CODES,
     });
 
     t.equal(readCalls.length > 0, true,
@@ -140,9 +281,16 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     );
     t.equal(
       readCalls.every((call) =>
-        call.workClass === PRESSURE_WORK_CLASS.CRITICAL),
+        call.workClass === 'critical'),
       true,
       'control snapshot repair should use the critical work class',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.workloadClass ===
+          CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR),
+      true,
+      'control snapshot repair should carry the shared repair workload class',
     );
     t.equal(
       readCalls.every((call) => call.deliveryPriority === 'critical'),
@@ -158,6 +306,61 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     );
   });
 
+test('AdminServiceDiscovery table-scoped snapshot repair keeps recovery-eligible routing',
+  async (t) => {
+    const readCalls = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: TEST_DISCOVERY_NODE_ID,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent, options) {
+          readCalls.push({
+            tableName: readIntent?.tableName,
+            allowSqlFallback: options?.allowSqlFallback,
+            routingReadinessDimension: options?.routingReadinessDimension,
+          });
+          return {
+            success: true,
+            tableName: readIntent?.tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 0};
+        },
+      },
+    });
+
+    await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: TEST_DISCOVERY_SNAPSHOT_REASON,
+      tableName: TEST_DISCOVERY_TABLE_NAME,
+      tableId: TEST_DISCOVERY_TABLE_ID,
+      triggerCodes: TEST_TRIGGER_CODES,
+    });
+
+    t.equal(readCalls.length > 0, true,
+      'table-scoped service discovery repair should issue authoritative reads');
+    t.equal(
+      readCalls.every((call) => call.allowSqlFallback === true),
+      true,
+      'table-scoped service discovery repair should preserve SQL fallback',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.routingReadinessDimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE),
+      true,
+      'table-scoped service discovery repair should use recovery-eligible routing',
+    );
+  });
+
 test(
   'AdminServiceDiscovery does not report applied repair when any authoritative read fails',
   async (t) => {
@@ -165,7 +368,7 @@ test(
     const readCalls = [];
     const warnings = [];
     const discovery = new AdminServiceDiscovery({
-      nodeId: 'node-a',
+      nodeId: TEST_DISCOVERY_NODE_ID,
       systemTableCache: {
         getAll() {
           return [];
@@ -325,6 +528,170 @@ test(
       warnings[0]?.fields?.firstFailedParticipant?.participantNodeId,
       'node-pressure',
       'warning should preserve the first failed participant',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery reuses recent pressure repair failures for the same repair scope',
+  async (t) => {
+    const INITIAL_NOW_MS = 1000;
+    const SECOND_CALL_DELTA_MS = 1000;
+    const FIRST_PRESSURE_RETRY_AFTER_MS = 8000;
+    let nowMs = INITIAL_NOW_MS;
+    const readCalls = [];
+    const timeoutFailure = {
+      success: false,
+      errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+      error: 'Message timeout',
+      retryAfterMs: 250,
+      localQueryTransport: {
+        ready: true,
+        state: 'ready',
+      },
+    };
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      nowFn() {
+        return nowMs;
+      },
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          readCalls.push(String(readIntent?.tableName || ''));
+          return timeoutFailure;
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+
+    const firstResult = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'control_snapshot',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.match(
+      firstResult,
+      {
+        applied: false,
+        skipped: false,
+        failureClass: 'pressure_or_timeout',
+        failureCount: 1,
+        retryAfterMs: FIRST_PRESSURE_RETRY_AFTER_MS,
+      },
+      'first pressure failure should create the initial repair backoff snapshot',
+    );
+    t.equal(readCalls.length > 0, true,
+      'first attempt should issue authoritative reads');
+
+    const firstReadCallCount = readCalls.length;
+    nowMs += SECOND_CALL_DELTA_MS;
+
+    const secondResult = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'control_snapshot',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.equal(readCalls.length, firstReadCallCount,
+      'second attempt should reuse the deferred failure snapshot');
+    t.match(
+      secondResult,
+      {
+        applied: false,
+        skipped: true,
+        deferred: true,
+        reused: true,
+        failureClass: 'pressure_or_timeout',
+        failureCount: 1,
+      },
+      'second attempt should report the reused deferred failure state',
+    );
+    t.equal(
+      secondResult.retryAfterMs,
+      FIRST_PRESSURE_RETRY_AFTER_MS - SECOND_CALL_DELTA_MS,
+      'reused failure should expose the remaining retry delay',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery increases repair backoff after repeated pressure failures',
+  async (t) => {
+    const INITIAL_NOW_MS = 1000;
+    const FIRST_PRESSURE_RETRY_AFTER_MS = 8000;
+    const SECOND_PRESSURE_RETRY_AFTER_MS = 16000;
+    let nowMs = INITIAL_NOW_MS;
+    const readCalls = [];
+    const timeoutFailure = {
+      success: false,
+      errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+      error: 'Message timeout',
+      retryAfterMs: 250,
+      localQueryTransport: {
+        ready: true,
+        state: 'ready',
+      },
+    };
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      nowFn() {
+        return nowMs;
+      },
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          readCalls.push(String(readIntent?.tableName || ''));
+          return timeoutFailure;
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+
+    const firstResult = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'control_snapshot',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.equal(firstResult.retryAfterMs, FIRST_PRESSURE_RETRY_AFTER_MS,
+      'first failure should use the initial pressure retry delay');
+
+    nowMs += FIRST_PRESSURE_RETRY_AFTER_MS;
+
+    const secondResult = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'control_snapshot',
+      triggerCodes: ['discovery_node_coverage_gap'],
+    });
+
+    t.equal(readCalls.length > 1, true,
+      'a retry after the cooldown should issue a new authoritative read');
+    t.match(
+      secondResult,
+      {
+        applied: false,
+        skipped: false,
+        failureClass: 'pressure_or_timeout',
+        failureCount: 2,
+        retryAfterMs: SECOND_PRESSURE_RETRY_AFTER_MS,
+      },
+      'second failure should increase the backoff window',
     );
   },
 );

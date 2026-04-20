@@ -108,6 +108,10 @@ const RAFT_GROUP_ERROR_MSG = Object.freeze({
   MISSING_TRANSPORT: 'RaftGroup requires transport',
   MISSING_PEER_ADDRESS_RESOLVER:
     'RaftGroup requires peerAddressResolver',
+  SINGLE_REPLICA_CHANGE_REQUIRED:
+    'single-replica leadership requires raft.change()',
+  SINGLE_REPLICA_LEADER_STATE_REQUIRED:
+    'single-replica leadership requires a live raft leader state constant',
   NOT_INITIALIZED: 'RaftGroup not initialized',
   ALREADY_INITIALIZED: 'RaftGroup already initialized',
   peerJoinFailed: (peerId) =>

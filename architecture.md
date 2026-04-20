@@ -169,6 +169,115 @@ To prevent overlap and contradictory runtime behavior:
    re-evaluation rather than serving a stale snapshot. This ensures
    load-lane admission reflects the latest readiness state after topology
    changes.
+   **Promise-shaped owner contract kernel:** `src/control-plane/owner-contract-outcome.js`
+   defines one shared cross-layer envelope: `contractState`
+   (`ready`, `pending`, `deferred`, `blocked`, `failed`) plus `nextAction`
+   (`proceed`, `wait`, `retry`, `stop`). Reason codes, retry hints,
+   visibility state, runtime-authority evidence, and durable protocol phase
+   remain attached as evidence instead of widening the caller-facing branch
+   surface.
+   **Control-plane mutation defer contract:** background gateway-owned
+   metadata writes and retryable routed system-table SQL DML both consume
+   `ControlPlaneMutationReadiness`, which derives one canonical deferred
+   outcome from `ControlPlaneReadinessService` while publication convergence
+   is still establishing. `ControlPlaneSystemTableGateway` now normalizes
+   those mutation results into the shared owner-contract envelope, and admin
+   plus harness consumers preserve `contractState`/`nextAction` alongside
+   the legacy `outcome`/`reasonCodes`/`runtimeAuthority` evidence instead of
+   inferring meaning from opaque write timeouts. The same owner now also
+   classifies transaction-control routing gaps on `sql_transactions`,
+   `sql_transaction_participants`, and `sql_write_operations`, so retryable
+   system-table mutations preserve one explicit deferred owner-gap outcome
+   instead of re-entering CDC retry loops as generic distributed failures.
+   **Control-plane write-health contract:** bootstrap/startup readiness now
+   consumes one shared `ControlPlaneWriteHealth` owner, which reuses
+   heartbeat publication evidence plus transport pressure partitions to
+   distinguish three states: `healthy`, `background_backlog_contained`, and
+   `critical_write_unhealthy`. Contained observability backlog is exposed as
+   degraded soft context, while true critical-reserve exhaustion remains a
+   hard readiness blocker. This prevents background heartbeat churn from
+   poisoning the same dependency used by actual control-plane write loss.
+   **Canonical leader-gap routing contract:** routing snapshots derive one
+   shared `canonicalLeaderRoutingGapState` from canonical leader identity
+   and required-table service visibility. Query write routing and
+   `ControlPlaneKernelIngress` consume that same state, so only
+   recovery-owned system-table writes may widen on `owner_missing` or
+   `service_missing` during `controlPlaneRecoveryEligible`; steady-state
+   writes stay fail-closed, while local `NODE_STATE_UPDATE` ingress keeps
+   only a bounded local fallback on that same contract.
+   **Priority recovery completion contract:** critical control-plane recovery
+   derives one shared `PriorityRecoveryCompletion` outcome, including bounded
+   `temporaryOverflowVoterBudget` while replace/remove work is still pending.
+   `PartitionService`, priority remove-safety, and other recovery consumers
+   must use that completion/planning contract instead of inferring temporary
+   overflow or authoritative recovery membership from local voter-count math
+   or stale durable published-membership rows, so multi-learner recovery can
+   finish without widening steady-state promotion rules or deadlocking source
+   removal behind lagging publication visibility.
+   **Strict CDC recovery-routing contract:** strict system-table CDC
+   dissemination derives one shared
+   `MessageGroupForwardingOwner.resolveCdcIngressDecision(...)` outcome.
+   For strict CDC tables, the forwarding owner reuses one recovery-routing
+   contract from the system-table partition
+   `controlPlaneRecoveryEligible` routing snapshot, ordered connected
+   message-group candidates, and bounded local system-table write
+   availability. Metadata-ingress readiness, bootstrap/join CDC propagation,
+   and strict CDC apply-vs-forward execution must therefore consume the same
+   ingress states: `forward_strict_target`,
+   `forward_strict_recovery_target`, `local_strict_convergence_ingress`,
+   `local_strict_recovery_ingress`, or `defer_strict_target_unknown`,
+   instead of re-deriving leader-unknown behavior from partial cache
+   visibility.
+   **Benchmark table bootstrap timeout contract:** admin control-lane SQL
+   requests derive one inner `SqlRequest.timeoutBudget` with bounded
+   completion margin, and `CREATE TABLE` carries that same budget through
+   `SQLQueryEngine` and `TableCreationService` into initial partition
+   provisioning and `IF NOT EXISTS` reconciliation. Benchmark table bootstrap
+   must therefore fail or defer on the same caller-owned timeout path instead
+   of letting inner provisioning outlive the outer admin request.
+   **Benchmark load-node availability contract:** distributed harness
+   benchmark load first derives one shared
+   `Cluster.resolveBenchmarkLoadAdmissionSnapshot(...)` from table-local
+   benchmark discovery plus the real load lane, then
+   `benchmark-partition-convergence` combines that snapshot with
+   replica-bearing spread so planners can distinguish `ready_replica` from
+   `replica_blocked` and `routed_admission_only` while preserving the
+   readiness and degradation evidence that explains each node:
+   routing/schema/topology readiness, local replica role and voter
+   readiness, degradation state, blocker reasons, and bounded
+   `retryAfterMs`.
+   The same convergence owner also derives one explicit dispatch
+   contribution state: `local_primary`, `local_blocked`,
+   `routed_support`, or `none`.
+   `resolveBenchmarkPartitionDispatchMode(...)` then derives one shared
+   steady-dispatch outcome from that convergence snapshot:
+   `local_ready_only` or `bootstrap_backfill_required`. Partitioning load
+   must therefore stay in backfill mode until the usable-spread target
+   exists, instead of collapsing to the smaller bootstrap quorum while
+   replica-bearing or routed support is still needed. `LoadNodeAvailability`
+   then derives one canonical dispatch state from local cooldown, external
+   admission, and sustained slot saturation. Borrowed healthy-node overflow
+   is explicit as `slot_borrowing`, while `slot_stalled` is reserved for
+   peers that have aged out at the borrowed dispatch ceiling, not merely at
+   the steady contribution floor. Healthy benchmark nodes can therefore keep
+   borrowing that budget instead of being capped by peers that are only
+   nominally admitted or only routable through another node.
+   **Boundary catalog rule:** current hotspot boundaries are cataloged in
+   `architecture/current-owner-maps.md` with the same fields each time:
+   semantic owner, canonical evidence, canonical vocabulary, allowed
+   consumers, forbidden reinterpretations, and primary diagnostics. The
+   current catalog centers on:
+   - benchmark load admission
+   - usable benchmark spread
+   - benchmark dispatch contribution
+   - structured deferred owner outcomes
+   - promise-shaped owner contracts: callers branch on `contractState` and
+     `nextAction`; visibility, phase, and owner-specific outcome labels stay
+     in reasons/evidence
+   - strict CDC recovery ingress
+   - diagnostics as derived consumers of owner state
+   Architectural fixes in these areas should extend that catalog instead of
+   adding new prose-only explanations or caller-local interpretations.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,

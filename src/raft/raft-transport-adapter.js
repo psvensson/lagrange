@@ -75,12 +75,40 @@ class RaftTransportAdapter {
         resolveRaftTransportDeliveryOptions({
           ...packet,
           targetAddress: peerAddress,
+          targetReplicaStatus: this.resolveTargetReplicaStatus(peerAddress),
         }),
       );
       callback(null, result);
     } catch (error) {
       callback(error);
     }
+  }
+
+  /**
+   * Resolve the current target replica status from the services cache when the
+   * peer address identifies one partition replica. This lets transport keep
+   * control-plane learner catch-up off the critical lane without weakening
+   * steady-state control traffic.
+   * @param {string} peerAddress
+   * @return {string|null}
+   */
+  resolveTargetReplicaStatus(peerAddress) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.get !== 'function' ||
+        typeof peerAddress !== 'string' ||
+        peerAddress.length === 0) {
+      return null;
+    }
+    const separatorIndex = peerAddress.lastIndexOf(ADDRESS.SEPARATOR);
+    if (separatorIndex <= 0 || separatorIndex === peerAddress.length - 1) {
+      return null;
+    }
+    const serviceId = peerAddress.slice(
+      separatorIndex + ADDRESS.SEPARATOR.length,
+    );
+    const serviceRow = this.systemTableCache.get(TABLES.SERVICES, serviceId);
+    const status = serviceRow?.status;
+    return typeof status === 'string' && status.length > 0 ? status : null;
   }
 
   /**

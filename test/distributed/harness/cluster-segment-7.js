@@ -1,0 +1,866 @@
+import { CLUSTER_SEGMENT_6 } from "./cluster-segment-6.js";
+import { Cluster5 } from "./cluster-segment-7-class-5.js";
+
+const {
+  ACTIVE_POLL_INTERVAL_MS,
+  ACTIVE_STATE,
+  ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX,
+  ACTIVE_WAIT_INACTIVE_SUMMARY_STATE_PREFIX,
+  ACTIVE_WAIT_INVARIANT_BREACH_MESSAGE_PREFIX,
+  ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+  ACTIVE_WAIT_MIN_CLUSTER_SIZE,
+  ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE,
+  ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+  ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX,
+  ACTIVE_WAIT_STALLED_MESSAGE_PREFIX,
+  ACTIVE_WAIT_TIMEOUT_MAX_MULTIPLIER,
+  ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR,
+  ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE,
+  CLUSTER_READINESS_MODE_LOAD,
+  CLUSTER_READINESS_MODE_STARTUP,
+  CLUSTER_STAGE_LOAD_READINESS_STABLE,
+  CLUSTER_STAGE_LOAD_READINESS_WAITING,
+  CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+  CONTAINER_LOG_TAIL_LINES,
+  LOG_COLLECTION_TIMEOUT_MS,
+  MIN_TIMEOUT_MS,
+  STARTUP_ADMISSION_STATE_BLOCKED,
+  STARTUP_ADMISSION_STATE_DEGRADED,
+  STARTUP_ADMISSION_STATE_STRONG_ACTIVE,
+  STATUS_ACTIVE_LOWER,
+  TIMEOUTS,
+  UNKNOWN_REASON,
+  UNKNOWN_STATE,
+  ZERO,
+  buildActiveGateWaitPolicy,
+  buildActiveWaitProgressSnapshot,
+  formatActiveWaitProgressSnapshot,
+  formatCountSummary,
+  formatNodeDiagnostics,
+  formatPublicationConvergenceGate,
+  formatSnapshotCoverage,
+  normalizeDistinctStringArray,
+  pollUntilCondition,
+  scoreActiveWaitProgress,
+  summarizeActiveWaitBlockerHistory,
+  summarizeInvariantBreaches,
+  upsertActiveWaitBlockerHistory,
+  withTimeout,
+} = CLUSTER_SEGMENT_6;
+
+class Cluster extends Cluster5 {
+  async _waitForAllActive(options = {}) {
+    const readinessMode =
+      options.mode === CLUSTER_READINESS_MODE_LOAD
+        ? CLUSTER_READINESS_MODE_LOAD
+        : CLUSTER_READINESS_MODE_STARTUP;
+    const timeoutOverrideMs = Number(options.timeoutMs);
+    const timeout =
+      Number.isFinite(timeoutOverrideMs) && timeoutOverrideMs >= MIN_TIMEOUT_MS
+        ? Math.floor(timeoutOverrideMs)
+        : this._resolveActiveWaitTimeoutMs();
+    const deadline = Date.now() + timeout;
+    const forceRepairAfterMs = Number.isFinite(
+      this._config?.timeouts?.activeWaitForceRepairAfter,
+    )
+      ? Math.max(ZERO, this._config.timeouts.activeWaitForceRepairAfter)
+      : TIMEOUTS.ACTIVE_WAIT_FORCE_REPAIR_AFTER;
+    const noProgressMaxAttempts =
+      readinessMode === CLUSTER_READINESS_MODE_LOAD
+        ? this._resolveActiveWaitNoProgressMaxAttempts(options, timeout)
+        : null;
+    const forceRepairThreshold = Date.now() + forceRepairAfterMs;
+    let forcedRepairIssued = false;
+    const inactiveSummaryCounts = new Map();
+    const blockerHistoryBySignature = new Map();
+    let bestProgressSnapshot = null;
+    let bestProgressScore = Number.NEGATIVE_INFINITY;
+    let lastMeaningfulProgressAttempt = ZERO;
+    let lastMeaningfulProgressElapsedMs = ZERO;
+    let lastMeaningfulProgressSnapshot = null;
+    let lastObservedProgressSnapshot = null;
+    let lastObservedAttempt = ZERO;
+    let lastObservedElapsedMs = ZERO;
+
+    const summarizeAdmissionState = (nodeDiagnostics = []) => {
+      const summary = {
+        [STARTUP_ADMISSION_STATE_STRONG_ACTIVE]: ZERO,
+        [STARTUP_ADMISSION_STATE_DEGRADED]: ZERO,
+        [STARTUP_ADMISSION_STATE_BLOCKED]: ZERO,
+      };
+      for (const diagnostic of nodeDiagnostics) {
+        const state =
+          typeof diagnostic?.admissionState === "string" &&
+          Object.prototype.hasOwnProperty.call(
+            summary,
+            diagnostic.admissionState,
+          )
+            ? diagnostic.admissionState
+            : "unknown";
+        summary[state] = (summary[state] || ZERO) + 1;
+      }
+      for (const [state, count] of Object.entries(summary)) {
+        if (count === ZERO) {
+          delete summary[state];
+        }
+      }
+      return summary;
+    };
+
+    const resolveActiveGateWaitPolicy = (result) => {
+      const progressSnapshot = buildActiveWaitProgressSnapshot(
+        result,
+        this._nodes.size,
+        { readinessMode },
+      );
+      return buildActiveGateWaitPolicy({
+        readinessMode,
+        closureRecordId: progressSnapshot?.closureRecordId || null,
+      });
+    };
+
+    const buildNoProgressDetails = (
+      attempts,
+      elapsedMs,
+      stalled,
+      progressSnapshot,
+    ) => {
+      const noProgressBudgetEnabled =
+        Number.isInteger(noProgressMaxAttempts) && noProgressMaxAttempts > ZERO;
+      const coordinatorCyclesSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      return {
+        enabled: noProgressBudgetEnabled,
+        mode: readinessMode,
+        maxAttempts: noProgressBudgetEnabled ? noProgressMaxAttempts : null,
+        maxCoordinatorCycles: noProgressBudgetEnabled
+          ? noProgressMaxAttempts
+          : null,
+        attemptsSinceProgress: coordinatorCyclesSinceProgress,
+        coordinatorCyclesSinceProgress,
+        stalled: stalled === true,
+        lastMeaningfulProgressAttempt: lastMeaningfulProgressAttempt || null,
+        lastMeaningfulProgressElapsedMs:
+          lastMeaningfulProgressElapsedMs || null,
+        lastMeaningfulProgress: lastMeaningfulProgressSnapshot || null,
+        currentProgress: progressSnapshot || null,
+        closureRecordId: progressSnapshot?.closureRecordId || null,
+        closureWitnessClass: progressSnapshot?.closureWitnessClass || null,
+        readinessDelay: progressSnapshot?.readinessDelay || null,
+      };
+    };
+    const buildActiveWaitReadinessFailure = ({
+      mode = null,
+      noProgress = null,
+      attemptsSinceProgress = null,
+      maxAttempts = null,
+    } = {}) => {
+      if (!noProgress || typeof noProgress !== "object") {
+        return null;
+      }
+      const readinessDelay =
+        typeof noProgress.readinessDelay === "object" &&
+        noProgress.readinessDelay !== null
+          ? noProgress.readinessDelay
+          : null;
+      const timedOut = readinessDelay && readinessDelay.timedOut === true;
+      const classCode =
+        timedOut &&
+        typeof readinessDelay?.cause === "string" &&
+        readinessDelay.cause.length > ZERO
+          ? readinessDelay.cause
+          : noProgress?.reasonCode === ACTIVE_WAIT_NO_PROGRESS_REASON_CODE ||
+              noProgress?.stalled === true
+            ? ACTIVE_WAIT_NO_PROGRESS_CLASS_CODE
+            : null;
+      return {
+        mode: typeof mode === "string" && mode.length > ZERO ? mode : null,
+        classCode,
+        recoverability:
+          typeof readinessDelay?.recoverability === "string" &&
+          readinessDelay.recoverability.length > ZERO
+            ? readinessDelay.recoverability
+            : null,
+        progressSignal: {
+          attemptsSinceProgress: Number.isInteger(attemptsSinceProgress)
+            ? Math.max(ZERO, attemptsSinceProgress)
+            : null,
+          maxAttempts:
+            Number.isInteger(maxAttempts) && maxAttempts > ZERO
+              ? Math.max(ZERO, maxAttempts)
+              : null,
+          stalled: noProgress?.stalled === true,
+        },
+        terminalReason:
+          typeof noProgress?.reasonCode === "string" &&
+          noProgress.reasonCode.length > ZERO
+            ? noProgress.reasonCode
+            : null,
+        source:
+          typeof readinessDelay?.source === "string" &&
+          readinessDelay.source.length > ZERO
+            ? readinessDelay.source
+            : null,
+        cause:
+          typeof readinessDelay?.cause === "string" &&
+          readinessDelay.cause.length > ZERO
+            ? readinessDelay.cause
+            : null,
+        error:
+          typeof readinessDelay?.error === "string" &&
+          readinessDelay.error.length > ZERO
+            ? readinessDelay.error
+            : null,
+      };
+    };
+
+    const buildWaitingDetails = (attempts, elapsedMs, lastResult) => {
+      const progressSnapshot = buildActiveWaitProgressSnapshot(
+        lastResult,
+        this._nodes.size,
+        { readinessMode },
+      );
+      const invariantBreaches = summarizeInvariantBreaches(
+        lastResult?.priorityRecoveryInvariants?.invariants,
+      );
+      const progressScore = scoreActiveWaitProgress(progressSnapshot);
+      const meaningfulProgressObserved = progressScore > bestProgressScore;
+      if (meaningfulProgressObserved) {
+        bestProgressScore = progressScore;
+        bestProgressSnapshot = progressSnapshot;
+        lastMeaningfulProgressAttempt = attempts;
+        lastMeaningfulProgressElapsedMs = elapsedMs;
+        lastMeaningfulProgressSnapshot = progressSnapshot;
+      }
+
+      upsertActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+        progressSnapshot,
+        attempts,
+        elapsedMs,
+      );
+      lastObservedProgressSnapshot = progressSnapshot;
+      lastObservedAttempt = attempts;
+      lastObservedElapsedMs = elapsedMs;
+
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      const blockerHistory = summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      );
+      const waitingDetails = {
+        nodeDiagnostics: lastResult?.nodeDiagnostics || [],
+        snapshotCoverage: lastResult?.snapshotCoverage || null,
+        publicationConvergenceGate:
+          lastResult?.publicationConvergenceGate || null,
+        priorityRecoveryInvariants:
+          lastResult?.priorityRecoveryInvariants || null,
+        invariantBreaches,
+        activeGateProgress: progressSnapshot,
+        activeGateBestProgress: bestProgressSnapshot || null,
+        activeGateNoProgress: buildNoProgressDetails(
+          attempts,
+          elapsedMs,
+          false,
+          progressSnapshot,
+        ),
+        activeGateAdmissionState: summarizeAdmissionState(
+          lastResult?.nodeDiagnostics || [],
+        ),
+        activeGateBlockerHistory: blockerHistory,
+      };
+
+      return {
+        waitingDetails,
+        invariantBreaches,
+        progressSnapshot,
+        attemptsSinceProgress,
+        blockerHistory,
+      };
+    };
+
+    let pollResult;
+    try {
+      pollResult = await pollUntilCondition({
+        deadline,
+        intervalMs: ACTIVE_POLL_INTERVAL_MS,
+        sleep: (ms) => this._sleep(ms),
+        probe: () => {
+          const forceRepair =
+            forcedRepairIssued === false && Date.now() >= forceRepairThreshold;
+          if (forceRepair) {
+            forcedRepairIssued = true;
+          }
+          return this._probeClusterActiveState(deadline, {
+            mode: readinessMode,
+            forceRepair,
+          });
+        },
+        isSuccess: (result) => {
+          return (
+            result?.allActive === true ||
+            (result?.priorityRecoveryInvariants?.passed === true &&
+              resolveActiveGateWaitPolicy(result).allowSoftSuccess === true)
+          );
+        },
+        onAttempt: ({ attempts, elapsedMs, lastResult }) => {
+          for (const diagnostic of lastResult.nodeDiagnostics || []) {
+            if (diagnostic.active === true) {
+              continue;
+            }
+            const summaryKey = diagnostic.error
+              ? ACTIVE_WAIT_INACTIVE_SUMMARY_ERROR_PREFIX + diagnostic.error
+              : ACTIVE_WAIT_INACTIVE_SUMMARY_STATE_PREFIX +
+                (diagnostic.state || UNKNOWN_STATE);
+            inactiveSummaryCounts.set(
+              summaryKey,
+              (inactiveSummaryCounts.get(summaryKey) || ZERO) + 1,
+            );
+          }
+
+          const waitingProgress = buildWaitingDetails(
+            attempts,
+            elapsedMs,
+            lastResult,
+          );
+
+          this._recordPeriodicStartupWaitingStage(
+            CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+            {
+              attempts,
+              elapsedMs,
+            },
+            waitingProgress.waitingDetails,
+          );
+
+          if (waitingProgress.invariantBreaches.hardCount > ZERO) {
+            const hardReasonCodes =
+              waitingProgress.invariantBreaches.hardBreaches
+                .map((entry) => String(entry?.reasonCode || "").trim())
+                .filter((reasonCode) => reasonCode.length > ZERO);
+            const hardInvariantIds =
+              waitingProgress.invariantBreaches.hardBreaches
+                .map((entry) => String(entry?.invariantId || "").trim())
+                .filter((invariantId) => invariantId.length > ZERO);
+            const invariantFailureDetails = {
+              reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+              mode: readinessMode,
+              attempts,
+              elapsedMs,
+              hardReasonCodes,
+              hardInvariantIds,
+              invariantBreaches: waitingProgress.invariantBreaches,
+            };
+            this._recordClusterStage(
+              CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+              {
+                attempts,
+                elapsedMs,
+                ...waitingProgress.waitingDetails,
+                invariantFailure: invariantFailureDetails,
+              },
+            );
+            const invariantError = new Error(
+              ACTIVE_WAIT_INVARIANT_BREACH_MESSAGE_PREFIX +
+                "(mode=" +
+                readinessMode +
+                ", reasonCodes=" +
+                (hardReasonCodes.length > ZERO
+                  ? hardReasonCodes.join("|")
+                  : UNKNOWN_REASON) +
+                ", invariantIds=" +
+                (hardInvariantIds.length > ZERO
+                  ? hardInvariantIds.join("|")
+                  : UNKNOWN_REASON) +
+                ")",
+            );
+            const invariantProgressSnapshot = buildNoProgressDetails(
+              attempts,
+              elapsedMs,
+              false,
+              waitingProgress.progressSnapshot,
+            );
+            invariantError.diagnostics = {
+              reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+              invariantBreaches: waitingProgress.invariantBreaches,
+              priorityRecoveryInvariants:
+                lastResult?.priorityRecoveryInvariants || null,
+              noProgress: invariantProgressSnapshot
+                ? {
+                    ...invariantProgressSnapshot,
+                    readinessFailure: buildActiveWaitReadinessFailure({
+                      mode: readinessMode,
+                      noProgress: invariantProgressSnapshot,
+                      attemptsSinceProgress:
+                        waitingProgress.attemptsSinceProgress,
+                      maxAttempts: noProgressMaxAttempts,
+                    }),
+                  }
+                : null,
+            };
+            invariantError.invariantBreaches =
+              waitingProgress.invariantBreaches;
+            throw invariantError;
+          }
+
+          if (
+            Number.isInteger(noProgressMaxAttempts) &&
+            noProgressMaxAttempts > ZERO &&
+            waitingProgress.attemptsSinceProgress >= noProgressMaxAttempts
+          ) {
+            const stalledCoordinatorCycles =
+              waitingProgress.attemptsSinceProgress;
+            const stalledProgress = buildNoProgressDetails(
+              attempts,
+              elapsedMs,
+              true,
+              waitingProgress.progressSnapshot,
+            );
+            const stalledNoProgress = {
+              ...stalledProgress,
+              readinessFailure: buildActiveWaitReadinessFailure({
+                mode: readinessMode,
+                noProgress: stalledProgress,
+                attemptsSinceProgress: stalledCoordinatorCycles,
+                maxAttempts: noProgressMaxAttempts,
+              }),
+              reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+              stalledReason:
+                ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+                String(stalledCoordinatorCycles),
+              failedNoProgress: {
+                phase: CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+                details: {
+                  mode: readinessMode,
+                  budgetCoordinatorCycles: noProgressMaxAttempts,
+                  budgetAttempts: noProgressMaxAttempts,
+                  attempts,
+                  elapsedMs,
+                  attemptsSinceProgress: stalledCoordinatorCycles,
+                  coordinatorCyclesSinceProgress: stalledCoordinatorCycles,
+                },
+              },
+              lastMeaningfulChange:
+                lastMeaningfulProgressSnapshot &&
+                typeof lastMeaningfulProgressSnapshot === "object"
+                  ? {
+                      attempt: lastMeaningfulProgressAttempt,
+                      elapsedMs: lastMeaningfulProgressElapsedMs,
+                      message: formatActiveWaitProgressSnapshot(
+                        lastMeaningfulProgressSnapshot,
+                      ),
+                    }
+                  : null,
+              lastProgressEvent:
+                waitingProgress.progressSnapshot &&
+                typeof waitingProgress.progressSnapshot === "object"
+                  ? {
+                      attempt: attempts,
+                      elapsedMs,
+                      message: formatActiveWaitProgressSnapshot(
+                        waitingProgress.progressSnapshot,
+                      ),
+                    }
+                  : null,
+              activeGateBlockerHistory: waitingProgress.blockerHistory,
+            };
+            this._recordClusterStage(
+              CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+              {
+                attempts,
+                elapsedMs,
+                ...waitingProgress.waitingDetails,
+                activeGateNoProgress: stalledNoProgress,
+              },
+            );
+            const stalledError = new Error(
+              ACTIVE_WAIT_STALLED_MESSAGE_PREFIX +
+                "for " +
+                String(stalledCoordinatorCycles) +
+                " attempts (mode=" +
+                readinessMode +
+                ", progress=" +
+                formatActiveWaitProgressSnapshot(
+                  waitingProgress.progressSnapshot,
+                ) +
+                ")",
+            );
+            stalledError.diagnostics = {
+              noProgress: stalledNoProgress,
+              invariantBreaches: waitingProgress.invariantBreaches,
+              priorityRecoveryInvariants:
+                lastResult?.priorityRecoveryInvariants || null,
+            };
+            throw stalledError;
+          }
+        },
+      });
+    } catch (error) {
+      try {
+        await this._collectFailureLogs();
+      } catch (_collectFailureLogsError) {
+        // Best effort log collection only.
+      }
+      throw error;
+    }
+
+    if (pollResult.success) {
+      return;
+    }
+
+    await this._collectFailureLogs();
+    const nodeDiagnosticsSummary = formatNodeDiagnostics(
+      pollResult.lastResult?.nodeDiagnostics || [],
+    );
+    const inactiveSummary = formatCountSummary(inactiveSummaryCounts);
+    const snapshotCoverageSummary = formatSnapshotCoverage(
+      pollResult.lastResult?.snapshotCoverage || null,
+    );
+    const publicationConvergenceSummary = formatPublicationConvergenceGate(
+      pollResult.lastResult?.publicationConvergenceGate || null,
+    );
+    const priorityRecoveryFailingInvariantIds = normalizeDistinctStringArray(
+      pollResult.lastResult?.priorityRecoveryInvariants?.failingInvariantIds,
+    );
+    const priorityRecoveryInvariantBreaches = summarizeInvariantBreaches(
+      pollResult.lastResult?.priorityRecoveryInvariants?.invariants,
+    );
+    const finalProgressSnapshot =
+      lastObservedProgressSnapshot ||
+      buildActiveWaitProgressSnapshot(
+        pollResult.lastResult || {},
+        this._nodes.size,
+        { readinessMode },
+      );
+    const finalAttemptsSinceProgress = Math.max(
+      ZERO,
+      pollResult.attempts - (lastMeaningfulProgressAttempt || ZERO),
+    );
+    const finalNoProgress = buildNoProgressDetails(
+      pollResult.attempts,
+      pollResult.elapsedMs,
+      false,
+      finalProgressSnapshot,
+    );
+    const finalNoProgressWithReasonCode = finalNoProgress
+      ? {
+          ...finalNoProgress,
+          reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+        }
+      : null;
+    const finalReadinessFailure = finalNoProgressWithReasonCode
+      ? buildActiveWaitReadinessFailure({
+          mode: readinessMode,
+          noProgress: finalNoProgressWithReasonCode,
+          attemptsSinceProgress: finalAttemptsSinceProgress,
+          maxAttempts: noProgressMaxAttempts,
+        })
+      : null;
+    if (
+      finalNoProgress &&
+      !Array.isArray(finalNoProgress.activeGateBlockerHistory)
+    ) {
+      finalNoProgress.activeGateBlockerHistory =
+        summarizeActiveWaitBlockerHistory(blockerHistoryBySignature);
+    }
+    this._recordClusterStage(CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE, {
+      attempts: pollResult.attempts,
+      elapsedMs: pollResult.elapsedMs,
+      nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+      snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+      publicationConvergenceGate:
+        pollResult.lastResult?.publicationConvergenceGate || null,
+      priorityRecoveryInvariants:
+        pollResult.lastResult?.priorityRecoveryInvariants || null,
+      invariantBreaches: priorityRecoveryInvariantBreaches,
+      activeGateProgress: finalProgressSnapshot,
+      activeGateBestProgress: bestProgressSnapshot || null,
+      activeGateAdmissionState: summarizeAdmissionState(
+        pollResult.lastResult?.nodeDiagnostics || [],
+      ),
+      activeGateNoProgress: finalNoProgress,
+      activeGateBlockerHistory: summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      ),
+    });
+    const timeoutError = new Error(
+      "Not all nodes reached " +
+        ACTIVE_STATE +
+        " state within " +
+        timeout +
+        "ms" +
+        " (attempts=" +
+        pollResult.attempts +
+        ", elapsedMs=" +
+        pollResult.elapsedMs +
+        ", nodeDiagnostics=" +
+        (nodeDiagnosticsSummary || "none") +
+        ", snapshotCoverage=" +
+        snapshotCoverageSummary +
+        ", publicationConvergence=" +
+        publicationConvergenceSummary +
+        ", priorityRecoveryInvariants=" +
+        (priorityRecoveryFailingInvariantIds.length > ZERO
+          ? priorityRecoveryFailingInvariantIds.join("|")
+          : "passed") +
+        ", progress=" +
+        formatActiveWaitProgressSnapshot(finalProgressSnapshot) +
+        (Number.isInteger(noProgressMaxAttempts) && noProgressMaxAttempts > ZERO
+          ? ", attemptsSinceProgress=" +
+            String(finalAttemptsSinceProgress) +
+            "/" +
+            String(noProgressMaxAttempts)
+          : "") +
+        ", inactiveSummary=" +
+        (inactiveSummary || "none") +
+        ")",
+    );
+    timeoutError.diagnostics = {
+      noProgress: finalNoProgressWithReasonCode
+        ? {
+            ...finalNoProgressWithReasonCode,
+            readinessFailure: finalReadinessFailure,
+            stalledReason:
+              ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+              String(finalAttemptsSinceProgress),
+            failedNoProgress: {
+              phase: CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
+              details: {
+                mode: readinessMode,
+                budgetCoordinatorCycles: noProgressMaxAttempts,
+                budgetAttempts: noProgressMaxAttempts,
+                attempts: pollResult.attempts,
+                elapsedMs: pollResult.elapsedMs,
+                attemptsSinceProgress: finalAttemptsSinceProgress,
+                coordinatorCyclesSinceProgress: finalAttemptsSinceProgress,
+                timedOut: true,
+              },
+            },
+            lastMeaningfulChange:
+              lastMeaningfulProgressSnapshot &&
+              typeof lastMeaningfulProgressSnapshot === "object"
+                ? {
+                    attempt: lastMeaningfulProgressAttempt,
+                    elapsedMs: lastMeaningfulProgressElapsedMs,
+                    message: formatActiveWaitProgressSnapshot(
+                      lastMeaningfulProgressSnapshot,
+                    ),
+                  }
+                : null,
+            lastProgressEvent:
+              lastObservedProgressSnapshot &&
+              typeof lastObservedProgressSnapshot === "object"
+                ? {
+                    attempt: lastObservedAttempt,
+                    elapsedMs: lastObservedElapsedMs,
+                    message: formatActiveWaitProgressSnapshot(
+                      lastObservedProgressSnapshot,
+                    ),
+                  }
+                : null,
+            priorityRecoveryInvariants:
+              pollResult.lastResult?.priorityRecoveryInvariants || null,
+          }
+        : null,
+      invariantBreaches: priorityRecoveryInvariantBreaches,
+      priorityRecoveryInvariants:
+        pollResult.lastResult?.priorityRecoveryInvariants || null,
+    };
+    throw timeoutError;
+  }
+
+  async waitForLoadReadinessStability(options = {}) {
+    const stableWindowMs = this._resolveLoadReadinessStableWindowMs(options);
+    if (stableWindowMs <= ZERO) {
+      return;
+    }
+    const timeoutMs = this._resolveLoadReadinessStabilityTimeoutMs(options);
+    const deadline = Date.now() + timeoutMs;
+    let stableWindowStartedAtMs = null;
+    const instabilitySummaryCounts = new Map();
+    this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_WAITING, {
+      stableWindowMs,
+      timeoutMs,
+    });
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: ACTIVE_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: async () => {
+        const activeProbe = await this._probeClusterActiveState(deadline, {
+          mode: CLUSTER_READINESS_MODE_LOAD,
+        });
+        const now = Date.now();
+        if (activeProbe.allActive === true) {
+          if (stableWindowStartedAtMs === null) {
+            stableWindowStartedAtMs = now;
+          }
+        } else {
+          stableWindowStartedAtMs = null;
+        }
+        const stableElapsedMs =
+          stableWindowStartedAtMs === null
+            ? ZERO
+            : now - stableWindowStartedAtMs;
+        return {
+          ...activeProbe,
+          stableElapsedMs,
+          stable:
+            activeProbe.allActive === true && stableElapsedMs >= stableWindowMs,
+        };
+      },
+      isSuccess: (result) => result.stable === true,
+      onAttempt: ({ attempts, elapsedMs, lastResult }) => {
+        for (const diagnostic of lastResult.nodeDiagnostics || []) {
+          if (diagnostic.active === true) {
+            continue;
+          }
+          const summaryKey = diagnostic.error
+            ? "error:" + diagnostic.error
+            : "state:" + (diagnostic.state || UNKNOWN_STATE);
+          instabilitySummaryCounts.set(
+            summaryKey,
+            (instabilitySummaryCounts.get(summaryKey) || ZERO) + 1,
+          );
+        }
+        this._recordPeriodicStartupWaitingStage(
+          CLUSTER_STAGE_LOAD_READINESS_WAITING,
+          {
+            attempts,
+            elapsedMs,
+          },
+          {
+            stableWindowMs,
+            stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+            nodeDiagnostics: lastResult.nodeDiagnostics || [],
+            snapshotCoverage: lastResult.snapshotCoverage || null,
+          },
+        );
+      },
+    });
+
+    if (pollResult.success) {
+      this._recordClusterStage(CLUSTER_STAGE_LOAD_READINESS_STABLE, {
+        stableWindowMs,
+        timeoutMs,
+        attempts: pollResult.attempts,
+        elapsedMs: pollResult.elapsedMs,
+        snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+        publicationConvergenceGate:
+          pollResult.lastResult?.publicationConvergenceGate || null,
+      });
+      return;
+    }
+
+    await this._collectFailureLogs();
+    const nodeDiagnosticsSummary = formatNodeDiagnostics(
+      pollResult.lastResult?.nodeDiagnostics || [],
+    );
+    const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
+    const snapshotCoverageSummary = formatSnapshotCoverage(
+      pollResult.lastResult?.snapshotCoverage || null,
+    );
+    const publicationConvergenceSummary = formatPublicationConvergenceGate(
+      pollResult.lastResult?.publicationConvergenceGate || null,
+    );
+    throw new Error(
+      "Cluster load readiness did not stabilize within " +
+        timeoutMs +
+        "ms (attempts=" +
+        pollResult.attempts +
+        ", elapsedMs=" +
+        pollResult.elapsedMs +
+        ", stableWindowMs=" +
+        stableWindowMs +
+        ", stableElapsedMs=" +
+        (pollResult.lastResult?.stableElapsedMs ?? ZERO) +
+        ", nodeDiagnostics=" +
+        (nodeDiagnosticsSummary || "none") +
+        ", snapshotCoverage=" +
+        snapshotCoverageSummary +
+        ", publicationConvergence=" +
+        publicationConvergenceSummary +
+        ", instabilitySummary=" +
+        (instabilitySummary || "none") +
+        ")",
+    );
+  }
+
+  _extractNodeState(status) {
+    if (!status) {
+      return null;
+    }
+    if (Array.isArray(status.rows) && status.rows.length > 0) {
+      const row = status.rows[0];
+      if (typeof row.status === "string" && row.status.length > 0) {
+        return row.status.toLowerCase();
+      }
+      if (typeof row.state === "string" && row.state.length > 0) {
+        return row.state.toLowerCase();
+      }
+    }
+    if (typeof status.status === "string" && status.status.length > 0) {
+      return status.status.toLowerCase();
+    }
+    if (typeof status.state === "string" && status.state.length > 0) {
+      return status.state.toLowerCase();
+    }
+    return null;
+  }
+
+  _isNodeActive(status) {
+    if (!status) return false;
+    if (status.rows && status.rows.length > 0) {
+      return (
+        this._isActiveValue(status.rows[0].status) ||
+        this._isActiveValue(status.rows[0].state)
+      );
+    }
+    if (this._isActiveValue(status.status)) return true;
+    if (this._isActiveValue(status.state)) return true;
+    return false;
+  }
+
+  _isActiveValue(value) {
+    if (typeof value !== "string") {
+      return false;
+    }
+    return value.toLowerCase() === STATUS_ACTIVE_LOWER;
+  }
+
+  async _collectFailureLogs() {
+    for (const node of this._nodes.values()) {
+      try {
+        const logs = await withTimeout(
+          node.getLogs({ tail: CONTAINER_LOG_TAIL_LINES }),
+          LOG_COLLECTION_TIMEOUT_MS,
+          "Timed out collecting logs for node " + node.id,
+        );
+        process.stderr.write(
+          "--- Logs from " +
+            node.id +
+            " (" +
+            node.role +
+            ") ---\n" +
+            logs +
+            "\n",
+        );
+      } catch (_err) {
+        // Best-effort log collection
+      }
+    }
+  }
+
+  _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+}
+
+export const CLUSTER_SEGMENT_7 = {
+  ...CLUSTER_SEGMENT_6,
+  Cluster,
+};

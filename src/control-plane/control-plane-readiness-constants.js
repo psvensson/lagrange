@@ -9,6 +9,7 @@ const CONTROL_PLANE_READINESS_DIMENSION = Object.freeze({
   ROUTING_READY: 'routingReady',
   LOAD_READY: 'loadReady',
   PLACEMENT_ELIGIBLE: 'placementEligible',
+  PROVISIONING_ELIGIBLE: 'provisioningEligible',
   CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
   CONTROL_PLANE_PUBLISHED: 'controlPlanePublished',
   CONTROL_PLANE_RECOVERY_ELIGIBLE: 'controlPlaneRecoveryEligible',
@@ -66,6 +67,51 @@ const CONTROL_PLANE_PUBLICATION_MODE = Object.freeze({
   REPAIR_ONLY: 'repair_only',
 });
 
+const PROVISIONING_ELIGIBILITY_STATE = Object.freeze({
+  STEADY: 'steady',
+  CONVERGENCE_GRACE: 'convergence_grace',
+  BLOCKED: 'blocked',
+});
+
+const AUTHORITY_DESCRIPTOR_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  KNOWN: 'known',
+  NONE: 'none',
+  PRESENT: 'present',
+  UNAVAILABLE: 'unavailable',
+});
+
+const AUTHORITY_PUBLICATION_OBSERVATION_STATE = Object.freeze({
+  OBSERVATION_UNAVAILABLE: 'observation_unavailable',
+  UNPUBLISHED: 'unpublished',
+});
+
+const RUNTIME_AUTHORITY_STATE = Object.freeze({
+  CONFIRMED: 'confirmed',
+  ESTABLISHING: 'establishing',
+  RETAINED: 'retained',
+  UNAVAILABLE: 'unavailable',
+});
+
+const RUNTIME_AUTHORITY_PUBLICATION_STATE = Object.freeze({
+  HEALTHY: 'healthy',
+  DEGRADED: 'degraded',
+});
+
+const RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
+  CONFIRMED: 'confirmed',
+  PENDING_PUBLICATION: 'pending_publication',
+  RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
+  UNAVAILABLE: 'unavailable',
+});
+
+const RUNTIME_AUTHORITY_REPAIR_STATE = Object.freeze({
+  FAILED: 'failed',
+  NOT_ATTEMPTED: 'not_attempted',
+  REPAIRED: 'repaired',
+  UNCHANGED: 'unchanged',
+});
+
 const CONTROL_PLANE_READINESS_DEFAULT = Object.freeze({
   LOAD_READY_MAX_PERCENT: NUM.HUNDRED,
   CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS: NUM.THIRTY_THOUSAND,
@@ -93,9 +139,12 @@ const READINESS_SNAPSHOT_KEY = Object.freeze({
   LIFECYCLE_STATE: 'lifecycleState',
   OBSERVED_AT: 'observedAt',
   DECISION_DIMENSION: 'decisionDimension',
+  RUNTIME_AUTHORITY: 'runtimeAuthority',
 });
 
 export {
+  AUTHORITY_DESCRIPTOR_STATE,
+  AUTHORITY_PUBLICATION_OBSERVATION_STATE,
   CONTROL_PLANE_PARTICIPATION_DECISION,
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -105,5 +154,10 @@ export {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
+  PROVISIONING_ELIGIBILITY_STATE,
   READINESS_SNAPSHOT_KEY,
+  RUNTIME_AUTHORITY_PUBLICATION_STATE,
+  RUNTIME_AUTHORITY_REPAIR_STATE,
+  RUNTIME_AUTHORITY_STATE,
+  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 };

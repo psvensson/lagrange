@@ -8,6 +8,17 @@ import {
 import {REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE} from
   '../../src/node/replica-state-machine-constants.js';
 
+const TEST_RETRY_SERVICE_ID = 'svc-retry-1';
+const TEST_RETRY_PARTITION_ID = 'partition-retry-1';
+const TEST_RETRY_NODE_ID = 'node-retry-1';
+const TEST_RETRY_SERVICE_ADDRESS = 'node-retry-1/partition/svc-retry-1';
+const TEST_RETRY_PENDING_REASON = 'pending';
+const TEST_RETRY_CREATING_REASON = 'creating';
+const TEST_RETRY_SYNCING_REASON = 'syncing';
+const TEST_RETRY_ACTIVE_REASON = 'active';
+const TEST_RETRY_PRESSURE_ERROR =
+  'Distributed operation failed due to participant failures';
+
 test('ReplicaStateMachine uses upsert for initial services persistence',
   async (t) => {
     ConfigurationManager.resetInstance();
@@ -169,6 +180,112 @@ test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
       'stable leader loss should also clear canonical partition leader');
 
     stateMachine.clear();
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+test('ReplicaStateMachine does not commit runtime state when persistence fails and allows the same transition to retry',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    let activeFailureCount = 0;
+    const mutations = [];
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: TEST_RETRY_NODE_ID,
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation) {
+          mutations.push(mutation);
+          if (mutation.tableName === 'services' &&
+              mutation.operation === 'update' &&
+              mutation.data?.status === ReplicaState.ACTIVE &&
+              activeFailureCount === 0) {
+            activeFailureCount += 1;
+            throw new Error(TEST_RETRY_PRESSURE_ERROR);
+          }
+          return {success: true};
+        },
+      },
+    });
+
+    await stateMachine.transition(TEST_RETRY_SERVICE_ID, ReplicaState.PENDING, {
+      partitionId: TEST_RETRY_PARTITION_ID,
+      nodeId: TEST_RETRY_NODE_ID,
+      reason: TEST_RETRY_PENDING_REASON,
+      serviceId: TEST_RETRY_SERVICE_ID,
+      serviceAddress: TEST_RETRY_SERVICE_ADDRESS,
+    });
+    await stateMachine.transition(TEST_RETRY_SERVICE_ID, ReplicaState.CREATING, {
+      partitionId: TEST_RETRY_PARTITION_ID,
+      nodeId: TEST_RETRY_NODE_ID,
+      reason: TEST_RETRY_CREATING_REASON,
+      serviceId: TEST_RETRY_SERVICE_ID,
+    });
+    await stateMachine.transition(TEST_RETRY_SERVICE_ID, ReplicaState.SYNCING, {
+      partitionId: TEST_RETRY_PARTITION_ID,
+      nodeId: TEST_RETRY_NODE_ID,
+      reason: TEST_RETRY_SYNCING_REASON,
+      serviceId: TEST_RETRY_SERVICE_ID,
+    });
+
+    await t.rejects(
+      stateMachine.transition(TEST_RETRY_SERVICE_ID, ReplicaState.ACTIVE, {
+        partitionId: TEST_RETRY_PARTITION_ID,
+        nodeId: TEST_RETRY_NODE_ID,
+        reason: TEST_RETRY_ACTIVE_REASON,
+        serviceId: TEST_RETRY_SERVICE_ID,
+      }),
+      new Error(TEST_RETRY_PRESSURE_ERROR),
+      'retryable persistence failure should surface without committing runtime state',
+    );
+
+    t.equal(
+      stateMachine.getState(TEST_RETRY_SERVICE_ID)?.state,
+      ReplicaState.SYNCING,
+      'failed persistence should keep the prior tracked state authoritative',
+    );
+    t.equal(
+      stateMachine.getStateCounts()[ReplicaState.SYNCING],
+      1,
+      'failed persistence should keep the prior state count',
+    );
+    t.equal(
+      stateMachine.getStateCounts()[ReplicaState.ACTIVE],
+      0,
+      'failed persistence should not increment the target state count',
+    );
+
+    const retryResult =
+      await stateMachine.transition(TEST_RETRY_SERVICE_ID, ReplicaState.ACTIVE, {
+        partitionId: TEST_RETRY_PARTITION_ID,
+        nodeId: TEST_RETRY_NODE_ID,
+        reason: TEST_RETRY_ACTIVE_REASON,
+        serviceId: TEST_RETRY_SERVICE_ID,
+      });
+
+    t.equal(retryResult, true, 'the same transition should succeed on retry');
+    t.equal(
+      stateMachine.getState(TEST_RETRY_SERVICE_ID)?.state,
+      ReplicaState.ACTIVE,
+      'successful retry should commit the target state',
+    );
+    t.equal(
+      mutations.filter((mutation) =>
+        mutation.tableName === 'services' &&
+        mutation.operation === 'update' &&
+        mutation.data?.status === ReplicaState.ACTIVE,
+      ).length,
+      2,
+      'ACTIVE persistence should be attempted twice across the failed write and retry',
+    );
+
+    stateMachine.clear();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
@@ -239,6 +356,77 @@ test('ReplicaStateMachine clears canonical partition leader when a partition rep
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
+
+test('ReplicaStateMachine keeps canonical partition leader when another ' +
+  'active partition replica remains on the same node',
+async (t) => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+
+  const config = ConfigurationManager.getInstance();
+  config.initialize({});
+
+  const logging = LoggingService.getInstance();
+  logging.initialize({level: 'error'});
+
+  const mutations = [];
+  const stateMachine = new ReplicaStateMachine({
+    nodeId: 'node-1',
+    systemTableCache: {
+      filter(tableName, predicate) {
+        if (tableName !== 'services') {
+          return [];
+        }
+        return [{
+          service_id: 'svc-sibling',
+          replica_id: 'svc-sibling',
+          service_type: 'partition',
+          partition_id: 'partition-9',
+          node_id: 'node-1',
+          status: ReplicaState.ACTIVE,
+        }].filter(predicate);
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async submitMutation(mutation, options) {
+        mutations.push({mutation, options});
+        return {success: true};
+      },
+    },
+  });
+
+  await stateMachine.transition('svc-leader', ReplicaState.PENDING, {
+    partitionId: 'partition-9',
+    nodeId: 'node-1',
+    reason: 'pending',
+    serviceId: 'svc-leader',
+    serviceType: 'partition',
+    serviceAddress: 'node-1/partition/svc-leader',
+  });
+  await stateMachine.transition('svc-leader', ReplicaState.FAILED, {
+    partitionId: 'partition-9',
+    nodeId: 'node-1',
+    reason: 'failed',
+    serviceId: 'svc-leader',
+    serviceType: 'partition',
+    errorMessage: 'boom',
+  });
+
+  t.equal(
+    mutations.length,
+    2,
+    'leader clear should be suppressed when another active same-node replica still serves the partition',
+  );
+  t.equal(
+    mutations.every(({mutation}) => mutation.tableName === 'services'),
+    true,
+    'only services-row mutations should be emitted in the sibling-active case',
+  );
+
+  stateMachine.clear();
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
 
 test('ReplicaStateMachine uses injected clock for create and update persistence',
   async (t) => {
@@ -445,8 +633,8 @@ test('ReplicaStateMachine does not consume timeout budget while persistence is i
     nowValue = 1250;
     t.equal(stateMachine.checkTimeoutsNow(), 0,
       'timeout checker should ignore an unpersisted pending transition');
-    t.equal(stateMachine.getState('svc-pending')?.state, ReplicaState.PENDING,
-      'replica should remain pending while persistence is blocked');
+    t.equal(stateMachine.getState('svc-pending'), null,
+      'replica should stay untracked until pending persistence commits');
 
     releasePersistence();
     await transitionPromise;
@@ -460,6 +648,7 @@ test('ReplicaStateMachine does not consume timeout budget while persistence is i
     nowValue = 1451;
     t.equal(stateMachine.checkTimeoutsNow(), 1,
       'replica should time out once the post-persistence budget is exhausted');
+    await new Promise((resolve) => setImmediate(resolve));
     t.equal(stateMachine.getState('svc-pending')?.state, ReplicaState.FAILED,
       'replica should eventually transition to failed');
 

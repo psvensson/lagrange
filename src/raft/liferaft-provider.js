@@ -23,6 +23,48 @@ function resolveProposeTimeoutMs(options = {}) {
   return timeoutMs;
 }
 
+function resolveRetryDelayMs(options = {}, attempt, error = null) {
+  const configuredRetryDelayMsRaw =
+    typeof options.computeRetryDelayMs === TYPEOF.FUNCTION ?
+      options.computeRetryDelayMs(attempt) :
+      NUM.ZERO;
+  const configuredRetryDelayMs =
+    Number.isFinite(configuredRetryDelayMsRaw) &&
+      configuredRetryDelayMsRaw > NUM.ZERO ?
+      Math.floor(configuredRetryDelayMsRaw) :
+      NUM.ZERO;
+  const errorRetryAfterMs = Number.isFinite(error?.retryAfterMs) &&
+    error.retryAfterMs > NUM.ZERO ?
+    Math.floor(error.retryAfterMs) :
+    NUM.ZERO;
+  return Math.max(configuredRetryDelayMs, errorRetryAfterMs);
+}
+
+function hasCommandApi(raftNode) {
+  return Boolean(
+    raftNode &&
+    typeof raftNode.command === TYPEOF.FUNCTION,
+  );
+}
+
+function shouldProposeLocally(raftNode, options = {}) {
+  if (typeof options.shouldProposeLocally === TYPEOF.FUNCTION) {
+    return options.shouldProposeLocally() === true &&
+      hasCommandApi(raftNode);
+  }
+  return Boolean(
+    raftNode &&
+    raftNode.state === LifeRaft.LEADER &&
+    hasCommandApi(raftNode),
+  );
+}
+
+function resolveRouteMode(raftNode, options = {}) {
+  return shouldProposeLocally(raftNode, options) ?
+    LIFERAFT_ROUTE_MODE.PROPOSE :
+    LIFERAFT_ROUTE_MODE.FORWARD;
+}
+
 function awaitWithTimeout(promise, timeoutMs, timeoutMessage) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
     return Promise.resolve(promise);
@@ -120,6 +162,7 @@ class LiferaftProvider {
    * @param {*} command
    * @param {Object} [options]
    * @param {Function} [options.forwardToLeader] - async (command, meta) => void
+   * @param {Function} [options.shouldProposeLocally] - () => boolean
    * @param {number} [options.maxAttempts=1]
    * @param {Function} [options.computeRetryDelayMs] - (attempt) => ms
    * @param {Function} [options.onRetry] - ({attempt, mode, retryDelayMs, error}) => void
@@ -137,10 +180,7 @@ class LiferaftProvider {
     let lastMode = LIFERAFT_ROUTE_MODE.PROPOSE;
 
     while (attempt <= maxAttempts) {
-      const isLeader = raftNode && raftNode.state === LifeRaft.LEADER;
-      const mode = isLeader ?
-        LIFERAFT_ROUTE_MODE.PROPOSE :
-        LIFERAFT_ROUTE_MODE.FORWARD;
+      const mode = resolveRouteMode(raftNode, options);
       lastMode = mode;
       try {
         if (mode === LIFERAFT_ROUTE_MODE.PROPOSE) {
@@ -175,13 +215,11 @@ class LiferaftProvider {
         break;
       }
 
-      const retryDelayMsRaw =
-        typeof options.computeRetryDelayMs === TYPEOF.FUNCTION ?
-          options.computeRetryDelayMs(attempt) :
-          NUM.ZERO;
-      const retryDelayMs = Number.isFinite(retryDelayMsRaw) && retryDelayMsRaw > NUM.ZERO ?
-        Math.floor(retryDelayMsRaw) :
-        NUM.ZERO;
+      const retryDelayMs = resolveRetryDelayMs(
+        options,
+        attempt,
+        lastError,
+      );
       if (typeof options.onRetry === TYPEOF.FUNCTION) {
         options.onRetry({
           attempt,

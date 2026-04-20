@@ -81,9 +81,30 @@ Every work package should answer:
 6. What files or subsystems are expected hotspots.
 7. What tests and validation are required.
 8. What counts as done.
+9. If it adds or reshapes a shared runtime boundary:
+   - who owns the boundary
+   - what the canonical contract shape or vocabulary is
+   - which consumers may use it
+   - which reinterpretations are forbidden
+10. What residual closure remains after the hot-path fix:
+   - owner-path cutovers
+   - tail consumers
+   - diagnostics, admin, or report surfaces
+   - superseded paths or vocabulary to delete
+
+Package closure also requires one final deep dive across the affected area:
+
+1. read the touched files and their direct owner collaborators as one boundary
+2. look for mistakes, irregularities, and doctrine/system-guideline violations
+3. fix any discovered issue that falls inside the affected area before renaming
+   the package to `done-...`
 
 If the work package cannot answer those clearly, it is still an idea, not a
 package.
+
+Shared-boundary work is not done when only the implementation changes land.
+The package should update the relevant architecture record and any bounded
+static guardrail in the same work cycle when the boundary contract is durable.
 
 ## Sprint Use
 

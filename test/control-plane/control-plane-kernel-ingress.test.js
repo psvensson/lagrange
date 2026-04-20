@@ -5,6 +5,18 @@ import {
 import {
   ControlPlaneKernelIngress,
 } from '../../src/control-plane/control-plane-kernel-ingress.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  TABLES,
+} from '../../src/constants/index.js';
+import {
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
+} from '../../src/query/query-constants.js';
+
+const LOCAL_ROUTING_PARTITION_ID = 'nodes-p1';
+const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
 
 test('ControlPlaneKernelIngress - resolves bootstrap ingress without cache metadata',
   async (t) => {
@@ -514,5 +526,308 @@ test('ControlPlaneKernelIngress - READY heartbeats can keep optimistic remote in
         'joining-node-ready-2/message-group/mg-1-r2',
       ],
       'READY heartbeat routing should still expose optimistic remote ingress before falling back to local self delivery',
-    );
+  );
+});
+
+test('ControlPlaneKernelIngress - READY heartbeats evaluate local routing on ' +
+  'the recovery-eligible dimension', async (t) => {
+  const decisionDimensions = [];
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-ready-2b',
+    getBootstrapResponse: () => ({
+      seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-ready-2b/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => true,
+      }],
+    ]),
+    getSqlQueryEngine: () => ({
+      getTablePartitions(tableName) {
+        return tableName === TABLES.NODES ?
+          [{partition_id: LOCAL_ROUTING_PARTITION_ID}] :
+          [];
+      },
+      queryExecutor: {
+        getPartitionRoutingSnapshot(_partitionId, decisionDimension) {
+          decisionDimensions.push(decisionDimension);
+          if (decisionDimension ===
+              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE) {
+            return {
+              partitionId: LOCAL_ROUTING_PARTITION_ID,
+              reasonCode:
+                QUERY_ROUTING_DIAGNOSTIC_REASON
+                  .ALL_SERVICES_FILTERED_BY_READINESS,
+              serviceRowCount: 3,
+              activeAddressedServiceCount: 3,
+              routableServiceCount: 0,
+              leaderKnown: true,
+              canonicalLeaderNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+              canonicalLeaderServiceCount: 3,
+            };
+          }
+          return {
+            partitionId: LOCAL_ROUTING_PARTITION_ID,
+            reasonCode: 'ok',
+            serviceRowCount: 3,
+            activeAddressedServiceCount: 3,
+            routableServiceCount: 3,
+            leaderKnown: true,
+            canonicalLeaderNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+            canonicalLeaderServiceCount: 3,
+          };
+        },
+      },
+    }),
   });
+
+  ingress.noteSuccessfulTarget('joining-node-ready-2b/message-group/mg-1-r2');
+
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'ready',
+      heartbeatAt: Date.now(),
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+      requiredTables: [TABLES.NODES],
+    }),
+    [
+      `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+      'joining-node-ready-2b/message-group/mg-1-r2',
+    ],
+    'ready heartbeat routing should retain the local self target when recovery-eligible routing remains open under repair pressure',
+  );
+  t.same(
+    decisionDimensions,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE],
+    'ready heartbeat routing should consult the recovery-eligible routing snapshot for node-state updates',
+  );
+});
+
+test('ControlPlaneKernelIngress - does not reuse a confirmed local lease ' +
+  'when required table routing has no service rows', async (t) => {
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-ready-3',
+    getBootstrapResponse: () => ({
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r1',
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-ready-3/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => true,
+      }],
+    ]),
+    getSqlQueryEngine: () => ({
+      getTablePartitions(tableName) {
+        return tableName === TABLES.NODES ?
+          [{partition_id: LOCAL_ROUTING_PARTITION_ID}] :
+          [];
+      },
+      queryExecutor: {
+        getPartitionRoutingSnapshot() {
+          return {
+            partitionId: LOCAL_ROUTING_PARTITION_ID,
+            reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+            serviceRowCount: 0,
+            routableServiceCount: 0,
+          };
+        },
+      },
+    }),
+  });
+
+  ingress.noteSuccessfulTarget('joining-node-ready-3/message-group/mg-1-r2');
+
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'ready',
+      heartbeatAt: Date.now(),
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+      requiredTables: [TABLES.NODES],
+    }),
+    [
+      'seed-node-1/message-group/mg-1-r1',
+    ],
+    'a stale local lease must be ignored once the local nodes routing owner reports no service rows',
+  );
+});
+
+test('ControlPlaneKernelIngress - keeps a local self-target fallback ' +
+  'when required table routing has a recovery-owned canonical leader service gap',
+async (t) => {
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-ready-4',
+    getBootstrapResponse: () => ({
+      seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-ready-4/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => true,
+      }],
+    ]),
+    getSqlQueryEngine: () => ({
+      getTablePartitions(tableName) {
+        return tableName === TABLES.NODES ?
+          [{partition_id: LOCAL_ROUTING_PARTITION_ID}] :
+          [];
+      },
+      queryExecutor: {
+        getPartitionRoutingSnapshot() {
+          return {
+            partitionId: LOCAL_ROUTING_PARTITION_ID,
+            reasonCode: 'ok',
+            serviceRowCount: 1,
+            activeAddressedServiceCount: 1,
+            routableServiceCount: 1,
+            leaderKnown: true,
+            canonicalLeaderNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+            canonicalLeaderServiceCount: 0,
+          };
+        },
+        resolveCanonicalLeaderGapRecoveryRoutingContract() {
+          return {
+            gapState: 'service_missing',
+            recoveryCandidateWidening: true,
+          };
+        },
+      },
+    }),
+  });
+
+  ingress.noteSuccessfulTarget('joining-node-ready-4/message-group/mg-1-r2');
+
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'ready',
+      heartbeatAt: Date.now(),
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+      requiredTables: [TABLES.NODES],
+    }),
+    [
+      `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+      'joining-node-ready-4/message-group/mg-1-r2',
+    ],
+    'recovery-owned node-state updates should keep the local ingress fallback when the nodes routing owner only has a canonical leader service gap',
+  );
+});
+
+test('ControlPlaneKernelIngress - keeps a local self-target fallback ' +
+  'when required table routing has a recovery-owned canonical leader owner gap',
+async (t) => {
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-ready-5',
+    getBootstrapResponse: () => ({
+      seedNodeId: REMOTE_CANONICAL_LEADER_NODE_ID,
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-ready-5/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => true,
+      }],
+    ]),
+    getSqlQueryEngine: () => ({
+      getTablePartitions(tableName) {
+        return tableName === TABLES.NODES ?
+          [{partition_id: LOCAL_ROUTING_PARTITION_ID}] :
+          [];
+      },
+      queryExecutor: {
+        getPartitionRoutingSnapshot() {
+          return {
+            partitionId: LOCAL_ROUTING_PARTITION_ID,
+            reasonCode: 'ok',
+            serviceRowCount: 2,
+            activeAddressedServiceCount: 2,
+            routableServiceCount: 2,
+            leaderKnown: false,
+            canonicalLeaderNodeId: null,
+            canonicalLeaderServiceCount: 0,
+          };
+        },
+        resolveCanonicalLeaderGapRecoveryRoutingContract() {
+          return {
+            gapState: 'owner_missing',
+            recoveryCandidateWidening: true,
+          };
+        },
+      },
+    }),
+  });
+
+  ingress.noteSuccessfulTarget('joining-node-ready-5/message-group/mg-1-r2');
+
+  t.same(
+    ingress.resolveNodeStateUpdateTargetCandidates({
+      state: 'ready',
+      heartbeatAt: Date.now(),
+      allowBootstrapHints: true,
+      localTargetMode: 'any_replica',
+      requiredTables: [TABLES.NODES],
+    }),
+    [
+      `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`,
+      'joining-node-ready-5/message-group/mg-1-r2',
+    ],
+    'recovery-owned node-state updates should keep the local ingress fallback when the nodes routing owner still lacks canonical leader identity',
+  );
+});

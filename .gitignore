@@ -15,6 +15,7 @@ data/
 data2/
 .tap/
 .tmp/
+.stryker-tmp/
 .playback/
 test-output/
 

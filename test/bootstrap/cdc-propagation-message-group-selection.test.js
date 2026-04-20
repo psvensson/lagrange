@@ -137,6 +137,50 @@ test(
 );
 
 test(
+  'BootstrapService reuses captured CDC propagation owner when ' +
+    'current metadata readiness churns',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+    const preferredMessageGroup = {
+      id: 'preferred',
+      initialized: true,
+      subscribeToCDC: async () => {},
+      isLeaderReplica: () => false,
+      getMetadataIngressReadiness: () => ({
+        ready: false,
+        reason: 'operational message-group ingress not ready',
+        retryAfterMs: 25,
+      }),
+    };
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        isLeaderReplica: () => false,
+        getMetadataIngressReadiness: () => ({ready: false}),
+      }],
+    ]);
+
+    const resolved = await service.seedCacheHydrationPhase
+      .resolveCdcPropagationMessageGroup(
+        preferredMessageGroup,
+        {requiredTables: ['services']},
+      );
+
+    assert.equal(
+      resolved,
+      preferredMessageGroup,
+      'should keep the captured ingress owner for CDC propagation ' +
+      'instead of failing closed on one readiness churn',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
   'BootstrapService routes bootstrap and operational selection through the owner',
   async (t) => {
     setupEnvironment();
@@ -277,6 +321,52 @@ test(
 );
 
 test(
+  'NodeJoiningService reuses captured CDC propagation owner when ' +
+    'current metadata readiness churns',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'node-a',
+      seedNodeAddress: 'http://seed-node:8080',
+    });
+    const preferredMessageGroup = {
+      id: 'preferred',
+      initialized: true,
+      subscribeToCDC: async () => {},
+      isLeaderReplica: () => false,
+      getMetadataIngressReadiness: () => ({
+        ready: false,
+        reason: 'operational message-group ingress not ready',
+        retryAfterMs: 25,
+      }),
+    };
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        isLeaderReplica: () => false,
+        getMetadataIngressReadiness: () => ({ready: false}),
+      }],
+    ]);
+
+    const resolved = await service.resolveCdcPropagationMessageGroup(
+      preferredMessageGroup,
+      {requiredTables: ['services']},
+    );
+
+    assert.equal(
+      resolved,
+      preferredMessageGroup,
+      'should keep the captured ingress owner for CDC propagation ' +
+      'instead of failing closed on one readiness churn',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
   'NodeJoiningService routes selection through the owner and preserves ' +
     'default required tables',
   async (t) => {
@@ -344,6 +434,25 @@ test(
       service.buildMessageGroupOwnerNotReadyError(),
       ownerNotReadyError,
       'owner-not-ready error should route through the owner',
+    );
+    const preferredMessageGroup = {id: 'preferred'};
+    assert.equal(
+      await service.resolveCdcPropagationMessageGroup(
+        preferredMessageGroup,
+        {requiredTables: ['services']},
+      ),
+      asyncSelection.service,
+      'CDC propagation selection should reuse the same owner path',
+    );
+    assert.deepEqual(
+      asyncOptions,
+      {
+        requiredTables: ['services'],
+        preferredService: preferredMessageGroup,
+        reuseCapturedIngress: true,
+      },
+      'CDC propagation selection should request captured-ingress reuse ' +
+      'from the shared owner',
     );
 
     teardownEnvironment();

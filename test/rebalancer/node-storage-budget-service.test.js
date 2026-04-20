@@ -15,6 +15,9 @@ import {
   STORAGE_CAPACITY_ERROR_MSG,
 } from '../../src/rebalancer/storage-capacity-constants.js';
 import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+import {
   NodeStorageBudgetService,
 } from '../../src/rebalancer/node-storage-budget-service.js';
 
@@ -305,20 +308,25 @@ test('registerNodeBudget - persists valid budget', async (t) => {
 
 test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => {
   setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
-  const upsertCalls = [];
+  const mutationCalls = [];
   const mockCdc = {
-    upsertSystemTableRow: async (tableName, rowData, options) => {
-      upsertCalls.push({tableName, rowData, options});
-      return {success: true};
-    },
+    upsertSystemTableRow: async () => ({success: true}),
   };
   const service = new NodeStorageBudgetService({
     nodeId: TEST_NODE_ID,
     cdcIntegrationService: mockCdc,
+    controlPlaneSystemTableGateway: {
+      async submitMutation(mutation, options) {
+        mutationCalls.push({mutation, options});
+        return {success: true};
+      },
+    },
   });
   service.initialize({
     nodeId: TEST_NODE_ID,
     cdcIntegrationService: mockCdc,
+    controlPlaneSystemTableGateway:
+      service.getControlPlaneSystemTableGateway(),
   });
 
   await service.registerNodeBudget({
@@ -326,14 +334,16 @@ test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => 
     upsertOptions: {skipCacheWait: true},
   });
 
-  assert.equal(upsertCalls.length, 1);
-  assert.equal(upsertCalls[0].options.skipCacheWait, true);
-  assert.equal(upsertCalls[0].options.workClass, 'interactive');
-  assert.equal(upsertCalls[0].options.deliveryPriority, 'critical');
+  assert.equal(mutationCalls.length, 1);
+  assert.equal(mutationCalls[0].options.skipCacheWait, true);
   assert.equal(
-    upsertCalls[0].options.routingReadinessDimension,
-    'controlPlaneRecoveryEligible',
+    mutationCalls[0].options.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.NODE_METADATA_MUTATION,
   );
+  assert.equal(mutationCalls[0].options.workClass, 'interactive');
+  assert.equal(mutationCalls[0].options.allowPressureDefer, false);
+  assert.equal(mutationCalls[0].options.allowPressureDegrade, false);
+  assert.equal(mutationCalls[0].options.deliveryPriority, 'critical');
   teardown();
   t.end();
 });

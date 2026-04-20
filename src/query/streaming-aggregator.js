@@ -23,6 +23,87 @@ const RESULT_ESTIMATE = Object.freeze({
   FALLBACK_ROW_BYTES: NUM.HUNDRED,
 });
 
+function resolveSortDirection(clause) {
+  return clause.direction === QUERY_SORT_DIRECTION.DESC ?
+    NUM.NEGATIVE_ONE :
+    NUM.ONE;
+}
+
+function compareNullishValues(aVal, bVal, direction) {
+  if (aVal === bVal) {
+    return NUM.ZERO;
+  }
+  if (aVal === null || aVal === undefined) {
+    return direction;
+  }
+  if (bVal === null || bVal === undefined) {
+    return -direction;
+  }
+  return null;
+}
+
+function compareDefinedValues(aVal, bVal, direction) {
+  if (typeof aVal === TYPEOF.STRING && typeof bVal === TYPEOF.STRING) {
+    return aVal.localeCompare(bVal) * direction;
+  }
+  if (aVal < bVal) {
+    return -direction;
+  }
+  if (aVal > bVal) {
+    return direction;
+  }
+  return NUM.ZERO;
+}
+
+function resolveAccumulatorValue(acc, row) {
+  return acc.isStar ? NUM.ONE : row[acc.column];
+}
+
+function updateCountAccumulator(acc, value) {
+  if (acc.distinct) {
+    if (!acc.values.includes(value)) {
+      acc.values.push(value);
+      acc.count++;
+    }
+    return;
+  }
+
+  acc.count++;
+}
+
+function updateMinAccumulator(acc, value) {
+  if (acc.min === null || value < acc.min) {
+    acc.min = value;
+  }
+}
+
+function updateMaxAccumulator(acc, value) {
+  if (acc.max === null || value > acc.max) {
+    acc.max = value;
+  }
+}
+
+function updateAccumulator(acc, value) {
+  switch (acc.function) {
+  case QUERY_AGGREGATE.COUNT:
+    updateCountAccumulator(acc, value);
+    break;
+  case QUERY_AGGREGATE.SUM:
+    acc.sum += Number(value) || NUM.ZERO;
+    break;
+  case QUERY_AGGREGATE.AVG:
+    acc.sum += Number(value) || NUM.ZERO;
+    acc.count++;
+    break;
+  case QUERY_AGGREGATE.MIN:
+    updateMinAccumulator(acc, value);
+    break;
+  case QUERY_AGGREGATE.MAX:
+    updateMaxAccumulator(acc, value);
+    break;
+  }
+}
+
 /**
  * StreamingAggregator processes query results in a streaming fashion
  * to reduce memory footprint for large result sets.
@@ -193,24 +274,13 @@ class StreamingAggregator {
   compareRows(a, b, orderBy) {
     for (const clause of orderBy) {
       const col = clause.expression?.column || clause.column;
-      const dir = clause.direction === QUERY_SORT_DIRECTION.DESC ?
-        NUM.NEGATIVE_ONE :
-        NUM.ONE;
-
+      const dir = resolveSortDirection(clause);
       const aVal = a[col];
       const bVal = b[col];
-
-      if (aVal === bVal) continue;
-      if (aVal === null || aVal === undefined) return dir;
-      if (bVal === null || bVal === undefined) return -dir;
-
-      if (typeof aVal === TYPEOF.STRING && typeof bVal === TYPEOF.STRING) {
-        const cmp = aVal.localeCompare(bVal);
-        if (cmp !== NUM.ZERO) return cmp * dir;
-      } else {
-        if (aVal < bVal) return -dir;
-        if (aVal > bVal) return dir;
-      }
+      const nullishComparison = compareNullishValues(aVal, bVal, dir);
+      if (nullishComparison !== null) return nullishComparison;
+      const valueComparison = compareDefinedValues(aVal, bVal, dir);
+      if (valueComparison !== NUM.ZERO) return valueComparison;
     }
     return NUM.ZERO;
   }
@@ -328,7 +398,7 @@ class StreamingAggregator {
    */
   updateAccumulators(accumulators, row) {
     for (const acc of accumulators) {
-      const value = acc.isStar ? NUM.ONE : row[acc.column];
+      const value = resolveAccumulatorValue(acc, row);
 
       // Skip null values for non-COUNT(*)
       if (value === null || value === undefined) {
@@ -338,39 +408,7 @@ class StreamingAggregator {
         continue;
       }
 
-      switch (acc.function) {
-      case QUERY_AGGREGATE.COUNT:
-        if (acc.distinct) {
-          if (!acc.values.includes(value)) {
-            acc.values.push(value);
-            acc.count++;
-          }
-        } else {
-          acc.count++;
-        }
-        break;
-
-      case QUERY_AGGREGATE.SUM:
-        acc.sum += Number(value) || NUM.ZERO;
-        break;
-
-      case QUERY_AGGREGATE.AVG:
-        acc.sum += Number(value) || NUM.ZERO;
-        acc.count++;
-        break;
-
-      case QUERY_AGGREGATE.MIN:
-        if (acc.min === null || value < acc.min) {
-          acc.min = value;
-        }
-        break;
-
-      case QUERY_AGGREGATE.MAX:
-        if (acc.max === null || value > acc.max) {
-          acc.max = value;
-        }
-        break;
-      }
+      updateAccumulator(acc, value);
     }
   }
 

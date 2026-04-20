@@ -56,6 +56,44 @@ function getNodeHeartbeatWatermark(nodeRow) {
   });
 }
 
+function compareWatermarkNumber(previousValue, nextValue) {
+  if (previousValue === null || nextValue === null || previousValue === nextValue) {
+    return NUM.ZERO;
+  }
+  return nextValue > previousValue ? NUM.ONE : NUM.NEGATIVE_ONE;
+}
+
+function compareReadyLeaseTie(previous, next) {
+  if (previous.readyLeaseExpiresAt !== null && next.readyLeaseExpiresAt === null) {
+    if (next.connectionState === STATE.CONNECTED ||
+        next.connectionState === STATE.READY) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (next.connectionState === STATE.DISCONNECTED) {
+      return NUM.ONE;
+    }
+  }
+
+  if (previous.readyLeaseExpiresAt === null &&
+      next.readyLeaseExpiresAt !== null) {
+    return NUM.ONE;
+  }
+
+  return NUM.ZERO;
+}
+
+function compareConnectionStateTie(previous, next) {
+  if (previous.connectionState === STATE.READY &&
+      next.connectionState === STATE.CONNECTED) {
+    return NUM.NEGATIVE_ONE;
+  }
+  if (previous.connectionState === STATE.CONNECTED &&
+      next.connectionState === STATE.READY) {
+    return NUM.ONE;
+  }
+  return NUM.ZERO;
+}
+
 function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
   const previous = getNodeHeartbeatWatermark(previousRow);
   const next = getNodeHeartbeatWatermark(nextRow);
@@ -63,49 +101,34 @@ function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
     return NUM.ZERO;
   }
 
-  if (previous.lastHeartbeat !== null &&
-      next.lastHeartbeat !== null &&
+  const heartbeatComparison = compareWatermarkNumber(
+    previous.lastHeartbeat,
+    next.lastHeartbeat,
+  );
+  if (heartbeatComparison !== NUM.ZERO) {
+    return heartbeatComparison;
+  }
+
+  const readyLeaseComparison = compareWatermarkNumber(
+    previous.readyLeaseExpiresAt,
+    next.readyLeaseExpiresAt,
+  );
+  if (readyLeaseComparison !== NUM.ZERO) {
+    return readyLeaseComparison;
+  }
+
+  if (previous.lastHeartbeat === null ||
+      next.lastHeartbeat === null ||
       previous.lastHeartbeat !== next.lastHeartbeat) {
-    return next.lastHeartbeat > previous.lastHeartbeat ? 1 : -1;
+    return NUM.ZERO;
   }
 
-  if (previous.readyLeaseExpiresAt !== null &&
-      next.readyLeaseExpiresAt !== null &&
-      previous.readyLeaseExpiresAt !== next.readyLeaseExpiresAt) {
-    return next.readyLeaseExpiresAt > previous.readyLeaseExpiresAt ? 1 : -1;
+  const readyLeaseTieComparison = compareReadyLeaseTie(previous, next);
+  if (readyLeaseTieComparison !== NUM.ZERO) {
+    return readyLeaseTieComparison;
   }
 
-  if (previous.lastHeartbeat !== null &&
-      next.lastHeartbeat !== null &&
-      previous.lastHeartbeat === next.lastHeartbeat) {
-    if (previous.readyLeaseExpiresAt !== null &&
-        next.readyLeaseExpiresAt === null) {
-      if (next.connectionState === STATE.CONNECTED ||
-          next.connectionState === STATE.READY) {
-        return -1;
-      }
-      if (next.connectionState === STATE.DISCONNECTED) {
-        return 1;
-      }
-    }
-
-    if (previous.readyLeaseExpiresAt === null &&
-        next.readyLeaseExpiresAt !== null) {
-      return 1;
-    }
-
-    if (previous.connectionState === STATE.READY &&
-        next.connectionState === STATE.CONNECTED) {
-      return -1;
-    }
-
-    if (previous.connectionState === STATE.CONNECTED &&
-        next.connectionState === STATE.READY) {
-      return 1;
-    }
-  }
-
-  return NUM.ZERO;
+  return compareConnectionStateTie(previous, next);
 }
 
 function isNodeHeartbeatWatermarkRegression(previousRow, nextRow) {

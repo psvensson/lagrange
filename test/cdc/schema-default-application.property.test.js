@@ -150,7 +150,7 @@ function generateMinimalData(tableName) {
  */
 function normalizeDefaultValue(value) {
   const builder = new CDCSqlBuilder();
-  const result = builder.normalizeDefaultValue(value);
+  const result = builder.normalizeDefaultValueResult(value);
   if (result.state === DEFAULT_VALUE_NORMALIZATION_STATE.VALUE) {
     return result.value;
   }

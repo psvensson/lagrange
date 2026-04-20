@@ -32,6 +32,28 @@ export const VIEW_KEYS = {
   '0': 'services',
 };
 
+const NORMAL_MODE_NAVIGATION_ACTION = Object.freeze({
+  backspace: {type: 'navigate:back'},
+  down: {type: 'navigate:down'},
+  end: {type: 'navigate:last'},
+  enter: {type: 'navigate:select'},
+  escape: {type: 'navigate:back'},
+  home: {type: 'navigate:first'},
+  pagedown: {type: 'navigate:pagedown', usesPageSize: true},
+  pageup: {type: 'navigate:pageup', usesPageSize: true},
+  up: {type: 'navigate:up'},
+});
+
+const NORMAL_MODE_CHARACTER_ACTION = Object.freeze({
+  'd': 'detail:toggle',
+  'e': 'config:edit',
+  'p': 'cdc:toggle-pause',
+  'q': 'app:quit',
+  'r': 'cache:refresh',
+  'R': 'config:revert',
+  's': 'view:sort',
+});
+
 /**
  * @typedef {Object} KeyEvent
  * @property {string} name - Key name (e.g., 'up', 'down', 'enter')
@@ -111,102 +133,34 @@ export class KeyboardHandler {
    */
   handleNormalMode(key) {
     const keyName = key.full || key.name || '';
-
-    // Navigation keys
-    if (keyName === 'up') {
-      return this.emitAction('navigate:up');
-    }
-    if (keyName === 'down') {
-      return this.emitAction('navigate:down');
-    }
-    if (keyName === 'pageup') {
-      return this.emitAction('navigate:pageup', {count: this.pageSize});
-    }
-    if (keyName === 'pagedown') {
-      return this.emitAction('navigate:pagedown', {count: this.pageSize});
-    }
-    if (keyName === 'home') {
-      return this.emitAction('navigate:first');
-    }
-    if (keyName === 'end') {
-      return this.emitAction('navigate:last');
-    }
-    if (keyName === 'enter') {
-      return this.emitAction('navigate:select');
-    }
-    if (keyName === 'escape' || keyName === 'backspace') {
-      return this.emitAction('navigate:back');
+    const navigationAction = this.handleNormalModeNavigationKey(keyName);
+    if (navigationAction) {
+      return navigationAction;
     }
 
     // Check for character keys
     const ch = key.ch || '';
 
-    // Number keys for view switching
-    if (VIEW_KEYS[ch]) {
-      return this.emitAction('view:switch', {view: VIEW_KEYS[ch]});
+    const viewSwitchAction = this.handleNormalModeViewSwitch(ch);
+    if (viewSwitchAction) {
+      return viewSwitchAction;
     }
 
-    // Mode switching
-    if (ch === '/') {
-      this.enterFilterMode();
-      return {type: 'mode:filter'};
+    const inputModeAction = this.handleNormalModeInputModeSwitch(ch);
+    if (inputModeAction) {
+      return inputModeAction;
     }
 
-    if (ch === ':') {
-      this.enterCommandMode();
-      return {type: 'mode:command'};
+    const helpAction = this.handleNormalModeHelp(ch);
+    if (helpAction) {
+      return helpAction;
     }
 
-    // Help
-    if (ch === '?') {
-      if (this.helpOverlay) {
-        this.helpOverlay.show();
-      }
-      return {type: 'help:show'};
-    }
-
-    // Quit
-    if (ch === 'q') {
-      return this.emitAction('app:quit');
-    }
-
-    // Detail panel
-    if (ch === 'd') {
-      return this.emitAction('detail:toggle');
-    }
-
-    // Refresh
-    if (ch === 'r') {
-      return this.emitAction('cache:refresh');
-    }
-
-    // CDC Pause/Resume toggle
-    // Requirements: 12.6
-    if (ch === 'p') {
-      return this.emitAction('cdc:toggle-pause');
-    }
-
-    // Sort
-    if (ch === 's') {
-      return this.emitAction('view:sort');
-    }
-
-    // Edit (for config view)
-    if (ch === 'e') {
-      return this.emitAction('config:edit');
-    }
-
-    // Revert to default (for config view)
-    if (ch === 'R') {
-      return this.emitAction('config:revert');
-    }
-
-    // Ctrl+C for force quit
     if (key.ctrl && ch === 'c') {
       return this.emitAction('app:force-quit');
     }
 
-    return null;
+    return this.handleNormalModeCharacterAction(ch);
   }
 
   /**
@@ -256,77 +210,143 @@ export class KeyboardHandler {
    */
   handleCommandMode(key) {
     const keyName = key.full || key.name || '';
+    const specialAction = this.handleCommandModeSpecialKey(keyName);
+    if (specialAction) {
+      return specialAction;
+    }
 
-    // Escape exits command mode
+    return this.handleBufferedCharacterInput(key.ch, 'command:input');
+  }
+
+  handleNormalModeNavigationKey(keyName) {
+    const descriptor = NORMAL_MODE_NAVIGATION_ACTION[keyName];
+    if (!descriptor) {
+      return null;
+    }
+
+    return descriptor.usesPageSize ?
+      this.emitAction(descriptor.type, {count: this.pageSize}) :
+      this.emitAction(descriptor.type);
+  }
+
+  handleNormalModeViewSwitch(ch) {
+    const view = VIEW_KEYS[ch];
+    return view ? this.emitAction('view:switch', {view}) : null;
+  }
+
+  handleNormalModeInputModeSwitch(ch) {
+    if (ch === '/') {
+      this.enterFilterMode();
+      return {type: 'mode:filter'};
+    }
+    if (ch === ':') {
+      this.enterCommandMode();
+      return {type: 'mode:command'};
+    }
+    return null;
+  }
+
+  handleNormalModeHelp(ch) {
+    if (ch !== '?') {
+      return null;
+    }
+    if (this.helpOverlay) {
+      this.helpOverlay.show();
+    }
+    return {type: 'help:show'};
+  }
+
+  handleNormalModeCharacterAction(ch) {
+    const actionType = NORMAL_MODE_CHARACTER_ACTION[ch];
+    return actionType ? this.emitAction(actionType) : null;
+  }
+
+  handleCommandModeSpecialKey(keyName) {
     if (keyName === 'escape') {
       this.exitInputMode();
       return {type: 'command:cancel'};
     }
-
-    // Enter executes command
     if (keyName === 'enter') {
-      const command = this.inputBuffer;
-      this.exitInputMode();
-
-      if (this.commandParser) {
-        const result = this.commandParser.parse(command);
-        if (result.error) {
-          return this.emitAction('command:error', {error: result.error});
-        }
-        return this.emitAction('command:execute', {
-          command: result.command,
-          args: result.args,
-        });
-      }
-
-      return {type: 'command:execute', command};
+      return this.executeBufferedCommand();
     }
-
-    // Tab for autocomplete
     if (keyName === 'tab') {
-      if (this.commandParser) {
-        const completions = this.commandParser.getCompletions(this.inputBuffer);
-        if (completions.length === 1) {
-          this.inputBuffer = completions[0];
-          this.notifyInputChange();
-        } else if (completions.length > 1) {
-          return {type: 'command:completions', completions};
-        }
-      }
-      return {type: 'command:autocomplete', value: this.inputBuffer};
+      return this.autocompleteCommandInput();
     }
-
-    // Up/Down for command history
-    if (keyName === 'up' && this.commandParser) {
-      const history = this.commandParser.getHistory();
-      if (history.length > 0) {
-        this.inputBuffer = history[0] || '';
-        this.notifyInputChange();
-      }
-      return {type: 'command:history', direction: 'up'};
+    if (keyName === 'up') {
+      return this.recallCommandHistory();
     }
-
     if (keyName === 'down') {
       return {type: 'command:history', direction: 'down'};
     }
-
-    // Backspace removes character
     if (keyName === 'backspace') {
-      if (this.inputBuffer.length > 0) {
-        this.inputBuffer = this.inputBuffer.slice(0, -1);
-        this.notifyInputChange();
-      }
-      return {type: 'command:input', value: this.inputBuffer};
+      return this.removeBufferedCharacter('command:input');
     }
-
-    // Add printable characters
-    if (key.ch && key.ch.length === 1) {
-      this.inputBuffer += key.ch;
-      this.notifyInputChange();
-      return {type: 'command:input', value: this.inputBuffer};
-    }
-
     return null;
+  }
+
+  executeBufferedCommand() {
+    const command = this.inputBuffer;
+    this.exitInputMode();
+
+    if (this.commandParser) {
+      const result = this.commandParser.parse(command);
+      if (result.error) {
+        return this.emitAction('command:error', {error: result.error});
+      }
+      return this.emitAction('command:execute', {
+        command: result.command,
+        args: result.args,
+      });
+    }
+
+    return {type: 'command:execute', command};
+  }
+
+  autocompleteCommandInput() {
+    if (!this.commandParser) {
+      return {type: 'command:autocomplete', value: this.inputBuffer};
+    }
+
+    const completions = this.commandParser.getCompletions(this.inputBuffer);
+    if (completions.length === 1) {
+      this.inputBuffer = completions[0];
+      this.notifyInputChange();
+    } else if (completions.length > 1) {
+      return {type: 'command:completions', completions};
+    }
+
+    return {type: 'command:autocomplete', value: this.inputBuffer};
+  }
+
+  recallCommandHistory() {
+    if (!this.commandParser) {
+      return null;
+    }
+
+    const history = this.commandParser.getHistory();
+    if (history.length > 0) {
+      this.inputBuffer = history[0] || '';
+      this.notifyInputChange();
+    }
+    return {type: 'command:history', direction: 'up'};
+  }
+
+  removeBufferedCharacter(actionType) {
+    if (this.inputBuffer.length > 0) {
+      this.inputBuffer = this.inputBuffer.slice(0, -1);
+      this.notifyInputChange();
+    }
+    return {type: actionType, value: this.inputBuffer};
+  }
+
+  handleBufferedCharacterInput(ch, actionType) {
+    if (!ch || ch.length !== 1) {
+      return null;
+    }
+
+    this.inputBuffer += ch;
+    this.notifyInputChange();
+    return {type: actionType, value: this.inputBuffer};
   }
 
   /**

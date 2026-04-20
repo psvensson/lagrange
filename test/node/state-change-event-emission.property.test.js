@@ -22,7 +22,9 @@ import fc from 'fast-check';
 import {
   NodeLifecycleStateMachine,
   NodeState,
+  TransitionOutcome,
   VALID_TRANSITIONS,
+  resolveNodeLifecycleTransitionOutcome,
 } from '../../src/node/node-lifecycle-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -260,13 +262,13 @@ test('Property 4: State Change Event Emission', async (t) => {
         (fromState, toState) => {
           initializeTestDependencies();
 
-          const validTargets = VALID_TRANSITIONS[fromState] || [];
-          const isValidTransition = validTargets.includes(toState);
-
-          // Skip if this is actually a valid transition
-          if (isValidTransition) {
+          const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+            fromState,
+            toState,
+          );
+          if (transitionOutcome !== TransitionOutcome.INVALID) {
             resetTestDependencies();
-            return true; // Property holds trivially for valid transitions
+            return true;
           }
 
           const events = [];
@@ -295,6 +297,36 @@ test('Property 4: State Change Event Emission', async (t) => {
     );
 
     t.pass('no event emitted for invalid transitions');
+  });
+
+  t.test('idempotent ready transition emits no event', async (t) => {
+    initializeTestDependencies();
+
+    const events = [];
+    const sm = new NodeLifecycleStateMachine({
+      nodeId: 'test-node',
+      initialState: NodeState.READY,
+    });
+
+    sm.on('stateChange', (event) => {
+      events.push(event);
+    });
+
+    const result = sm.transition(NodeState.READY);
+    const transitionOutcome = resolveNodeLifecycleTransitionOutcome(
+      NodeState.READY,
+      NodeState.READY,
+    );
+
+    resetTestDependencies();
+
+    t.equal(
+      transitionOutcome,
+      TransitionOutcome.IDEMPOTENT_NOOP,
+      'READY -> READY should be classified as an idempotent no-op',
+    );
+    t.equal(result, true, 'READY -> READY should succeed');
+    t.equal(events.length, 0, 'idempotent no-op should not emit stateChange');
   });
 
   /**

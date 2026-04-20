@@ -75,6 +75,9 @@ const HEARTBEAT_QUIET_MODE_BYPASS_REASON = Object.freeze({
   NODE_HEARTBEAT_INITIAL_WRITE: 'node_heartbeat_initial_write',
   NODE_HEARTBEAT_MAX_STALENESS: 'node_heartbeat_max_staleness',
   NODE_HEARTBEAT_STRUCTURAL_CHANGE: 'node_heartbeat_structural_change',
+  NODE_HEARTBEAT_VISIBILITY_PENDING: 'node_heartbeat_visibility_pending',
+  NODE_HEARTBEAT_VISIBILITY_UNVERIFIED:
+    'node_heartbeat_visibility_unverified',
 });
 
 export {

@@ -34,6 +34,9 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {KeyRange} from './key-range-manager.js';
+import {
+  createPartitionSplitMergeManagerEvaluationMethods,
+} from './partition-split-merge-manager-evaluation-methods.js';
 
 const OperationState = SPLIT_MERGE_STATE;
 const DEFAULT_SPLIT_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
@@ -46,6 +49,11 @@ const DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS = 1000;
 const DEFAULT_EVALUATION_TRIGGER = 'direct_call';
 const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
 const PERIODIC_EVALUATION_TRIGGER = 'periodic_timer';
+const REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY = 'write_activity';
+const REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS = Object.freeze({
+  allowPressureDefer: false,
+  workClass: PRESSURE_WORK_CLASS.CRITICAL,
+});
 
 /**
  * Clone one list of string-like values into a stable diagnostics array.
@@ -92,86 +100,86 @@ class PartitionSplitMergeManager extends EventEmitter {
      * @param {Object} [options.storageAdmissionService] - Admission gate.
      * @param {Object} [options.storageAccountingService] - Accounting owner.
      */
-    constructor(options = {}) {
-      super();
+  constructor(options = {}) {
+    super();
 
-      this.keyRangeManager = options.keyRangeManager || null;
-      this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
-      this.listPartitions = options.listPartitions || null;
-      this.tablePolicyService = options.tablePolicyService || null;
-      this.createPartition = options.createPartition || (() => {});
-      this.deletePartition = options.deletePartition || (() => {});
-      this.executeSplitCandidate = options.executeSplitCandidate || null;
-      this.executeMergeCandidate = options.executeMergeCandidate || null;
-      this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
-      this.maxAutoExecuteSplitsPerEvaluation =
+    this.keyRangeManager = options.keyRangeManager || null;
+    this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
+    this.listPartitions = options.listPartitions || null;
+    this.tablePolicyService = options.tablePolicyService || null;
+    this.createPartition = options.createPartition || (() => {});
+    this.deletePartition = options.deletePartition || (() => {});
+    this.executeSplitCandidate = options.executeSplitCandidate || null;
+    this.executeMergeCandidate = options.executeMergeCandidate || null;
+    this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
+    this.maxAutoExecuteSplitsPerEvaluation =
         Number.isInteger(options.maxAutoExecuteSplitsPerEvaluation) &&
         options.maxAutoExecuteSplitsPerEvaluation >= NUM.ZERO ?
           options.maxAutoExecuteSplitsPerEvaluation :
           DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION;
-      this.storageAdmissionService =
+    this.storageAdmissionService =
         options.storageAdmissionService || null;
-      this.storageAccountingService =
+    this.storageAccountingService =
         options.storageAccountingService || null;
-      this.nodeId = options.nodeId || null;
-      this.messageRouter = options.messageRouter || null;
-      this.pressureGovernor = options.pressureGovernor || null;
+    this.nodeId = options.nodeId || null;
+    this.messageRouter = options.messageRouter || null;
+    this.pressureGovernor = options.pressureGovernor || null;
 
-      // Configuration
-      const config = ConfigurationManager.getInstance();
-      this.splitStorageThreshold =
+    // Configuration
+    const config = ConfigurationManager.getInstance();
+    this.splitStorageThreshold =
         config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_BYTES) ||
         SPLIT_MERGE_DEFAULT.SPLIT_STORAGE_THRESHOLD_BYTES;
-      this.splitTrafficThreshold =
+    this.splitTrafficThreshold =
         config.get(CONFIG_KEY.PARTITION_SPLIT_THRESHOLD_QPM) ||
         SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESHOLD_QPM;
-      this.mergeStorageThreshold =
+    this.mergeStorageThreshold =
         config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_BYTES) ||
         SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
-      this.mergeTrafficThreshold =
+    this.mergeTrafficThreshold =
         config.get(CONFIG_KEY.PARTITION_MERGE_THRESHOLD_QPM) ||
         SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
-      this.evaluationIntervalMs =
+    this.evaluationIntervalMs =
         config.get(CONFIG_KEY.PARTITION_EVALUATION_INTERVAL_MS) ||
         SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
-      this.splitAmplificationFactor = this.getNumericConfig(
-        config,
-        STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
-        STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR,
-      );
+    this.splitAmplificationFactor = this.getNumericConfig(
+      config,
+      STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
+      STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR,
+    );
 
-      // State
-      this.state = OperationState.IDLE;
-      this.evaluationTimer = null;
-      this.allowManagedSplitDuringEvaluation = false;
-      this.reactiveEvaluationDebounceMs =
+    // State
+    this.state = OperationState.IDLE;
+    this.evaluationTimer = null;
+    this.allowManagedSplitDuringEvaluation = false;
+    this.reactiveEvaluationDebounceMs =
         Number.isInteger(options.reactiveEvaluationDebounceMs) &&
         options.reactiveEvaluationDebounceMs >= NUM.ZERO ?
           options.reactiveEvaluationDebounceMs :
           DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS;
-      this.requestedEvaluation = null;
-      this.requestedEvaluationTimer = null;
-      this.requestedEvaluationDueAtMs = null;
-      this.deferredRetryEvaluation = null;
-      this.deferredRetryEvaluationDueAtMs = null;
-      this.deferredRetryEvaluationTimer = null;
-      this.isShutdown = false;
-      this.lastEvaluationRequestedAtMs = null;
-      this.lastEvaluationStartedAtMs = null;
-      this.lastEvaluationCompletedAtMs = null;
-      this.lastEvaluationDurationMs = null;
-      this.lastEvaluationError = null;
-      this.lastEvaluationSummary = null;
-      this.lastEvaluationTrigger = null;
-      this.lastEvaluationReasonCodes = [];
-      this.lastEvaluationPartitionIds = [];
+    this.requestedEvaluation = null;
+    this.requestedEvaluationTimer = null;
+    this.requestedEvaluationDueAtMs = null;
+    this.deferredRetryEvaluation = null;
+    this.deferredRetryEvaluationDueAtMs = null;
+    this.deferredRetryEvaluationTimer = null;
+    this.isShutdown = false;
+    this.lastEvaluationRequestedAtMs = null;
+    this.lastEvaluationStartedAtMs = null;
+    this.lastEvaluationCompletedAtMs = null;
+    this.lastEvaluationDurationMs = null;
+    this.lastEvaluationError = null;
+    this.lastEvaluationSummary = null;
+    this.lastEvaluationTrigger = null;
+    this.lastEvaluationReasonCodes = [];
+    this.lastEvaluationPartitionIds = [];
 
-      // Logging
-      const loggingService = LoggingService.getInstance();
-      this.logger = loggingService.isInitialized() ?
-        loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) :
-        console;
-    }
+    // Logging
+    const loggingService = LoggingService.getInstance();
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) :
+      console;
+  }
 
   /**
    * Resolve the shared pressure-governor owner for this node.
@@ -209,6 +217,39 @@ class PartitionSplitMergeManager extends EventEmitter {
       allowDefer: true,
       retryAfterMs: options.retryAfterMs,
     });
+  }
+
+  /**
+   * Resolve stable reason codes for one evaluation invocation.
+   * @param {Object} [preflightOptions={}]
+   * @return {string[]}
+   * @private
+   */
+  resolveEvaluationReasonCodes(preflightOptions = {}) {
+    return cloneStringArray(
+      Array.isArray(preflightOptions?.reasonCodes) ?
+        preflightOptions.reasonCodes :
+        [preflightOptions?.reasonCode, preflightOptions?.reason],
+    );
+  }
+
+  /**
+   * Reactive write-activity split evaluation must not self-starve behind the
+   * same transport pressure that the write workload is generating. Keep the
+   * bypass scoped to reactive write activity; periodic/background evaluation
+   * remains deferable.
+   *
+   * @param {Object} [preflightOptions={}]
+   * @return {boolean}
+   * @private
+   */
+  shouldBypassSplitPressure(preflightOptions = {}) {
+    if (this.resolveEvaluationTrigger(preflightOptions) !==
+        REACTIVE_EVALUATION_TRIGGER) {
+      return false;
+    }
+    return this.resolveEvaluationReasonCodes(preflightOptions)
+      .includes(REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY);
   }
 
   /**
@@ -447,14 +488,15 @@ class PartitionSplitMergeManager extends EventEmitter {
    * @return {Promise<Object|null>} Execution result.
    * @private
    */
-  async executeManagedSplitCandidate(partitionId) {
+  async executeManagedSplitCandidate(partitionId, options = {}) {
     if (!partitionId ||
         !this.autoExecuteCandidates ||
         typeof this.executeSplitCandidate !== 'function') {
       return null;
     }
     const pressureDecision = this.evaluateSplitPressure();
-    if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+    if (options?.bypassPressure !== true &&
+        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
       return this.buildPressureDeferredExecution(
         partitionId,
         pressureDecision,
@@ -462,7 +504,18 @@ class PartitionSplitMergeManager extends EventEmitter {
     }
     this.allowManagedSplitDuringEvaluation = true;
     try {
-      return await this.executeSplitCandidate(partitionId);
+      const executionOptions =
+        options?.executionOptions &&
+        typeof options.executionOptions === 'object' ?
+          {...options.executionOptions} :
+          {};
+      if (options?.bypassPressure === true) {
+        Object.assign(
+          executionOptions,
+          REACTIVE_WRITE_ACTIVITY_EXECUTION_OPTIONS,
+        );
+      }
+      return await this.executeSplitCandidate(partitionId, executionOptions);
     } finally {
       this.allowManagedSplitDuringEvaluation = false;
     }
@@ -1156,638 +1209,20 @@ class PartitionSplitMergeManager extends EventEmitter {
       mergedEnd: mergedRange.end,
     });
   }
-
-
-  /**
-   * Start periodic evaluation of split/merge criteria.
-   * Evaluates every 5 minutes by default.
-   */
-  startPeriodicEvaluation() {
-    if (this.evaluationTimer) {
-      return;
-    }
-
-    this.logger.info(SPLIT_MERGE_LOG_MSG.STARTING_PERIODIC_EVAL, {
-      intervalMs: this.evaluationIntervalMs,
-    });
-
-    this.evaluationTimer = setInterval(() => {
-      this.evaluateAllPartitions({
-        triggerReason: PERIODIC_EVALUATION_TRIGGER,
-      }).catch((error) => {
-        this.logger.error(SPLIT_MERGE_LOG_MSG.PERIODIC_EVAL_FAILED, {
-          error: error.message,
-        });
-      });
-    }, this.evaluationIntervalMs);
-    this.evaluationTimer.unref();
-  }
-
-  /**
-   * Stop periodic evaluation.
-   */
-  stopPeriodicEvaluation() {
-    if (this.evaluationTimer) {
-      clearInterval(this.evaluationTimer);
-      this.evaluationTimer = null;
-      this.logger.info(SPLIT_MERGE_LOG_MSG.STOPPED_PERIODIC_EVAL);
-    }
-  }
-
-  /**
-   * Request one coalesced split/merge evaluation outside the periodic timer.
-   * Reuses the canonical evaluateAllPartitions path and collapses bursts of
-   * cache-driven triggers into one follow-up evaluation.
-   * @param {Object} [context]
-   * @return {void}
-   */
-  requestEvaluation(context = {}) {
-    if (this.isShutdown) {
-      return;
-    }
-
-    this.requestedEvaluation = this.mergeRequestedEvaluationContext(
-      this.requestedEvaluation,
-      context,
-    );
-    this.setRequestedEvaluationDiagnostics(this.requestedEvaluation);
-    const pressureDecision = this.evaluateSplitPressure();
-    const pressureDeferred =
-      pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER;
-    const delayMs = Math.max(
-      this.reactiveEvaluationDebounceMs,
-      pressureDeferred ? pressureDecision.retryAfterMs : NUM.ZERO,
-    );
-    const dueAtMs = Date.now() + delayMs;
-    if (this.requestedEvaluationTimer &&
-        Number.isFinite(this.requestedEvaluationDueAtMs)) {
-      if (pressureDeferred &&
-          this.requestedEvaluationDueAtMs < dueAtMs) {
-        clearTimeout(this.requestedEvaluationTimer);
-        this.requestedEvaluationTimer = null;
-      } else if (!pressureDeferred &&
-          this.requestedEvaluationDueAtMs <= dueAtMs) {
-        return;
-      } else if (this.requestedEvaluationDueAtMs === dueAtMs) {
-        return;
-      } else {
-        clearTimeout(this.requestedEvaluationTimer);
-        this.requestedEvaluationTimer = null;
-      }
-    } else if (this.requestedEvaluationTimer) {
-      clearTimeout(this.requestedEvaluationTimer);
-      this.requestedEvaluationTimer = null;
-    }
-
-    this.requestedEvaluationDueAtMs = dueAtMs;
-    this.requestedEvaluationTimer = setTimeout(() => {
-      this.requestedEvaluationTimer = null;
-      this.requestedEvaluationDueAtMs = null;
-      void this.flushRequestedEvaluation();
-    }, delayMs);
-    this.requestedEvaluationTimer.unref?.();
-  }
-
-  /**
-   * Merge multiple evaluation requests into one stable context object.
-   * @param {Object|null} existing
-   * @param {Object|null} next
-   * @return {Object}
-   * @private
-   */
-  mergeRequestedEvaluationContext(existing, next) {
-    const merged = {
-      reasonCodes: [],
-      partitionIds: [],
-    };
-    const appendValues = (target, values) => {
-      if (!Array.isArray(values)) {
-        return;
-      }
-      for (const value of values) {
-        const normalizedValue = String(value || '');
-        if (!normalizedValue || target.includes(normalizedValue)) {
-          continue;
-        }
-        target.push(normalizedValue);
-      }
-    };
-    const appendContext = (context) => {
-      if (!context || typeof context !== 'object') {
-        return;
-      }
-      appendValues(
-        merged.reasonCodes,
-        Array.isArray(context.reasonCodes) ?
-          context.reasonCodes :
-          [context.reasonCode, context.reason],
-      );
-      appendValues(
-        merged.partitionIds,
-        Array.isArray(context.partitionIds) ?
-          context.partitionIds :
-          [context.partitionId],
-      );
-    };
-
-    appendContext(existing);
-    appendContext(next);
-    return merged;
-  }
-
-  /**
-   * Resolve one stable trigger label for evaluation diagnostics.
-   * @param {Object} preflightOptions
-   * @return {string}
-   * @private
-   */
-  resolveEvaluationTrigger(preflightOptions = {}) {
-    const trigger = String(
-      preflightOptions?.triggerReason ||
-      preflightOptions?.reasonCode ||
-      preflightOptions?.reason ||
-      DEFAULT_EVALUATION_TRIGGER,
-    );
-    return trigger.length > NUM.ZERO ? trigger : DEFAULT_EVALUATION_TRIGGER;
-  }
-
-  /**
-   * Capture pending reactive-request diagnostics.
-   * @param {Object|null} request
-   * @return {void}
-   * @private
-   */
-  setRequestedEvaluationDiagnostics(request) {
-    const normalizedRequest = request &&
-      typeof request === 'object' ?
-      request :
-      null;
-    this.lastEvaluationRequestedAtMs = Date.now();
-    this.lastEvaluationReasonCodes = cloneStringArray(
-      normalizedRequest?.reasonCodes,
-    );
-    this.lastEvaluationPartitionIds = cloneStringArray(
-      normalizedRequest?.partitionIds,
-    );
-  }
-
-  /**
-   * Clear pending reactive-request diagnostics after dispatch.
-   * @return {void}
-   * @private
-   */
-  clearRequestedEvaluationDiagnostics() {
-    this.lastEvaluationRequestedAtMs = null;
-    this.lastEvaluationReasonCodes = [];
-    this.lastEvaluationPartitionIds = [];
-  }
-
-  /**
-   * Record evaluation-start diagnostics.
-   * @param {Object} preflightOptions
-   * @return {number}
-   * @private
-   */
-  recordEvaluationStart(preflightOptions = {}) {
-    const startedAtMs = Date.now();
-    this.lastEvaluationTrigger =
-      this.resolveEvaluationTrigger(preflightOptions);
-    this.lastEvaluationStartedAtMs = startedAtMs;
-    this.lastEvaluationError = null;
-    return startedAtMs;
-  }
-
-  /**
-   * Record evaluation success diagnostics.
-   * @param {Object} results
-   * @param {number} startedAtMs
-   * @return {void}
-   * @private
-   */
-  recordEvaluationSuccess(results, startedAtMs) {
-    const completedAtMs = Date.now();
-    this.lastEvaluationCompletedAtMs = completedAtMs;
-    this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
-      Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
-      null;
-    const normalized = results && typeof results === 'object' ? results : {};
-    this.lastEvaluationSummary = {
-      evaluated: normalized.evaluated === true,
-      partitionsEvaluated: Number(normalized.partitionsEvaluated || NUM.ZERO),
-      splitCandidateCount: Array.isArray(normalized.splitCandidates) ?
-        normalized.splitCandidates.length :
-        NUM.ZERO,
-      executedSplitCount: Array.isArray(normalized.executedSplits) ?
-        normalized.executedSplits.length :
-        NUM.ZERO,
-      splitDeferredCount: Array.isArray(normalized.splitDeferred) ?
-        normalized.splitDeferred.length :
-        NUM.ZERO,
-      splitErrorCount: Array.isArray(normalized.splitErrors) ?
-        normalized.splitErrors.length :
-        NUM.ZERO,
-      mergeCandidateCount: Array.isArray(normalized.mergeCandidates) ?
-        normalized.mergeCandidates.length :
-        NUM.ZERO,
-    };
-    this.lastEvaluationError = null;
-  }
-
-  /**
-   * Record evaluation failure diagnostics.
-   * @param {Error|*} error
-   * @param {number} startedAtMs
-   * @return {void}
-   * @private
-   */
-  recordEvaluationFailure(error, startedAtMs) {
-    const completedAtMs = Date.now();
-    this.lastEvaluationCompletedAtMs = completedAtMs;
-    this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
-      Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
-      null;
-    this.lastEvaluationError = String(error?.message || error || '');
-  }
-
-  /**
-   * Drain one pending evaluation request once the manager is idle.
-   * @return {Promise<void>}
-   * @private
-   */
-  async flushRequestedEvaluation() {
-    const request = this.requestedEvaluation;
-    this.requestedEvaluation = null;
-    this.clearRequestedEvaluationDiagnostics();
-    if (!request) {
-      return;
-    }
-
-    if (this.state !== OperationState.IDLE) {
-      this.requestEvaluation(request);
-      return;
-    }
-
-    try {
-      await this.evaluateAllPartitions({
-        ...request,
-        triggerReason: REACTIVE_EVALUATION_TRIGGER,
-      });
-    } catch (error) {
-      this.logger.error(SPLIT_MERGE_LOG_MSG.REQUESTED_EVAL_FAILED, {
-        error: error.message,
-        reasonCodes: request.reasonCodes,
-        partitionIds: request.partitionIds,
-      });
-    }
-  }
-
-  /**
-   * Evaluate all partitions for split/merge operations.
-   * @return {Promise<Object>} Evaluation results.
-   */
-  /**
-     * Evaluate all partitions for split/merge operations.
-     *
-     * Split candidates that fail capacity preflight are moved to
-     * splitDeferred with reason codes (Req 7.2, 7.4). Merge
-     * candidates are never blocked by capacity pressure (Req 7.3).
-     *
-     * @param {Object} [preflightOptions] - Optional preflight config.
-     * @param {string} [preflightOptions.targetNodeId] - Node to check
-     *   capacity against for split preflight.
-     * @return {Promise<Object>} Evaluation results.
-     */
-    async evaluateAllPartitions(preflightOptions = {}) {
-      if (this.state !== OperationState.IDLE) {
-        this.logger.debug(SPLIT_MERGE_LOG_MSG.SKIPPING_EVAL_BUSY, {
-          state: this.state,
-        });
-        return {evaluated: false, reason: SPLIT_MERGE_REASON.BUSY};
-      }
-
-      const evaluationStartedAtMs =
-        this.recordEvaluationStart(preflightOptions);
-      const pressureDecision = this.evaluateSplitPressure();
-      if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
-        this.requestEvaluation({
-          reasonCode: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-          partitionIds: preflightOptions.partitionIds,
-        });
-        const results = {
-          evaluated: false,
-          reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-          retryAfterMs: pressureDecision.retryAfterMs,
-          pressureSummary: pressureDecision.summary || null,
-          partitionsEvaluated: NUM.ZERO,
-          splitCandidates: [],
-          executedSplits: [],
-          splitErrors: [],
-          splitDeferred: [],
-          mergeCandidates: [],
-        };
-        this.recordEvaluationSuccess(
-          results,
-          evaluationStartedAtMs,
-        );
-        return results;
-      }
-
-      this.state = OperationState.EVALUATING;
-
-      try {
-        const results = {
-          evaluated: true,
-          partitionsEvaluated: NUM.ZERO,
-          splitCandidates: [],
-          executedSplits: [],
-          splitErrors: [],
-          splitDeferred: [],
-          mergeCandidates: [],
-        };
-
-        const partitions = await this.loadEvaluationPartitions();
-        if (partitions.length === NUM.ZERO) {
-          this.recordEvaluationSuccess(
-            results,
-            evaluationStartedAtMs,
-          );
-          return results;
-        }
-        results.partitionsEvaluated = partitions.length;
-        const targetNodeId = preflightOptions.targetNodeId || null;
-
-        for (const partition of partitions) {
-          const partitionId = this.getPartitionId(partition);
-          if (!partitionId) {
-            continue;
-          }
-          const metrics = await this.resolvePartitionMetrics(partition);
-          const policy = await this.getTablePolicy(partitionId);
-
-          if (!this.evaluateSplitCriteria(
-            partitionId, metrics, policy)) {
-            continue;
-          }
-
-          // Capacity preflight for split candidates
-          if (targetNodeId) {
-            const preflight =
-              await this.checkSplitCapacityPreflight(
-                partitionId, metrics, targetNodeId,
-              );
-            if (preflight.feasible) {
-              this.logger.debug(
-                SPLIT_MERGE_LOG_MSG.SPLIT_CAPACITY_ALLOWED, {
-                  partitionId,
-                  targetNodeId,
-                });
-              results.splitCandidates.push(partitionId);
-            } else {
-              this.logger.warn(
-                SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_CAPACITY, {
-                  partitionId,
-                  targetNodeId,
-                  reason: preflight.reason,
-                });
-              results.splitDeferred.push({
-                partitionId,
-                reason: preflight.reason,
-                admissionResult: preflight.admissionResult,
-              });
-              this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
-                partitionId,
-                reason: preflight.reason,
-              });
-            }
-          } else {
-            results.splitCandidates.push(partitionId);
-          }
-        }
-
-        let splitExecutionAttempts = NUM.ZERO;
-        for (const partitionId of results.splitCandidates) {
-          if (splitExecutionAttempts >=
-              this.maxAutoExecuteSplitsPerEvaluation) {
-            this.logger.warn(
-              SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_BACKPRESSURE,
-              {
-                partitionId,
-                reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-                maxAutoExecuteSplitsPerEvaluation:
-                  this.maxAutoExecuteSplitsPerEvaluation,
-              },
-            );
-            results.splitDeferred.push({
-              partitionId,
-              reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-            });
-            this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
-              partitionId,
-              reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
-            });
-            continue;
-          }
-          splitExecutionAttempts += NUM.ONE;
-          try {
-            const execution = await this.executeManagedSplitCandidate(partitionId);
-            this.recordManagedSplitExecutionOutcome(
-              results,
-              partitionId,
-              execution,
-            );
-          } catch (error) {
-            this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_FAILED, {
-              partitionId,
-              error: error.message,
-              phase: 'workflow_execution',
-            });
-            results.splitErrors.push({
-              partitionId,
-              error: error.message,
-            });
-          }
-        }
-
-        // Merge eligibility is never blocked by capacity pressure
-        // (Req 7.3). Merges reduce storage usage and remain
-        // eligible even under hard/exhausted pressure.
-        const sortedPartitions = this.keyRangeManager ?
-          this.keyRangeManager.getSortedPartitions() :
-          this.sortEvaluationPartitions(partitions);
-        for (
-          let i = NUM.ZERO;
-          i < sortedPartitions.length - NUM.ONE;
-          i++
-        ) {
-          const leftPartition = sortedPartitions[i];
-          const rightPartition = sortedPartitions[i + NUM.ONE];
-          const leftId = this.keyRangeManager ?
-            leftPartition.partitionId :
-            this.getPartitionId(leftPartition);
-          const rightId = this.keyRangeManager ?
-            rightPartition.partitionId :
-            this.getPartitionId(rightPartition);
-          if (!leftId || !rightId) {
-            continue;
-          }
-          if (!this.keyRangeManager &&
-              this.getPartitionTableId(leftPartition) !==
-                this.getPartitionTableId(rightPartition)) {
-            continue;
-          }
-          if (!this.keyRangeManager &&
-              this.comparePartitionKeys(
-                this.getPartitionEndKey(leftPartition),
-                this.getPartitionStartKey(rightPartition),
-              ) !== NUM.ZERO) {
-            continue;
-          }
-
-          const leftMetrics = await this.resolvePartitionMetrics(leftPartition);
-          const rightMetrics = await this.resolvePartitionMetrics(rightPartition);
-          const policy = await this.getTablePolicy(leftId);
-
-          if (this.evaluateMergeCriteria(
-            leftId, rightId, leftMetrics, rightMetrics, policy,
-          )) {
-            results.mergeCandidates.push({leftId, rightId});
-            this.logger.debug(
-              SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBLE_UNDER_PRESSURE, {
-                leftId,
-                rightId,
-              });
-          }
-        }
-
-        this.logger.debug(SPLIT_MERGE_LOG_MSG.PARTITION_EVAL_COMPLETED,
-          {
-            partitionsEvaluated: results.partitionsEvaluated,
-            splitCandidates: results.splitCandidates.length,
-            splitDeferred: results.splitDeferred.length,
-            mergeCandidates: results.mergeCandidates.length,
-          });
-
-        this.emit(
-          SPLIT_MERGE_EVENT.EVALUATION_COMPLETED, results);
-        this.recordEvaluationSuccess(
-          results,
-          evaluationStartedAtMs,
-        );
-        return results;
-      } catch (error) {
-        this.recordEvaluationFailure(
-          error,
-          evaluationStartedAtMs,
-        );
-        throw error;
-      } finally {
-        this.state = OperationState.IDLE;
-      }
-    }
-
-  /**
-   * Get the current operation state.
-   * @return {string} Current state.
-   */
-  getState() {
-    return this.state;
-  }
-
-  /**
-   * Get the configured thresholds.
-   * @return {Object} Threshold configuration.
-   */
-  getThresholds() {
-    return {
-      splitStorageThreshold: this.splitStorageThreshold,
-      splitTrafficThreshold: this.splitTrafficThreshold,
-      mergeStorageThreshold: this.mergeStorageThreshold,
-      mergeTrafficThreshold: this.mergeTrafficThreshold,
-      evaluationIntervalMs: this.evaluationIntervalMs,
-      maxAutoExecuteSplitsPerEvaluation:
-        this.maxAutoExecuteSplitsPerEvaluation,
-    };
-  }
-
-  /**
-   * Get split/merge evaluation diagnostics for control-plane snapshots.
-   * @return {Object}
-   */
-  getEvaluationDiagnostics() {
-    return {
-      state: this.state,
-      evaluationIntervalMs: this.evaluationIntervalMs,
-      reactiveEvaluationDebounceMs: this.reactiveEvaluationDebounceMs,
-      inFlight: this.state === OperationState.EVALUATING,
-      deferredRetryEvaluationPending: this.deferredRetryEvaluation !== null,
-      deferredRetryEvaluationDueAtMs: this.deferredRetryEvaluationDueAtMs,
-      requestedEvaluationPending: this.requestedEvaluation !== null,
-      requestedAtMs: this.lastEvaluationRequestedAtMs,
-      requestedReasonCodes: [...this.lastEvaluationReasonCodes],
-      requestedPartitionIds: [...this.lastEvaluationPartitionIds],
-      lastTrigger: this.lastEvaluationTrigger,
-      lastStartedAtMs: this.lastEvaluationStartedAtMs,
-      lastCompletedAtMs: this.lastEvaluationCompletedAtMs,
-      lastDurationMs: this.lastEvaluationDurationMs,
-      lastError: this.lastEvaluationError,
-      lastSummary: this.lastEvaluationSummary &&
-        typeof this.lastEvaluationSummary === 'object' ?
-        {...this.lastEvaluationSummary} :
-        null,
-    };
-  }
-
-  /**
-   * Update thresholds dynamically.
-   * @param {Object} thresholds - New threshold values.
-   */
-  setThresholds(thresholds) {
-    if (thresholds.splitStorageThreshold !== undefined) {
-      this.splitStorageThreshold = thresholds.splitStorageThreshold;
-    }
-    if (thresholds.splitTrafficThreshold !== undefined) {
-      this.splitTrafficThreshold = thresholds.splitTrafficThreshold;
-    }
-    if (thresholds.mergeStorageThreshold !== undefined) {
-      this.mergeStorageThreshold = thresholds.mergeStorageThreshold;
-    }
-    if (thresholds.mergeTrafficThreshold !== undefined) {
-      this.mergeTrafficThreshold = thresholds.mergeTrafficThreshold;
-    }
-    if (thresholds.evaluationIntervalMs !== undefined) {
-      this.evaluationIntervalMs = thresholds.evaluationIntervalMs;
-    }
-    if (thresholds.maxAutoExecuteSplitsPerEvaluation !== undefined) {
-      this.maxAutoExecuteSplitsPerEvaluation =
-        thresholds.maxAutoExecuteSplitsPerEvaluation;
-    }
-
-    this.logger.info(SPLIT_MERGE_LOG_MSG.THRESHOLDS_UPDATED, this.getThresholds());
-  }
-
-  /**
-   * Shutdown the manager.
-   */
-  shutdown() {
-    this.isShutdown = true;
-    this.stopPeriodicEvaluation();
-    if (this.requestedEvaluationTimer) {
-      clearTimeout(this.requestedEvaluationTimer);
-      this.requestedEvaluationTimer = null;
-    }
-    this.requestedEvaluationDueAtMs = null;
-    if (this.deferredRetryEvaluationTimer) {
-      clearTimeout(this.deferredRetryEvaluationTimer);
-      this.deferredRetryEvaluationTimer = null;
-    }
-    this.deferredRetryEvaluation = null;
-    this.deferredRetryEvaluationDueAtMs = null;
-    this.requestedEvaluation = null;
-    this.clearRequestedEvaluationDiagnostics();
-    this.removeAllListeners();
-    this.logger.info(SPLIT_MERGE_LOG_MSG.MANAGER_SHUTDOWN);
-  }
 }
+
+Object.assign(
+  PartitionSplitMergeManager.prototype,
+  createPartitionSplitMergeManagerEvaluationMethods({
+    cloneStringArray,
+    operationState: OperationState,
+    defaultEvaluationTrigger: DEFAULT_EVALUATION_TRIGGER,
+    periodicEvaluationTrigger: PERIODIC_EVALUATION_TRIGGER,
+    reactiveEvaluationTrigger: REACTIVE_EVALUATION_TRIGGER,
+    reactivePressureBypassReasonWriteActivity:
+      REACTIVE_PRESSURE_BYPASS_REASON_WRITE_ACTIVITY,
+  }),
+);
 
 export {
   PartitionSplitMergeManager,

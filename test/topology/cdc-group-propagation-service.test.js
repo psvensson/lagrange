@@ -136,7 +136,6 @@ function createMessageGroupServiceRow(
     [COLUMN.RAFT_ROLE]: raftRole,
   };
 }
-
 test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
   const cache = createTopologyCache({
@@ -189,7 +188,6 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
     data: {[COLUMN.NODE_ID]: 'node-z'},
     sourceMessageGroupService: source,
   });
-
   assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
   assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
   assert.equal(
@@ -211,7 +209,6 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   teardownConfig();
   t.end();
 });
-
 test('CDCGroupPropagationService keeps repair_only publication mode in safe mode ' +
   'when grouped prerequisites are missing', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
@@ -250,7 +247,6 @@ test('CDCGroupPropagationService keeps repair_only publication mode in safe mode
     data: {[COLUMN.NODE_ID]: 'node-z'},
     sourceMessageGroupService: source,
   });
-
   assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
   assert.equal(result.fallbackReason, CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE);
   const diagnostics = service.getPublicationModeDiagnostics();
@@ -267,7 +263,6 @@ test('CDCGroupPropagationService keeps repair_only publication mode in safe mode
   teardownConfig();
   t.end();
 });
-
 test('CDCGroupPropagationService reports repair_only publication mode when ' +
   'safe mode is configured', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
@@ -303,7 +298,6 @@ test('CDCGroupPropagationService reports repair_only publication mode when ' +
   service.start();
 
   const diagnostics = service.getPublicationModeDiagnostics();
-
   assert.equal(
     diagnostics.currentMode,
     CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
@@ -318,7 +312,6 @@ test('CDCGroupPropagationService reports repair_only publication mode when ' +
   teardownConfig();
   t.end();
 });
-
 test('CDCGroupPropagationService fans out by group coordinators in grouped mode',
   async (t) => {
     setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
@@ -371,7 +364,6 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
       data: {[COLUMN.NODE_ID]: 'node-z'},
       sourceMessageGroupService: source,
     });
-
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
     assert.equal(
       result.strategy,
@@ -395,7 +387,6 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
     teardownConfig();
     t.end();
   });
-
 test('CDCGroupPropagationService falls back when coordinator address is missing',
   async (t) => {
     setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
@@ -441,7 +432,6 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
       data: {[COLUMN.NODE_ID]: 'node-y'},
       sourceMessageGroupService: source,
     });
-
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
     assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(
@@ -462,7 +452,6 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
     teardownConfig();
     t.end();
   });
-
 test('CDCGroupPropagationService reports grouped delivery failures', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
   const cache = createTopologyCache({
@@ -518,7 +507,6 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
     data: {[COLUMN.NODE_ID]: 'node-k'},
     sourceMessageGroupService: source,
   });
-
   assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
   assert.equal(
     result.strategy,
@@ -539,7 +527,6 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
   teardownConfig();
   t.end();
 });
-
 test('CDCGroupPropagationService tracks publication mode transitions ' +
   'between grouped and conservative fanout', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
@@ -1432,6 +1419,78 @@ test('CDCGroupPropagationService defers background retries while local router pr
       deliveredAfterPressureClears,
       true,
       'background retry should resume once local router pressure clears',
+    );
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+
+test('CDCGroupPropagationService keeps partition visibility propagation on the critical lane under local router pressure',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-b'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b-r1',
+          'node-b',
+          'node-b/message-group/mg-node-b-r1',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const routerPressure = {
+      backpressured: true,
+      saturatedNodeCount: 1,
+      totalPending: 48,
+      maxPendingUtilization: 0.75,
+    };
+    const router = createMessageRouter([{acknowledged: true}]);
+    router.getOutboundPressureSummary = () => ({...routerPressure});
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: {
+        getRoutingOrder: () => ['g-1', 'g-2'],
+      },
+      nowFn: () => 7160,
+      deliveryRetryDelayMs: 5,
+      deliveryRetryMaxDelayMs: 5,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    const result = await service.propagateCDCEvent({
+      tableName: TABLES.PARTITIONS,
+      operation: 'INSERT',
+      data: {
+        partition_id: 'tbl-critical-p1',
+        table_id: 'tbl-critical',
+      },
+      sourceMessageGroupService: source,
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(router.calls.length, 1,
+      'critical partition visibility propagation should bypass local background defer');
+    assert.equal(
+      router.calls[0].options?.deliveryPriority,
+      'critical',
+      'partition visibility propagation should claim the critical router lane',
     );
 
     service.stop();

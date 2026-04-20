@@ -3,9 +3,11 @@
  * **Property 6: State Persistence via CDC**
  * **Validates: Requirements 4.1**
  *
- * *For any* state transition, the Replica_State_Machine SHALL persist
- * the new state to the `services` system table via CDC before the
- * transition method returns.
+ * *For any* state transition, ReplicaStateMachine SHALL persist the new
+ * state through the canonical control-plane mutation bundle before the
+ * transition method returns. Every transition writes one authoritative
+ * `services` row, and stable non-routable partition states may append one
+ * canonical `partitions` leader-clear mutation.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -16,6 +18,11 @@ import {
 } from '../../src/node/replica-state-machine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  buildReplicaStatePropertyContext,
+  getExpectedReplicaStateMutationBundleCount,
+  getServiceMutationCalls,
+} from './replica-state-machine-property-helpers.js';
 
 // Valid transition sequences for testing
 const VALID_TRANSITION_SEQUENCES = [
@@ -76,9 +83,11 @@ test('Property 6: State Persistence via CDC', async (t) => {
 
   /**
    * Property: For any state transition with CDC configured,
-   * CDC persistence is called for each transition.
+   * the authoritative service-row persistence runs for each transition and the
+   * total emitted mutation bundle matches the canonical late-state contract.
    */
-  t.test('CDC persistence called for every transition', async (t) => {
+  t.test('CDC persistence emits the canonical mutation bundle for every transition',
+    async (t) => {
     await fc.assert(
       fc.asyncProperty(
         fc.constantFrom(...VALID_TRANSITION_SEQUENCES),
@@ -94,11 +103,14 @@ test('Property 6: State Persistence via CDC', async (t) => {
 
           // Execute transition sequence
           for (const state of transitionSequence) {
-            const result = await stateMachine.transition(replicaId, state, {
-              partitionId,
-              nodeId: 'test-node',
-              reason: `transition to ${state}`,
-            });
+            const result = await stateMachine.transition(
+              replicaId,
+              state,
+              buildReplicaStatePropertyContext(
+                partitionId,
+                `transition to ${state}`,
+              ),
+            );
             if (!result) {
               stateMachine.clear();
               return false;
@@ -107,15 +119,21 @@ test('Property 6: State Persistence via CDC', async (t) => {
 
           stateMachine.clear();
 
-          // Verify CDC was called for each transition
-          return mockCdc.calls.length === transitionSequence.length;
+          const serviceCalls = getServiceMutationCalls(mockCdc.calls);
+          return serviceCalls.length === transitionSequence.length &&
+            mockCdc.calls.length ===
+              getExpectedReplicaStateMutationBundleCount(
+                transitionSequence,
+              );
         },
       ),
       {numRuns: 10},
     );
 
-    t.pass('CDC persistence called for every transition');
-  });
+      t.pass(
+        'CDC persistence emits the canonical mutation bundle for every transition',
+      );
+    });
 
   /**
    * Property: CDC persistence includes all required state fields.
@@ -138,11 +156,7 @@ test('Property 6: State Persistence via CDC', async (t) => {
           const result = await stateMachine.transition(
             replicaId,
             ReplicaState.PENDING,
-            {
-              partitionId,
-              nodeId: 'test-node',
-              reason,
-            },
+            buildReplicaStatePropertyContext(partitionId, reason),
           );
 
           stateMachine.clear();
@@ -205,11 +219,7 @@ test('Property 6: State Persistence via CDC', async (t) => {
           const result = await stateMachine.transition(
             replicaId,
             ReplicaState.PENDING,
-            {
-              partitionId,
-              nodeId: 'test-node',
-              reason: 'test',
-            },
+            buildReplicaStatePropertyContext(partitionId, 'test'),
           );
 
           stateMachine.clear();
@@ -241,27 +251,33 @@ test('Property 6: State Persistence via CDC', async (t) => {
           });
 
           // Execute two transitions
-          await stateMachine.transition(replicaId, ReplicaState.PENDING, {
-            partitionId,
-            nodeId: 'test-node',
-            reason: 'first transition',
-          });
+          await stateMachine.transition(
+            replicaId,
+            ReplicaState.PENDING,
+            buildReplicaStatePropertyContext(
+              partitionId,
+              'first transition',
+            ),
+          );
 
-          await stateMachine.transition(replicaId, ReplicaState.CREATING, {
-            partitionId,
-            nodeId: 'test-node',
-            reason: 'second transition',
-          });
+          await stateMachine.transition(
+            replicaId,
+            ReplicaState.CREATING,
+            buildReplicaStatePropertyContext(
+              partitionId,
+              'second transition',
+            ),
+          );
 
           stateMachine.clear();
 
-          // Verify we have at least 2 calls
-          if (mockCdc.calls.length < 2) {
+          const serviceCalls = getServiceMutationCalls(mockCdc.calls);
+          if (serviceCalls.length < 2) {
             return false;
           }
 
-          // Second call should have previous_state set to 'pending'
-          const secondCall = mockCdc.calls[1];
+          // Second service-row call should have previous_state set to 'pending'
+          const secondCall = serviceCalls[1];
           const hasPreviousState = 'previous_state' in secondCall.data;
 
           if (!hasPreviousState) {

@@ -8,8 +8,14 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  AUTHORITY_DESCRIPTOR_STATE,
   READINESS_SNAPSHOT_KEY,
   CONTROL_PLANE_READINESS_DIMENSION,
+  PROVISIONING_ELIGIBILITY_STATE,
+  RUNTIME_AUTHORITY_PUBLICATION_STATE,
+  RUNTIME_AUTHORITY_REPAIR_STATE,
+  RUNTIME_AUTHORITY_STATE,
+  RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   OPERATION_METADATA_KEY,
@@ -80,12 +86,46 @@ function createReadiness(nodeId, overrides = {}) {
     publication: Object.freeze({mode: 'grouped'}),
     capacity: null,
     observedAt: overrides.observedAt || '2026-03-06T00:00:00.000Z',
+    runtimeAuthority: Object.freeze(overrides.runtimeAuthority || {
+      state: RUNTIME_AUTHORITY_STATE.CONFIRMED,
+      authorityAvailable: true,
+      ready: true,
+      processAlive: true,
+      clusterMemberHealthy: true,
+      routingReady: true,
+      writeEligible: true,
+      recoveryEligible: true,
+      repairEligible: true,
+      publication: Object.freeze({
+        state: RUNTIME_AUTHORITY_PUBLICATION_STATE.HEALTHY,
+        healthy: true,
+      }),
+      visibility: Object.freeze({
+        state: RUNTIME_AUTHORITY_VISIBILITY_STATE.CONFIRMED,
+        published: true,
+        observedAt: overrides.observedAt || '2026-03-06T00:00:00.000Z',
+      }),
+      repair: Object.freeze({
+        state: RUNTIME_AUTHORITY_REPAIR_STATE.NOT_ATTEMPTED,
+        applied: false,
+      }),
+      provisioning: Object.freeze({
+        state: PROVISIONING_ELIGIBILITY_STATE.STEADY,
+        eligible: true,
+      }),
+      failure: Object.freeze({
+        state: AUTHORITY_DESCRIPTOR_STATE.NONE,
+        reason: null,
+      }),
+      reasonCodes: Object.freeze([]),
+    }),
     dimensions: Object.freeze({
       processAlive: true,
       clusterMemberHealthy: true,
       routingReady: true,
       loadReady: true,
       placementEligible: true,
+      provisioningEligible: true,
       controlPlaneWritable: true,
       metadataPublicationHealthy: true,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
@@ -164,6 +204,18 @@ test('compactSnapshotSummary extracts key fields from full snapshot',
       summary[READINESS_SNAPSHOT_KEY.DECISION_DIMENSION],
       CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     );
+    t.match(
+      summary[READINESS_SNAPSHOT_KEY.RUNTIME_AUTHORITY],
+      {
+        state: RUNTIME_AUTHORITY_STATE.CONFIRMED,
+        publication: {
+          state: RUNTIME_AUTHORITY_PUBLICATION_STATE.HEALTHY,
+        },
+        visibility: {
+          state: RUNTIME_AUTHORITY_VISIBILITY_STATE.CONFIRMED,
+        },
+      },
+    );
   });
 
 test('compactSnapshotSummary returns null for null input',
@@ -238,8 +290,8 @@ test('admission result includes readinessSnapshots per candidate node',
       result.readinessSnapshots[TEST_NODE_ID][
         READINESS_SNAPSHOT_KEY.DECISION_DIMENSION
       ],
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-    );
+      CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
+      );
     t.equal(
       result.readinessSnapshots[TEST_NODE_ID][
         READINESS_SNAPSHOT_KEY.OBSERVED_AT
@@ -275,7 +327,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
             [targetNodeId]:
               ControlPlaneReadinessService.compactSnapshotSummary(
                 readiness,
-                CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+                CONTROL_PLANE_READINESS_DIMENSION.PROVISIONING_ELIGIBLE,
               ),
           },
         };

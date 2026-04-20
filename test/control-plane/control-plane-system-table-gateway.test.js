@@ -1,5 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
   CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -11,6 +13,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  CDC_OPERATION,
   METRICS_LOG_TAG,
   TABLES,
 } from '../../src/constants/index.js';
@@ -19,6 +22,23 @@ import {
   PressureGovernor,
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+import {registerControlPlaneSystemTableGatewayTailTests} from './control-plane-system-table-gateway-tail-test-cases.js';
+
+const GATEWAY_ROUTING_GAP_OWNER_MISSING = 'owner_missing';
+const GATEWAY_ROUTING_IDENTITY_MISSING = 'missing';
+const GATEWAY_REPLACE_PENDING_SERVICE_KEY = 'services:svc-1';
+const GATEWAY_MUTATION_STATUS_CREATING = 'creating';
+const GATEWAY_MUTATION_STATUS_ACTIVE = 'active';
+const GATEWAY_EXPECTED_FAILURE_MESSAGE = 'expected queued mutation failure';
+const GATEWAY_FAILURE_PRIMARY_REASON =
+  'authoritative_row_source_unavailable';
+const GATEWAY_FAILURE_DISTRIBUTED_PARTICIPANT_CODE =
+  'DISTRIBUTED_PARTICIPANT_FAILURE';
+const GATEWAY_FAILURE_RECONNECT_MESSAGE =
+  'Connection to node node-2 closed';
 
 test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   'eligible defaults', async (t) => {
@@ -105,22 +125,17 @@ async (t) => {
     {
       localReadConsistency: 'local_leader',
       replicaFallbackConsistency: 'local_leader',
-      preferOwnerRpcRead: true,
-      requireOwnerRpcRead: true,
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
     },
   );
 
   t.equal(result.success, true, 'authoritative read should succeed');
   t.equal(calls.length, 1, 'gateway should execute one authoritative read');
   t.equal(
-    calls[0]?.options?.preferOwnerRpcRead,
-    true,
-    'gateway should pass owner-RPC preference through to authoritative reads',
-  );
-  t.equal(
-    calls[0]?.options?.requireOwnerRpcRead,
-    true,
-    'gateway should pass strict owner-RPC requirement through to authoritative reads',
+    calls[0]?.options?.authoritativeReadMode,
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+    'gateway should pass the canonical authoritative read mode through to authoritative reads',
   );
   t.equal(
     calls[0]?.options?.localReadConsistency,
@@ -256,6 +271,67 @@ test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
   );
 });
 
+test('ControlPlaneSystemTableGateway executeRead lets workload classes own ' +
+  'fairness defaults even when the read profile is repair_required',
+async (t) => {
+  let evaluateArgs = null;
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    pressureGovernor: {
+      configure() {},
+      evaluate(args) {
+        evaluateArgs = args;
+        return {
+          action: 'allow',
+          reason: 'test-allow',
+          summary: null,
+          retryAfterMs: 0,
+        };
+      },
+    },
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          success: true,
+          rows: [{node_id: 'node-a'}],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.executeRead({
+    owner: 'admin-service-discovery',
+    tableName: TABLES.NODES,
+    sql: 'SELECT * FROM nodes',
+    params: [],
+    strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+  }, {
+    readProfile: 'repair_required',
+    workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
+  });
+
+  t.equal(result.success, true, 'authoritative read should succeed');
+  t.equal(
+    evaluateArgs?.workClass,
+    PRESSURE_WORK_CLASS.BACKGROUND,
+    'gateway should derive read pressure work class from the shared workload contract',
+  );
+  t.equal(
+    evaluateArgs?.allowDegrade,
+    true,
+    'gateway should preserve workload-owned degrade semantics instead of forcing repair-profile defaults',
+  );
+  t.equal(
+    evaluateArgs?.allowDefer,
+    true,
+    'gateway should preserve workload-owned defer semantics instead of forcing repair-profile defaults',
+  );
+  t.ok(
+    evaluateArgs?.resourceKeys?.includes('control-plane:admin:diagnostics'),
+    'gateway should forward workload-owned fairness resource keys to the pressure governor',
+  );
+});
+
 test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows skips ' +
   'blank primary keys for control_plane_publications', async (t) => {
   const systemTableCache = new SystemTableCache();
@@ -367,6 +443,181 @@ async (t) => {
       transition_history: [],
     }],
     'publication rows should be serialized into the persisted cache shape',
+  );
+});
+
+test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows ' +
+  'preserves missing cached rows during refresh-evidence reconciliation',
+async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const cachedServiceRow = {
+    service_id: 'svc-preserve',
+    node_id: 'node-a',
+    service_type: 'partition',
+    status: 'active',
+    address: 'node-a/partition/svc-preserve',
+  };
+  systemTableCache.applySystemTableChange(
+    TABLES.SERVICES,
+    CDC_OPERATION.UPSERT,
+    cachedServiceRow,
+  );
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache,
+  });
+
+  const result = await gateway.reconcileAuthoritativeCacheRows(
+    TABLES.SERVICES,
+    [],
+    {
+      cacheMutationTarget: systemTableCache,
+      reconcileIntent: CONTROL_PLANE_CACHE_RECONCILE_INTENT
+        .REFRESH_EVIDENCE,
+      systemTableCache,
+    },
+  );
+
+  t.equal(result.success, true, 'refresh reconciliation should succeed');
+  t.equal(
+    result.reconcileIntent,
+    CONTROL_PLANE_CACHE_RECONCILE_INTENT.REFRESH_EVIDENCE,
+    'gateway should record the refresh-evidence reconcile intent',
+  );
+  t.equal(
+    result.mutationCount,
+    0,
+    'refresh reconciliation should not mutate cache rows when the read is empty',
+  );
+  t.same(
+    systemTableCache.getAll(TABLES.SERVICES),
+    [cachedServiceRow],
+    'refresh reconciliation should preserve cached service evidence on empty reads',
+  );
+});
+
+test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows skips ' +
+  'unchanged service rows by default',
+async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const cachedServiceRow = {
+    service_id: 'svc-stable',
+    node_id: 'node-a',
+    service_type: 'partition',
+    partition_id: 'nodes-p1',
+    replica_id: 'nodes-p1-r1',
+    raft_role: 'leader',
+    status: 'active',
+    address: 'node-a/partition/nodes-p1-r1',
+  };
+  systemTableCache.applySystemTableChange(
+    TABLES.SERVICES,
+    CDC_OPERATION.UPSERT,
+    cachedServiceRow,
+  );
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache,
+  });
+
+  const result = await gateway.reconcileAuthoritativeCacheRows(
+    TABLES.SERVICES,
+    [{
+      address: 'node-a/partition/nodes-p1-r1',
+      node_id: 'node-a',
+      partition_id: 'nodes-p1',
+      raft_role: 'leader',
+      replica_id: 'nodes-p1-r1',
+      service_id: 'svc-stable',
+      service_type: 'partition',
+      status: 'active',
+    }],
+    {
+      cacheMutationTarget: systemTableCache,
+      systemTableCache,
+    },
+  );
+
+  t.equal(result.success, true, 'reconciliation should still succeed');
+  t.equal(
+    result.mutationCount,
+    0,
+    'unchanged authoritative service rows should reconcile as a no-op',
+  );
+  t.same(
+    systemTableCache.getAll(TABLES.SERVICES),
+    [cachedServiceRow],
+    'no-op reconciliation should preserve the cached row without rewriting it',
+  );
+});
+
+test('ControlPlaneSystemTableGateway reconcileAuthoritativeCacheRows skips ' +
+  'canonical-equivalent publication rows by default',
+async (t) => {
+  const systemTableCache = new SystemTableCache();
+  const cachedPublicationRow = {
+    publication_id: 'publication-stable',
+    publication_kind: 'cluster_membership',
+    publication_epoch: 7,
+    publisher_node_id: 'node-a',
+    source_topology_epoch: null,
+    source_snapshot_version: null,
+    status: 'PUBLISHED',
+    reason_code: '',
+    published_active_node_ids: ['node-a', 'node-b'],
+    required_ack_node_ids: ['node-a'],
+    acknowledged_node_ids: ['node-a'],
+    priority_partition_summary: null,
+    membership_lifecycle_summary: null,
+    created_at: null,
+    updated_at: 123,
+    published_at: null,
+    closed_at: null,
+    transition_history: [],
+  };
+  systemTableCache.applySystemTableChange(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    CDC_OPERATION.UPSERT,
+    cachedPublicationRow,
+  );
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    systemTableCache,
+  });
+
+  const result = await gateway.reconcileAuthoritativeCacheRows(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    [{
+      publicationId: 'publication-stable',
+      publicationKind: 'cluster_membership',
+      publicationEpoch: 7,
+      publisherNodeId: 'node-a',
+      status: 'published',
+      reasonCode: '',
+      publishedActiveNodeIds: ['node-a', 'node-b'],
+      requiredAckNodeIds: ['node-a'],
+      acknowledgedNodeIds: ['node-a'],
+      priorityPartitionSummary: null,
+      membershipLifecycleSummary: null,
+      updatedAt: 123,
+      transitionHistory: [],
+    }],
+    {
+      cacheMutationTarget: systemTableCache,
+      systemTableCache,
+    },
+  );
+
+  t.equal(result.success, true, 'reconciliation should still succeed');
+  t.equal(
+    result.mutationCount,
+    0,
+    'canonical-equivalent publication rows should reconcile as a no-op',
+  );
+  t.same(
+    systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS),
+    [cachedPublicationRow],
+    'no-op publication reconciliation should preserve the cached row',
   );
 });
 
@@ -847,6 +1098,195 @@ test('ControlPlaneSystemTableGateway emits mutation telemetry with owner and ' +
   );
 });
 
+test('ControlPlaneSystemTableGateway classifies mutation failures and includes ' +
+  'transport pressure diagnostics', async (t) => {
+  const metricEvents = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    logger: {
+      info(tag, data) {
+        metricEvents.push({tag, data});
+      },
+    },
+    messageRouter: {
+      getOutboundPressureSummary() {
+        return {
+          backpressured: false,
+          saturatedNodeCount: 0,
+          totalPending: 0,
+          maxPendingUtilization: 0,
+          pendingNodeConnectionCount: 2,
+          reconnectBeforeDeliveryFailureCount: 4,
+          maxObservedPendingNodeConnectionCount: 3,
+        };
+      },
+    },
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {
+          success: false,
+          error: 'Distributed operation failed due to participant failures',
+          errorCode: GATEWAY_FAILURE_DISTRIBUTED_PARTICIPANT_CODE,
+          participantFailures: [{
+            error: GATEWAY_FAILURE_PRIMARY_REASON,
+          }, {
+            error: GATEWAY_FAILURE_RECONNECT_MESSAGE,
+          }],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.submitMutation({
+    owner: 'services-owner',
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+    tableName: TABLES.SERVICES,
+    whereClause: {service_id: 'svc-1'},
+    data: {status: 'active'},
+  }, {
+    workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+  });
+
+  t.equal(result.success, false, 'the mutation should fail closed');
+  const mutationMetric = metricEvents.find((entry) =>
+    entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_MUTATION,
+  ) || null;
+  t.equal(
+    mutationMetric?.data?.canonicalFailureReason,
+    GATEWAY_FAILURE_PRIMARY_REASON,
+    'telemetry should expose the canonical blocker',
+  );
+  t.equal(
+    mutationMetric?.data?.authoritativeRowSourceUnavailableCount,
+    1,
+    'telemetry should count authoritative-source failures',
+  );
+  t.equal(
+    mutationMetric?.data?.distributedParticipantFailureCount,
+    1,
+    'telemetry should count distributed participant failures',
+  );
+  t.equal(
+    mutationMetric?.data?.reconnectDeliveryFailureCount,
+    1,
+    'telemetry should count reconnect-related delivery failures',
+  );
+  t.equal(
+    mutationMetric?.data?.transportReconnectBeforeDeliveryFailureCount,
+    4,
+    'telemetry should include router reconnect-pressure counters',
+  );
+  t.equal(
+    mutationMetric?.data?.transportPendingNodeConnectionCount,
+    2,
+    'telemetry should include current reconnect ownership pressure',
+  );
+  const latestEntry =
+    gateway.getControlPlaneOperationLedgerEntries().at(-1) || null;
+  t.equal(
+    latestEntry?.canonicalFailureReason,
+    GATEWAY_FAILURE_PRIMARY_REASON,
+    'the operation ledger should preserve the canonical blocker',
+  );
+  t.equal(
+    gateway.getStats().metrics.authoritativeRowSourceUnavailableCount,
+    1,
+    'gateway stats should accumulate authoritative-source failures',
+  );
+  t.equal(
+    gateway.getStats().metrics.reconnectDeliveryFailureCount,
+    1,
+    'gateway stats should accumulate reconnect delivery failures',
+  );
+  t.equal(
+    gateway.getStats().metrics.mutationFailureReasonCounts[
+      GATEWAY_FAILURE_PRIMARY_REASON
+    ],
+    1,
+    'gateway stats should accumulate canonical failure reasons',
+  );
+});
+
+test('ControlPlaneSystemTableGateway records replace-pending queue wait in ' +
+  'mutation telemetry', async (t) => {
+  const metricEvents = [];
+  let currentTimeMs = 1000;
+  let releaseFirstMutation = null;
+  let invocationCount = 0;
+  const firstMutationReleased = new Promise((resolve) => {
+    releaseFirstMutation = resolve;
+  });
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    now: () => currentTimeMs,
+    logger: {
+      info(tag, data) {
+        metricEvents.push({tag, data});
+      },
+    },
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        invocationCount += 1;
+        if (invocationCount === 1) {
+          await firstMutationReleased;
+        }
+        currentTimeMs += 5;
+        return {success: true};
+      },
+    },
+  });
+
+  const firstMutation = gateway.submitMutation({
+    owner: 'services-owner',
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+    tableName: TABLES.SERVICES,
+    whereClause: {service_id: 'svc-1'},
+    data: {status: GATEWAY_MUTATION_STATUS_CREATING},
+    coalescingKey: GATEWAY_REPLACE_PENDING_SERVICE_KEY,
+  }, {
+    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+  });
+
+  currentTimeMs += 10;
+
+  const secondMutation = gateway.submitMutation({
+    owner: 'services-owner',
+    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+    tableName: TABLES.SERVICES,
+    whereClause: {service_id: 'svc-1'},
+    data: {status: GATEWAY_MUTATION_STATUS_ACTIVE},
+    coalescingKey: GATEWAY_REPLACE_PENDING_SERVICE_KEY,
+  }, {
+    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
+  });
+
+  currentTimeMs += 10;
+  releaseFirstMutation();
+  await firstMutation;
+  await secondMutation;
+
+  const mutationMetrics = metricEvents.filter((entry) =>
+    entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_MUTATION,
+  );
+  const queuedMetric = mutationMetrics[mutationMetrics.length - 1] || null;
+
+  t.equal(
+    queuedMetric?.data?.queueState,
+    'pending_replace',
+    'the queued mutation should report its queue state',
+  );
+  t.equal(
+    queuedMetric?.data?.queueWaitMs,
+    15,
+    'the queued mutation should report how long it waited before execution',
+  );
+  t.equal(
+    gateway.getStats().metrics.maxObservedMutationQueueWaitMs,
+    15,
+    'gateway stats should track the worst observed queue wait',
+  );
+});
+
 test('ControlPlaneSystemTableGateway emits shared pressure diagnostics with ' +
   'control-plane resource keys', async (t) => {
   const metricEvents = [];
@@ -945,964 +1385,31 @@ test('ControlPlaneSystemTableGateway logs typed defer reasons for harness ' +
   );
 });
 
-test('ControlPlaneSystemTableGateway submitMutation centralizes write ingress',
-  async (t) => {
-    const updateCalls = [];
-    const gateway = new ControlPlaneSystemTableGateway({
-      nodeId: 'node-gateway',
-      cdcIntegrationService: {
-        async updateSystemTableRow(tableName, whereClause, data, options) {
-          updateCalls.push({tableName, whereClause, data, options});
-          return {success: true};
-        },
-      },
-    });
-
-  await gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'active'},
-  }, {
-    allowPendingVisibility: true,
-    workClass: 'background',
-    allowPressureDefer: true,
-    coalescingKey: 'services:svc-1',
-  });
-
-    t.equal(updateCalls.length, 1, 'central mutation ingress should delegate once');
-    t.same(
-      updateCalls[0].whereClause,
-      {service_id: 'svc-1'},
-      'central mutation ingress should preserve the where clause',
-    );
-    t.equal(
-      updateCalls[0].options.coalescingKey,
-      'services:svc-1',
-      'central mutation ingress should preserve gateway write options',
-    );
-    t.equal(
-      updateCalls[0].options.allowPendingVisibility,
-      true,
-      'central mutation ingress should preserve pending-visibility semantics',
-    );
-  });
-
-test('ControlPlaneSystemTableGateway submitMutation surfaces pending visibility outcomes',
-  async (t) => {
-    const gateway = new ControlPlaneSystemTableGateway({
-      nodeId: 'node-gateway',
-      cdcIntegrationService: {
-        async updateSystemTableRow() {
-          return {
-            success: true,
-            visibilityState: 'pending_visibility',
-            authoritativeVisibilityConfirmed: true,
-          };
-        },
-      },
-    });
-
-    const result = await gateway.submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.SERVICES,
-      whereClause: {service_id: 'svc-1'},
-      data: {status: 'active'},
-    });
-
-    t.equal(
-      result.outcome,
-      CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-      'gateway should surface committed-but-not-yet-visible mutation outcomes explicitly',
-    );
-    t.equal(
-      result.authoritativeVisibilityConfirmed,
-      true,
-      'gateway should preserve authoritative visibility confirmation details',
-    );
-  });
-
-test('ControlPlaneSystemTableGateway submitMutation canonicalizes ' +
-  'control_plane_publications upserts before delegating to CDC',
-async (t) => {
-  const upsertCalls = [];
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    cdcIntegrationService: {
-      async upsertSystemTableRow(tableName, row) {
-        upsertCalls.push({tableName, row});
-        return {success: true};
-      },
-    },
-  });
-
-  await gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-    tableName: TABLES.CONTROL_PLANE_PUBLICATIONS,
-    row: {
-      publicationId: 'pub-1',
-      publicationKind: 'cluster_membership',
-      publicationEpoch: 7,
-      publisherNodeId: 'node-a',
-      publishedActiveNodeIds: ['node-a'],
-      requiredAckNodeIds: ['node-a'],
-      acknowledgedNodeIds: [],
-      status: 'OPEN',
-    },
-  });
-
-  t.equal(upsertCalls.length, 1, 'gateway should delegate one upsert');
-  t.equal(
-    upsertCalls[0].tableName,
-    TABLES.CONTROL_PLANE_PUBLICATIONS,
-    'gateway should preserve the publication table name',
-  );
-  t.equal(
-    upsertCalls[0].row.publication_id,
-    'pub-1',
-    'gateway should canonicalize the publication primary key',
-  );
-  t.same(
-    upsertCalls[0].row.published_active_node_ids,
-    ['node-a'],
-    'gateway should canonicalize publication array fields',
-  );
-  t.equal(
-    upsertCalls[0].row.status,
-    'OPEN',
-    'gateway should preserve publication status',
-  );
+registerControlPlaneSystemTableGatewayTailTests({
+  test,
+  TABLES,
+  SystemTableCache,
+  PressureGovernor,
+  PRESSURE_WORK_CLASS,
+  ControlPlaneSystemTableGateway,
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+  CONTROL_PLANE_PHASE_SCOPE,
+  CONTROL_PLANE_READ_STRATEGY,
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+  CONTROL_PLANE_MUTATION_OUTCOME,
+  CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+  CDC_OPERATION,
+  METRICS_LOG_TAG,
+  GATEWAY_ROUTING_GAP_OWNER_MISSING,
+  GATEWAY_ROUTING_IDENTITY_MISSING,
+  GATEWAY_REPLACE_PENDING_SERVICE_KEY,
+  GATEWAY_MUTATION_STATUS_CREATING,
+  GATEWAY_MUTATION_STATUS_ACTIVE,
+  GATEWAY_EXPECTED_FAILURE_MESSAGE,
+  GATEWAY_FAILURE_PRIMARY_REASON,
+  GATEWAY_FAILURE_DISTRIBUTED_PARTICIPANT_CODE,
+  GATEWAY_FAILURE_RECONNECT_MESSAGE,
 });
-
-test('ControlPlaneSystemTableGateway submitMutation falls back to SQL during ' +
-  'bootstrap-scoped skip-cache-wait writes when CDC mutation helpers are unavailable',
-async (t) => {
-  const sqlCalls = [];
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    sqlQueryEngine: {
-      async executeQuery(sql, params, options) {
-        sqlCalls.push({sql, params, options});
-        return {success: true, affectedRows: 1};
-      },
-    },
-  });
-
-  const result = await gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-    tableName: TABLES.SERVICES,
-    row: {
-      service_id: 'svc-1',
-      service_type: 'message_group',
-      node_id: 'node-a',
-      status: 'stopped',
-    },
-  }, {
-    skipCacheWait: true,
-    phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
-    workClass: PRESSURE_WORK_CLASS.CRITICAL,
-    deliveryPriority: 'critical',
-  });
-
-  t.equal(result.success, true, 'bootstrap fallback mutation should succeed');
-  t.equal(result.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-    'fallback mutation should still normalize as an applied write');
-  t.equal(sqlCalls.length, 1, 'fallback should route through SQL once');
-  t.match(
-    sqlCalls[0].sql,
-    /^INSERT OR REPLACE INTO services \(/,
-    'fallback should emit an upsert statement for the system table',
-  );
-  t.same(
-    sqlCalls[0].params,
-    ['svc-1', 'message_group', 'node-a', 'stopped'],
-    'fallback should preserve row values in statement order',
-  );
-  t.equal(
-    sqlCalls[0].options.routingReadinessDimension,
-    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-    'fallback should keep control-plane recovery routing semantics',
-  );
-});
-
-test('ControlPlaneSystemTableGateway submitMutation still fails closed ' +
-  'without CDC mutation helpers outside the explicit startup fallback',
-async (t) => {
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    sqlQueryEngine: {
-      async executeQuery() {
-        return {success: true, affectedRows: 1};
-      },
-    },
-  });
-
-  await t.rejects(
-    gateway.submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.SERVICES,
-      whereClause: {service_id: 'svc-1'},
-      data: {status: 'active'},
-    }),
-    /requires cdcIntegrationService/,
-    'steady-state writes should not silently bypass the CDC mutation owner',
-  );
-});
-
-test('ControlPlaneSystemTableGateway supportsReadRows only when a readable ' +
-  'backend is configured', async (t) => {
-  const emptyGateway = new ControlPlaneSystemTableGateway();
-  t.equal(
-    emptyGateway.supportsReadRows(),
-    false,
-    'gateway without authoritative or SQL owner should not claim readability',
-  );
-
-  const authoritativeGateway = new ControlPlaneSystemTableGateway({
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        return {success: true, rows: []};
-      },
-    },
-  });
-  t.equal(
-    authoritativeGateway.supportsReadRows(),
-    true,
-    'authoritative owner should make the gateway readable',
-  );
-
-  const sqlGateway = new ControlPlaneSystemTableGateway({
-    sqlQueryEngine: {
-      async executeQuery() {
-        return {success: true, rows: []};
-      },
-    },
-  });
-  t.equal(
-    sqlGateway.supportsReadRows(),
-    true,
-    'SQL owner should make the gateway readable',
-  );
-});
-
-test('ControlPlaneSystemTableGateway supportsMutationSubmission only when a ' +
-  'mutation owner is configured', async (t) => {
-  const emptyGateway = new ControlPlaneSystemTableGateway();
-  t.equal(
-    emptyGateway.supportsMutationSubmission(),
-    false,
-    'gateway without mutation owner should not claim write support',
-  );
-
-  const mutationGateway = new ControlPlaneSystemTableGateway({
-    cdcIntegrationService: {
-      async upsertSystemTableRow() {
-        return {success: true};
-      },
-    },
-  });
-  t.equal(
-    mutationGateway.supportsMutationSubmission(),
-    true,
-    'CDC mutation owner should make the gateway writable',
-  );
-});
-
-test('ControlPlaneSystemTableGateway submitMutation replace_pending keeps ' +
-  'only the newest pending mutation for one coalescing key', async (t) => {
-  const updateCalls = [];
-  const releaseUpdates = [];
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data, options) {
-        updateCalls.push({tableName, whereClause, data, options});
-        await new Promise((resolve) => {
-          releaseUpdates.push(resolve);
-        });
-        return {
-          success: true,
-          partitionResult: {affectedRows: 1},
-        };
-      },
-    },
-  });
-
-  const firstMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'creating'},
-  }, {
-    coalescingKey: 'services:svc-1',
-    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-  });
-
-  const secondMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'syncing'},
-  }, {
-    coalescingKey: 'services:svc-1',
-    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-  });
-
-  const thirdMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'active'},
-  }, {
-    coalescingKey: 'services:svc-1',
-    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-  });
-
-  await Promise.resolve();
-
-  t.equal(updateCalls.length, 1, 'only the first write should start immediately');
-  t.equal(
-    gateway.getStats().retainedRequests.inFlightMutations,
-    1,
-    'gateway should retain one tracked in-flight mutation',
-  );
-
-  releaseUpdates.shift()();
-  const firstResult = await firstMutation;
-  const secondResult = await secondMutation;
-
-  t.equal(
-    secondResult.outcome,
-    CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
-    'superseded pending mutation should resolve as no_op',
-  );
-  t.equal(firstResult.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-    'first mutation should still apply');
-
-  await Promise.resolve();
-  t.equal(updateCalls.length, 2, 'only the latest pending mutation should run next');
-  t.same(
-    updateCalls[1].data,
-    {status: 'active'},
-    'the newest pending mutation should replace the older pending mutation',
-  );
-  t.equal(
-    gateway.getStats().metrics.mutationReplacePendingQueuedCount,
-    2,
-    'gateway should count queued replace_pending mutations',
-  );
-  t.equal(
-    gateway.getStats().metrics.mutationReplacePendingSupersededCount,
-    1,
-    'gateway should count superseded pending mutations',
-  );
-  t.equal(
-    gateway.getStats().metrics.maxObservedPendingReplaceMutationRequests,
-    1,
-    'gateway should keep at most one pending replacement per key',
-  );
-
-  releaseUpdates.shift()();
-  const thirdResult = await thirdMutation;
-  t.equal(thirdResult.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-    'latest pending mutation should eventually apply');
-});
-
-test('ControlPlaneSystemTableGateway submitMutation single-flights ' +
-  'identical mutations in the gateway', async (t) => {
-  const updateCalls = [];
-  let releaseMutation = null;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data, options) {
-        updateCalls.push({tableName, whereClause, data, options});
-        await new Promise((resolve) => {
-          releaseMutation = resolve;
-        });
-        return {
-          success: true,
-          partitionResult: {affectedRows: 1},
-        };
-      },
-    },
-  });
-
-  const firstMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'active'},
-  });
-  const secondMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'active'},
-  });
-
-  await Promise.resolve();
-
-  t.equal(updateCalls.length, 1,
-    'identical gateway mutations should collapse to one in-flight write');
-
-  releaseMutation();
-  const [firstResult, secondResult] = await Promise.all([
-    firstMutation,
-    secondMutation,
-  ]);
-  t.same(firstResult, secondResult,
-    'single-flighted mutations should resolve with the same result');
-  t.equal(
-    gateway.getStats().metrics.mutationSingleFlightJoinCount,
-    1,
-    'gateway should record one mutation single-flight join',
-  );
-  t.equal(
-    gateway.getStats().metrics.maxObservedInFlightMutationRequests,
-    1,
-    'gateway should bound tracked in-flight mutation retention to one key here',
-  );
-});
-
-test('ControlPlaneSystemTableGateway readRows disables SQL fallback under ' +
-  'pressure degrade', async (t) => {
-  let sqlFallbackUsed = false;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    messageRouter: {
-      getOutboundPressureSummary() {
-        return {
-          backpressured: true,
-          saturatedNodeCount: 1,
-          totalPending: 64,
-          maxPendingUtilization: 1,
-        };
-      },
-    },
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead(
-        _tableName,
-        _sql,
-        _params,
-        options,
-      ) {
-        t.equal(
-          options.allowSqlFallback,
-          false,
-          'pressure degrade should disable routed SQL fallback',
-        );
-        return {
-          success: false,
-          error: 'local authoritative row unavailable',
-          rows: [],
-        };
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        sqlFallbackUsed = true;
-        return {
-          success: true,
-          rows: [{node_id: 'node-a'}],
-        };
-      },
-    },
-  });
-
-  const result = await gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-a'],
-    {
-      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-    },
-  );
-
-  t.equal(sqlFallbackUsed, false, 'gateway should not issue routed SQL fallback');
-  t.equal(result.success, false, 'degraded read should fail closed');
-  t.equal(
-    result.errorCode,
-    'CONTROL_PLANE_PRESSURE_DEGRADED',
-    'gateway should return a typed degraded result',
-  );
-});
-
-test('ControlPlaneSystemTableGateway executeRead returns typed defer and ' +
-  'reject outcomes under pressure', async (t) => {
-  const cases = [
-    {
-      name: 'defer',
-      options: {
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDegrade: false,
-        allowPressureDefer: true,
-      },
-      expectedOutcome: 'deferred',
-      expectedAction: 'defer',
-    },
-    {
-      name: 'reject',
-      options: {
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-        allowPressureDegrade: false,
-      },
-      expectedOutcome: 'rejected',
-      expectedAction: 'reject',
-    },
-  ];
-
-  for (const testCase of cases) {
-    let authoritativeCalls = 0;
-    const gateway = new ControlPlaneSystemTableGateway({
-      nodeId: `node-gateway-${testCase.name}`,
-      messageRouter: {
-        getOutboundPressureSummary() {
-          return {
-            backpressured: true,
-            saturatedNodeCount: 1,
-            totalPending: 64,
-            maxPendingUtilization: 1,
-          };
-        },
-      },
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead() {
-          authoritativeCalls++;
-          return {
-            success: true,
-            rows: [{node_id: 'node-a'}],
-          };
-        },
-      },
-    });
-
-    const result = await gateway.executeRead({
-      tableName: TABLES.NODES,
-      strategy: 'authoritative',
-      sql: 'SELECT * FROM nodes WHERE node_id = ?',
-      params: ['node-a'],
-    }, testCase.options);
-
-    t.equal(authoritativeCalls, 0,
-      `${testCase.name}: pressure outcome should stop the authoritative read`);
-    t.equal(result.success, false,
-      `${testCase.name}: pressure outcome should fail closed`);
-    t.equal(result.outcome, testCase.expectedOutcome,
-      `${testCase.name}: gateway should expose the typed read outcome`);
-    t.equal(result.pressureAction, testCase.expectedAction,
-      `${testCase.name}: gateway should preserve the underlying pressure action`);
-  }
-});
-
-test('ControlPlaneSystemTableGateway restricts bootstrap snapshot reads to ' +
-  'explicit bootstrap/join phase scopes', async (t) => {
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    pressureGovernor: new PressureGovernor({
-      nodeId: 'node-gateway',
-    }),
-  });
-
-  const deniedResult = await gateway.executeRead({
-    tableName: TABLES.NODES,
-    strategy: 'bootstrap_snapshot',
-    bootstrapSnapshotRows: [{node_id: 'node-a'}],
-  });
-
-  t.equal(deniedResult.success, false,
-    'runtime callers should not read bootstrap snapshots without an explicit phase scope');
-  t.equal(
-    deniedResult.error,
-    'bootstrap_snapshot_phase_scope_required',
-    'bootstrap snapshot reads should fail closed without bootstrap/join scope',
-  );
-
-  const allowedResult = await gateway.executeRead({
-    tableName: TABLES.NODES,
-    strategy: 'bootstrap_snapshot',
-    bootstrapSnapshotRows: [{node_id: 'node-a'}],
-    phaseScope: CONTROL_PLANE_PHASE_SCOPE.JOIN,
-  });
-
-  t.equal(allowedResult.success, true,
-    'explicit join scope should allow bootstrap snapshot reads');
-  t.equal(allowedResult.rows.length, 1,
-    'bootstrap snapshot read should return supplied rows when scope is explicit');
-});
-
-test('ControlPlaneSystemTableGateway readRows single-flights identical ' +
-  'control-plane reads', async (t) => {
-  let releaseRead = null;
-  let callCount = 0;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    pressureGovernor: {
-      configure() {},
-      evaluate() {
-        return {
-          action: 'allow',
-          reason: 'test-allow',
-          summary: null,
-          retryAfterMs: 0,
-        };
-      },
-    },
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        callCount++;
-        await new Promise((resolve) => {
-          releaseRead = resolve;
-        });
-        return {
-          success: true,
-          rows: [{node_id: 'node-a'}],
-        };
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        throw new Error('should not fall back to raw SQL');
-      },
-    },
-  });
-
-  const firstRead = gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-a'],
-  );
-  const secondRead = gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-a'],
-  );
-
-  await Promise.resolve();
-
-  t.equal(callCount, 1, 'identical authoritative reads should collapse in flight');
-
-  releaseRead();
-  const [firstResult, secondResult] = await Promise.all([firstRead, secondRead]);
-  t.same(firstResult, secondResult, 'coalesced reads should share one result');
-  t.equal(
-    gateway.getStats().metrics.readSingleFlightJoinCount,
-    1,
-    'gateway should record one read single-flight join',
-  );
-  t.equal(
-    gateway.getStats().metrics.maxObservedInFlightReadRequests,
-    1,
-    'gateway should keep one tracked read request for the shared key',
-  );
-});
-
-test('ControlPlaneSystemTableGateway readRows bounds tracked read retention ' +
-  'and records bypass metrics', async (t) => {
-  let firstRelease = null;
-  let secondRelease = null;
-  let callCount = 0;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    maxTrackedReadRequests: 1,
-    pressureGovernor: {
-      configure() {},
-      evaluate() {
-        return {
-          action: 'allow',
-          reason: 'test-allow',
-          summary: null,
-          retryAfterMs: 0,
-        };
-      },
-    },
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead(_tableName, _sql, params) {
-        callCount++;
-        await new Promise((resolve) => {
-          if (params[0] === 'node-a') {
-            firstRelease = resolve;
-            return;
-          }
-          secondRelease = resolve;
-        });
-        return {
-          success: true,
-          rows: [{node_id: params[0]}],
-        };
-      },
-    },
-  });
-
-  const firstRead = gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-a'],
-  );
-  await Promise.resolve();
-  const secondRead = gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-b'],
-  );
-
-  await Promise.resolve();
-
-  const statsWhileBusy = gateway.getStats();
-  t.equal(callCount, 2, 'second distinct read should bypass tracking at capacity');
-  t.equal(
-    statsWhileBusy.retainedRequests.inFlightReads,
-    1,
-    'gateway should retain only one tracked read request at the configured limit',
-  );
-  t.equal(
-    statsWhileBusy.metrics.readTrackingBypassCount,
-    1,
-    'gateway should record one read-tracking bypass at capacity',
-  );
-
-  firstRelease();
-  secondRelease();
-  await Promise.all([firstRead, secondRead]);
-});
-
-test('ControlPlaneSystemTableGateway emits bounded retention diagnostics for ' +
-  'in-flight work', async (t) => {
-  const metricEvents = [];
-  let releaseRead = null;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'retention-node',
-    logger: {
-      info(tag, data) {
-        metricEvents.push({tag, data});
-      },
-    },
-    cdcIntegrationService: {
-      async executeAuthoritativeSystemTableRead() {
-        await new Promise((resolve) => {
-          releaseRead = resolve;
-        });
-        return {
-          success: true,
-          rows: [{node_id: 'node-a'}],
-        };
-      },
-    },
-  });
-
-  const readPromise = gateway.readRows(
-    TABLES.NODES,
-    'SELECT * FROM nodes WHERE node_id = ?',
-    ['node-a'],
-  );
-  await Promise.resolve();
-
-  const retentionMetrics = metricEvents.filter((entry) => {
-    return entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_RETENTION;
-  });
-  const busyMetric = retentionMetrics.find((entry) => {
-    return entry.data?.retainedRequests?.inFlightReads === 1;
-  }) || null;
-
-  t.ok(busyMetric, 'retention diagnostics should include in-flight work');
-  t.equal(
-    busyMetric?.data?.retainedRequests?.total,
-    1,
-    'retention diagnostics should report total retained work',
-  );
-  t.equal(
-    busyMetric?.data?.boundedByTrackedCapacity,
-    true,
-    'retention diagnostics should confirm bounded retention',
-  );
-  t.equal(
-    busyMetric?.data?.retainedRequestCapacity,
-    gateway.getStats().limits.maxTrackedReadRequests +
-      gateway.getStats().limits.maxTrackedQueryRequests +
-      gateway.getStats().limits.maxTrackedMutationRequests +
-      gateway.getStats().limits.maxPendingReplaceMutationRequests,
-    'retention diagnostics should expose tracked capacity',
-  );
-
-  releaseRead();
-  await readPromise;
-
-  const idleMetric = metricEvents.find((entry) => {
-    return entry.tag === METRICS_LOG_TAG.CONTROL_PLANE_GATEWAY_RETENTION &&
-      entry.data?.retainedRequests?.total === 0 &&
-      entry.data?.maxObservedRetainedRequestCount >= 1;
-  }) || null;
-  t.ok(idleMetric, 'retention diagnostics should include the release back to idle');
-});
-
-test('ControlPlaneSystemTableGateway submitMutation rejects replace_pending ' +
-  'work when tracked mutation capacity is exhausted', async (t) => {
-  const updateCalls = [];
-  const releaseUpdates = [];
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    maxTrackedMutationRequests: 1,
-    cdcIntegrationService: {
-      async updateSystemTableRow(tableName, whereClause, data, options) {
-        updateCalls.push({tableName, whereClause, data, options});
-        await new Promise((resolve) => {
-          releaseUpdates.push(resolve);
-        });
-        return {
-          success: true,
-          partitionResult: {affectedRows: 1},
-        };
-      },
-    },
-  });
-
-  const firstMutation = gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-1'},
-    data: {status: 'syncing'},
-  }, {
-    coalescingKey: 'services:svc-1',
-    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-  });
-
-  await Promise.resolve();
-
-  const secondResult = await gateway.submitMutation({
-    operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-    tableName: TABLES.SERVICES,
-    whereClause: {service_id: 'svc-2'},
-    data: {status: 'active'},
-  }, {
-    coalescingKey: 'services:svc-2',
-    mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
-  });
-
-  t.equal(updateCalls.length, 1, 'gateway should not retain a second tracked mutation');
-  t.equal(secondResult.success, false, 'saturated tracked mutation should be rejected');
-  t.equal(
-    secondResult.outcome,
-    CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
-    'saturated tracked mutation should fail with a typed rejected outcome',
-  );
-  t.equal(
-    gateway.getStats().metrics.mutationTrackingRejectedCount,
-    1,
-    'gateway should count mutation tracking saturation',
-  );
-  t.equal(
-    gateway.getStats().retainedRequests.inFlightMutations,
-    1,
-    'gateway should keep tracked mutation retention at the configured bound',
-  );
-
-  releaseUpdates.shift()();
-  const firstResult = await firstMutation;
-  t.equal(firstResult.outcome, CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-    'first tracked mutation should still complete normally');
-});
-
-test('ControlPlaneSystemTableGateway executeQuery defers opted-in raw ' +
-  'system-table reads under pressure', async (t) => {
-  let sqlCalls = 0;
-  const gateway = new ControlPlaneSystemTableGateway({
-    nodeId: 'node-gateway',
-    messageRouter: {
-      getOutboundPressureSummary() {
-        return {
-          backpressured: true,
-          saturatedNodeCount: 1,
-          totalPending: 64,
-          maxPendingUtilization: 1,
-        };
-      },
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        sqlCalls++;
-        return {
-          success: true,
-          rows: [{total_count: 0}],
-        };
-      },
-    },
-  });
-
-  const result = await gateway.executeQuery(
-    'SELECT * FROM replica_operations WHERE status = ?',
-    ['pending'],
-    {
-      controlPlaneTableName: TABLES.REPLICA_OPERATIONS,
-      controlPlaneOperationKind: 'read',
-      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-      allowPressureDefer: true,
-      deliveryPriority: 'background',
-    },
-  );
-
-  t.equal(result.success, false, 'background raw query should fail closed');
-  t.equal(
-    result.errorCode,
-    'CONTROL_PLANE_PRESSURE_DEGRADED',
-    'gateway should expose typed pressure admission failures',
-  );
-  t.equal(sqlCalls, 0, 'deferred raw reads should not hit routed SQL');
-});
-
-test('ControlPlaneSystemTableGateway resolves runtime dependencies through providers',
-  async (t) => {
-    let sqlQueryEngine = null;
-    let authoritativeReads = 0;
-    const cache = {
-      getAll() {
-        return [{node_id: 'node-a'}];
-      },
-    };
-    const gateway = new ControlPlaneSystemTableGateway({
-      getSqlQueryEngine: () => sqlQueryEngine,
-      getCdcIntegrationService: () => ({
-        sqlQueryEngine,
-        async executeAuthoritativeSystemTableRead() {
-          authoritativeReads += 1;
-          return {
-            success: true,
-            rows: [{node_id: 'node-a'}],
-          };
-        },
-      }),
-      getSystemTableCache: () => cache,
-    });
-
-    t.equal(gateway.supportsReadRows(), true,
-      'provider-backed cache should satisfy read support');
-
-    sqlQueryEngine = {
-      async executeQuery() {
-        return {
-          success: true,
-          rows: [{service_id: 'svc-1'}],
-        };
-      },
-    };
-
-    const queryResult = await gateway.executeQuery(
-      'SELECT * FROM services WHERE service_id = ?',
-      ['svc-1'],
-      {
-        controlPlaneTableName: TABLES.SERVICES,
-        controlPlaneOperationKind: 'read',
-      },
-    );
-    t.equal(queryResult.success, true,
-      'provider-backed SQL engine should execute raw system-table reads');
-
-    const authoritativeResult = await gateway.readRows(
-      TABLES.NODES,
-      'SELECT * FROM nodes WHERE node_id = ?',
-      ['node-a'],
-    );
-    t.equal(authoritativeResult.success, true,
-      'provider-backed authoritative read owner should execute reads');
-    t.equal(authoritativeReads, 1,
-      'gateway should evaluate provider-backed authoritative owner once');
-  });

@@ -12,7 +12,6 @@ import {
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
-  BENCHMARK_WORKLOAD_PROFILE,
   createPartitioningAdaptiveDispatchGuardrail,
   createPartitioningBenchmarkLoadNodePlan,
   prepareBenchmarkPartitioningTable,
@@ -47,6 +46,8 @@ const FAILURE_REASON_NO_SPLIT_ATTEMPTS = 'no_split_attempt_evidence';
 const FAILURE_REASON_NO_PARTITIONING_EVIDENCE = 'no_partitioning_evidence';
 const PARTITION_EVALUATION_INTERVAL_MIN_MS = 60000;
 const SPLIT_ATTEMPT_TIMEOUT_MIN_HEADROOM_MS = 1000;
+const SPLIT_PROGRESS_QUERY_TIMEOUT_MS = 15000;
+const SPLIT_PROGRESS_QUERY_LANE = 'snapshot';
 
 /**
  * Resolve one sane split-attempt timeout floor from cluster settings.
@@ -303,6 +304,40 @@ function summarizeSplitEvaluation(splitEvaluation) {
 }
 
 /**
+ * Query one local control snapshot for split-progress diagnostics.
+ * The diagnostics probe must not contend with the default load lane.
+ * @param {Object} node
+ * @param {Object} [options]
+ * @return {Promise<Object>}
+ */
+async function executeSplitProgressControlSnapshotQuery(
+  node,
+  options = {},
+) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) &&
+    options.timeoutMs > ZERO ?
+    Math.floor(options.timeoutMs) :
+    SPLIT_PROGRESS_QUERY_TIMEOUT_MS;
+  if (typeof node?.getControlSnapshot === 'function') {
+    return node.getControlSnapshot({
+      lane: SPLIT_PROGRESS_QUERY_LANE,
+      timeoutMs,
+    });
+  }
+  if (typeof node?.queryWithTimeout === 'function') {
+    return node.queryWithTimeout(
+      SQL_CONTROL_SNAPSHOT,
+      [],
+      {
+        lane: SPLIT_PROGRESS_QUERY_LANE,
+        timeoutMs,
+      },
+    );
+  }
+  return node.query(SQL_CONTROL_SNAPSHOT);
+}
+
+/**
  * Query split progress diagnostics from control snapshot.
  * @param {Object} seedNode
  * @param {string} tableName
@@ -311,7 +346,7 @@ function summarizeSplitEvaluation(splitEvaluation) {
  */
 async function querySplitProgressDiagnostics(seedNode, tableName, tableId) {
   try {
-    const result = await seedNode.query(SQL_CONTROL_SNAPSHOT);
+    const result = await executeSplitProgressControlSnapshotQuery(seedNode);
     const rows = rowsFromResult(result);
     if (rows.length === ZERO) {
       return {
@@ -404,6 +439,7 @@ async function run(cluster, options = {}) {
     controlPlaneQuiescenceNoProgressTimeoutMs,
     loadOpsPerSec,
     loadDuration,
+    workloadProfile,
     loadOperations,
     tableName,
     minAdditionalPartitions,
@@ -488,7 +524,7 @@ async function run(cluster, options = {}) {
     adaptiveDispatchGuardrail: createPartitioningAdaptiveDispatchGuardrail(),
     operations: loadOperations,
     tableName: effectiveTableName,
-    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
+    workloadProfile,
   });
 
   let partitioningEvidence = null;

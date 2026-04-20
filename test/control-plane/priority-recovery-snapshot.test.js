@@ -1,5 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+} from '../../src/control-plane/priority-recovery-completion.js';
+import {
   PRIORITY_RECOVERY_ADMISSION_DECISION_REASON,
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
   PRIORITY_RECOVERY_ADMISSION_SOURCE,
@@ -403,6 +406,22 @@ test('priority recovery decision snapshots classify eligible ACTIVE replace disp
       'spread_satisfied_in_flight',
       'eligible ACTIVE replace dispatch should use the spread-satisfied semantic state',
     );
+    t.equal(
+      targetSnapshot.completion?.state,
+      PRIORITY_RECOVERY_COMPLETION_STATE.SPREAD_SATISFIED_IN_FLIGHT,
+      'decision snapshots should preserve the canonical completion state alongside the semantic state',
+    );
+    t.same(
+      decisionSnapshots.partitionIdsByCompletionState,
+      {
+        converged: [],
+        spread_satisfied_in_flight: ['control_plane_publications-p1'],
+        temporary_over_target_allowed: [],
+        operation_visibility_deferred: [],
+        blocked: [],
+      },
+      'completion-state aggregation should use the same canonical owner contract',
+    );
   });
 
 test('priority recovery decision snapshots keep ACTIVE replace dispatch blocking when the target is outside the eligible cohort',
@@ -572,6 +591,91 @@ test('priority recovery decision snapshots treat non-blocked SYNCING replace wor
       targetSnapshot.semanticState,
       'spread_satisfied_in_flight',
       'non-blocked SYNCING replace work should stop appearing as recovering_in_flight',
+    );
+  });
+
+test('priority recovery decision snapshots infer operation identity from malformed syncing rows',
+  async (t) => {
+    const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+      capturedAt: 5000,
+      publicationConvergence: {
+        publicationEpoch: 12,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: ['node-a', 'node-b'],
+        pendingAckNodeIds: [],
+        priorityPartitionSummary: {
+          blockedPartitions: [{
+            partitionId: 'sql_transactions-p1',
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 1,
+            spreadGap: 2,
+          }],
+          missingPartitionIds: ['sql_transactions-p1'],
+          requiredDistinctNodeCount: 3,
+        },
+        membershipLifecycleSummary: {
+          projectedServingNodeIds: ['node-a', 'node-b'],
+          locallyEligibleNodeIds: ['node-a', 'node-b'],
+        },
+      },
+      readinessByNodeId: {},
+      workflowAdmissionsByWorkflowId: {},
+      replicaOperationRows: [{
+        operation_id: 'op-replace-syncing-missing-columns',
+        type: '',
+        status: 'syncing',
+        workflow_step: 'SYNCING',
+        replica_id: 'sql_transactions-p1-r4',
+        steps_history: JSON.stringify([{
+          step: 'PENDING',
+          sourceReplicaId: 'sql_transactions-p1-r1',
+          replicaIds: [
+            'sql_transactions-p1-r2',
+            'sql_transactions-p1-r3',
+            'sql_transactions-p1-r4',
+          ],
+          peerAddresses: [
+            'node-a/partition/sql_transactions-p1-r2',
+            'node-a/partition/sql_transactions-p1-r3',
+            'node-b/partition/sql_transactions-p1-r4',
+          ],
+        }, {
+          step: 'SYNCING',
+          readinessSnapshot: {
+            nodeId: 'node-b',
+          },
+        }]),
+      }],
+      replicaOperations: {
+        operationTimelineById: {
+          'op-replace-syncing-missing-columns': [
+            {step: 'PENDING', status: 'pending', inFlight: true},
+            {step: 'SYNCING', status: 'syncing', inFlight: true},
+          ],
+        },
+      },
+      serviceRows: [],
+    });
+
+    const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+      entry.operationId === 'op-replace-syncing-missing-columns',
+    );
+    t.ok(targetSnapshot, 'malformed syncing row should still produce one partition snapshot');
+    t.equal(
+      targetSnapshot.partitionId,
+      'sql_transactions-p1',
+      'priority recovery snapshots should recover the partition id from replica identity when the row omits it',
+    );
+    t.notOk(
+      targetSnapshot.blockerReasons.includes(
+        'eligible_but_no_operation_created',
+      ),
+      'live syncing work should not collapse back into the synthetic needs-operation state when persisted columns are missing',
+    );
+    t.equal(
+      targetSnapshot.semanticState,
+      'recovering_in_flight',
+      'malformed syncing rows should still remain visible as in-flight recovery work',
     );
   });
 

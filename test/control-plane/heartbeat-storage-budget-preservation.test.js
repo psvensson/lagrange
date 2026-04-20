@@ -22,6 +22,9 @@ import {ControlPlaneSystemTableGateway} from
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
+} from '../../src/control-plane/control-plane-constants.js';
 import {COLUMN, NUM} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -164,6 +167,11 @@ async (t) => {
     const nodeRow = reportedPayload.nodeRow;
     t.ok(nodeRow, 'reporter payload should include nodeRow');
     t.equal(
+      reportedPayload.nodeStatePublicationMode,
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+      'initial heartbeat reporter payload should enter freshness-recovery mode',
+    );
+    t.equal(
       nodeRow[COLUMN.STORAGE_BUDGET_BYTES],
       TEST_BUDGET_BYTES,
       'reporter nodeRow must include storage_budget_bytes from cache',
@@ -274,14 +282,15 @@ async (t) => {
         allowCoalescing: true,
         allowPressureDefer: true,
         coalescingKey: `heartbeat:nodes:${TEST_NODE_ID}`,
-        deliveryPriority: 'background',
+        deliveryPriority: 'critical',
         mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
         pressureRetryAfterMs: service.heartbeatIntervalMs,
         queryTimeoutMs: service.resolveHeartbeatWriteQueryTimeoutMs(),
         skipCacheWait: true,
-        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        workloadClass: 'node_state_publication_critical',
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
       },
-      'node heartbeat writes should use the shared coalesced deferred write contract',
+      'initial node heartbeat writes should use the deferred freshness-recovery write contract',
     );
 
     t.equal(endpointWrites.length, 1, 'heartbeat should issue one endpoint upsert');

@@ -52,9 +52,16 @@ test('ControlPlaneReadinessService builds recovery-pending startup authority sna
   );
   t.same(
     snapshot.priorityRecoveryReasonCodes,
-    ['publication_epoch_pending'],
-    'startup authority should preserve the recovery reasons',
+    [
+      'publication_epoch_pending',
+      'priority_partitions_not_spread',
+    ],
+    'startup authority should preserve the shared recovery-gate reasons',
   );
+  t.match(snapshot.publicationRecoveryGate, {
+    state: 'ack_pending',
+    pendingAckCount: 0,
+  });
   t.end();
 });
 

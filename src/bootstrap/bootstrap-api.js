@@ -3,10 +3,15 @@
  * Implements /bootstrap endpoint for new node registration.
  *
  * Architecture:
- * - System cache is the single source of truth for all cluster state
- * - Bootstrap response contains default cache-sync table snapshots
+ * - `systemTableCache` is the raw observed cluster view
+ * - `BootstrapTopologySnapshotOwner` publishes the stabilized authority view
+ *   used for bootstrap topology answers during convergence
+ * - Bootstrap response contains default cache-sync table snapshots derived
+ *   from that published authority view
  * - Joining nodes hydrate their cache from these snapshots
- * - After hydration, all nodes use system cache for query routing
+ * - After hydration, steady-state partition enumeration uses system cache,
+ *   while canonical leader decisions for critical partitions may still route
+ *   through the bootstrap authority owner
  *
  * Requirements: 1.2, 7.2, 7.3, 7.4
  */
@@ -14,51 +19,30 @@
 import Fastify from 'fastify';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {assertCritical} from '../utils/assert.js';
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
   ERRNO,
   HTTP_STATUS,
   HOST,
   NUM,
-  PROTOCOL,
   SERVICE_STATUS,
-  SERVICE_TYPE,
-  STRING,
   TABLES,
   TYPEOF,
-  WORKFLOW_STEP,
 } from '../constants/index.js';
-import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
-import {
-  resolveCanonicalLeaderService,
-} from '../cache/leader-readiness-gate.js';
-import {
-  isNodeRecordReady,
-} from '../node/node-readiness-policy.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {NODE_CONFIG_KEY, NODE_DEFAULT} from '../node/node-constants.js';
-import {CONFIG_KEY} from '../config/config-constants.js';
 import {
   BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_HEALTH_STATUS,
   BOOTSTRAP_API_HEALTH_STATUS_INITIALIZING,
-  BOOTSTRAP_API_HANDOFF_OPERATION,
-  BOOTSTRAP_API_HANDOFF_PHASE,
-  BOOTSTRAP_API_HANDOFF_STATUS,
-  BOOTSTRAP_API_ASSIGNMENT,
   BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_ROUTE,
-  BOOTSTRAP_API_SQL,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
 import {
@@ -72,13 +56,14 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
+import {
   CONTROL_PLANE_PHASE_SCOPE,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
-import {
-  PRESSURE_WORK_CLASS,
-} from '../control-plane/pressure-governor.js';
 import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
@@ -102,11 +87,21 @@ import {BootstrapRequestOwner} from
   './owners/bootstrap-request-owner.js';
 import {BootstrapClusterViewOwner} from
   './owners/bootstrap-cluster-view-owner.js';
+import {createBootstrapApiRuntimeMethods} from
+  './bootstrap-api-runtime-methods.js';
 
 /**
  * Bootstrap response strategies.
  */
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
+const BOOTSTRAP_CONTROL_PLANE_READ_PROFILE =
+  buildControlPlaneWorkloadProfile(
+    CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_READ,
+  );
+const BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE =
+  buildControlPlaneWorkloadProfile(
+    CONTROL_PLANE_WORKLOAD_CLASS.BOOTSTRAP_CONTROL_PLANE_MUTATION,
+  );
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -326,6 +321,10 @@ class BootstrapAPI {
         delegates: {
           getSeedNodeId: () => this.seedNodeId,
           getSystemTableCache: () => this.getSystemTableCache(),
+          getBootstrapAuthoritativeTableRows: (tableName) =>
+            this.getBootstrapAuthoritativeTableRows(tableName),
+          isBootstrapAuthoritativeTableRowNewer: (candidate, existing) =>
+            this.isAuthoritativeSnapshotRowNewer(candidate, existing),
           getMessageGroupServices: () => this.messageGroupServices,
           getSqlQueryEngine: () => this.sqlQueryEngine,
           getLogger: () => this.logger,
@@ -595,11 +594,15 @@ class BootstrapAPI {
     }
     return controlPlaneSystemTableGateway.executeQuery(sql, params, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      workloadClass: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.workloadClass,
+      workClass: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.workClass,
       deliveryPriority: 'critical',
       enforcePressureAdmission: true,
-      allowPressureDefer: true,
-      allowPressureDegrade: false,
+      allowPressureDefer:
+        BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDefer,
+      allowPressureDegrade:
+        BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.allowPressureDegrade,
+      resourceKeys: BOOTSTRAP_CONTROL_PLANE_READ_PROFILE.resourceKeys,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -621,18 +624,28 @@ class BootstrapAPI {
         typeof controlPlaneSystemTableGateway.submitMutation !== TYPEOF.FUNCTION) {
       throw new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
     }
-    return controlPlaneSystemTableGateway.submitMutation(mutation, {
+    const result = await controlPlaneSystemTableGateway.submitMutation(mutation, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
-      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      workloadClass:
+        BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.workloadClass,
+      workClass: BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.workClass,
       deliveryPriority: 'critical',
-      allowPressureDefer: true,
-      allowPressureDegrade: false,
+      allowPressureDefer:
+        BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.allowPressureDefer,
+      allowPressureDegrade:
+        BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.allowPressureDegrade,
+      resourceKeys: BOOTSTRAP_CONTROL_PLANE_MUTATION_PROFILE.resourceKeys,
       pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       phaseScope: CONTROL_PLANE_PHASE_SCOPE.BOOTSTRAP,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       ...options,
     });
+    if (result?.success !== false) {
+      this.bootstrapTopologySnapshotOwner
+        ?.invalidateAuthoritativeSystemTableSnapshotRows();
+    }
+    return result;
   }
 
   /**
@@ -1417,1113 +1430,18 @@ class BootstrapAPI {
     }
     return error;
   }
-
-  /**
-   * Lookup one move-assignment reservation by assignment ID.
-   * @param {string} assignmentId
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async getMoveReplicaAssignmentReservationById(assignmentId) {
-    return this.moveReplicaAssignmentOwner
-      .getMoveReplicaAssignmentReservationById(assignmentId);
-  }
-
-  /**
-   * Validate MOVE_REPLICA assignment token on register-service.
-   * @param {Object} serviceData
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async validateMoveReplicaAssignmentToken(serviceData) {
-    return this.moveReplicaAssignmentOwner
-      .validateMoveReplicaAssignmentToken(serviceData);
-  }
-
-  /**
-   * Return whether one active reservation should be renewed before it expires.
-   * Keeps long-running join/register retries alive without waiting for the
-   * token to become invalid first.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  shouldRenewMoveReplicaAssignmentReservation(reservation, now = Date.now()) {
-    return this.moveReplicaAssignmentOwner
-      .shouldRenewMoveReplicaAssignmentReservation(reservation, now);
-  }
-
-  /**
-   * Renew or revive a MOVE_REPLICA reservation when the original handoff
-   * is still the canonical pending move for this replica.
-   * @param {Object} reservation
-   * @param {Object} [options]
-   * @param {number} [options.now=Date.now()]
-   * @param {boolean} [options.force=false]
-   * @param {string} [options.phase='lease_renewed']
-   * @return {Promise<Object|null>}
-   * @private
-   */
-  async renewMoveReplicaAssignmentReservation(
-    reservation,
-    options = {},
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .renewMoveReplicaAssignmentReservation(reservation, options);
-  }
-
-  /**
-   * Return whether the source replica still exists locally on the seed.
-   * MOVE_REPLICA reservations only originate from seed-owned source replicas,
-   * so local replica absence is one authoritative signal that source removal
-   * has already completed.
-   * @param {Object} reservation
-   * @return {boolean}
-   * @private
-   */
-  isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation) {
-    return this.moveReplicaAssignmentOwner
-      .isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation);
-  }
-
-  /**
-   * Evaluate canonical ownership signals for one MOVE_REPLICA reservation.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {Object}
-   * @private
-   */
-  evaluateMoveReplicaAssignmentReservationOwnership(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
-  }
-
-  /**
-   * Check whether an expired reservation still matches the source owner that
-   * originally granted the handoff.
-   * @param {Object} reservation
-   * @return {boolean}
-   * @private
-   */
-  canReviveExpiredMoveReplicaAssignmentReservation(reservation) {
-    return this.moveReplicaAssignmentOwner
-      .canReviveExpiredMoveReplicaAssignmentReservation(reservation);
-  }
-
-  /**
-   * Check whether a reservation source still has a viable owner path.
-   * A bootstrap MOVE_REPLICA reservation is no longer actionable when the
-   * recorded source node has lost readiness while the source replica still
-   * appears to belong to it.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  hasViableMoveReplicaAssignmentSource(reservation, now = Date.now()) {
-    return this.moveReplicaAssignmentOwner
-      .hasViableMoveReplicaAssignmentSource(reservation, now);
-  }
-
-  /**
-   * Resolve one non-terminal reservation invalidation reason.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {string|null}
-   * @private
-   */
-  getMoveReplicaAssignmentReservationInvalidationReason(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .getMoveReplicaAssignmentReservationInvalidationReason(
-        reservation,
-        now,
-      );
-  }
-
-  /**
-   * Determine whether one non-terminal reservation has already converged to
-   * canonical target ownership and should be reconciled into a committed row.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  shouldReconcileMoveReplicaAssignmentReservationToCommitted(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .shouldReconcileMoveReplicaAssignmentReservationToCommitted(
-        reservation,
-        now,
-      );
-  }
-
-  /**
-   * Enforce one active owner row per message-group replica registration.
-   * @param {Object} serviceData
-   * @param {Object|null} assignmentContext
-   * @return {void}
-   * @private
-   */
-  assertSingleOwnerReplicaRegistration(serviceData, assignmentContext) {
-    return this.moveReplicaHandoffOwner
-      .assertSingleOwnerReplicaRegistration(serviceData, assignmentContext);
-  }
-
-  /**
-   * Check whether a node is the canonical home for a self-hosted
-   * message group. The canonical group ID is deterministically
-   * derived from the node ID by MessageGroupAssignment, so a
-   * match proves the node originally created the group.
-   * @param {string|null} groupId - Group ID from the service row.
-   * @param {string|null} nodeId - Target node ID.
-   * @return {boolean} True if the node is the canonical home.
-   */
-  isCanonicalGroupHomeNode(groupId, nodeId) {
-    return this.moveReplicaHandoffOwner
-      .isCanonicalGroupHomeNode(groupId, nodeId);
-  }
-
-  buildReplicaOperationMutationRow(operationContext) {
-    return {
-      operation_id: operationContext.operationId,
-      type: operationContext.type,
-      partition_id: operationContext.partitionId,
-      replica_id: operationContext.replicaId,
-      source_node_id: operationContext.sourceNodeId,
-      target_node_id: operationContext.targetNodeId,
-      status: operationContext.status,
-      workflow_step: operationContext.workflowStep,
-      created_at: operationContext.createdAt,
-      updated_at: operationContext.updatedAt,
-      completed_at: operationContext.completedAt,
-      lease_expires_at: operationContext.leaseExpiresAt ?? null,
-      error_message: operationContext.errorMessage,
-      steps_history: JSON.stringify(operationContext.stepsHistory || []),
-      entity_type: operationContext.entityType,
-      entity_id: operationContext.entityId,
-    };
-  }
-
-  buildReplicaOperationMutationData(operationContext) {
-    return {
-      status: operationContext.status,
-      workflow_step: operationContext.workflowStep,
-      updated_at: operationContext.updatedAt,
-      completed_at: operationContext.completedAt,
-      lease_expires_at: operationContext.leaseExpiresAt ?? null,
-      error_message: operationContext.errorMessage,
-      steps_history: JSON.stringify(operationContext.stepsHistory || []),
-    };
-  }
-
-  /**
-   * Persist a new MOVE_REPLICA handoff operation row.
-   *
-   * OWNERSHIP BOUNDARY: BootstrapAPI owns the MOVE_REPLICA handoff
-   * and MOVE_ASSIGNMENT reservation lifecycle as a separate ownership
-   * domain from RebalanceCoordinator. This is an explicit exception
-   * to the single-writer contract for replica_operations:
-   *
-   * - BootstrapAPI owns rows with type = 'ADD' (handoff) and
-   *   type = 'MOVE_ASSIGNMENT' (reservation) created during node join.
-   * - RebalanceCoordinator owns all other replica_operations rows
-   *   (ADD/REMOVE/REPLACE for steady-state rebalancing).
-   * - The two domains are distinguished by operation type and
-   *   creation context (bootstrap vs steady-state).
-   * - BootstrapAPI MUST NOT create or mutate coordinator-owned rows.
-   * - RebalanceCoordinator MUST NOT create or mutate bootstrap-owned
-   *   handoff/reservation rows.
-   *
-   * @param {Object} handoffContext - Operation context.
-   * @return {Promise<void>}
-   * @private
-   */
-  async insertMoveReplicaHandoffOperation(handoffContext) {
-    const result = await this.executeBootstrapControlPlaneMutation({
-      operation: 'insert',
-      tableName: TABLES.REPLICA_OPERATIONS,
-      row: this.buildReplicaOperationMutationRow(handoffContext),
-    });
-    if (!result.success) {
-      throw this.buildBootstrapControlPlaneQueryError(
-        result,
-        'Failed to persist MOVE_REPLICA handoff operation',
-      );
-    }
-  }
-
-  /**
-   * Persist updates to an existing MOVE_REPLICA handoff operation row.
-   * @param {Object} handoffContext - Operation context.
-   * @return {Promise<void>}
-   * @private
-   */
-  async updateMoveReplicaHandoffOperation(handoffContext) {
-    const result = await this.executeBootstrapControlPlaneMutation({
-      operation: 'update',
-      tableName: TABLES.REPLICA_OPERATIONS,
-      whereClause: {
-        operation_id: handoffContext.operationId,
-      },
-      data: this.buildReplicaOperationMutationData(handoffContext),
-    });
-    if (!result.success) {
-      throw this.buildBootstrapControlPlaneQueryError(
-        result,
-        'Failed to update MOVE_REPLICA handoff operation',
-      );
-    }
-  }
-
-  /**
-   * Start MOVE_REPLICA handoff tracking when applicable.
-   * @param {Object} serviceData - Incoming register-service payload.
-   * @param {Object|null} assignmentContext - Validated assignment reservation.
-   * @return {Promise<Object|null>} Handoff context or null.
-   * @private
-   */
-  async startMoveReplicaHandoff(serviceData, assignmentContext = null) {
-    if (!this.isMoveReplicaHandoffRequest(serviceData)) {
-      return null;
-    }
-    return this.moveReplicaHandoffOwner
-      .startMoveReplicaHandoff(serviceData, assignmentContext);
-  }
-
-  /**
-   * Execute and persist a MOVE_REPLICA handoff phase.
-   * @param {Object} handoffContext - Operation context.
-   * @param {string} phase - Handoff phase identifier.
-   * @param {string} workflowStep - Workflow step value.
-   * @param {string} status - Replica operation status.
-   * @param {Function} executor - Phase action.
-   * @return {Promise<void>}
-   * @private
-   */
-  async executeMoveReplicaHandoffPhase(
-    handoffContext,
-    phase,
-    workflowStep,
-    status,
-    executor,
-  ) {
-    return this.moveReplicaHandoffOwner
-      .executeMoveReplicaHandoffPhase(
-        handoffContext,
-        phase,
-        workflowStep,
-        status,
-        executor,
-      );
-  }
-
-  /**
-   * Verify the MOVE_REPLICA target metadata before source removal.
-   * @param {Object} handoffContext - Operation context.
-   * @param {Object} serviceData - Incoming register-service payload.
-   * @return {void}
-   * @private
-   */
-  verifyMoveReplicaHandoffTarget(handoffContext, serviceData) {
-    return this.moveReplicaHandoffOwner
-      .verifyMoveReplicaHandoffTarget(handoffContext, serviceData);
-  }
-
-  /**
-   * Mark MOVE_REPLICA handoff as committed.
-   * @param {Object} handoffContext - Operation context.
-   * @return {Promise<void>}
-   * @private
-   */
-  async completeMoveReplicaHandoff(handoffContext) {
-    return this.moveReplicaHandoffOwner
-      .completeMoveReplicaHandoff(handoffContext);
-  }
-
-  /**
-   * Mark MOVE_REPLICA handoff as failed.
-   * @param {Object} handoffContext - Operation context.
-   * @param {Error} error - Failure reason.
-   * @return {Promise<void>}
-   * @private
-   */
-  async failMoveReplicaHandoff(handoffContext, error) {
-    return this.moveReplicaHandoffOwner
-      .failMoveReplicaHandoff(handoffContext, error);
-  }
-
-  /**
-   * Remove a local message-group source replica before committing MOVE_REPLICA
-   * ownership metadata to another node.
-   * @param {Object} serviceData - Incoming register-service payload.
-   * @return {Promise<void>}
-   * @private
-   */
-  async removeLocalSourceReplicaForMoveReplica(serviceData) {
-    return this.moveReplicaHandoffOwner
-      .removeLocalSourceReplicaForMoveReplica(serviceData);
-  }
-
-  /**
-   * Get the leader partition info for a specific table.
-   * Uses ONLY the system cache - no fallbacks.
-   * @param {string} tableName - Table name.
-   * @return {Object|null} Leader partition info or null.
-   * @private
-   */
-  getLeaderPartitionForTable(tableName) {
-    return this.bootstrapJoinAdmissionOwner
-      .getLeaderPartitionForTable(tableName);
-  }
-
-  /**
-   * Validate bootstrap request parameters.
-   * @param {string} nodeId - Node ID from request.
-   * @param {string} nodeAddress - Node address from request.
-   * @return {string|null} Error message or null if valid.
-   */
-  validateBootstrapRequest(nodeId, nodeAddress) {
-    return this.bootstrapJoinAdmissionOwner
-      .validateBootstrapRequest(nodeId, nodeAddress);
-  }
-
-  /**
-   * Check for node ID or address conflicts using system table cache.
-   * @param {string} nodeId - Node ID to check.
-   * @param {string} nodeAddress - Node address to check.
-   * @return {Promise<string|null>} Error message or null if no conflict.
-   */
-  async checkForConflicts(nodeId, nodeAddress) {
-    return this.bootstrapJoinAdmissionOwner
-      .checkForConflicts(nodeId, nodeAddress);
-  }
-
-  /**
-   * Determine whether a node record represents a dead node that
-   * is eligible for re-registration. A node is dead when its
-   * status is terminal OR its ready lease has expired.
-   * @param {Object} nodeRecord - Row from the nodes table.
-   * @return {boolean} True if the node is considered dead.
-   * @private
-   */
-  _isNodeDead(nodeRecord) {
-    return this.bootstrapJoinAdmissionOwner.isNodeDead(nodeRecord);
-  }
-
-  /**
-   * Read one canonical nodes row when authoritative control-plane reads
-   * are available. Successful empty reads are treated as cache-stale absence;
-   * read failures fall back to cache semantics.
-   * @param {string} nodeId
-   * @return {Promise<{available: boolean, row: Object|null}>}
-   * @private
-   */
-  async readAuthoritativeNodeRow(nodeId) {
-    return this.bootstrapJoinAdmissionOwner
-      .readAuthoritativeNodeRow(nodeId);
-  }
-
-  /**
-   * Resolve the canonical control-plane view when the bootstrap owner can
-   * execute authoritative system-table reads.
-   * @return {AuthoritativeControlPlaneView|null}
-   * @private
-   */
-  getAuthoritativeControlPlaneView() {
-    return this.bootstrapJoinAdmissionOwner
-      .getAuthoritativeControlPlaneView();
-  }
-
-  /**
-   * Determine message group assignment for a new node.
-   * Delegates strategy selection to MessageGroupAssignment (single owner)
-   * and augments the result with peer addresses for Raft communication.
-   * @param {string} newNodeId - New node ID.
-   * @param {Object} [options]
-   * @param {Set<string>} [options.excludedReplicaIds]
-   * @return {Object} Assignment instructions.
-   */
-  determineMessageGroupAssignment(newNodeId, options = {}) {
-    return this.bootstrapJoinAdmissionOwner
-      .determineMessageGroupAssignment(newNodeId, options);
-  }
-
-  /**
-   * Serialize MOVE_REPLICA assignment reservation so concurrent bootstrap
-   * requests cannot reserve the same replica.
-   * @param {Function} action
-   * @return {Promise<*>}
-   * @private
-   */
-  async withMoveReplicaAssignmentReservationLock(action) {
-    return this.bootstrapJoinAdmissionOwner
-      .withMoveReplicaAssignmentReservationLock(action);
-  }
-
-  /**
-   * Determine assignment and reserve MOVE_REPLICA ownership atomically before
-   * responding to bootstrap.
-   * @param {string} newNodeId
-   * @param {Object} [options={}]
-   * @return {Promise<Object>}
-   * @private
-   */
-  async determineAndReserveMessageGroupAssignment(newNodeId, options = {}) {
-    return this.bootstrapJoinAdmissionOwner
-      .determineAndReserveMessageGroupAssignment(newNodeId, options);
-  }
-
-  /**
-   * Convert persisted replica operation row into move-assignment reservation.
-   * @param {Object} row
-   * @return {Object|null}
-   * @private
-   */
-  normalizeMoveReplicaAssignmentReservationRow(row) {
-    return this.moveReplicaAssignmentOwner
-      .normalizeMoveReplicaAssignmentReservationRow(row);
-  }
-
-  /**
-   * Return active move-assignment reservations from in-memory + persisted state.
-   * @return {Promise<Array<Object>>}
-   * @private
-   */
-  async getActiveMoveReplicaAssignmentReservations() {
-    return this.moveReplicaAssignmentOwner
-      .getActiveMoveReplicaAssignmentReservations();
-  }
-
-  /**
-   * Return one set of MOVE_REPLICA reservations that should defer new
-   * bootstrap admissions because the canonical handoff has not stabilized yet.
-   * This includes in-flight reservations and recently committed handoffs whose
-   * target node is not ready yet.
-   * @param {number} [now=Date.now()]
-   * @return {Promise<Array<Object>>}
-   * @private
-   */
-  async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
-    return this.moveReplicaAssignmentOwner
-      .getBlockingMoveReplicaBootstrapAdmissions(now);
-  }
-
-  /**
-   * Determine whether one MOVE_REPLICA reservation should block a new
-   * bootstrap admission.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  isMoveReplicaBootstrapAdmissionBlocked(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .isMoveReplicaBootstrapAdmissionBlocked(reservation, now);
-  }
-
-  /**
-   * A non-terminal MOVE_REPLICA handoff remains exclusive for new bootstrap
-   * admissions until it either commits or is explicitly invalidated. Lease
-   * expiry only affects token freshness; it must not make the replica
-   * assignable again while the original handoff is still open.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  isMoveReplicaAssignmentReservationOpen(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .isMoveReplicaAssignmentReservationOpen(reservation, now);
-  }
-
-  /**
-   * A committed handoff still blocks new bootstrap admissions until the target
-   * node is actually ready and the canonical service row points at it. This
-   * prevents the seed from starting a second control-plane handoff while the
-   * first moved replica is still converging.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  isCommittedMoveReplicaHandoffStabilizing(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .isCommittedMoveReplicaHandoffStabilizing(reservation, now);
-  }
-
-  /**
-   * Determine whether the canonical target of a committed MOVE_REPLICA
-   * handoff is locally ready.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {boolean}
-   * @private
-   */
-  isMoveReplicaAssignmentTargetReady(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .isMoveReplicaAssignmentTargetReady(reservation, now);
-  }
-
-  /**
-   * Resolve one bounded retry hint for bootstrap admission blocked by an
-   * unsettled MOVE_REPLICA handoff.
-   * @param {Object|null} reservation
-   * @param {number} [now=Date.now()]
-   * @return {number}
-   * @private
-   */
-  resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
-        reservation,
-        now,
-      );
-  }
-
-  /**
-   * Check whether one reservation is currently active.
-   * @param {Object} reservation
-   * @param {number} now
-   * @return {boolean}
-   * @private
-   */
-  isMoveReplicaAssignmentReservationActive(reservation, now = Date.now()) {
-    return this.moveReplicaAssignmentOwner
-      .isMoveReplicaAssignmentReservationActive(reservation, now);
-  }
-
-  /**
-   * Expire stale reservations so replicas become assignable again.
-   * @return {Promise<void>}
-   * @private
-   */
-  async expireMoveReplicaAssignmentReservations() {
-    return this.moveReplicaAssignmentOwner
-      .expireMoveReplicaAssignmentReservations();
-  }
-
-  /**
-   * Start background sweeping for stranded MOVE_REPLICA reservations.
-   * @private
-   */
-  startMoveReplicaAssignmentSweep() {
-    if (!this.ownsMoveReplicaAssignmentLifecycle) {
-      return;
-    }
-    if (this.moveReplicaAssignmentSweepTimer ||
-        this.moveReplicaAssignmentSweepIntervalMs <= NUM.ZERO) {
-      return;
-    }
-
-    this.moveReplicaAssignmentSweepTimer = setInterval(() => {
-      void this.expireMoveReplicaAssignmentReservations().catch((error) => {
-        this.logger.warn(
-          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_SWEEP_FAILED,
-          {error: error.message},
-        );
-      });
-    }, this.moveReplicaAssignmentSweepIntervalMs);
-
-    if (typeof this.moveReplicaAssignmentSweepTimer.unref === TYPEOF.FUNCTION) {
-      this.moveReplicaAssignmentSweepTimer.unref();
-    }
-  }
-
-  /**
-   * Stop background sweeping for MOVE_REPLICA reservations.
-   * @private
-   */
-  stopMoveReplicaAssignmentSweep() {
-    if (!this.moveReplicaAssignmentSweepTimer) {
-      return;
-    }
-    clearInterval(this.moveReplicaAssignmentSweepTimer);
-    this.moveReplicaAssignmentSweepTimer = null;
-  }
-
-  /**
-   * Persist and cache one MOVE_REPLICA assignment reservation.
-   *
-   * OWNERSHIP BOUNDARY: See insertMoveReplicaHandoffOperation for the
-   * full boundary contract. This method creates MOVE_ASSIGNMENT rows
-   * owned by the bootstrap handoff domain.
-   *
-   * @param {string} targetNodeId
-   * @param {Object} assignment
-   * @return {Promise<Object>}
-   * @private
-   */
-  async reserveMoveReplicaAssignment(targetNodeId, assignment) {
-    return this.moveReplicaAssignmentOwner
-      .reserveMoveReplicaAssignment(targetNodeId, assignment);
-  }
-
-  /**
-   * Mark reservation row terminal and clear in-memory ownership lock.
-   * @param {string} assignmentId
-   * @param {string} status
-   * @param {string} workflowStep
-   * @param {string} errorMessage
-   * @return {Promise<void>}
-   * @private
-   */
-  async markMoveReplicaAssignmentReservationTerminal(
-    assignmentId,
-    status,
-    workflowStep,
-    errorMessage = null,
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .markMoveReplicaAssignmentReservationTerminal(
-        assignmentId,
-        status,
-        workflowStep,
-        errorMessage,
-      );
-  }
-
-  /**
-   * Reconcile one non-terminal reservation into its observed committed state
-   * once canonical ownership has already moved to the target and the source
-   * replica is gone locally.
-   * @param {Object} reservation
-   * @param {number} [now=Date.now()]
-   * @return {Promise<void>}
-   * @private
-   */
-  async reconcileMoveReplicaAssignmentReservationToCommitted(
-    reservation,
-    now = Date.now(),
-  ) {
-    return this.moveReplicaAssignmentOwner
-      .reconcileMoveReplicaAssignmentReservationToCommitted(
-        reservation,
-        now,
-      );
-  }
-
-  /**
-   * Augment a MessageGroupAssignment result with peer addresses
-   * needed for Raft communication during bootstrap.
-   * @param {Object} assignment - Base assignment from MessageGroupAssignment.
-   * @param {Array<Object>} messageGroups - Existing message groups.
-   * @return {Object} Assignment with peer addresses added.
-   * @private
-   */
-  augmentAssignmentWithPeerAddresses(assignment, messageGroups) {
-    return this.bootstrapJoinAdmissionOwner
-      .augmentAssignmentWithPeerAddresses(assignment, messageGroups);
-  }
-
-  /**
-   * Wait for partition leaders when live services are available.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForPartitionLeaders() {
-    return this.serviceLeaderReadinessOwner.waitForPartitionLeaders();
-  }
-
-  /**
-   * Get all message groups from system cache.
-   * Uses the system cache (fed by CDC) as the single source of truth.
-   * @return {Array<Object>} Message groups.
-   */
-  getMessageGroups() {
-    return this.bootstrapJoinAdmissionOwner.getMessageGroups();
-  }
-
-  /**
-   * Resolve bootstrap-owned system-table rows from the same authoritative
-   * source used when publishing bootstrap topology snapshots. This keeps
-   * assignment selection, peer-address derivation, and bootstrap snapshot
-   * publication on one canonical topology view.
-   * @param {string} tableName
-   * @return {Object[]}
-   * @private
-   */
-  getBootstrapAuthoritativeTableRows(tableName) {
-    return this.bootstrapTopologySnapshotOwner
-      .getBootstrapAuthoritativeTableRows(tableName);
-  }
-
-  /**
-   * Build complete system table snapshots for bootstrap response.
-   * Reads all system tables from system cache and returns complete snapshots.
-   *
-   * System Cache Seeding Architecture:
-   * - System cache is the single source of truth for cluster state
-   * - Bootstrap response includes complete snapshots of default cache-sync tables:
-   *   * nodes - All registered nodes with addresses and status
-   *   * partitions - All partitions with key ranges and replica counts
-   *   * services - All services (partition/message group replicas) with addresses and Raft roles
-   *   * tables - All user tables with schemas and policies
-   *   * message_groups - All message groups with replica counts
-   *   * replica_operations - Any pending replica operations
-   *   * indices, config, live_queries, contexts, code - additional system metadata
-   * - High-volume logs table is intentionally excluded from default snapshots
-   * - Joining nodes hydrate their cache from these snapshots
-   * - After hydration, joining nodes can immediately read and write to system tables
-   * - No bootstrap directories needed - system cache provides all routing information
-   *
-   * @return {Object} System table snapshots with arrays for each table.
-   */
-  buildSystemTableSnapshots() {
-    return this.bootstrapTopologySnapshotOwner
-      .buildSystemTableSnapshots();
-  }
-
-  /**
-   * Build the bootstrap topology snapshot envelope published to joiners.
-   * @param {Object} [options]
-   * @param {Object|null} [options.currentEpoch]
-   * @return {{systemTableSnapshots: Object, topologySnapshotMeta: Object}}
-   */
-  buildBootstrapTopologySnapshotEnvelope(options = {}) {
-    return this.bootstrapTopologySnapshotOwner
-      .buildBootstrapTopologySnapshotEnvelope(options);
-  }
-
-  /**
-   * Prefer direct local partition reads over cache snapshots when available.
-   * This keeps bootstrap snapshots authoritative even when cache propagation
-   * briefly lags committed partition state during a multi-node join burst.
-   * @param {string} tableName
-   * @param {Object[]} cacheRows
-   * @return {Object[]}
-   * @private
-   */
-  resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows = []) {
-    return this.bootstrapTopologySnapshotOwner
-      .resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows);
-  }
-
-  /**
-   * Read one system table directly from local partition replicas.
-   * @param {string} tableName
-   * @return {Object[][]}
-   * @private
-   */
-  queryLocalAuthoritativePartitionRowSets(tableName) {
-    return this.bootstrapTopologySnapshotOwner
-      .queryLocalAuthoritativePartitionRowSets(tableName);
-  }
-
-  /**
-   * Merge direct replica row sets by canonical primary key.
-   * @param {string} tableName
-   * @param {Object[][]} rowSets
-   * @return {Object[]}
-   * @private
-   */
-  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
-    return this.bootstrapTopologySnapshotOwner
-      .mergeAuthoritativeSystemTableRowSets(tableName, rowSets);
-  }
-
-  /**
-   * Prefer the freshest row when merging authoritative replica snapshots.
-   * @param {Object} candidate
-   * @param {Object} existing
-   * @return {boolean}
-   * @private
-   */
-  isAuthoritativeSnapshotRowNewer(candidate, existing) {
-    return this.bootstrapTopologySnapshotOwner
-      .isAuthoritativeSnapshotRowNewer(candidate, existing);
-  }
-
-  /**
-   * Build latency topology hints for joining node bootstrap.
-   * @param {string} nodeId - Joining node ID.
-   * @return {Object}
-   * @private
-   */
-  getLatencyTopologyHints(nodeId) {
-    return this.bootstrapTopologySnapshotOwner
-      .getLatencyTopologyHints(nodeId);
-  }
-
-  /**
-   * Get service groups that are missing a leader.
-   * @return {Object} Missing leader info by service type.
-   * @private
-   */
-  getMissingServiceLeaders() {
-    return this.serviceLeaderReadinessOwner.getMissingServiceLeaders();
-  }
-
-  /**
-   * Build partition ID sets for bootstrap leader-readiness checks.
-   * Required tables must have routable leaders before /bootstrap succeeds.
-   * @return {Object} Known/required partition ID sets.
-   * @private
-   */
-  getLeaderReadinessPartitionSets() {
-    return this.serviceLeaderReadinessOwner.getLeaderReadinessPartitionSets();
-  }
-
-  /**
-   * Build partition ID sets for one leader-readiness requirement set.
-   * Required tables must have routable leaders before the owning concern
-   * is considered fully ready.
-   * @param {Array<string>} requiredTablesList
-   * @return {Object} Known/required partition ID sets.
-   * @private
-   */
-  getLeaderReadinessPartitionSetsForTables(requiredTablesList = []) {
-    return this.serviceLeaderReadinessOwner
-      .getLeaderReadinessPartitionSetsForTables(requiredTablesList);
-  }
-
-  /**
-   * Keep missing-partition diagnostics focused on bootstrap-critical tables.
-   * Unknown partition IDs are preserved for safety.
-   * @param {Array<string>} partitionIds - Missing partition IDs.
-   * @param {Array<string>} [requiredTablesList]
-   * @return {Array<string>} Filtered missing IDs.
-   * @private
-   */
-  filterMissingRequiredPartitionIds(
-      partitionIds = [],
-      requiredTablesList,
-  ) {
-    return this.serviceLeaderReadinessOwner
-      .filterMissingRequiredPartitionIds(partitionIds, requiredTablesList);
-  }
-
-  /**
-   * Build cached leader metadata by service type and entity ID.
-   * @param {string} serviceType - Service type value.
-   * @param {string} idColumn - Column key for entity ID.
-   * @return {Map<string, Object>} Entity ID -> metadata flags.
-   * @private
-   */
-  getCachedLeaderMetadataByServiceType(serviceType, idColumn) {
-    return this.serviceLeaderReadinessOwner
-      .getCachedLeaderMetadataByServiceType(serviceType, idColumn);
-  }
-
-  /**
-   * Determine whether a live service instance is currently leader.
-   * @param {Object} service - Service instance.
-   * @return {boolean} True when the service is leader.
-   * @private
-   */
-  isLiveServiceLeader(service) {
-    return this.serviceLeaderReadinessOwner.isLiveServiceLeader(service);
-  }
-
-  /**
-   * Normalize leader readiness diagnostics for one required-table set.
-   * @param {Object} missing - Missing-leader diagnostics.
-   * @param {Array<string>} [requiredTablesList]
-   * @return {Object} Normalized diagnostics.
-   * @private
-   */
-  normalizeLeaderStatusForRequiredTables(
-      missing = {},
-      requiredTablesList,
-  ) {
-    return this.serviceLeaderReadinessOwner
-      .normalizeLeaderStatusForRequiredTables(missing, requiredTablesList);
-  }
-
-  /**
-   * Keep bootstrap gating focused on partition leader metadata.
-   * Message-group leader rows can lag during restart and move-replica
-   * recovery without preventing a node from receiving bootstrap state.
-   * @param {Object} missing - Normalized missing-leader diagnostics.
-   * @return {Object} Blocking subset for POST /bootstrap.
-   * @private
-   */
-  getBlockingLeaderStatusForReadiness(missing = {}) {
-    return this.serviceLeaderReadinessOwner
-      .getBlockingLeaderStatusForReadiness(missing);
-  }
-
-  /**
-   * Wait for all service raft groups to have leaders with complete routing info.
-   * This is critical for bootstrap - joining nodes need complete leader information
-   * (raft_role, node_id, address) to route writes correctly.
-   * @return {Promise<Object>} Leader readiness status.
-   * @private
-   */
-  async waitForServiceLeaders(options = {}) {
-    return this.serviceLeaderReadinessOwner.waitForServiceLeaders(options);
-  }
-
-  /**
-   * Count total missing leader information from getMissingServiceLeaders result.
-   * Includes leaders without addresses - these are useless for query routing.
-   * @param {Object} missing - Result from getMissingServiceLeaders.
-   * @return {number} Total count of missing leader info.
-   * @private
-   */
-  countMissingLeaderInfo(missing) {
-    return this.serviceLeaderReadinessOwner.countMissingLeaderInfo(missing);
-  }
-
-  /**
-   * Get system partition leaders for new node to query.
-   * Prefer live partition services when available to avoid races with cache updates.
-   * Cache fallback is strict: partitions.leader_node_id must map to an active
-   * partition service on that node.
-   * @return {Object} Partition leader addresses by table name.
-   */
-  getSystemPartitionLeaders() {
-    return this.serviceLeaderReadinessOwner.getSystemPartitionLeaders();
-  }
-
-  /**
-   * Get the list of ready node IDs from the system cache.
-   * Always includes the seed node since it's responding to the bootstrap request.
-   * Uses ONLY the system cache - no fallbacks.
-   * @return {string[]} Ready node IDs.
-   */
-  getReadyNodes(options = {}) {
-    return this.bootstrapClusterViewOwner
-      .getReadyNodes(options);
-  }
-
-  /**
-   * Get table policies from the system tables.
-   * Uses ONLY the system cache - no fallbacks.
-   * @return {Object} Table policies keyed by table name.
-   */
-  getTablePolicies() {
-    return this.bootstrapClusterViewOwner
-      .getTablePolicies();
-  }
-
-  /**
-   * Get the current assignment epoch from the seed node.
-   * @return {Object|null} Current epoch data or null if unavailable.
-   */
-  getCurrentEpoch() {
-    return this.bootstrapClusterViewOwner
-      .getCurrentEpoch();
-  }
-
-  /**
-   * Get cluster configuration for new node.
-   * @return {Object} Cluster configuration.
-   */
-  getClusterConfiguration() {
-    return this.bootstrapClusterViewOwner
-      .getClusterConfiguration();
-  }
-
-  /**
-   * Get current cluster state.
-   * @return {Object} Cluster state.
-   */
-  getClusterState() {
-    return this.bootstrapClusterViewOwner
-      .getClusterState();
-  }
-
-  /**
-   * Update node status - unsupported, status updates should go through CDC.
-   * @param {string} _nodeId - Node ID (unused).
-   * @param {string} _status - New status (unused).
-   */
-  updateNodeStatus(_nodeId, _status) {
-    this.logger.error(BOOTSTRAP_API_LOG_MSG.UPDATE_NODE_STATUS_UNSUPPORTED);
-    throw new Error(BOOTSTRAP_API_ERROR.UPDATE_NODE_STATUS_UNSUPPORTED);
-  }
-
-  /**
-   * Get the Fastify instance.
-   * @return {Object} Fastify instance.
-   */
-  getFastify() {
-    return this.fastify;
-  }
-
-  /**
-   * Get the ReplicaHandler instance.
-   * @return {Object|null} Replica handler or null.
-   */
-  getReplicaHandler() {
-    return this.replicaHandler;
-  }
-
-  /**
-   * Check if the API is initialized.
-   * @return {boolean} True if initialized.
-   */
-  isInitialized() {
-    return this.initialized;
-  }
-
-  /**
-   * Shutdown the API server.
-   * @return {Promise<void>}
-   */
-  async shutdown() {
-    this.stopMoveReplicaAssignmentSweep();
-    const wasInitialized = this.initialized === true;
-    const hadFastify = Boolean(this.fastify);
-    const serverListening = this.fastify?.server?.listening === true;
-
-    if (this.fastify) {
-      const server = this.fastify.server;
-      if (server && typeof server.closeAllConnections === TYPEOF.FUNCTION) {
-        server.closeAllConnections();
-      }
-      await this.fastify.close();
-      if (server && typeof server.close === TYPEOF.FUNCTION) {
-        await new Promise((resolve) => {
-          server.close((error) => {
-            if (error && error.code !== BOOTSTRAP_API_CLOSE_ERROR_CODE) {
-              this.logger.warn(BOOTSTRAP_API_LOG_MSG.SERVER_CLOSE_ERROR, {
-                error: error.message,
-              });
-            }
-            resolve();
-          });
-        });
-      }
-      if (server && typeof server.unref === TYPEOF.FUNCTION) {
-        server.unref();
-      }
-      this.fastify = null;
-    }
-
-    this.initialized = false;
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.SHUTDOWN, {
-      seedNodeId: this.seedNodeId,
-      wasInitialized,
-      hadFastify,
-      serverListening,
-    });
-  }
 }
+
+Object.assign(
+  BootstrapAPI.prototype,
+  createBootstrapApiRuntimeMethods({
+    bootstrapApiCloseErrorCode: BOOTSTRAP_API_CLOSE_ERROR_CODE,
+    bootstrapApiError: BOOTSTRAP_API_ERROR,
+    bootstrapApiLogMsg: BOOTSTRAP_API_LOG_MSG,
+    num: NUM,
+    tables: TABLES,
+    typeofToken: TYPEOF,
+  }),
+);
 
 export {BootstrapAPI, BootstrapStrategy};

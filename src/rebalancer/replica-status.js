@@ -80,6 +80,20 @@ const WORKFLOW_STEP_TO_STATUS = {
   [WORKFLOW_STEP.REMOVED]: ReplicaStatus.REMOVED,
 };
 
+const REPLICA_OPERATION_SEMANTIC_PHASE = Object.freeze({
+  UNKNOWN: 'unknown',
+  ACCEPTED: 'accepted',
+  TARGET_READY: 'target_ready',
+  SOURCE_RETIRING: 'source_retiring',
+  SETTLED: 'settled',
+  FAILED: 'failed',
+});
+
+const TERMINAL_REPLICA_OPERATION_SEMANTIC_PHASES = Object.freeze([
+  REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+  REPLICA_OPERATION_SEMANTIC_PHASE.FAILED,
+]);
+
 /**
  * Operation types for replica operations.
  *
@@ -285,6 +299,122 @@ function isTerminalStep(operationType, step) {
   return step === steps[steps.length - 1];
 }
 
+function normalizeWorkflowStepIdentifier(step) {
+  return typeof step === 'string' && step.length > 0 ?
+    step.toUpperCase() :
+    '';
+}
+
+function normalizeReplicaStatusIdentifier(status) {
+  return typeof status === 'string' && status.length > 0 ?
+    status.toLowerCase() :
+    '';
+}
+
+function resolveReplicaOperationSemanticPhase(
+  operationType,
+  workflowStep,
+  status = '',
+) {
+  const normalizedType =
+    typeof operationType === 'string' && operationType.length > 0 ?
+      operationType.toUpperCase() :
+      '';
+  const normalizedWorkflowStep = normalizeWorkflowStepIdentifier(workflowStep);
+  const normalizedStatus = normalizeReplicaStatusIdentifier(status);
+
+  if (normalizedWorkflowStep === WORKFLOW_STEP.FAILED ||
+      normalizedStatus === ReplicaStatus.FAILED) {
+    return REPLICA_OPERATION_SEMANTIC_PHASE.FAILED;
+  }
+
+  if (normalizedType === OperationType.ADD) {
+    if (normalizedWorkflowStep === WORKFLOW_STEP.ACTIVE ||
+        normalizedStatus === ReplicaStatus.ACTIVE) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED;
+    }
+    if (normalizedWorkflowStep === WORKFLOW_STEP.PENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.SENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.CREATING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.SYNCING ||
+        normalizedStatus === ReplicaStatus.PENDING ||
+        normalizedStatus === ReplicaStatus.CREATING ||
+        normalizedStatus === ReplicaStatus.SYNCING) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.ACCEPTED;
+    }
+  }
+
+  if (normalizedType === OperationType.REMOVE) {
+    if (normalizedWorkflowStep === WORKFLOW_STEP.REMOVED ||
+        normalizedStatus === ReplicaStatus.REMOVED) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED;
+    }
+    if (normalizedWorkflowStep === WORKFLOW_STEP.PENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.SENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.STOPPING ||
+        normalizedStatus === ReplicaStatus.PENDING ||
+        normalizedStatus === ReplicaStatus.REMOVING) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING;
+    }
+  }
+
+  if (normalizedType === OperationType.REPLACE) {
+    if (normalizedWorkflowStep === WORKFLOW_STEP.REMOVED ||
+        normalizedStatus === ReplicaStatus.REMOVED) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED;
+    }
+    if (normalizedWorkflowStep === WORKFLOW_STEP.STOPPING ||
+        normalizedStatus === ReplicaStatus.REMOVING) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING;
+    }
+    if (normalizedWorkflowStep === WORKFLOW_STEP.ACTIVE ||
+        normalizedStatus === ReplicaStatus.ACTIVE) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY;
+    }
+    if (normalizedWorkflowStep === WORKFLOW_STEP.PENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.SENDING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.CREATING ||
+        normalizedWorkflowStep === WORKFLOW_STEP.SYNCING ||
+        normalizedStatus === ReplicaStatus.PENDING ||
+        normalizedStatus === ReplicaStatus.CREATING ||
+        normalizedStatus === ReplicaStatus.SYNCING) {
+      return REPLICA_OPERATION_SEMANTIC_PHASE.ACCEPTED;
+    }
+  }
+
+  return REPLICA_OPERATION_SEMANTIC_PHASE.UNKNOWN;
+}
+
+function buildReplicaOperationSemanticWitnesses(
+  operationType,
+  workflowStep,
+  status = '',
+) {
+  const semanticPhase = resolveReplicaOperationSemanticPhase(
+    operationType,
+    workflowStep,
+    status,
+  );
+
+  return Object.freeze({
+    activationWitness:
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.TARGET_READY ||
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING ||
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+    sourceRetirementWitness:
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SOURCE_RETIRING ||
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+    settlementWitness:
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.SETTLED,
+    failureWitness:
+      semanticPhase === REPLICA_OPERATION_SEMANTIC_PHASE.FAILED,
+  });
+}
+
+function isTerminalReplicaOperationSemanticPhase(semanticPhase) {
+  return TERMINAL_REPLICA_OPERATION_SEMANTIC_PHASES.includes(semanticPhase);
+}
+
 /**
  * @typedef {Object} Operation
  * @property {string} operationId - Unique operation identifier (UUID).
@@ -422,6 +552,8 @@ export {
   TERMINAL_STATUS_SQL_CLAUSE,
   ADJUST_DIRECTION,
   WORKFLOW_STEP_TO_STATUS,
+  REPLICA_OPERATION_SEMANTIC_PHASE,
+  TERMINAL_REPLICA_OPERATION_SEMANTIC_PHASES,
   OperationType,
   OPERATION_METADATA_KEY,
   ADD_WORKFLOW_STEPS,
@@ -438,6 +570,9 @@ export {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   isCoordinatorOwnedOperationType,
   isReplaceRemoveDispatchPhase,
+  resolveReplicaOperationSemanticPhase,
+  buildReplicaOperationSemanticWitnesses,
+  isTerminalReplicaOperationSemanticPhase,
   getOperationMetadataValue,
   getOperationMetadataString,
   getOperationMetadataStringArray,

@@ -72,6 +72,120 @@ The point of this rule is the same as the rest of this document: one concern,
 one owner, one path. Planning must not be allowed to fragment into several
 parallel tracking systems any more than runtime logic is.
 
+### 0.1.1 Package Closure And Sprint Archiving
+
+Work-tracking closure is filename-first and must stay mechanically obvious.
+
+Mandatory rules:
+
+1. Close a completed package by renaming its file from `active-...` to
+   `done-...`. Do not create a second closure marker inside another tracker to
+   compensate for a stale filename.
+2. If a package is not being executed yet, rename it to `todo-...`; do not
+   leave dormant work in `active-...`.
+3. Active sprint documents live directly in `work/sprints/`.
+4. Close a sprint by renaming it to `done-...` and moving it to
+   `work/sprints/archived/`.
+5. `work/sprints/` should contain only the live `active-...` and `todo-...`
+   sprint files plus the `archived/` folder.
+6. When archiving a sprint or closing a package, update in-repo links in the
+   same change so the tracker remains navigable.
+7. Do not archive package files into a second package-status directory. Package
+   status is carried by the filename; sprint archival is the exception used to
+   keep the live sprint root small and readable.
+
+### 0.1.2 Package Closure Deep-Dive Review
+
+Every work package MUST end with a deep-dive review of the affected code area
+before the package is renamed to `done-...`.
+
+Affected area means:
+
+1. every production file touched by the package
+2. the direct owner collaborators of those files
+3. the decision, lifecycle, ingress, dissemination, or persistence boundaries
+   that those files participate in
+
+Mandatory rules:
+
+1. Before closing a package, read through the affected area as a whole, not
+   only the changed lines.
+2. Look explicitly for mistakes, irregularities, and architectural drift, not
+   only for the narrow package symptom that triggered the change.
+3. Audit the affected area against `.kiro/steering/doctrine.md` and this
+   document with special focus on:
+   - owner bypasses and shadow state
+   - duplicate logic or parallel paths
+   - fallback behavior and bag-of-`if` decision boundaries
+   - `null`/`undefined` domain-state contracts
+   - unowned resource lifetime or missing diagnostics
+   - mutations that cross row-field or lifecycle ownership boundaries
+4. If the deep dive finds a concrete mistake, irregularity, or doctrine/system
+   guideline violation inside the affected area, the package is not done until
+   that issue is fixed in the same work cycle.
+5. Do not leave known doctrine or system-guideline violations in the affected
+   area behind as "follow-up cleanup" while still closing the package.
+6. If the deep dive reveals a separate concern outside the affected area, open
+   a new idea or work package for that concern instead of silently widening the
+   current package.
+
+### 0.1.3 Residual Closure Inventory And Boundary Sequencing
+
+Every active package MUST make residual closure explicit so package completion
+cannot drift into “hot path fixed, tails later”.
+
+Mandatory rules:
+
+1. Every active package must carry an explicit residual-closure inventory in
+   the package file.
+2. That inventory must name, at minimum:
+   - the direct owner paths being changed
+   - the tail consumers and collaborator owners that must be cut over
+   - the status, diagnostics, harness, admin, or reporting surfaces that must
+     match the new contract
+   - the superseded paths, fallbacks, or vocabulary that must be deleted
+   - the required proof layers before closure
+3. A package may not be renamed to `done-...` while any in-scope residual item
+   remains open.
+4. “Known residual” is not an acceptable closure state for an in-scope package
+   item. Either fix it in the same package, or split it into a new package
+   before closure and update links immediately.
+5. Do not start a second active package on the same architectural boundary
+   while the first package still has unresolved in-scope residuals.
+6. If two packages must be worked in parallel on the same broad area, they
+   must have explicitly disjoint file and owner scope, or one umbrella package
+   must define the sequencing and completion contract for both.
+7. Package progress notes must distinguish clearly between:
+   - landed hot-path changes
+   - remaining residual closures
+   - proof already run
+   - proof still required
+
+### 0.1.4 Shared Boundary Contract Declaration
+
+When a package adds or reshapes a shared runtime boundary, the package must
+carry the boundary contract explicitly instead of leaving reviewers to infer it
+from code.
+
+Mandatory rules:
+
+1. The package must name:
+   - semantic owner
+   - canonical contract shape or vocabulary
+   - allowed consumers
+   - prohibited reinterpretations
+   - primary diagnostics and proof surfaces
+2. If the concern has several views, the package must state which view is:
+   - operational authority
+   - diagnostics-only observation
+   - owner-internal retained state
+3. If the change is durable rather than bug-local, update
+   `architecture/current-owner-maps.md` or the relevant architecture record in
+   the same work cycle.
+4. If part of the boundary is mechanically checkable, add one bounded static
+   guardrail or split that guardrail work into a linked follow-on before
+   closure.
+
 ## 0.2 Critical Generation Contract: Scalars And Decision Boundaries
 
 These rules are hard stops for generated code and hand-written code alike.
@@ -100,6 +214,43 @@ These rules are hard stops for generated code and hand-written code alike.
    are not.
 6. If a scalar or state has no clear owner, stop and define the owner first.
    Do not inline it “for now”.
+
+## 0.2.1 Shared Contract Shape And Boundary-Impedance Discipline
+
+When one concern keeps reappearing under different names, shapes, or helper
+options, treat that as a design bug, not as harmless flexibility.
+
+Mandatory rules:
+
+1. One runtime concern must have one canonical contract shape.
+   If several views exist, each must have a non-overlapping role such as:
+   - published operational authority
+   - observed diagnostics input
+   - owner-internal retained stabilization state
+2. Shared contract surfaces must declare:
+   - semantic owner
+   - canonical evidence inputs
+   - canonical state or outcome vocabulary
+   - allowed consumers
+   - forbidden reinterpretations
+3. Do not expose semantic mode through combinable boolean or tri-state option
+   bags.
+   If callers are choosing between policy variants, define one explicit named
+   mode set and make invalid combinations unrepresentable.
+4. Storage rows, transport observations, bootstrap inputs, cache internals,
+   and wire payloads are boundary evidence, not runtime contracts.
+   Normalize them once at ingress before they enter runtime logic.
+5. For shared identity or authority concerns such as node endpoint identity,
+   leader identity, and publishable control-plane authority, there must be one
+   canonical operational source.
+   Other sources may exist only as ingress-only, diagnostics-only, or
+   owner-internal evidence.
+6. Do not introduce a second cache, snapshot, field, or helper for the same
+   concern unless the role boundary is explicit and non-overlapping.
+7. If a work package adds or reshapes a shared runtime boundary, update
+   `architecture/current-owner-maps.md` or the relevant architecture record in
+   the same work cycle so the owner, vocabulary, consumers, and forbidden
+   reinterpretations are documented once.
 
 ## 0. Platform Model and Design Intent
 
@@ -163,12 +314,21 @@ It is FORBIDDEN to:
 - Introduce a "helper" or "utility" that reimplements logic from another module.
 - Create a "wrapper" that silently duplicates the behavior of the thing it wraps.
 - Add a second code path "just in case" or as an alternate path.
+- Introduce a second authority surface, cache, snapshot, or identifier for the
+  same runtime concern without an explicit role split and consumer contract.
+- Preserve semantic mode as several orthogonal booleans when one named mode
+  contract should exist.
 
 ### 1.3 Single-Path Execution
 
 There must be exactly ONE code path for any given operation. Specifically:
 
 - Any given runtime function or semantic concern MUST have one active code path
+  once policy has been normalized.
+- Callers must not assemble semantic behavior by toggling combinations of
+  booleans that route into overlapping owner behavior.
+- Boundary normalization happens once at ingress. Runtime logic must consume
+  the normalized state rather than reopening raw storage or transport shapes.
   at a time.
 - No "if new way fails, try old way" patterns.
 - No feature flags that keep two implementations alive simultaneously.
@@ -267,6 +427,54 @@ It is FORBIDDEN to:
   paths
 - Infer missing identity data from local convenience state when a canonical row
   owner exists
+
+### 1.4.5.1 Shared Control-Plane Snapshot Readers Must Not Repair On Read
+
+For shared control-plane truth surfaces such as startup, readiness, admin
+snapshot, service discovery, and harness convergence, one snapshot owner MUST
+own:
+
+- freshness or revision state
+- canonical observation state
+- reason codes
+- retry timing
+- repair scheduling and forced-repair routing
+
+Mandatory rules:
+
+1. Non-forced readers MUST NOT perform synchronous multi-table authoritative
+   repair on the hot path.
+2. When cache evidence is insufficient, readers MUST consume the owner outcome
+   directly as `fresh`, `stale-but-usable`, `deferred-refresh`, or `failed`
+   instead of reopening broad repair locally.
+3. Background or deferred repair MUST be scheduled through the owner-held
+   reconcile path rather than through reader-local retry loops.
+4. Forced repair, when a boundary explicitly allows it, MUST still route
+   through the same owner and bounded budget rather than bypassing it with a
+   second repair path.
+5. Reader-local caches MUST NOT memoize stale or deferred blocked answers as if
+   they were fresh observations.
+
+### 1.4.5.2 Critical Convergence Traffic Must Outrank Snapshot Repair
+
+When control-plane pressure forces a choice, critical convergence work must
+outrank diagnostics, observability reads, and broad repair.
+
+Critical convergence work includes:
+
+- `NODE_STATE_UPDATE`
+- membership publication
+- authoritative `replica_operations` visibility
+- other owner-defined control-plane progression writes
+
+It is FORBIDDEN to:
+
+- Let snapshot repair or observability reads consume the same effective lane as
+  critical convergence work
+- Treat mild pressure or degrade signals as permission to collapse critical
+  visibility into cache-only emptiness
+- Reopen broad repair from readers on the same stressed path needed to finish
+  convergence
 
 ### 1.4.6 Canonical Owner Rows Must Outrank Read Models
 

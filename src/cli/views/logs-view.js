@@ -917,6 +917,69 @@ export class LogsView extends BaseView {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  resolveSortValue(log) {
+    return this.sortColumn === 'timestamp' ?
+      this.getLogTimestampMs(log) :
+      log?.[this.sortColumn];
+  }
+
+  compareNullishSortValues(aVal, bVal) {
+    const aMissing = aVal === null || aVal === undefined;
+    const bMissing = bVal === null || bVal === undefined;
+    if (aMissing && bMissing) {
+      return 0;
+    }
+    if (aMissing) {
+      return 1;
+    }
+    if (bMissing) {
+      return -1;
+    }
+    return null;
+  }
+
+  compareResolvedSortValues(aVal, bVal) {
+    if (typeof aVal === 'number' && typeof bVal === 'number') {
+      return aVal - bVal;
+    }
+    return String(aVal).localeCompare(String(bVal));
+  }
+
+  compareTimestampTieBreakers(a, b) {
+    const aCreatedAt = this.parseTimestamp(a?.created_at);
+    const bCreatedAt = this.parseTimestamp(b?.created_at);
+    if (aCreatedAt !== null && bCreatedAt !== null) {
+      const timestampCompare = aCreatedAt - bCreatedAt;
+      if (timestampCompare !== 0) {
+        return timestampCompare;
+      }
+    } else if (aCreatedAt !== null) {
+      return 1;
+    } else if (bCreatedAt !== null) {
+      return -1;
+    }
+
+    const aId = String(a?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
+    const bId = String(b?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
+    return aId.localeCompare(bId);
+  }
+
+  compareRowsForCurrentSort(a, b) {
+    const aVal = this.resolveSortValue(a);
+    const bVal = this.resolveSortValue(b);
+    const nullishComparison = this.compareNullishSortValues(aVal, bVal);
+    if (nullishComparison !== null) {
+      return nullishComparison;
+    }
+
+    const valueComparison = this.compareResolvedSortValues(aVal, bVal);
+    if (valueComparison !== 0 || this.sortColumn !== 'timestamp') {
+      return valueComparison;
+    }
+
+    return this.compareTimestampTieBreakers(a, b);
+  }
+
   /**
    * Apply sort to data
    * Requirements: 29.12
@@ -929,55 +992,8 @@ export class LogsView extends BaseView {
     }
 
     return [...data].sort((a, b) => {
-      let aVal = a[this.sortColumn];
-      let bVal = b[this.sortColumn];
-
-      // Special handling for timestamp sorting
-      if (this.sortColumn === 'timestamp') {
-        aVal = this.getLogTimestampMs(a);
-        bVal = this.getLogTimestampMs(b);
-      }
-
-      // Handle null/undefined
-      if ((aVal === null || aVal === undefined) &&
-        (bVal === null || bVal === undefined)) {
-        return 0;
-      }
-      if (aVal === null || aVal === undefined) {
-        return this.sortDirection === 'asc' ? 1 : -1;
-      }
-      if (bVal === null || bVal === undefined) {
-        return this.sortDirection === 'asc' ? -1 : 1;
-      }
-
-      // Compare values
-      let cmp;
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        cmp = aVal - bVal;
-      } else {
-        cmp = String(aVal).localeCompare(String(bVal));
-      }
-
-      // Deterministic tie-breakers for dense same-millisecond log bursts.
-      if (cmp === 0 && this.sortColumn === 'timestamp') {
-        const aCreatedAt = this.parseTimestamp(a?.created_at);
-        const bCreatedAt = this.parseTimestamp(b?.created_at);
-
-        if (aCreatedAt !== null && bCreatedAt !== null) {
-          cmp = aCreatedAt - bCreatedAt;
-        } else if (aCreatedAt !== null) {
-          cmp = 1;
-        } else if (bCreatedAt !== null) {
-          cmp = -1;
-        }
-      }
-      if (cmp === 0 && this.sortColumn === 'timestamp') {
-        const aId = String(a?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
-        const bId = String(b?.[LOGS_SORT_FALLBACK_ID_FIELD] || '');
-        cmp = aId.localeCompare(bId);
-      }
-
-      return this.sortDirection === 'asc' ? cmp : -cmp;
+      const comparison = this.compareRowsForCurrentSort(a, b);
+      return this.sortDirection === 'asc' ? comparison : -comparison;
     });
   }
 

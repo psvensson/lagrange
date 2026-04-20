@@ -5,6 +5,26 @@ import {
   attachSqlRuntimeToStartupOwner,
 } from '../../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
 
+const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
+  partitions: Object.freeze([
+    Object.freeze({
+      partition_id: 'sql_transactions-p1',
+      table_name: 'sql_transactions',
+      leader_node_id: 'seed-node',
+    }),
+  ]),
+  services: Object.freeze([
+    Object.freeze({
+      service_id: 'sql_transactions-p1-r1',
+      partition_id: 'sql_transactions-p1',
+      service_type: 'partition',
+      node_id: 'seed-node',
+      status: 'active',
+      address: 'seed-node/partition/sql_transactions-p1-r1',
+    }),
+  ]),
+});
+
 describe('startup-sql-runtime-handoff', () => {
   it('upgrades the canonical startup owner CDC path and re-arms deferred recovery after runtime handoff',
     () => {
@@ -118,5 +138,72 @@ describe('startup-sql-runtime-handoff', () => {
       assert.strictEqual(recovered, 0);
       assert.strictEqual(owner.sqlQueryEngine, sqlQueryEngine);
       assert.strictEqual(cdcIntegrationService.sqlQueryEngine, sqlQueryEngine);
+    });
+
+  it('seeds bootstrap leader routing bridges onto the final runtime engine during handoff',
+    () => {
+      const bootstrapTopologySnapshotOwner = {
+        ownerId: 'bootstrap-topology-snapshot-owner',
+      };
+      let seededSnapshots = null;
+      let attachedOwner = null;
+      const sqlQueryEngine = {
+        queryExecutor: {
+          setBootstrapTopologySnapshotOwner(owner) {
+            attachedOwner = owner;
+          },
+        },
+        seedBootstrapRoutingOverlayFromSnapshots(systemTableSnapshots) {
+          seededSnapshots = systemTableSnapshots;
+        },
+      };
+      const owner = {
+        bootstrapTopologySnapshotOwner,
+        bootstrapResponse: {
+          systemTableSnapshots: JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS,
+        },
+      };
+
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine,
+        systemTableCache: null,
+      });
+
+      assert.strictEqual(owner.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(attachedOwner, bootstrapTopologySnapshotOwner);
+      assert.strictEqual(
+        seededSnapshots,
+        JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS,
+      );
+    });
+
+  it('attaches bootstrap topology owner from the owner getter when no direct property exists',
+    () => {
+      const bootstrapTopologySnapshotOwner = {
+        ownerId: 'bootstrap-topology-snapshot-owner-via-getter',
+      };
+      let attachedOwner = null;
+      const sqlQueryEngine = {
+        queryExecutor: {
+          setBootstrapTopologySnapshotOwner(owner) {
+            attachedOwner = owner;
+          },
+        },
+      };
+      const owner = {
+        getBootstrapTopologySnapshotOwner() {
+          return bootstrapTopologySnapshotOwner;
+        },
+      };
+
+      attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine,
+        systemTableCache: null,
+      });
+
+      assert.strictEqual(owner.sqlQueryEngine, sqlQueryEngine);
+      assert.strictEqual(attachedOwner, bootstrapTopologySnapshotOwner);
     });
 });
