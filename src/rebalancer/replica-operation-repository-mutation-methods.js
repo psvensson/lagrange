@@ -9,13 +9,16 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
     NUM,
     OPERATION_PERSIST_RETRY_DELAY_MS,
     OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+    OPERATION_MUTATION_SESSION_RETRY_DECISION,
     PARTITION_SERVICE_ERROR_MSG,
     PRESSURE_WORK_CLASS,
+    QUERY_ERROR_MSG,
     READ_MODEL_DIVERGENCE_TYPE,
     REBALANCE_COORDINATOR_EVENT,
     REBALANCE_COORDINATOR_LOG_MSG,
     REBALANCER_SUBSYSTEM,
     REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE,
+    REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
     REPLICA_OPERATION_OWNER_NAME,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     REPLICA_OPERATION_TRANSITION_LANE,
@@ -33,9 +36,12 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
     getRemainingBudgetMs,
+    hasControlPlaneMutationRoutingGapFailureSignature,
     isPriorityControlPlanePartition,
     isRetryableControlPlaneError,
     isRetryableWorkflowParticipantLookupErrorMessage,
+    ROUTER_ERROR_MSG,
+    TRANSPORT_ERROR_MSG,
     uuidv4,
   } = options;
 
@@ -101,7 +107,18 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
             this.syncIncompleteOperationObservation(operation);
             return true;
           }
-          await this.confirmReplicaOperationPersistence(operation);
+          this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+          let visibility = null;
+          try {
+            visibility = await this.confirmReplicaOperationPersistence(operation);
+          } finally {
+            if (
+              visibility?.confirmationState !==
+              REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
+            ) {
+              this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+            }
+          }
           this.syncIncompleteOperationObservation(operation);
           const changeCount = this.extractMutationChangeCount(result);
           return changeCount === null ? true : changeCount > NUM.ZERO;
@@ -193,10 +210,16 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         return true;
       }
       this.recordOwnerPersistedTransitionVisibilityWitness(operation);
+      let visibility = null;
       try {
-        await this.confirmReplicaOperationPersistence(operation);
+        visibility = await this.confirmReplicaOperationPersistence(operation);
       } finally {
-        this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+        if (
+          visibility?.confirmationState !==
+          REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.DEFERRED
+        ) {
+          this.clearOwnerPersistedTransitionVisibilityWitness(operation.operationId);
+        }
       }
       this.syncIncompleteOperationObservation(operation);
       return true;
@@ -511,8 +534,7 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
     async executeReplicaOperationGatewayMutationWithRetry(mutation, options = {}, fallback = {}) {
       const startedAt = Date.now();
       let retryAttempt = NUM.ZERO;
-      const shouldRetryDeferredCanonicalUpdate =
-      mutation?.operation === CONTROL_PLANE_MUTATION_OPERATION.UPDATE &&
+      const shouldRetryDeferredCanonicalMutation =
       this.canUseReplicaOperationMutationIngress(mutation?.operation);
       while (true) {
         const queryOptions = this.buildOperationMutationQueryOptions(options, retryAttempt);
@@ -533,7 +555,7 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         }
         if (
           this.shouldShortCircuitDeferredMutationRetry(result) &&
-        !shouldRetryDeferredCanonicalUpdate
+        !shouldRetryDeferredCanonicalMutation
         ) {
           return result;
         }
@@ -759,19 +781,87 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       );
     }
     /**
-   * Rotate repository-generated retry sessions after partition contention.
-   * Explicit transition-owned sessions stay stable so the enclosing atomic
-   * boundary can decide when to rotate them.
+   * @param {object|string} errorResult
+   * @param {string} errorMessage
+   * @return {boolean}
+   * @private
+   */
+    hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage) {
+      return (
+        (Array.isArray(errorResult?.participantFailures) &&
+        errorResult.participantFailures.length > NUM.ZERO) ||
+      (errorResult?.firstFailedParticipant &&
+        typeof errorResult.firstFailedParticipant === REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) ||
+      errorMessage.includes(QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE)
+      );
+    }
+    /**
+   * Route-shaped retry failures should rotate repository-owned sessions so the
+   * next attempt can re-resolve leader/service routing instead of inheriting a
+   * stale write affinity from the first failed attempt.
+   * @param {object|string} errorResult
+   * @return {boolean}
+   * @private
+   */
+    isOperationMutationRouteRepairCandidate(errorResult) {
+      if (!this.isRetryableOperationPersistError(errorResult)) {
+        return false;
+      }
+      const errorMessage = this.getOperationPersistErrorMessage(errorResult);
+      if (typeof errorMessage !== TYPEOF.STRING || errorMessage.length <= NUM.ZERO) {
+        return hasControlPlaneMutationRoutingGapFailureSignature(errorResult);
+      }
+      return (
+        hasControlPlaneMutationRoutingGapFailureSignature(errorResult) ||
+      errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
+      errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
+      RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS.some((fragment) =>
+        errorMessage.includes(fragment),
+      ) ||
+      errorMessage.includes(TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT) ||
+      errorMessage.includes(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT) ||
+      isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
+      this.hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage)
+      );
+    }
+    /**
+   * @param {object|string} errorResult
+   * @param {object} [options]
+   * @return {{state: string}}
+   * @private
+   */
+    resolveOperationMutationSessionRetryDecision(errorResult, options = {}) {
+      if (typeof options?.sessionId === TYPEOF.STRING && options.sessionId.length > NUM.ZERO) {
+        return {
+          state: OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
+        };
+      }
+      if (
+        this.isOperationMutationPartitionContention(errorResult) ||
+      this.isOperationMutationRouteRepairCandidate(errorResult)
+      ) {
+        return {
+          state: OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION,
+        };
+      }
+      return {
+        state: OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
+      };
+    }
+    /**
+   * Rotate repository-generated retry sessions after route-shaped or
+   * transaction-contention failures. Explicit transition-owned sessions stay
+   * stable so the enclosing atomic boundary can decide when to rotate them.
    * @param {object|string} errorResult
    * @param {object} [options]
    * @return {boolean}
    * @private
    */
     shouldRotateOperationMutationSessionOnRetry(errorResult, options = {}) {
-      if (typeof options?.sessionId === TYPEOF.STRING && options.sessionId.length > NUM.ZERO) {
-        return false;
-      }
-      return this.isOperationMutationPartitionContention(errorResult);
+      return (
+        this.resolveOperationMutationSessionRetryDecision(errorResult, options).state ===
+      OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION
+      );
     }
     /**
    * Resolve the next retry delay for one failed replica_operations mutation.
@@ -820,12 +910,37 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
       return Math.min(localRemainingMs, budgetRemainingMs);
     }
     /**
+   * Clamp one replica_operations mutation query timeout to the canonical owner
+   * retry window and any enclosing timeout budget.
+   * @param {Object|null} timeoutBudget
+   * @return {number}
+   * @private
+   */
+    resolveOperationMutationQueryTimeoutMs(timeoutBudget = null) {
+      if (!timeoutBudget || typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT) {
+        return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
+      }
+      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
+      if (budgetRemainingMs <= NUM.ZERO) {
+        return NUM.ONE;
+      }
+      return Math.max(
+        NUM.ONE,
+        Math.min(REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS, budgetRemainingMs),
+      );
+    }
+    /**
    * Build query options for an operation mutation.
    * @param {object} [options]
    * @param {number} [retryAttempt=0]
    * @return {object}
    */
     buildOperationMutationQueryOptions(options = {}, retryAttempt = NUM.ZERO) {
+      const timeoutBudget =
+      options.timeoutBudget &&
+      typeof options.timeoutBudget === REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT ?
+        options.timeoutBudget :
+        undefined;
       const ownerId =
       typeof options.ownerId === 'string' && options.ownerId.length > NUM.ZERO ?
         options.ownerId :
@@ -836,12 +951,9 @@ function assignReplicaOperationRepositoryMutationMethods(ReplicaOperationReposit
         this.resolveOperationMutationSessionId(options, retryAttempt);
       return {
         ...CONTROL_PLANE_QUERY_OPTIONS,
+        timeoutMs: this.resolveOperationMutationQueryTimeoutMs(timeoutBudget || null),
         skipCacheWait: true,
-        timeoutBudget:
-        options.timeoutBudget &&
-        typeof options.timeoutBudget === REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT ?
-          options.timeoutBudget :
-          undefined,
+        timeoutBudget,
         ...(typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ? {sessionId} : {}),
         disableSystemWriteSession: options.disableSystemWriteSession === true,
         deliveryPriority: REPLICA_OPERATION_REPOSITORY_LITERAL.CRITICAL,

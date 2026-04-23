@@ -103,6 +103,9 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX =
+  " operation visibility is deferred for safe removal";
+
 class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
   buildPriorityRecoveryAssessmentContextForOperation(
     operation,
@@ -121,22 +124,30 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT
         ? planningSnapshot.priorityPartitionSummary
         : null;
+    const decisionSnapshot =
+      this.buildPriorityRecoveryDecisionSnapshotForOperations(
+        operation.partitionId || operation.entityId || "",
+        [operation],
+        planningSnapshot,
+      );
     const effectiveEligibleNodeIds = normalizeNodeIdList(
-      resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
+      decisionSnapshot?.admission?.effectiveEligibleNodeIds ||
+        resolvePriorityRecoveryActiveNodeCohort(planningSnapshot).activeNodeIds,
     );
-    const assessment = buildPriorityRecoveryOperationAssessment({
-      operation,
-      priorityPartitionSummary,
-      effectiveEligibleNodeIds,
-    });
-    const completion = buildPriorityRecoveryCompletion({
-      assessment,
-      priorityRecoveryActive: hasPriorityRecoverySpreadGap(
-        priorityPartitionSummary,
-      ),
-    });
+    const completion =
+      decisionSnapshot?.completion ||
+      buildPriorityRecoveryCompletion({
+        assessment: buildPriorityRecoveryOperationAssessment({
+          operation,
+          priorityPartitionSummary,
+          effectiveEligibleNodeIds,
+        }),
+        priorityRecoveryActive: hasPriorityRecoverySpreadGap(
+          priorityPartitionSummary,
+        ),
+      });
     return Object.freeze({
-      assessment,
+      decisionSnapshot,
       completion,
       effectiveEligibleNodeIds: Object.freeze([...effectiveEligibleNodeIds]),
       planningSnapshot,
@@ -479,6 +490,31 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return this.buildDeferredRemoveSafetyEvaluationForOperation(
         operation,
         supersededTargetError,
+      );
+    }
+    if (
+      priorityRecoveryCompletion?.state ===
+      PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED
+    ) {
+      const replaceRemovePhase = this.repository.isReplaceRemovePhase(
+        operation,
+      );
+      const deferReason = await this.resolveRemoveSafetyDeferredReason(
+        operation,
+        replaceRemovePhase,
+      );
+      const deferredVisibilityError =
+        OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_CONTROL_DASH_PLANE_PARTITION +
+        operation.partitionId +
+        PRIORITY_OPERATION_VISIBILITY_DEFERRED_SAFE_REMOVAL_SUFFIX;
+      if (!deferReason) {
+        return this.buildFailedRemoveSafetyEvaluation(
+          deferredVisibilityError,
+        );
+      }
+      return this.buildDeferredRemoveSafetyEvaluation(
+        deferredVisibilityError,
+        deferReason,
       );
     }
     const priorityPartitionSummary =
@@ -901,6 +937,21 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
       return;
     }
     const operationType = sourceOperation.type || targetOperation.type;
+    const retainedStepsHistory = Array.isArray(targetOperation.stepsHistory)
+      ? targetOperation.stepsHistory
+      : [];
+    const observedStepsHistory = Array.isArray(sourceOperation.stepsHistory)
+      ? sourceOperation.stepsHistory
+      : [];
+    const adoptedStepsHistory =
+      observedStepsHistory.length > NUM.ZERO ?
+        observedStepsHistory :
+        retainedStepsHistory;
+    const clonedStepsHistory = adoptedStepsHistory.map((entry) => {
+      return entry && typeof entry === TYPEOF.OBJECT ?
+        {...entry} :
+        entry;
+    });
     if (operationType === OperationType.REPLACE) {
       const retainedSourceReplicaId =
         this.repository.getReplaceSourceReplicaId(targetOperation) ||
@@ -943,6 +994,28 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
         canonicalSourceReplicaId.length > NUM.ZERO
       ) {
         targetOperation.sourceReplicaId = canonicalSourceReplicaId;
+        const hasObservedSourceReplicaMetadata = clonedStepsHistory.some(
+          (entry) => {
+            return (
+              entry &&
+              typeof entry === TYPEOF.OBJECT &&
+              entry[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] ===
+                canonicalSourceReplicaId
+            );
+          },
+        );
+        if (
+          !hasObservedSourceReplicaMetadata &&
+          clonedStepsHistory.length > NUM.ZERO &&
+          clonedStepsHistory[NUM.ZERO] &&
+          typeof clonedStepsHistory[NUM.ZERO] === TYPEOF.OBJECT
+        ) {
+          clonedStepsHistory[NUM.ZERO] = {
+            ...clonedStepsHistory[NUM.ZERO],
+            [OPERATION_METADATA_KEY.SOURCE_REPLICA_ID]:
+              canonicalSourceReplicaId,
+          };
+        }
       }
     } else {
       targetOperation.replicaId = sourceOperation.replicaId;
@@ -953,9 +1026,7 @@ class OperationWorkflowOwnerSegment6 extends OperationWorkflowOwnerSegment5 {
     targetOperation.updatedAt = sourceOperation.updatedAt;
     targetOperation.completedAt = sourceOperation.completedAt;
     targetOperation.errorMessage = sourceOperation.errorMessage;
-    targetOperation.stepsHistory = Array.isArray(sourceOperation.stepsHistory)
-      ? [...sourceOperation.stepsHistory]
-      : [];
+    targetOperation.stepsHistory = clonedStepsHistory;
   }
 
   /**

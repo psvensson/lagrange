@@ -2,14 +2,14 @@
 
 ## Status
 
-Active on 2026-04-19.
+Closed on 2026-04-20.
 
 Focused proof is now green. Readiness planning answers retain and merge the
 shared `publicationRecoveryGate`, readiness evidence preserves typed local
 query-transport diagnostics, bootstrap readiness consumes gate-owned ACK
 fields, and rebalancer priority blockers use the shared gate snapshot instead
-of local spread-gap reinterpretation. Named harness evidence remains the final
-closure gate.
+of local spread-gap reinterpretation. Sprint-level scenario confirmation
+remains downstream and is not a package-local closure gate.
 
 ## Why
 
@@ -50,7 +50,8 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 
 - [x] Tail consumers of readiness/publication/recovery reuse shared contracts.
 - [x] Superseded local branch piles are deleted.
-- [ ] Focused proof plus named harness evidence confirm the cutover.
+- [x] Focused proof confirms the cutover and package-local closure no longer
+      waits on named harness evidence.
   Focused proof is green with:
   `npm test -- test/control-plane/control-plane-readiness-service.test.js test/bootstrap/bootstrap-api.test.js test/bootstrap/bootstrap-readiness-ladder.test.js test/rebalancer/unified-rebalancer.test.js`.
-  Named harness evidence has not been rerun yet in this package.
+  Named harness confirmation is now owned by the sprint-level scenario pass.

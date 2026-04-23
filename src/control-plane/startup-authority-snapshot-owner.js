@@ -33,6 +33,16 @@ const STARTUP_AUTHORITY_PUBLICATION_STATE = Object.freeze({
   AUTHORITATIVE: "authoritative",
   ESTABLISHING: "establishing",
 });
+export const STARTUP_AUTHORITY_ADMISSION_STATE = Object.freeze({
+  ADMITTED: "admitted",
+  BLOCKED: "blocked",
+  UNAVAILABLE: "unavailable",
+});
+const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = new Set([
+  PUBLICATION_RECOVERY_GATE_STATE.PUBLICATION_PENDING,
+  PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING,
+  PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING,
+]);
 
 function normalizeCanonicalStartupNodeIds(values = []) {
   return Object.freeze(
@@ -43,6 +53,49 @@ function normalizeCanonicalStartupNodeIds(values = []) {
         ),
     )].sort(),
   );
+}
+
+function hasKnownStartupAuthorityString(value) {
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO;
+}
+
+function hasStartupAuthorityTargetParticipationEvidence(targetParticipation) {
+  return targetParticipation && typeof targetParticipation === TYPEOF.OBJECT;
+}
+
+function hasStartupAuthorityPriorityPartitionEvidence(priorityPartitionSummary) {
+  return priorityPartitionSummary &&
+    typeof priorityPartitionSummary === TYPEOF.OBJECT;
+}
+
+export function hasTransitionalStartupAuthorityEvidence(options = {}) {
+  const publicationRecoveryGate =
+    options.publicationRecoveryGate &&
+      typeof options.publicationRecoveryGate === TYPEOF.OBJECT ?
+      options.publicationRecoveryGate :
+      null;
+  const canonicalStartupNodeIds = Array.isArray(options.canonicalStartupNodeIds) ?
+    options.canonicalStartupNodeIds :
+    [];
+  if (!publicationRecoveryGate || canonicalStartupNodeIds.length === NUM.ZERO) {
+    return false;
+  }
+  const activeGate =
+    publicationRecoveryGate.active === true ||
+    STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE.has(
+      publicationRecoveryGate.state,
+    );
+  if (!activeGate) {
+    return false;
+  }
+  return hasKnownStartupAuthorityString(options.publicationStatus) ||
+    hasStartupAuthorityPriorityPartitionEvidence(
+      options.priorityPartitionSummary,
+    ) ||
+    hasKnownStartupAuthorityString(options.recoveryProtocolState) ||
+    hasStartupAuthorityTargetParticipationEvidence(options.targetParticipation) ||
+    (Array.isArray(publicationRecoveryGate.reasonCodes) &&
+      publicationRecoveryGate.reasonCodes.length > NUM.ZERO);
 }
 
 export function buildStartupAuthorityFailureDescriptor(failureReason) {
@@ -138,6 +191,39 @@ export function buildStartupAuthorityTargetParticipationDescriptor(
       });
 }
 
+export function buildStartupAuthorityAdmissionDescriptor(details = {}) {
+  const state =
+    typeof details.admissionState === TYPEOF.STRING &&
+    details.admissionState.length > NUM.ZERO ?
+      details.admissionState :
+      STARTUP_AUTHORITY_ADMISSION_STATE.UNAVAILABLE;
+  const reasonCodes = Object.freeze(
+    Array.isArray(details.admissionReasonCodes) ?
+      [...new Set(details.admissionReasonCodes)] :
+      [],
+  );
+  const clusterIncarnationFence =
+    details.clusterIncarnationFence &&
+      typeof details.clusterIncarnationFence === TYPEOF.OBJECT ?
+      Object.freeze({
+        ...details.clusterIncarnationFence,
+        ...(Array.isArray(details.clusterIncarnationFence.reasonCodes) ?
+          {
+            reasonCodes: Object.freeze([
+              ...details.clusterIncarnationFence.reasonCodes,
+            ]),
+          } :
+          {}),
+      }) :
+      null;
+  return Object.freeze({
+    state,
+    admitted: state === STARTUP_AUTHORITY_ADMISSION_STATE.ADMITTED,
+    reasonCodes,
+    clusterIncarnationFence,
+  });
+}
+
 export function buildStartupAuthoritySnapshotContract(options = {}) {
   const publication = buildStartupAuthorityPublicationDescriptor({
     publicationEpoch: options.publicationEpoch,
@@ -156,6 +242,11 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
     buildStartupAuthorityTargetParticipationDescriptor(
       options.targetParticipation,
     );
+  const admission = buildStartupAuthorityAdmissionDescriptor({
+    admissionState: options.admissionState,
+    admissionReasonCodes: options.admissionReasonCodes,
+    clusterIncarnationFence: options.clusterIncarnationFence,
+  });
   const failure = buildStartupAuthorityFailureDescriptor(
     options.failureReason,
   );
@@ -173,6 +264,7 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
     priorityPartition,
     recoveryProtocol,
     targetParticipationDetail,
+    admission,
     priorityRecoveryReasonCodes: Object.freeze(
       Array.isArray(options.priorityRecoveryReasonCodes) ?
         [...options.priorityRecoveryReasonCodes] :
@@ -209,6 +301,18 @@ export function buildStartupAuthoritySnapshotContract(options = {}) {
         targetParticipation: targetParticipationDetail.participation,
       } :
       {}),
+    ...(admission.state !== STARTUP_AUTHORITY_ADMISSION_STATE.UNAVAILABLE ?
+      {
+        admissionState: admission.state,
+        admissionReasonCodes: admission.reasonCodes,
+        ...(admission.clusterIncarnationFence &&
+          typeof admission.clusterIncarnationFence === TYPEOF.OBJECT ?
+          {
+            clusterIncarnationFence: admission.clusterIncarnationFence,
+          } :
+          {}),
+      } :
+      {}),
     ...(failure.state === AUTHORITY_DESCRIPTOR_STATE.PRESENT ?
       {
         failureReason: failure.reason,
@@ -226,6 +330,7 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
     priorityPartition: startupAuthority.priorityPartition,
     recoveryProtocol: startupAuthority.recoveryProtocol,
     targetParticipationDetail: startupAuthority.targetParticipationDetail,
+    admission: startupAuthority.admission,
     priorityRecoveryReasonCodes: Object.freeze(
       Array.isArray(reasonCodes) ? [...reasonCodes] : [],
     ),
@@ -234,6 +339,12 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
     failure: startupAuthority.failure,
     publicationObservationState:
       startupAuthority.publication.observationState,
+    ...(startupAuthority.publicationRecoveryGate &&
+      typeof startupAuthority.publicationRecoveryGate === TYPEOF.OBJECT ?
+      {
+        publicationRecoveryGate: startupAuthority.publicationRecoveryGate,
+      } :
+      {}),
     ...(startupAuthority.publication.epoch.state ===
       AUTHORITY_DESCRIPTOR_STATE.KNOWN ?
       {
@@ -264,6 +375,21 @@ export function buildPriorityRecoveryHealthDetailsFromStartupAuthority(
       {
         targetParticipation:
           startupAuthority.targetParticipationDetail.participation,
+      } :
+      {}),
+    ...(startupAuthority.admission.state !==
+      STARTUP_AUTHORITY_ADMISSION_STATE.UNAVAILABLE ?
+      {
+        admissionState: startupAuthority.admission.state,
+        admissionReasonCodes: startupAuthority.admission.reasonCodes,
+        ...(startupAuthority.admission.clusterIncarnationFence &&
+          typeof startupAuthority.admission.clusterIncarnationFence ===
+            TYPEOF.OBJECT ?
+          {
+            clusterIncarnationFence:
+              startupAuthority.admission.clusterIncarnationFence,
+          } :
+          {}),
       } :
       {}),
     ...(startupAuthority.failure.state === AUTHORITY_DESCRIPTOR_STATE.PRESENT ?
@@ -350,6 +476,64 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     [];
   const publicationObservationState =
     publicationRecoveryGate.publicationObservationState;
+  const targetParticipation =
+    planningSnapshot.targetParticipation &&
+    typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
+      planningSnapshot.targetParticipation :
+      null;
+  const admissionState =
+    typeof planningSnapshot.admissionState === TYPEOF.STRING ?
+      planningSnapshot.admissionState :
+      undefined;
+  const admissionReasonCodes = Array.isArray(
+    planningSnapshot.admissionReasonCodes,
+  ) ?
+    planningSnapshot.admissionReasonCodes :
+    [];
+  const clusterIncarnationFence =
+    planningSnapshot.clusterIncarnationFence &&
+      typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+      planningSnapshot.clusterIncarnationFence :
+      null;
+  const targetParticipationReasons = Array.isArray(targetParticipation?.reasons) ?
+    [...targetParticipation.reasons] :
+    [];
+  const priorityRecoveryReasonCodes = [...new Set([
+    ...publicationRecoveryGate.reasonCodes,
+    ...targetParticipationReasons,
+  ])];
+  const explicitAdmissionBlocked =
+    admissionState === STARTUP_AUTHORITY_ADMISSION_STATE.BLOCKED;
+
+  if (explicitAdmissionBlocked) {
+    return buildStartupAuthoritySnapshotContract({
+      state: STARTUP_AUTHORITY_STATE.BLOCKED,
+      ready: false,
+      authorityAvailable: true,
+      publicationEpoch:
+        Number.isFinite(planningSnapshot.publicationEpoch) ?
+          planningSnapshot.publicationEpoch :
+          undefined,
+      publicationStatus:
+        typeof publicationStatus === TYPEOF.STRING &&
+          publicationStatus.length > NUM.ZERO ?
+          publicationStatus :
+          undefined,
+      publicationObservationState,
+      priorityPartitionSummary: priorityPartitionSummary || undefined,
+      recoveryProtocolState:
+        typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+          planningSnapshot.recoveryProtocolState :
+          undefined,
+      targetParticipation: targetParticipation || undefined,
+      admissionState,
+      admissionReasonCodes,
+      clusterIncarnationFence,
+      priorityRecoveryReasonCodes,
+      canonicalStartupNodeIds,
+      publicationRecoveryGate,
+    });
+  }
 
   if (
     publicationRecoveryGate.state ===
@@ -377,16 +561,55 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
           planningSnapshot.targetParticipation :
           undefined,
+      admissionState,
+      admissionReasonCodes,
+      clusterIncarnationFence,
       priorityRecoveryReasonCodes,
       canonicalStartupNodeIds,
       publicationRecoveryGate,
     });
   }
 
+  const transitionalRecoveryPending =
+    hasTransitionalStartupAuthorityEvidence({
+      publicationRecoveryGate,
+      publicationStatus,
+      priorityPartitionSummary,
+      recoveryProtocolState: planningSnapshot.recoveryProtocolState,
+      targetParticipation,
+      canonicalStartupNodeIds,
+    });
+
   if (
     typeof publicationStatus !== TYPEOF.STRING ||
     publicationStatus.length === NUM.ZERO
   ) {
+    if (transitionalRecoveryPending) {
+      return buildStartupAuthoritySnapshotContract({
+        state: STARTUP_AUTHORITY_STATE.RECOVERY_PENDING,
+        ready: false,
+        authorityAvailable: true,
+        publicationEpoch:
+          Number.isFinite(planningSnapshot.publicationEpoch) ?
+            planningSnapshot.publicationEpoch :
+            undefined,
+        publicationObservationState:
+          publicationObservationState ||
+          STARTUP_AUTHORITY_PUBLICATION_STATE.ESTABLISHING,
+        priorityPartitionSummary: priorityPartitionSummary || undefined,
+        recoveryProtocolState:
+          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+            planningSnapshot.recoveryProtocolState :
+            undefined,
+        targetParticipation: targetParticipation || undefined,
+        admissionState,
+        admissionReasonCodes,
+        clusterIncarnationFence,
+        priorityRecoveryReasonCodes,
+        canonicalStartupNodeIds,
+        publicationRecoveryGate,
+      });
+    }
     return buildStartupAuthorityUnavailableSnapshot(
       PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE,
       null,
@@ -398,6 +621,9 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         publicationStatus: publicationStatus || undefined,
         publicationObservationState,
         canonicalStartupNodeIds,
+        admissionState,
+        admissionReasonCodes,
+        clusterIncarnationFence,
         publicationRecoveryGate,
       },
     );
@@ -407,6 +633,33 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
     !priorityPartitionSummary ||
     typeof priorityPartitionSummary.satisfied !== TYPEOF.BOOLEAN
   ) {
+    if (transitionalRecoveryPending) {
+      return buildStartupAuthoritySnapshotContract({
+        state: STARTUP_AUTHORITY_STATE.RECOVERY_PENDING,
+        ready: false,
+        authorityAvailable: true,
+        publicationEpoch:
+          Number.isFinite(planningSnapshot.publicationEpoch) ?
+            planningSnapshot.publicationEpoch :
+            undefined,
+        publicationStatus,
+        publicationObservationState:
+          publicationObservationState ||
+          STARTUP_AUTHORITY_PUBLICATION_STATE.ESTABLISHING,
+        priorityPartitionSummary: priorityPartitionSummary || undefined,
+        recoveryProtocolState:
+          typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING ?
+            planningSnapshot.recoveryProtocolState :
+            undefined,
+        targetParticipation: targetParticipation || undefined,
+        admissionState,
+        admissionReasonCodes,
+        clusterIncarnationFence,
+        priorityRecoveryReasonCodes,
+        canonicalStartupNodeIds,
+        publicationRecoveryGate,
+      });
+    }
     return buildStartupAuthorityUnavailableSnapshot(
       PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE,
       null,
@@ -426,24 +679,15 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
           typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
             planningSnapshot.targetParticipation :
             undefined,
+        admissionState,
+        admissionReasonCodes,
+        clusterIncarnationFence,
         canonicalStartupNodeIds,
         publicationRecoveryGate,
       },
     );
   }
 
-  const targetParticipation =
-    planningSnapshot.targetParticipation &&
-    typeof planningSnapshot.targetParticipation === TYPEOF.OBJECT ?
-      planningSnapshot.targetParticipation :
-      null;
-  const targetParticipationReasons = Array.isArray(targetParticipation?.reasons) ?
-    [...targetParticipation.reasons] :
-    [];
-  const priorityRecoveryReasonCodes = [...new Set([
-    ...publicationRecoveryGate.reasonCodes,
-    ...targetParticipationReasons,
-  ])];
   const blocked =
     targetParticipationReasons.length > NUM.ZERO &&
     canonicalStartupNodeIds.length === NUM.ZERO;
@@ -473,6 +717,9 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
         planningSnapshot.recoveryProtocolState :
         undefined,
     targetParticipation: targetParticipation || undefined,
+    admissionState,
+    admissionReasonCodes,
+    clusterIncarnationFence,
     priorityRecoveryReasonCodes,
     canonicalStartupNodeIds,
     publicationRecoveryGate,

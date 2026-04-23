@@ -1000,6 +1000,152 @@ async (t) => {
   }
 });
 
+test('ReplicaDispatchService preserves canonical visibility retry metadata ' +
+  'when authoritative dispatch visibility lags',
+async (t) => {
+  initEnv();
+
+  const OPERATION_ID = 'op-dispatch-visibility-fallback-1';
+  const ORIGINAL_RETRY_DELAY_MS = 1000;
+  const CANONICAL_RETRY_DELAY_MS = 125;
+  const originalOperationRow = {
+    operation_id: OPERATION_ID,
+    type: OperationType.REPLACE,
+    partition_id: 'sql_transactions-p1',
+    replica_id: 'sql_transactions-p1-r4',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now() - 1000,
+    updated_at: Date.now(),
+    completed_at: null,
+    error_message: null,
+    steps_history: '[]',
+    entity_type: 'partition',
+    entity_id: 'sql_transactions-p1',
+  };
+  const visibilityFallbackOperation = {
+    operationId: OPERATION_ID,
+    type: OperationType.REPLACE,
+    partitionId: 'sql_transactions-p1',
+    entityType: 'partition',
+    entityId: 'sql_transactions-p1',
+    replicaId: 'sql_transactions-p1-r4',
+    sourceNodeId: 'node-1',
+    targetNodeId: 'node-2',
+    status: 'pending',
+    workflowStep: WORKFLOW_STEP.PENDING,
+    createdAt: originalOperationRow.created_at,
+    updatedAt: originalOperationRow.updated_at + 25,
+    completedAt: null,
+    errorMessage: null,
+    stepsHistory: [{
+      step: WORKFLOW_STEP.PENDING,
+      timestamp: originalOperationRow.updated_at,
+      sourceReplicaId: 'sql_transactions-p1-r1',
+    }],
+  };
+  let dispatchCalls = 0;
+  let authoritativeReadCalls = 0;
+  let visibilityObservationCalls = 0;
+  const scheduled = [];
+
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          observedAt: new Date(originalOperationRow.updated_at).toISOString(),
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+          reasons: [],
+        };
+      },
+    },
+    operationDispatchRetryAfterMs: ORIGINAL_RETRY_DELAY_MS,
+    rebalanceCoordinator: {
+      repository: {
+        async queryAuthoritativeOperationById() {
+          authoritativeReadCalls += 1;
+          return null;
+        },
+        async getOperationByIdVisibilityObservation(observedOperationId) {
+          visibilityObservationCalls += 1;
+          t.equal(
+            observedOperationId,
+            OPERATION_ID,
+            'visibility recovery should query the same operation id',
+          );
+          return {
+            operation: {...visibilityFallbackOperation},
+            deferredOutcome: {
+              retryAfterMs: CANONICAL_RETRY_DELAY_MS,
+            },
+          };
+        },
+      },
+      async dispatchOperation() {
+        dispatchCalls += 1;
+        return {success: false};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      scheduled.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+
+  try {
+    await service.dispatchOperationRow(originalOperationRow);
+
+    t.equal(
+      dispatchCalls,
+      1,
+      'dispatch should still attempt the coordinator owner path once',
+    );
+    t.equal(
+      visibilityObservationCalls,
+      1,
+      'visibility recovery should consult the canonical repository visibility observation',
+    );
+    t.equal(
+      authoritativeReadCalls,
+      0,
+      'canonical visibility recovery should replace the raw authoritative row miss path when available',
+    );
+    t.equal(
+      scheduled.length,
+      1,
+      'visibility recovery should still arm one deferred retry',
+    );
+    t.equal(
+      scheduled[0].delayMs,
+      CANONICAL_RETRY_DELAY_MS,
+      'the deferred retry should honor the canonical visibility retry delay',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.get(OPERATION_ID)?.row
+        ?.steps_history,
+      JSON.stringify(visibilityFallbackOperation.stepsHistory),
+      'the deferred retry should retain the canonical visibility fallback row, not the stale wake-up payload',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
 test('ReplicaDispatchService suppresses stale dispatch failures when the ' +
   'authoritative operation row already advanced',
 async (t) => {

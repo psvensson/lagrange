@@ -156,6 +156,8 @@ const {
 class NodeJoiningServiceSegment1 extends EventEmitter {
   constructor(options = {}) {
     super();
+    const explicitDataDirProvided =
+      Object.prototype.hasOwnProperty.call(options, 'dataDir');
     this.rolloutControls = assertRequiredControlPlaneRollout({
       owner: NODE_JOINING_SERVICE_LITERAL.NODEJOININGSERVICE,
       controls: options.rolloutControls,
@@ -198,15 +200,21 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       typeof options.sleep === TYPEOF.FUNCTION
         ? options.sleep
         : (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
-    this.joinSessionId =
+    this.joinSessionIdProvided =
       typeof options.joinSessionId === TYPEOF.STRING &&
-      options.joinSessionId.length > NUM.ZERO
-        ? options.joinSessionId
-        : uuidv4();
+      options.joinSessionId.length > NUM.ZERO;
+    this.joinSessionId = this.joinSessionIdProvided ?
+      options.joinSessionId :
+      uuidv4();
     const defaultJoinSessionStore =
       options.joinSessionStore instanceof JoinSessionStore
         ? options.joinSessionStore
-        : new JoinSessionStore({ now: this.now });
+        : new JoinSessionStore({
+            now: this.now,
+            dataDir: explicitDataDirProvided ?
+              this.dataDir :
+              null,
+          });
     this.joinCoordinator =
       options.joinCoordinator instanceof JoinCoordinator
         ? options.joinCoordinator
@@ -227,6 +235,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       options.startupMode.length > NUM.ZERO
         ? options.startupMode
         : STARTUP_JOIN_MODE.FRESH_JOIN;
+    this.clusterIncarnationFence =
+      options.clusterIncarnationFence &&
+        typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
+        options.clusterIncarnationFence :
+        null;
     this.membershipLifecycleController =
       options.membershipLifecycleController &&
       typeof options.membershipLifecycleController.submitJoinIntent ===
@@ -283,6 +296,9 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       get cdcIntegrationService() {
         return self.cdcIntegrationService;
       },
+      get systemTableCache() {
+        return self.peekSystemTableCache();
+      },
       get replicaHandler() {
         return self.replicaHandler;
       },
@@ -303,6 +319,11 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       },
       get tablePolicyService() {
         return self.tablePolicyService;
+      },
+      getSqlQueryEngine() {
+        return self.sqlQueryEngine ||
+          self.cdcIntegrationService?.sqlQueryEngine ||
+          null;
       },
       get latencyTopology() {
         return self.latencyTopology;
@@ -436,8 +457,47 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       this.nodeStatePublicationOwner.resolveNodeStateUpdateTargetCandidates(
         publicationOptions,
       );
+    this.resolveNodeStateUpdatePublicationRetryClass = (error) =>
+      this.nodeStatePublicationOwner.resolveNodeStateUpdatePublicationRetryClass(
+        error,
+      );
+    this.shouldDeferNodeStateUpdatePublication = (
+      error,
+      publicationProfile = null,
+    ) =>
+      this.nodeStatePublicationOwner.shouldDeferNodeStateUpdatePublication(
+        error,
+        publicationProfile,
+      );
+    this.resolveNodeStateUpdatePublicationRetryAfterMs = (error) =>
+      this.nodeStatePublicationOwner
+        .resolveNodeStateUpdatePublicationRetryAfterMs(error);
     this.clearDeferredNodeStateUpdatePublication = () =>
       this.nodeStatePublicationOwner.clearDeferredNodeStateUpdatePublication();
+    this.buildDeferredNodeStateUpdatePublicationOutcome = (
+      deferredPublication,
+      nowMs,
+    ) =>
+      this.nodeStatePublicationOwner
+        .buildDeferredNodeStateUpdatePublicationOutcome(
+          deferredPublication,
+          nowMs,
+        );
+    this.resolveDeferredNodeStateUpdatePublicationOutcome = (
+      message,
+      publicationMode,
+      publicationProfile,
+    ) =>
+      this.nodeStatePublicationOwner
+        .resolveDeferredNodeStateUpdatePublicationOutcome(
+          message,
+          publicationMode,
+          publicationProfile,
+        );
+    this.deferNodeStateUpdatePublication = (publicationOptions = {}) =>
+      this.nodeStatePublicationOwner.deferNodeStateUpdatePublication(
+        publicationOptions,
+      );
     this.triggerBackgroundClusterMeshReconciliation = (state) =>
       this.nodeStatePublicationOwner.triggerBackgroundClusterMeshReconciliation(
         state,
@@ -738,6 +798,8 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
         getJoinLifecycleIntentType: () =>
           resolveMembershipJoinIntentType(this.startupMode),
         getJoinStartupMode: () => this.startupMode,
+        getClusterIncarnationFence: () => this.clusterIncarnationFence,
+        getDataDir: () => this.dataDir,
         getNodeCapabilities: () => this.getNodeCapabilities(),
         subscribeToCDCEvents: () => this.subscribeToCDCEvents(),
         createCdcPipelineReadinessGate: (cache) =>
@@ -808,6 +870,8 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
           this.upsertSystemTableRow(table, data),
         upsertSystemTableRowWithRetry: (table, data, options) =>
           this.upsertSystemTableRowWithRetry(table, data, options),
+        upsertJoinServiceRowWithRetry: (rowData, options) =>
+          this.upsertJoinServiceRowWithRetry(rowData, options),
         seedJoinTimeCacheRow: (table, data) =>
           this.seedJoinTimeCacheRow(table, data),
         registerMessageGroupService: (gId, rId, svc, opts) =>
@@ -1043,6 +1107,28 @@ class NodeJoiningServiceSegment1 extends EventEmitter {
       getMessageGroupServicesSize: () => self.messageGroupServices.size,
       emit: (event, data) => self.emit(event, data),
     };
+  }
+  /**
+   * Read the current runtime cache reference without forcing bootstrap peers
+   * to branch on one specific startup handoff timing.
+   * @return {Object|null}
+   */
+  peekSystemTableCache() {
+    for (const messageGroupService of this.messageGroupServices.values()) {
+      if (typeof messageGroupService?.getReadOnlyCache === TYPEOF.FUNCTION) {
+        const readOnlyCache = messageGroupService.getReadOnlyCache();
+        if (readOnlyCache) {
+          return readOnlyCache;
+        }
+      }
+      if (messageGroupService?.systemTableCache) {
+        return messageGroupService.systemTableCache;
+      }
+    }
+    const nodeService = NodeService.getInstance();
+    return nodeService?._readOnlyCache ||
+      nodeService?._systemTableCache ||
+      null;
   }
   /**
    * Readiness delegates for join bootstrap.

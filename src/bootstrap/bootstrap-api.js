@@ -168,7 +168,7 @@ class BootstrapAPI {
       options.controlPlaneSystemTableGateway ||
       createControlPlaneRuntimeBundle({
         nodeId: this.seedNodeId || BOOTSTRAP_API_SUBSYSTEM,
-        getSqlQueryEngine: () => this.sqlQueryEngine,
+        getSqlQueryEngine: () => this.getSqlQueryEngine(),
         getCdcIntegrationService: () => this.getCdcIntegrationService(),
         getSystemTableCache: () => this.getSystemTableCache(),
         getMessageRouter: () => this.messageRouter,
@@ -262,7 +262,7 @@ class BootstrapAPI {
       new ServiceRegistrationHandoffOwner({
         delegates: {
           getLogger: () => this.logger,
-          getSqlQueryEngine: () => this.sqlQueryEngine,
+          getSqlQueryEngine: () => this.getSqlQueryEngine(),
           validateMoveReplicaAssignmentToken: (serviceData) =>
             this.validateMoveReplicaAssignmentToken(serviceData),
           assertSingleOwnerReplicaRegistration: (serviceData, assignmentContext) =>
@@ -326,7 +326,7 @@ class BootstrapAPI {
           isBootstrapAuthoritativeTableRowNewer: (candidate, existing) =>
             this.isAuthoritativeSnapshotRowNewer(candidate, existing),
           getMessageGroupServices: () => this.messageGroupServices,
-          getSqlQueryEngine: () => this.sqlQueryEngine,
+          getSqlQueryEngine: () => this.getSqlQueryEngine(),
           getLogger: () => this.logger,
           getMessageRouter: () =>
             this.messageRouter ||
@@ -416,7 +416,7 @@ class BootstrapAPI {
           getReadinessState: () => this.readinessState,
           getBootstrapService: () => this.bootstrapStartupAdapter,
           getMessageRouter: () => this.messageRouter,
-          getSqlQueryEngine: () => this.sqlQueryEngine,
+          getSqlQueryEngine: () => this.getSqlQueryEngine(),
           getControlPlaneReadinessService: () =>
             this.getControlPlaneReadinessService(),
           getControlPlaneWriteHealthProvider: () =>
@@ -464,8 +464,8 @@ class BootstrapAPI {
           determineAndReserveMessageGroupAssignment: (nodeId, options) =>
             this.determineAndReserveMessageGroupAssignment(nodeId, options),
           getCurrentEpoch: () => this.getCurrentEpoch(),
-          buildBootstrapTopologySnapshotEnvelope: (options) =>
-            this.buildBootstrapTopologySnapshotEnvelope(options),
+          buildBootstrapResponseTopologySnapshotEnvelope: (options) =>
+            this.buildBootstrapResponseTopologySnapshotEnvelope(options),
           getClusterConfiguration: () => this.getClusterConfiguration(),
           getReadyNodes: (options) => this.getReadyNodes(options),
           getTablePolicies: () => this.getTablePolicies(),
@@ -559,6 +559,24 @@ class BootstrapAPI {
   getCdcIntegrationService() {
     return this.cdcIntegrationService ||
       this.runtimeOwner?.cdcIntegrationService ||
+      null;
+  }
+
+  /**
+   * Resolve the live SQL engine for bootstrap-owned reads, writes, and probes.
+   * Prefer the explicitly hydrated engine, then fall back to the runtime owner
+   * or CDC integration service when the bootstrap API outlives startup-time
+   * attachment ordering.
+   * @return {Object|null}
+   * @private
+   */
+  getSqlQueryEngine() {
+    return this.sqlQueryEngine ||
+      this.runtimeOwner?.getSqlQueryEngine?.() ||
+      this.runtimeOwner?.sqlQueryEngine ||
+      this.getCdcIntegrationService()?.sqlQueryEngine ||
+      this.bootstrapStartupAdapter?.getSqlQueryEngine?.() ||
+      this.bootstrapStartupAdapter?.sqlQueryEngine ||
       null;
   }
 
@@ -834,7 +852,7 @@ class BootstrapAPI {
 
     // Health check endpoint
     this.fastify.get(BOOTSTRAP_API_ROUTE.HEALTH, async (_request, reply) => {
-      if (!this.sqlQueryEngine) {
+      if (!this.getSqlQueryEngine()) {
         this.logger.debug('metrics.bootstrap_api.health.initializing', {
           seedNodeId: this.seedNodeId,
           sqlEngineReady: false,

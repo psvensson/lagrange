@@ -1000,7 +1000,13 @@ class Cluster1 {
       node.closeQueryConnection();
     }
     await this._recordRestartBoundarySnapshot(id, "before_stop");
-    await this._chaos.stopNode(id);
+    try {
+      await this._chaos.stopNode(id);
+    } catch (error) {
+      if (!isIgnorableContainerStopError(error)) {
+        throw error;
+      }
+    }
     await this._waitForRestartShutdownBoundary(id);
     await this._chaos.startNode(id);
     if (typeof node?.closeQueryConnection === "function") {

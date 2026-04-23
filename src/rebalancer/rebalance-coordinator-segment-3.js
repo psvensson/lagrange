@@ -78,7 +78,7 @@ const {
   createTopLevelOperationBudget,
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
-  isCriticalTransportControlPlanePartitionTable,
+  isPriorityRecoveryEmergencyPartition,
   isPriorityControlPlanePartitionTable,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
@@ -87,6 +87,11 @@ const {
   shouldPriorityRecoveryOperationBlockPlanning,
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
+
+const ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES = Object.freeze([
+  OperationType.ADD,
+  OperationType.REPLACE,
+]);
 
 class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   assertMembershipPublicationEpoch(move) {
@@ -280,6 +285,13 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     }
 
     await this.ensureNoConflictingInFlightReplaceForRemove({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
+    await this.ensureEntityAddLikeCreateLaneAvailable({
       move,
       normalizedMoveType,
       entityType,
@@ -671,7 +683,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     }
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
       if (
-        this.shouldAllowEmergencyPriorityDeferredObservation(
+        this.shouldAllowPriorityRecoveryDeferredObservation(
           context?.partitionId,
           operationObservation,
         )
@@ -702,6 +714,72 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   }
 
   /**
+   * One entity must not admit a second add-like workflow while an earlier
+   * REPLACE already owns source-removal progression for that same entity.
+   * This keeps the authoritative operation grammar linear without blocking
+   * unrelated entities across the cluster.
+   *
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureEntityAddLikeCreateLaneAvailable(context) {
+    const normalizedMoveType = context?.normalizedMoveType;
+    if (!ENTITY_SERIALIZED_ADD_LIKE_OPERATION_TYPES.includes(
+      normalizedMoveType,
+    )) {
+      return;
+    }
+
+    const operationObservation =
+      await this.getEntityAuthoritativeOperationObservation(
+        context?.entityType || SERVICE_TYPE.PARTITION,
+        context?.entityId || context?.partitionId,
+      );
+    const operations = Array.isArray(operationObservation?.operations)
+      ? operationObservation.operations
+      : [];
+    const conflictingOperation = operations.find((operation) => {
+      if (
+        !operation ||
+        this.isOperationTerminal(operation) ||
+        operation.type !== OperationType.REPLACE
+      ) {
+        return false;
+      }
+      return this.isReplaceRemoveDispatchPhase(operation);
+    });
+    if (!conflictingOperation && operationObservation?.deferredOutcome) {
+      if (
+        this.shouldAllowPriorityRecoveryDeferredObservation(
+          context?.partitionId,
+          operationObservation,
+        )
+      ) {
+        return;
+      }
+      throw this.createDeferredOperationVisibilityError(
+        normalizedMoveType,
+        operationObservation,
+        {
+          partitionId: context?.partitionId || null,
+          entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+          entityId: context?.entityId || context?.partitionId || null,
+        },
+      );
+    }
+    if (!conflictingOperation) {
+      return;
+    }
+
+    throw this.createEntityConflictingOperationInFlightError(
+      normalizedMoveType,
+      context?.entityId || context?.partitionId || null,
+      conflictingOperation,
+    );
+  }
+
+  /**
    * Priority recovery rows that already satisfy spread or no longer target the
    * current eligible cohort must not keep blocking the next add-like action.
    *
@@ -714,7 +792,23 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
       !operation ||
       !isPriorityControlPlanePartitionTable({
         partitionId: operation.partitionId,
-      }) ||
+      })
+    ) {
+      return false;
+    }
+    if (
+      typeof this.workflowOwner
+        ?.getPriorityRecoveryDecisionSnapshotForOperation === "function"
+    ) {
+      const decisionSnapshot =
+        await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForOperation(
+          operation,
+        );
+      if (decisionSnapshot && typeof decisionSnapshot === "object") {
+        return !shouldPriorityRecoveryOperationBlockPlanning(decisionSnapshot);
+      }
+    }
+    if (
       typeof this.workflowOwner
         ?.getPriorityRecoveryPlanningSnapshotForOperation !== "function"
     ) {
@@ -785,7 +879,7 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
     });
     if (!conflictingOperation && operationObservation?.deferredOutcome) {
       if (
-        this.shouldAllowEmergencyPriorityDeferredObservation(
+        this.shouldAllowPriorityRecoveryDeferredObservation(
           context?.partitionId,
           operationObservation,
         )
@@ -957,18 +1051,17 @@ class RebalanceCoordinatorSegment3 extends RebalanceCoordinatorSegment2 {
   }
 
   /**
-   * Critical transport/system-table partitions own publication and
-   * replica-operation convergence for the rest of the control plane. During
-   * active priority recovery they must retain one extra add-like slot so
-   * ordinary priority system tables cannot consume the whole priority lane.
+   * Publication and replica-operation partitions own the recovery surfaces
+   * the rest of priority convergence depends on. Keep this emergency lane
+   * narrower than the generic transport-critical classifier so transactional
+   * priority tables do not consume the overflow slot when summary detail is
+   * temporarily unavailable under load.
    * @param {string|null} partitionId
    * @return {boolean}
    * @private
    */
   isEmergencyPriorityControlPlanePartition(partitionId) {
-    return isCriticalTransportControlPlanePartitionTable({
-      partitionId,
-    });
+    return isPriorityRecoveryEmergencyPartition(partitionId);
   }
 
   /**

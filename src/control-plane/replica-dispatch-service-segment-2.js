@@ -326,8 +326,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    * @private
    */
   async recoverUnsuccessfulDispatchResult(operationId, row) {
-    const authoritativeRow =
-      await this.getAuthoritativeReplicaOperationRow(operationId);
+    const visibilityObservation =
+      await this.getDispatchRetryOperationVisibilityObservation(operationId);
+    const authoritativeRow = visibilityObservation?.row || null;
     if (
       this.shouldSuppressDispatchFailureFromAuthoritativeRow(
         row,
@@ -340,7 +341,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
     }
 
     const visibilityLagError =
-      this.buildReplicaOperationVisibilityLagError(operationId);
+      this.buildReplicaOperationVisibilityLagError(
+        operationId,
+        visibilityObservation?.deferredOutcome || null,
+      );
     if (
       this.deferOperationDispatchRetry(
         operationId,
@@ -411,10 +415,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
   /**
    * Build one retryable visibility-lag error for direct dispatch wake-ups.
    * @param {string} operationId
+   * @param {Object|null} deferredOutcome
    * @return {Error}
    * @private
    */
-  buildReplicaOperationVisibilityLagError(operationId) {
+  buildReplicaOperationVisibilityLagError(
+    operationId,
+    deferredOutcome = null,
+  ) {
     const error = new Error(
       `${REPLICA_DISPATCH_SERVICE_LITERAL.CACHE_UPDATE_NOT_OBSERVED_FOR_REPLICA_OPERATION} ${operationId}`,
     );
@@ -422,7 +430,22 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       REPLICA_DISPATCH_SERVICE_LITERAL.REPLICA_OPERATION_VISIBILITY_LAG;
     error.operationId = operationId;
     error.deferRetry = true;
-    error.retryAfterMs = this.operationDispatchRetryAfterMs;
+    error.retryAfterMs =
+      Number.isFinite(deferredOutcome?.retryAfterMs) ?
+        deferredOutcome.retryAfterMs :
+        this.operationDispatchRetryAfterMs;
+    if (
+      typeof deferredOutcome?.reasonCode === TYPEOF.STRING &&
+      deferredOutcome.reasonCode.length > NUM.ZERO
+    ) {
+      error.reasonCode = deferredOutcome.reasonCode;
+    }
+    if (
+      typeof deferredOutcome?.completionState === TYPEOF.STRING &&
+      deferredOutcome.completionState.length > NUM.ZERO
+    ) {
+      error.completionState = deferredOutcome.completionState;
+    }
     return error;
   }
 

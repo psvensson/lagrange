@@ -27,6 +27,9 @@ import {
   resolveFastLocalMode,
   buildImage,
   deriveRunOutputDir,
+  deriveRunStatusPath,
+  buildRunStatusArtifact,
+  writeRunStatusArtifact,
   formatScenarioPhaseEventLine,
   loadHistoricalReports,
   loadScenarioModule,
@@ -1071,6 +1074,63 @@ describe('deriveRunOutputDir', () => {
   it('falls back to output basename when report extension differs', () => {
     const outputDir = deriveRunOutputDir('test-output/results.json');
     assert.equal(outputDir, 'test-output/.playback/results');
+  });
+});
+
+describe('run status artifact helpers', () => {
+  const RUN_STATUS_RUNNING = 'running';
+  const RUN_STATUS_REPORT_WRITTEN = 'report-written';
+  const RUN_STATUS_ARTIFACT_TYPE = 'distributed-run-status';
+  const REPORT_PATH = '/tmp/test-report.report.json';
+
+  it('derives run-scoped status path from playback directory', () => {
+    const statusPath = deriveRunStatusPath('test-output/.playback/my-run');
+    assert.equal(statusPath, 'test-output/.playback/my-run/run-status.json');
+  });
+
+  it('builds artifact with canonical type and timestamp', () => {
+    const artifact = buildRunStatusArtifact({
+      status: RUN_STATUS_RUNNING,
+      reportPath: REPORT_PATH,
+    });
+
+    assert.equal(artifact.artifactType, RUN_STATUS_ARTIFACT_TYPE);
+    assert.equal(artifact.status, RUN_STATUS_RUNNING);
+    assert.equal(artifact.reportPath, REPORT_PATH);
+    assert.ok(Date.parse(artifact.updatedAt) > 0);
+  });
+
+  it('writes and overwrites the runner status artifact', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'run-status-test-'));
+    const outputDir = join(tempDir, '.playback', 'sample-run');
+
+    try {
+      const firstWrite = await writeRunStatusArtifact(outputDir, {
+        status: RUN_STATUS_RUNNING,
+        reportPath: REPORT_PATH,
+        scenarioCount: 1,
+      });
+      assert.equal(
+        firstWrite.path,
+        join(outputDir, 'run-status.json'),
+      );
+
+      const secondWrite = await writeRunStatusArtifact(outputDir, {
+        status: RUN_STATUS_REPORT_WRITTEN,
+        reportPath: REPORT_PATH,
+        exitCode: 1,
+      });
+      const content = JSON.parse(await readFile(secondWrite.path, 'utf8'));
+
+      assert.equal(content.artifactType, RUN_STATUS_ARTIFACT_TYPE);
+      assert.equal(content.status, RUN_STATUS_REPORT_WRITTEN);
+      assert.equal(content.reportPath, REPORT_PATH);
+      assert.equal(content.exitCode, 1);
+      assert.equal(content.scenarioCount, undefined);
+      assert.ok(Date.parse(content.updatedAt) > 0);
+    } finally {
+      await rm(tempDir, {recursive: true, force: true});
+    }
   });
 });
 

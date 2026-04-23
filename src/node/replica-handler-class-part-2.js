@@ -95,6 +95,10 @@ const CRITICAL_VOTER_READY_FALLBACK_OPERATION_TYPES = new Set([
   OperationType.REMOVE,
   OperationType.REPLACE,
 ]);
+const FAILED_REMOVAL_TOLERATED_STATUS_WRITES = new Set([
+  ReplicaStatus.REMOVING,
+  ReplicaStatus.FAILED,
+]);
 const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
   PARTITION_BY_ID: `SELECT * FROM ${SYSTEM_TABLE_NAME.PARTITIONS} WHERE partition_id = ?`,
   TABLE_BY_ID: `SELECT * FROM ${SYSTEM_TABLE_NAME.TABLES} WHERE table_id = ?`,
@@ -219,6 +223,62 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
     return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
   }
   /**
+   * Build one canonical snapshot for REMOVE execution.
+   * Failed replicas skip the transitional REMOVING write because the state
+   * machine only permits failed -> removed durable cleanup.
+   * @param {string} replicaId
+   * @return {Object}
+   * @private
+   */
+  buildReplicaRemovalLifecycleSnapshot(replicaId) {
+    const trackedState =
+      typeof this.replicaStateMachine?.getState === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+        this.replicaStateMachine.getState(replicaId) :
+        null;
+    const localReplica = this.getLocalReplica(replicaId);
+    const cachedServiceRow =
+      this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.SERVICES, replicaId) ||
+      null;
+    const currentStatus =
+      trackedState ||
+      localReplica?.status ||
+      cachedServiceRow?.status ||
+      null;
+    return Object.freeze({
+      trackedState,
+      localStatus: localReplica?.status || null,
+      cachedStatus: cachedServiceRow?.status || null,
+      currentStatus,
+      skipRemovingStatusWrite: currentStatus === ReplicaStatus.FAILED,
+    });
+  }
+  /**
+   * Read one tracked replica lifecycle state from the shared state machine.
+   * @param {string} replicaId
+   * @return {string|null}
+   * @private
+   */
+  getTrackedReplicaLifecycleState(replicaId) {
+    return typeof this.replicaStateMachine?.getState ===
+      REPLICA_HANDLER_TYPEOF.FUNCTION ?
+      this.replicaStateMachine.getState(replicaId) :
+      null;
+  }
+  /**
+   * Failed replicas can proceed directly to durable REMOVE cleanup.
+   * This tolerates the race where REMOVE planning snapshots ACTIVE but the
+   * shared state machine flips to FAILED before the REMOVING write lands.
+   * @param {string} replicaId
+   * @param {string} requestedStatus
+   * @return {boolean}
+   * @private
+   */
+  shouldSkipReplicaRemovalLifecycleWrite(replicaId, requestedStatus) {
+    return this.getTrackedReplicaLifecycleState(replicaId) ===
+      ReplicaStatus.FAILED &&
+      FAILED_REMOVAL_TOLERATED_STATUS_WRITES.has(requestedStatus);
+  }
+  /**
    * Reconcile durable cleanup for replicas already marked REMOVED locally.
    * This keeps idempotent REMOVE retries from leaving stale service rows
    * routable after the local replica is already gone.
@@ -298,12 +358,33 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
     let serviceRowRemoved = false;
     let cleanupError = null;
     const service = this.getTrackedService(replicaId);
+    const removalLifecycleSnapshot =
+      this.buildReplicaRemovalLifecycleSnapshot(replicaId);
+    let skipRemovingStatusWrite =
+      removalLifecycleSnapshot.skipRemovingStatusWrite === true;
     try {
       this.throwIfShuttingDown();
-      // Update status to removing (via CDC)
-      await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
-        partitionId,
-      });
+      if (!skipRemovingStatusWrite) {
+        try {
+          await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
+            partitionId,
+          });
+        } catch (error) {
+          if (!this.shouldSkipReplicaRemovalLifecycleWrite(
+            replicaId,
+            ReplicaStatus.REMOVING,
+          )) {
+            throw error;
+          }
+          skipRemovingStatusWrite = true;
+          this.setLocalReplica(replicaId, {
+            replicaId,
+            partitionId,
+            status: ReplicaStatus.FAILED,
+            service,
+          });
+        }
+      }
       // Delete the authoritative row before local shutdown so routing never points at a dead handler.
       try {
         await this.getPartitionServiceRowOwner().removeReplica({
@@ -406,10 +487,18 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
         },
       );
       if (!serviceRowRemoved) {
-        await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
-          partitionId,
-          errorMessage: error.message,
-        });
+        if (
+          !skipRemovingStatusWrite &&
+          !this.shouldSkipReplicaRemovalLifecycleWrite(
+            replicaId,
+            ReplicaStatus.FAILED,
+          )
+        ) {
+          await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
+            partitionId,
+            errorMessage: error.message,
+          });
+        }
         this.setLocalReplica(replicaId, {
           replicaId,
           partitionId,
@@ -772,4 +861,35 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
     }
   }
 }
+assignReplicaHandlerRuntimeMethods(ReplicaHandler, {
+  AddressManager,
+  ESTABLISHED_VOTER_ROLES,
+  METADATA_RESOLUTION_POLL_INTERVAL_MS,
+  NUM,
+  PRESSURE_WORK_CLASS,
+  PARTITION_METADATA_MISSING_PREFIX,
+  PartitionServiceRowOwner,
+  REPLICA_HANDLER_ADDRESS,
+  REPLICA_HANDLER_ERRNO,
+  REPLICA_HANDLER_ERROR_MSG,
+  REPLICA_HANDLER_EVENT,
+  REPLICA_HANDLER_LITERAL,
+  REPLICA_HANDLER_LOG_MSG,
+  REPLICA_HANDLER_NUM,
+  REPLICA_HANDLER_SERVICE,
+  REPLICA_HANDLER_TYPEOF,
+  ReplicaStatus,
+  STORAGE_DEFAULT,
+  SYSTEM_TABLE_HYDRATION_SQL,
+  SYSTEM_TABLE_NAME,
+  TABLE_METADATA_MISSING_PREFIX,
+  createControlPlaneRuntimeBundle,
+  createSystemMetadataGatewayRequiredError,
+  fs,
+  isFreshPartitionBootstrapWindow,
+  isReplicaJoinNodeViable,
+  path,
+  partitionMetadataMissingError,
+});
+
 export { ReplicaHandler };

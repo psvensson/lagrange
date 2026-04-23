@@ -561,38 +561,18 @@ class SeedCleanupHandler {
     await this.quiesceRebalancers();
     await LatencyTopologySetup.stop(d.getLatencyTopology());
     d.setLatencyTopology(null);
-
-    await d.clearRuntimeServiceHandler();
-    d.stopAndClearControlPlaneServices();
-    await d.clearRpcClient();
+    await this.shutdownSharedRuntimeDependencies(d);
     d.clearReplicaStateMachine();
-
-    const systemTableWriter = d.getSystemTableWriter();
-    if (systemTableWriter && systemTableWriter.disable) {
-      systemTableWriter.disable();
-    }
-    d.setSystemTableWriter(null);
+    this.disableSystemTableWriter(d);
     d.clearEpochManager();
     await d.clearReplicaHandler();
 
-    // Shutdown partition services
-    for (const [replicaId, partition] of
-      d.getPartitionServices()) {
-      try {
-        if (partition.shutdown) {
-          await partition.shutdown();
-        }
-        logger.debug(BOOTSTRAP_LOG_MSG.PARTITION_CLEANED, {
-          replicaId,
-        });
-      } catch (err) {
-        logger.warn(
-          BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED, {
-            replicaId,
-            error: err.message,
-          });
-      }
-    }
+    await this.shutdownServiceMap({
+      logger,
+      services: d.getPartitionServices(),
+      successLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANED,
+      failureLogMessage: BOOTSTRAP_LOG_MSG.PARTITION_CLEANUP_FAILED,
+    });
     const messageRouter = d.getMessageRouter();
     if (messageRouter) {
       for (const [replicaId, partition] of
@@ -608,24 +588,12 @@ class SeedCleanupHandler {
     d.getPartitionServices().clear();
     d.resetPartitionReplicas();
 
-    // Shutdown message group services
-    for (const [replicaId, messageGroup] of
-      d.getMessageGroupServices()) {
-      try {
-        if (messageGroup.shutdown) {
-          await messageGroup.shutdown();
-        }
-        logger.debug(BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED, {
-          replicaId,
-        });
-      } catch (err) {
-        logger.warn(
-          BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED, {
-            replicaId,
-            error: err.message,
-          });
-      }
-    }
+    await this.shutdownServiceMap({
+      logger,
+      services: d.getMessageGroupServices(),
+      successLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANED,
+      failureLogMessage: BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_CLEANUP_FAILED,
+    });
     if (messageRouter) {
       for (const [replicaId] of
         d.getMessageGroupServices()) {
@@ -639,23 +607,71 @@ class SeedCleanupHandler {
     d.getMessageGroupServices().clear();
     d.resetMessageGroupReplicas();
 
-    // Shutdown message router
-    if (messageRouter && messageRouter.shutdown) {
-      await messageRouter.shutdown();
-      d.setMessageRouter(null);
-    }
-
-    // Shutdown transport
     const transport = d.getTransport();
+    await this.shutdownTransportAndRouter(d, transport, messageRouter);
+    logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_COMPLETE, {
+      nodeId: d.getNodeId(),
+    });
+  }
+
+  async shutdownSharedRuntimeDependencies(d) {
+    await d.clearRuntimeServiceHandler();
+    d.stopAndClearControlPlaneServices();
+    await d.clearRpcClient();
+    await this.shutdownSqlQueryEngine(d);
+  }
+
+  async shutdownSqlQueryEngine(d) {
+    const sqlQueryEngine =
+      d.getSqlQueryEngine?.() ||
+      d.getCdcIntegrationService?.()?.sqlQueryEngine ||
+      null;
+    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === 'function') {
+      await sqlQueryEngine.shutdown();
+    }
+    const cdcIntegrationService = d.getCdcIntegrationService?.() || null;
+    if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {
+      cdcIntegrationService.sqlQueryEngine = null;
+    }
+    d.setSqlQueryEngine?.(null);
+  }
+
+  disableSystemTableWriter(d) {
+    const systemTableWriter = d.getSystemTableWriter();
+    if (systemTableWriter?.disable) {
+      systemTableWriter.disable();
+    }
+    d.setSystemTableWriter(null);
+  }
+
+  async shutdownServiceMap(options) {
+    for (const [replicaId, service] of options.services) {
+      try {
+        if (service.shutdown) {
+          await service.shutdown();
+        }
+        options.logger.debug(options.successLogMessage, {
+          replicaId,
+        });
+      } catch (error) {
+        options.logger.warn(options.failureLogMessage, {
+          replicaId,
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  async shutdownTransportAndRouter(d, transport, messageRouter) {
     if (transport && transport.shutdown &&
         transport !== messageRouter) {
       await transport.shutdown();
     }
     d.setTransport(null);
-
-    logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_COMPLETE, {
-      nodeId: d.getNodeId(),
-    });
+    if (messageRouter?.shutdown) {
+      await messageRouter.shutdown();
+    }
+    d.setMessageRouter(null);
   }
 }
 

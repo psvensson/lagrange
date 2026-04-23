@@ -157,6 +157,47 @@ export function registerControlPlaneSystemTableGatewayTailTests({
       );
     });
 
+  test('ControlPlaneSystemTableGateway submitMutation preserves workload-owned ' +
+    'mutation defaults', async (t) => {
+    const updateCalls = [];
+    const gateway = new ControlPlaneSystemTableGateway({
+      nodeId: 'node-gateway',
+      cdcIntegrationService: {
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          updateCalls.push({tableName, whereClause, data, options});
+          return {success: true};
+        },
+      },
+    });
+
+    await gateway.submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SQL_TRANSACTIONS,
+      whereClause: {transaction_id: 'tx-1'},
+      data: {status: 'ACTIVE'},
+    }, {
+      workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+      skipCacheWait: true,
+    });
+
+    t.equal(updateCalls.length, 1, 'gateway should delegate one workload-owned mutation');
+    t.equal(
+      updateCalls[0].options.workloadClass,
+      CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+      'gateway should preserve the explicit mutation workload class',
+    );
+    t.equal(
+      updateCalls[0].options.workClass,
+      PRESSURE_WORK_CLASS.CRITICAL,
+      'gateway should derive the workload-owned critical work class when callers omit it',
+    );
+    t.equal(
+      updateCalls[0].options.allowPressureDefer,
+      false,
+      'gateway should derive the workload-owned no-defer contract when callers omit it',
+    );
+  });
+
   test('ControlPlaneSystemTableGateway submitMutation surfaces pending visibility outcomes',
     async (t) => {
       const gateway = new ControlPlaneSystemTableGateway({

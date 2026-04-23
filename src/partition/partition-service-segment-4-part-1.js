@@ -1,143 +1,36 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment3 } from "./partition-service-segment-3.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment3} from './partition-service-segment-3.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
-  COLUMN,
-  CONFIG_KEY,
   CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
   Database,
-  ENTITY_TYPE,
-  ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
-  LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
   PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
-  PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
-  PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
   PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
   SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_ACK_STATUS,
   SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   SQL,
-  SQLiteLogAdapter,
-  STRING,
-  SYSTEM_TABLE_NAME,
   TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
   assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
   cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
   extractPartitionSplitRoutingKey,
-  fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
-  path,
   replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
   resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
   routePartitionSplitMirroredWrite,
   runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
@@ -180,12 +73,12 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
             {
               operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
               tableName: TABLES.PARTITIONS,
-              whereClause: { partition_id: this.partitionId },
-              data: { size_bytes: sizeBytes, updated_at: Date.now() },
+              whereClause: {partition_id: this.partitionId},
+              data: {size_bytes: sizeBytes, updated_at: Date.now()},
             },
             {
               workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-              deliveryPriority: "background",
+              deliveryPriority: 'background',
               allowPressureDefer: true,
               coalescingKey: `partitions:size:${this.partitionId}`,
             },
@@ -207,7 +100,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     } catch (error) {
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_SIZE_PERSIST_FAILED,
-        { partitionId: this.partitionId, sizeBytes, error: error.message },
+        {partitionId: this.partitionId, sizeBytes, error: error.message},
       );
     }
   }
@@ -334,7 +227,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     };
     this.logger.info(
       PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_RECONSTRUCTED,
-      { partitionId: this.partitionId, phase, workflowId: metadata.workflowId },
+      {partitionId: this.partitionId, phase, workflowId: metadata.workflowId},
     );
     return this.splitReplication;
   }
@@ -369,7 +262,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
       await this.emitSplitSourceAck(
         metadata,
         SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-        { [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false },
+        {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false},
       );
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
         partitionId: this.partitionId,
@@ -442,7 +335,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
       !this.dbPath ||
       this.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH
     ) {
-      return { prepare: (...args) => this.db.prepare(...args), close() {} };
+      return {prepare: (...args) => this.db.prepare(...args), close() {}};
     }
     const snapshotDb = new Database(this.dbPath, {
       readonly: true,
@@ -524,10 +417,15 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
       row?.[metadata.primaryKeyColumn],
       metadata,
     );
+    const joinedColumns = columns.join(
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
+    );
     const placeholders = columns
       .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
       .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${this.tableName} (${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ${SQL.VALUES} (${placeholders})`;
+    const sql =
+      `${SQL.INSERT_OR_REPLACE_INTO} ${this.tableName} (${joinedColumns}) ` +
+      `${SQL.VALUES} (${placeholders})`;
     const params = columns.map((column) => row[column]);
     await this.routeSplitMirroredWrite(targetPartitionId, sql, params);
   }
@@ -556,7 +454,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     await splitWorkflow.advanceSplitPhase(
       workflowId,
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-      { [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]: Date.now() },
+      {[PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]: Date.now()},
     );
     this.logger.info(
       PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED,
@@ -606,13 +504,13 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
       splitReplication.lastError = error.message;
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED,
-        { partitionId: this.partitionId, error: error.message },
+        {partitionId: this.partitionId, error: error.message},
       );
       this.flushSplitReplicationQueue().catch((flushError) => {
         splitReplication.lastError = flushError.message;
         this.logger.warn(
           PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED,
-          { partitionId: this.partitionId, error: flushError.message },
+          {partitionId: this.partitionId, error: flushError.message},
         );
       });
     }
@@ -704,14 +602,14 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @return {Object} Key range {start, end}.
    */
   getKeyRange() {
-    return { ...this.keyRange };
+    return {...this.keyRange};
   }
   /**
    * Set the partition key range.
    * @param {Object} keyRange - New key range {start, end}.
    */
   setKeyRange(keyRange) {
-    this.keyRange = { ...keyRange };
+    this.keyRange = {...keyRange};
     this.emit(PARTITION_SERVICE_EVENT.KEY_RANGE_CHANGED, {
       partitionId: this.partitionId,
       keyRange: this.keyRange,
@@ -723,7 +621,7 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
    * @return {boolean} True if key is in range.
    */
   isKeyInRange(key) {
-    const { start, end } = this.keyRange;
+    const {start, end} = this.keyRange;
     if (start === null && end === null) {
       return true;
     }
@@ -895,9 +793,9 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     if (this.rebalancer) {
       const setCoordinator = assertCritical(
         typeof this.rebalancer.setRebalanceCoordinator ===
-          PARTITION_SERVICE_TYPE.FUNCTION
-          ? this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer)
-          : null,
+          PARTITION_SERVICE_TYPE.FUNCTION ?
+          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+          null,
         PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
       );
       setCoordinator(newCoordinator);
@@ -934,4 +832,4 @@ class PartitionServiceSegment4Part1 extends PartitionServiceSegment3 {
     this.maybeInitializeRebalancer();
   }
 }
-export { PartitionServiceSegment4Part1 };
+export {PartitionServiceSegment4Part1};

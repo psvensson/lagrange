@@ -241,6 +241,220 @@ test('observed progress reconciles REPLACE workflows from local owner rows ' +
   );
 });
 
+test('observed progress prefers local authoritative target status over ' +
+  'routed empty status reads for locally owned priority REPLACE', async (t) => {
+  const nowMs = Date.now();
+  const operationRow = {
+    operation_id: 'op-observed-progress-local-target-status',
+    type: 'REPLACE',
+    partition_id: 'control_plane_publications-p1',
+    replica_id: 'control_plane_publications-p1-r4',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'creating',
+    workflow_step: 'CREATING',
+    created_at: nowMs - 5000,
+    updated_at: nowMs - 1000,
+    completed_at: null,
+    error_message: null,
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
+    steps_history: JSON.stringify([{
+      step: 'PENDING',
+      timestamp: nowMs - 5000,
+      sourceReplicaId: 'control_plane_publications-p1-r1',
+    }, {
+      step: 'SENDING',
+      timestamp: nowMs - 3000,
+    }, {
+      step: 'CREATING',
+      timestamp: nowMs - 1000,
+    }]),
+  };
+  const serviceRow = {
+    service_id: 'control_plane_publications-p1-r4',
+    replica_id: 'control_plane_publications-p1-r4',
+    partition_id: 'control_plane_publications-p1',
+    node_id: 'node-2',
+    service_type: 'partition',
+    status: 'active',
+    raft_role: 'follower',
+    address: 'node-2/partition/control_plane_publications-p1-r4',
+  };
+  const authoritativeReadCalls = [];
+  const dispatchedMessages = [];
+
+  const cdcIntegrationService = {
+    async waitForCacheUpdate() {},
+    async executeAuthoritativeSystemTableRead(
+      tableName,
+      sql,
+      params,
+      options = {},
+    ) {
+      authoritativeReadCalls.push({
+        tableName,
+        sql: String(sql),
+        params: [...(Array.isArray(params) ? params : [])],
+        options: {...options},
+      });
+
+      if (tableName === 'replica_operations') {
+        return {
+          success: true,
+          source: 'local_partition_replica',
+          rows: [{...operationRow}],
+        };
+      }
+
+      if (tableName === 'services') {
+        if (
+          options.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
+        ) {
+          return {
+            success: true,
+            source: 'local_partition_replica',
+            rows: [{...serviceRow}],
+          };
+        }
+        return {
+          success: true,
+          source: 'owner_rpc_lane',
+          rows: [],
+        };
+      }
+
+      return {
+        success: true,
+        rows: [],
+      };
+    },
+  };
+
+  const controlPlaneSystemTableGateway = {
+    async readRows(tableName, sql, params = [], options = {}) {
+      return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      );
+    },
+    async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
+      return cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      );
+    },
+    async executeQuery(sql, params = []) {
+      if (String(sql).startsWith('UPDATE replica_operations SET')) {
+        operationRow.status = params[0];
+        operationRow.workflow_step = params[1];
+        operationRow.updated_at = params[2];
+        operationRow.completed_at = params[3];
+        operationRow.error_message = params[4];
+        operationRow.steps_history = params[5];
+        operationRow.replica_id = params[6];
+        return {
+          success: true,
+          affectedRows: 1,
+        };
+      }
+      return {
+        success: true,
+        rows: [],
+        affectedRows: 0,
+      };
+    },
+  };
+
+  const coordinator = createCoordinator({
+    nodeId: 'node-2',
+    transactionCoordinator: buildTransactionCoordinator(),
+    systemTableCache: {
+      get(tableName, key) {
+        if (tableName === 'replica_operations') {
+          return key === operationRow.operation_id ? operationRow : null;
+        }
+        if (tableName === 'services') {
+          return key === serviceRow.service_id ? serviceRow : null;
+        }
+        return null;
+      },
+      getAll(tableName) {
+        if (tableName === 'replica_operations') {
+          return [operationRow];
+        }
+        if (tableName === 'services') {
+          return [serviceRow];
+        }
+        return [];
+      },
+      filter(tableName, predicate) {
+        return this.getAll(tableName).filter(predicate);
+      },
+    },
+    cdcIntegrationService,
+    controlPlaneSystemTableGateway,
+    messageRouter: {
+      async deliver(target, request) {
+        dispatchedMessages.push({target, request});
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 3};
+      },
+    },
+    enableTimeouts: false,
+  });
+
+  coordinator.initialize();
+  try {
+    coordinator.handleObservedReplicaStateChange(
+      'services',
+      'UPSERT',
+      serviceRow,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    await coordinator.shutdown();
+  }
+
+  t.equal(
+    operationRow.workflow_step,
+    'ACTIVE',
+    'local authoritative target status should advance the REPLACE row even when routed status reads stay empty',
+  );
+  t.equal(
+    operationRow.status,
+    ReplicaStatus.ACTIVE,
+    'the durable row should record the locally observed target activation',
+  );
+  t.same(
+    dispatchedMessages.map(({target, request}) => ({
+      target,
+      type: request.type,
+      replicaId: request.replicaId,
+    })),
+    [],
+    'local target activation should not dispatch source removal until safety policy allows it',
+  );
+  t.ok(
+    authoritativeReadCalls.some((call) =>
+      call.tableName === 'services' &&
+      call.options.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+    ),
+    'priority reconciliation should probe local authoritative target status before trusting routed empty status reads',
+  );
+});
+
 test('observed progress does not replay REPLACE source removal from stale ' +
   'cache state when authoritative reads stay retryable', async (t) => {
   const nowMs = Date.now();
@@ -427,17 +641,18 @@ test('observed progress does not replay REPLACE source removal from stale ' +
   t.ok(
     authoritativeReadCalls.some((call) =>
       call.tableName === 'replica_operations' &&
-      call.options.requireOwnerRpcRead === true,
-    ),
-    'observed progress should still attempt the strict owner-rpc read first',
-  );
-  t.ok(
-    authoritativeReadCalls.some((call) =>
-      call.tableName === 'replica_operations' &&
       call.options.requireOwnerRpcRead !== true,
     ),
     'observed progress should still attempt the bounded non-strict ' +
-      'authoritative fallback before giving up',
+      'owner observation before giving up',
+  );
+  t.ok(
+    authoritativeReadCalls.every((call) =>
+      call.tableName !== 'replica_operations' ||
+      call.options.requireOwnerRpcRead !== true,
+    ),
+    'observed progress should not widen ACTIVE replace reconciliation into ' +
+      'strict owner-rpc while remove safety is still blocked',
   );
 });
 

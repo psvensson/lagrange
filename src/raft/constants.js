@@ -84,6 +84,14 @@ const RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS = Object.freeze({
   deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
 });
 
+const RAFT_TRANSPORT_DELIVERY_SOURCE = Object.freeze({
+  HEARTBEAT_APPEND: 'raft:append:heartbeat',
+});
+
+const RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX = Object.freeze({
+  HEARTBEAT_APPEND: 'raft:append:heartbeat',
+});
+
 const REPLICA_SERVICE_SUFFIX_PATTERN = /-r\d+$/;
 
 function extractServiceIdFromUnifiedAddress(address) {
@@ -148,6 +156,45 @@ function resolveNormalizedTargetReplicaStatus(packet = null) {
     null;
 }
 
+function resolveNormalizedTargetAddress(packet = null) {
+  for (const address of [packet?.targetAddress, packet?.destination]) {
+    if (typeof address !== 'string') {
+      continue;
+    }
+    const normalizedAddress = address.trim();
+    if (normalizedAddress.length > 0) {
+      return normalizedAddress;
+    }
+  }
+  return null;
+}
+
+function isRaftHeartbeatAppendPacket(packet = null) {
+  const packetType = typeof packet?.type === 'string' ?
+    packet.type.toLowerCase() :
+    null;
+  if (packetType !== RAFT_PACKET_TYPE.APPEND) {
+    return false;
+  }
+  return !Array.isArray(packet?.data) || packet.data.length === 0;
+}
+
+function buildHeartbeatAppendReplacePendingKey(packet = null) {
+  const targetAddress = resolveNormalizedTargetAddress(packet);
+  if (!targetAddress) {
+    return RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT_APPEND;
+  }
+  return `${RAFT_TRANSPORT_REPLACE_PENDING_KEY_PREFIX.HEARTBEAT_APPEND}:${targetAddress}`;
+}
+
+function buildHeartbeatAppendDeliveryOptions(baseOptions, packet = null) {
+  return Object.freeze({
+    ...baseOptions,
+    deliverySource: RAFT_TRANSPORT_DELIVERY_SOURCE.HEARTBEAT_APPEND,
+    replacePendingKey: buildHeartbeatAppendReplacePendingKey(packet),
+  });
+}
+
 function shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet = null) {
   const packetType = typeof packet?.type === 'string' ?
     packet.type.toLowerCase() :
@@ -165,16 +212,29 @@ function resolveRaftTransportDeliveryOptions(packet = null) {
   const packetType = typeof packet?.type === 'string' ?
     packet.type.toLowerCase() :
     null;
+  const isHeartbeatAppendPacket = isRaftHeartbeatAppendPacket(packet);
   const explicitTargetPartitionId = resolveExplicitTargetPartitionId(packet);
   if (resolvePriorityControlPlanePartitionId(packet)) {
     if (shouldUseBackgroundDeliveryForCriticalControlPlaneAppend(packet)) {
       return RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS;
+    }
+    if (isHeartbeatAppendPacket) {
+      return buildHeartbeatAppendDeliveryOptions(
+        RAFT_TRANSPORT_DELIVERY_OPTIONS,
+        packet,
+      );
     }
     return RAFT_TRANSPORT_DELIVERY_OPTIONS;
   }
   const hasAppendEntries = packetType === RAFT_PACKET_TYPE.APPEND &&
     Array.isArray(packet?.data) &&
     packet.data.length > 0;
+  if (isHeartbeatAppendPacket) {
+    return buildHeartbeatAppendDeliveryOptions(
+      RAFT_TRANSPORT_DELIVERY_OPTIONS,
+      packet,
+    );
+  }
   if (explicitTargetPartitionId) {
     return hasAppendEntries || packetType === RAFT_PACKET_TYPE.APPEND_FAIL ?
       RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS :

@@ -1,5 +1,7 @@
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
 
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
+
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
   test,
   RebalanceCoordinator,
@@ -96,8 +98,8 @@ test('queryIncompleteOperations uses the cache-preferred visibility read ' +
       t.equal(authoritativeReadCalls.length, 1, 'should use the authoritative visibility read path for owner rows');
       t.equal(
         authoritativeReadCalls[0]?.options?.queryOptions?.timeoutMs,
-        CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-        'should preserve control-plane timeout options on authoritative visibility reads',
+        REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS,
+        'should preserve the critical recovery timeout on authoritative visibility reads',
       );
       t.equal(
         authoritativeReadCalls[0]?.options?.authoritativeReadMode,

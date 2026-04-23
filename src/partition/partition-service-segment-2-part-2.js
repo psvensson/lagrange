@@ -1,147 +1,17 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment2Part1 } from "./partition-service-segment-2-part-1.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment2Part1} from './partition-service-segment-2-part-1.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
-  COLUMN,
-  CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
-  ENTITY_TYPE,
-  ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
   LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
-  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_SQL,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
-  PARTITION_SERVICE_TYPE,
-  PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
-  PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
-  RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SQL,
-  SQLiteLogAdapter,
-  STRING,
-  SYSTEM_TABLE_NAME,
-  TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
-  assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
-  fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
-
   /**
    * Reconstruct prepared transaction state from the persisted Raft log.
    * @return {{preparedTransactionCount: number, prepareLostCount: number}}
@@ -172,18 +42,18 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         reconstructedPreparedTransactions.set(sessionId, {
           sessionId,
           transactionEpoch: Number.isFinite(data.epoch) ? data.epoch : null,
-          startTime: Number.isFinite(data.proposedAt)
-            ? data.proposedAt
-            : Date.now(),
+          startTime: Number.isFinite(data.proposedAt) ?
+            data.proposedAt :
+            Date.now(),
           operations: [],
           writeSet: new Set(data.writeSet),
           readSet: /* @__PURE__ */ new Set(),
-          raftLogIndex: Number.isFinite(logEntry?.index)
-            ? logEntry.index
-            : null,
-          preparedAt: Number.isFinite(data.proposedAt)
-            ? data.proposedAt
-            : Date.now(),
+          raftLogIndex: Number.isFinite(logEntry?.index) ?
+            logEntry.index :
+            null,
+          preparedAt: Number.isFinite(data.proposedAt) ?
+            data.proposedAt :
+            Date.now(),
         });
         continue;
       }
@@ -289,10 +159,10 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
    */
   checkWriteConflicts(writeSet, transactionEpoch) {
     if (!(writeSet instanceof Set) || writeSet.size === NUM.ZERO) {
-      return { hasConflict: false, conflicts: [] };
+      return {hasConflict: false, conflicts: []};
     }
     if (!Number.isFinite(transactionEpoch)) {
-      return { hasConflict: false, conflicts: [] };
+      return {hasConflict: false, conflicts: []};
     }
     const conflicts = [];
     for (const commitRecord of this.committedWriteLog) {
@@ -306,10 +176,10 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         if (!commitRecord.writeSet.has(key)) {
           continue;
         }
-        conflicts.push({ key, conflictingEpoch: commitRecord.epoch });
+        conflicts.push({key, conflictingEpoch: commitRecord.epoch});
       }
     }
-    return { hasConflict: conflicts.length > NUM.ZERO, conflicts };
+    return {hasConflict: conflicts.length > NUM.ZERO, conflicts};
   }
   /**
    * Resolve oldest retained commit epoch from the write log.
@@ -423,7 +293,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
     } catch (error) {
       this.logger.warn(
         PARTITION_SERVICE_ERROR_MSG.ROLLBACK_TRANSACTION_FAILED,
-        { partitionId: this.partitionId, error: error.message },
+        {partitionId: this.partitionId, error: error.message},
       );
     }
     for (const expiredSession of expiredPreparedSessions) {
@@ -489,12 +359,12 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
     const openTransaction =
       this.resolveOpenTransactionState(transactionSessionId);
     if (openTransaction) {
-      const requestedEpoch = Number.isFinite(transactionEpoch)
-        ? transactionEpoch
-        : null;
-      const openEpoch = Number.isFinite(openTransaction.state.transactionEpoch)
-        ? openTransaction.state.transactionEpoch
-        : null;
+      const requestedEpoch = Number.isFinite(transactionEpoch) ?
+        transactionEpoch :
+        null;
+      const openEpoch = Number.isFinite(openTransaction.state.transactionEpoch) ?
+        openTransaction.state.transactionEpoch :
+        null;
       if (
         requestedEpoch === null ||
         openEpoch === null ||
@@ -572,7 +442,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         error: PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_PREPARE,
       };
     }
-    const { sessionId: transactionSessionId, state: transactionState } =
+    const {sessionId: transactionSessionId, state: transactionState} =
       transaction;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.PREPARING_TRANSACTION, {
       partitionId: this.partitionId,
@@ -640,7 +510,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
     if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
     }
-    const { sessionId: resolvedSessionId, state: transactionState } =
+    const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.COMMITTING_TRANSACTION, {
       partitionId: this.partitionId,
@@ -664,9 +534,9 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         for (const writeSetKey of transactionState.writeSet) {
           this.rowCommitEpoch.set(
             writeSetKey,
-            Number.isFinite(transactionState.transactionEpoch)
-              ? transactionState.transactionEpoch
-              : committedAt,
+            Number.isFinite(transactionState.transactionEpoch) ?
+              transactionState.transactionEpoch :
+              committedAt,
           );
         }
         this.committedWriteLog.push({
@@ -699,7 +569,9 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
       });
       try {
         this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
-      } catch (_rollbackErr) {}
+      } catch (_rollbackErr) {
+        // Ignore rollback failures after the original commit failure.
+      }
       this.activeTransactions.delete(resolvedSessionId);
       this.preparedTransactions.delete(resolvedSessionId);
       this.syncLegacyTransactionAliases();
@@ -734,7 +606,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         sessionId: transactionSessionId,
       };
     }
-    const { sessionId: resolvedSessionId, state: transactionState } =
+    const {sessionId: resolvedSessionId, state: transactionState} =
       transaction;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.ROLLING_BACK_TRANSACTION, {
       partitionId: this.partitionId,
@@ -815,7 +687,7 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
         if (err) {
           this.logger.debug(
             PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED,
-            { partitionId: this.partitionId, error: err.message },
+            {partitionId: this.partitionId, error: err.message},
           );
         }
       });
@@ -890,4 +762,4 @@ class PartitionServiceSegment2 extends PartitionServiceSegment2Part1 {
   }
 }
 
-export { PartitionServiceSegment2 };
+export {PartitionServiceSegment2};

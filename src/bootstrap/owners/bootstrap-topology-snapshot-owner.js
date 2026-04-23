@@ -530,6 +530,43 @@ class BootstrapTopologySnapshotOwner {
       .systemTableSnapshots;
   }
 
+  resolveBootstrapResponseTopologySnapshotRows(
+    tableName,
+    observedSystemCacheRows = [],
+  ) {
+    const observedPublishedRows =
+      this.readPublishedAuthoritativeSystemTableSnapshotRows(tableName);
+    if (Array.isArray(observedPublishedRows)) {
+      return observedPublishedRows;
+    }
+    const retainedSnapshotRows =
+      this.readRetainedAuthoritativeSystemTableSnapshotRows(tableName);
+    return this.resolvePublishedAuthoritativeSystemTableSnapshotRows({
+      tableName,
+      observedRows: observedSystemCacheRows,
+      retainedSnapshotRows,
+    });
+  }
+
+  buildBootstrapResponseTopologySnapshotEnvelope(options = {}) {
+    const currentEpoch =
+      options.currentEpoch === undefined ?
+        this.getCurrentEpoch() :
+        options.currentEpoch;
+    return buildBootstrapTopologySnapshotEnvelope({
+      systemTableCache: assertCritical(
+        this.getSystemTableCache(),
+        BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+      ),
+      currentEpoch,
+      resolveSnapshotRows: (tableName, cacheRows) =>
+        this.resolveBootstrapResponseTopologySnapshotRows(
+          tableName,
+          cacheRows,
+        ),
+    });
+  }
+
   buildBootstrapTopologySnapshotEnvelope(options = {}) {
     const currentEpoch =
       options.currentEpoch === undefined ?

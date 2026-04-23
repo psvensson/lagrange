@@ -34,10 +34,14 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../control-plane/control-plane-publication-merge.js';
 import {
+  hasControlPlaneMutationRoutingGapFailureSignature,
+} from '../control-plane/control-plane-mutation-readiness-constants.js';
+import {
   PRIORITY_RECOVERY_COMPLETION_STATE,
   buildPriorityRecoveryCompletion,
 } from '../control-plane/priority-recovery-completion.js';
 import {hasPriorityRecoverySpreadGap} from '../control-plane/priority-recovery-snapshot.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../cdc/cdc-integration-service.js';
 import {
   WORKFLOW_STEP,
   NUM,
@@ -47,6 +51,7 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
+import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {
   buildControlPlaneQueryOptions,
   getRemainingBudgetMs,
@@ -184,6 +189,10 @@ const SQL = Object.freeze({
 });
 const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
 const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * (NUM.TEN + NUM.FIVE);
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS =
+  TIME_MS.SECOND * (NUM.TEN + NUM.FIVE);
+const REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS =
+  REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS;
 const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
 const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS = TIME_MS.SECOND * NUM.TEN;
 const INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD = 1000;
@@ -223,6 +232,8 @@ const REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE = Object.freeze({
     'priority_recovery_authoritative_operation_visibility_failure',
   PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_EMPTY_READ:
     'priority_recovery_authoritative_operation_visibility_empty_read',
+  OWNER_PERSISTED_TRANSITION_RETRYABLE_FAILURE:
+    'owner_persisted_transition_authoritative_operation_visibility_retryable_failure',
   OWNER_PERSISTED_TRANSITION_EMPTY_READ:
     'owner_persisted_transition_authoritative_operation_visibility_empty_read',
   OWNER_PERSISTED_TRANSITION_STALE_READ:
@@ -310,6 +321,7 @@ const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
   ...CONTROL_PLANE_QUERY_OPTIONS,
   routingReadinessDimension: REPLICA_OPERATION_READINESS_DIMENSION,
   readStrategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+  replicaFallbackConsistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
   controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
   controlPlaneOperationKind: 'read',
   workloadClass: REPLICA_OPERATION_VISIBILITY_WORKLOAD_PROFILE.workloadClass,
@@ -323,10 +335,19 @@ const REPLICA_OPERATION_READ_QUERY_OPTIONS = Object.freeze({
   allowSqlFallback: false,
   confirmEmptyLocalReadWithOwnerRpc: false,
 });
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_OPTIONS = Object.freeze({
+  ...buildControlPlaneQueryOptions({
+    requestedTimeoutMs: REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS,
+  }),
+});
+const REPLICA_OPERATION_CRITICAL_RECOVERY_READ_QUERY_OPTIONS = Object.freeze({
+  ...REPLICA_OPERATION_READ_QUERY_OPTIONS,
+  ...REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_OPTIONS,
+});
 const _REPLICA_OPERATION_STRICT_DEDUPE_READ_QUERY_OPTIONS =
   REPLICA_OPERATION_READ_QUERY_OPTIONS;
 const _REPLICA_OPERATION_PERSIST_CONFIRMATION_READ_QUERY_OPTIONS =
-  REPLICA_OPERATION_READ_QUERY_OPTIONS;
+  REPLICA_OPERATION_CRITICAL_RECOVERY_READ_QUERY_OPTIONS;
 const REPLICA_STATUS_READ_QUERY_OPTIONS = Object.freeze({
   ...CONTROL_PLANE_QUERY_OPTIONS,
   preferOwnerRpcRead: true,
@@ -342,6 +363,10 @@ const RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS = Object.freeze([ERRORS.NO_HAN
 const REPLICA_OPERATION_TRANSITION_LANE = Object.freeze({
   DEFAULT: 'default',
   PRIORITY_RECOVERY: 'priority_recovery',
+});
+const OPERATION_MUTATION_SESSION_RETRY_DECISION = Object.freeze({
+  RETAIN_EXISTING_SESSION: 'retain_existing_session',
+  ROTATE_IMPLICIT_SESSION: 'rotate_implicit_session',
 });
 const REPLICA_OPERATION_OWNER_NAME = 'replica-operations-owner';
 function isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) {
@@ -369,8 +394,13 @@ const REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS = Object.freeze({
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
 });
 
+const REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS = Object.freeze({
+  ...REPLICA_OPERATION_CRITICAL_RECOVERY_READ_QUERY_OPTIONS,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+});
+
 const REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS = Object.freeze({
-  ...REPLICA_OPERATION_READ_QUERY_OPTIONS,
+  ...REPLICA_OPERATION_CRITICAL_RECOVERY_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED_SQL_FALLBACK,
 });
 
@@ -382,6 +412,14 @@ const REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS = Object.freeze({
 const REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
   ...REPLICA_STATUS_READ_QUERY_OPTIONS,
   authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_PREFERRED,
+});
+const REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS = Object.freeze({
+  ...REPLICA_STATUS_READ_QUERY_OPTIONS,
+  authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+  preferOwnerRpcRead: false,
+  allowOwnerRpcFallback: false,
+  allowSqlFallback: false,
+  confirmEmptyLocalReadWithOwnerRpc: false,
 });
 
 function normalizeReplicaOperationVisibilityReadMode(value) {
@@ -629,6 +667,61 @@ class ReplicaOperationRepository {
       recordedAtMs: witness.recordedAtMs,
       operation: this.cloneIncompleteOperationObservation(witness.operation),
     };
+  }
+  getOwnerPersistedTransitionVisibilityFallbackOperation(
+    operationId,
+    expectedOperation = null,
+  ) {
+    const witness = this.getOwnerPersistedTransitionVisibilityWitness(
+      operationId,
+      expectedOperation,
+    );
+    return witness?.operation ?
+      this.cloneIncompleteOperationObservation(witness.operation) :
+      null;
+  }
+  getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity(
+    entityType,
+    entityId,
+  ) {
+    const normalizedEntityType = String(entityType || '').trim();
+    const normalizedEntityId = String(entityId || '').trim();
+    if (
+      normalizedEntityType.length === NUM.ZERO ||
+      normalizedEntityId.length === NUM.ZERO
+    ) {
+      return [];
+    }
+    const fallbackOperations = [];
+    for (const operationId of this.ownerPersistedTransitionVisibilityWitnesses.keys()) {
+      const operation =
+        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
+      if (
+        !operation ||
+        this.isOperationTerminal(operation) ||
+        !this.isOperationLocallyOwned(operation)
+      ) {
+        continue;
+      }
+      const operationEntityType = String(
+        operation.entityType || REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
+      ).trim();
+      const operationEntityId = String(
+        operation.entityId ||
+        operation.partitionId ||
+        REPLICA_OPERATION_REPOSITORY_LITERAL.VALUE,
+      ).trim();
+      const entityMatches =
+        (operationEntityType === normalizedEntityType &&
+          operationEntityId === normalizedEntityId) ||
+        (operationEntityType.length === NUM.ZERO &&
+          String(operation.partitionId || '').trim() === normalizedEntityId);
+      if (!entityMatches) {
+        continue;
+      }
+      fallbackOperations.push(operation);
+    }
+    return this.mergeIncompleteOperationVisibilityOperations([], fallbackOperations);
   }
   isOwnerPersistedTransitionVisibilityLagCandidate(
     expectedOperation,
@@ -1385,6 +1478,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
   NUM,
   OperationType,
+  REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,
   REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
@@ -1421,6 +1515,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   NUM,
   OPERATION_PERSIST_RETRY_DELAY_MS,
   OPERATION_PERSIST_RETRY_TIMEOUT_MS,
+  OPERATION_MUTATION_SESSION_RETRY_DECISION,
   PARTITION_SERVICE_ERROR_MSG,
   PRESSURE_WORK_CLASS,
   QUERY_ERROR_MSG,
@@ -1429,6 +1524,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCER_SUBSYSTEM,
   REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE,
+  REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
   REPLICA_OPERATION_OWNER_NAME,
   REPLICA_OPERATION_REPOSITORY_LITERAL,
   REPLICA_OPERATION_TRANSITION_LANE,
@@ -1446,13 +1542,17 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
+  hasControlPlaneMutationRoutingGapFailureSignature,
   isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   isRetryableWorkflowParticipantLookupErrorMessage,
+  ROUTER_ERROR_MSG,
+  TRANSPORT_ERROR_MSG,
   uuidv4,
 });
 
 assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   COORDINATOR_OWNER_COMPONENT,
   NUM,
   RAFT_ROLE,
@@ -1460,6 +1560,7 @@ assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
+  REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS,
   REPLICA_OPERATION_REPOSITORY_LITERAL,
   ReplicaStatus,
   SERVICE_TYPE,

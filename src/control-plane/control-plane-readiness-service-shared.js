@@ -60,6 +60,7 @@ import { AuthoritativeNodeEvidenceReconciler } from "./authoritative-node-eviden
 import { buildReadinessTransitionState as buildReadinessTransitionOwnerState } from "./readiness-transition-state.js";
 import {
   buildPriorityRecoveryHealthDetailsFromStartupAuthority as buildStartupAuthorityHealthDetails,
+  STARTUP_AUTHORITY_ADMISSION_STATE,
   buildStartupAuthorityFailureDescriptor as buildStartupAuthorityFailureOwnerDescriptor,
   buildStartupAuthorityPriorityPartitionDescriptor as buildStartupAuthorityPriorityPartitionOwnerDescriptor,
   buildStartupAuthorityPublicationDescriptor as buildStartupAuthorityPublicationOwnerDescriptor,
@@ -399,6 +400,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STARTUP_AUTHORITY_ADMISSION_STATE,
   STARTUP_AUTHORITY_STATE,
   STATE,
   TABLES,

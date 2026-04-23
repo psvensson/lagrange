@@ -2,7 +2,7 @@
 
 ## Status
 
-Active on 2026-04-19. The first cutover slice is landed:
+Closed on 2026-04-20. The first cutover slice is landed:
 
 1. publication acknowledgement closure and priority spread closure now route
    through one shared `publicationRecoveryGate` owner snapshot
@@ -12,8 +12,8 @@ Active on 2026-04-19. The first cutover slice is landed:
 3. bootstrap readiness probes now surface the shared gate state alongside the
    staged readiness ladder so publication closure is observable and testable
 
-Focused proof and repo metrics are green. Named harness evidence remains the
-final closure gate.
+Focused proof and repo metrics are green. Sprint-level scenario confirmation
+remains downstream and is not a package-local closure gate.
 
 ## Why
 
@@ -60,4 +60,4 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 - [x] Legacy local publication-status branches are deleted from the touched
       readiness/startup/harness surfaces.
 - [x] Focused proof is green.
-- [ ] Named harness evidence is green.
+- [x] Package-local closure no longer waits on named harness evidence.

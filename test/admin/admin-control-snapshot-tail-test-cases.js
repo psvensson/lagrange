@@ -815,7 +815,7 @@ export function registerAdminControlSnapshotTailTests({
         {
           eligible_but_no_operation_created: ['orders-p1', 'payments-p1'],
           operation_created_but_no_step_transitions: ['users-p1'],
-          learner_active_but_never_promotable: ['users-p1'],
+          learner_active_but_never_promotable: [],
           publication_recovery_eligible_but_coordinator_excludes_node: ['users-p1'],
         },
         'decision snapshots should expose deterministic blocker classes by partition',
@@ -853,7 +853,6 @@ export function registerAdminControlSnapshotTailTests({
         usersSnapshot.blockerReasons,
         [
           'operation_created_but_no_step_transitions',
-          'learner_active_but_never_promotable',
           'publication_recovery_eligible_but_coordinator_excludes_node',
         ],
         'users partition should include coordinator, learner, and publication blockers',
@@ -868,6 +867,7 @@ export function registerAdminControlSnapshotTailTests({
         ['node-b'],
         'decision snapshots should surface recovery-eligible nodes excluded by coordinator admission',
       );
+
     });
 
   test('AdminControlSnapshot classifies spread-gap partitions with only terminal operations as eligible/no-operation blockers',
@@ -1035,6 +1035,109 @@ export function registerAdminControlSnapshotTailTests({
         targetSnapshot.publication.missingPublishedEligibleNodeIds,
         ['node-b', 'node-c'],
         'decision snapshots should expose the concrete eligible nodes still missing from publication',
+      );
+    });
+
+  test('AdminControlSnapshot reuses replica-operation summary rows when cache rows lag follow-up creation',
+    async (t) => {
+      const snapshot = new AdminControlSnapshot({
+        nodeId: 'node-a',
+        nowFn: () => 5000,
+      });
+      const terminalOperationId = 'op-terminal-replace';
+      const followupOperationId = 'op-followup-sending';
+
+      const decisionSnapshots = snapshot.buildPriorityRecoveryDecisionSnapshots({
+        capturedAt: 5000,
+        publicationConvergence: {
+          publicationEpoch: 12,
+          publicationStatus: 'PUBLISHED',
+          publishedActiveNodeIds: ['node-a'],
+          pendingAckNodeIds: [],
+          priorityPartitionSummary: {
+            blockedPartitions: [{
+              partitionId: 'control_plane_publications-p1',
+              requiredDistinctNodeCount: 3,
+              readyDistinctNodeCount: 2,
+              spreadGap: 1,
+            }],
+            missingPartitionIds: ['control_plane_publications-p1'],
+            requiredDistinctNodeCount: 3,
+          },
+          membershipLifecycleSummary: {
+            projectedServingNodeIds: ['node-a', 'node-b'],
+            locallyEligibleNodeIds: ['node-a', 'node-b'],
+          },
+        },
+        readinessByNodeId: {},
+        workflowAdmissionsByWorkflowId: {},
+        replicaOperationRows: [{
+          operation_id: terminalOperationId,
+          partition_id: 'control_plane_publications-p1',
+          entity_type: 'partition',
+          operation_type: 'REPLACE',
+          status: 'completed',
+          workflow_step: 'REMOVED',
+          source_node_id: 'node-a',
+          target_node_id: 'node-b',
+          replica_id: 'control_plane_publications-p1-r4',
+          created_at: 1000,
+          updated_at: 1500,
+          completed_at: 1500,
+        }],
+        replicaOperations: {
+          rows: [{
+            operation_id: followupOperationId,
+            partition_id: 'control_plane_publications-p1',
+            entity_type: 'partition',
+            operation_type: 'REPLACE',
+            status: 'pending',
+            workflow_step: 'SENDING',
+            source_node_id: 'node-a',
+            target_node_id: 'node-b',
+            replica_id: 'control_plane_publications-p1-r5',
+            created_at: 2000,
+            updated_at: 2600,
+          }],
+          operationTimelineById: {
+            [terminalOperationId]: [
+              {step: 'ACTIVE', status: 'active', inFlight: true},
+              {step: 'REMOVED', status: 'completed', inFlight: false},
+            ],
+            [followupOperationId]: [
+              {step: 'PENDING', status: 'pending', inFlight: true},
+              {step: 'SENDING', status: 'pending', inFlight: true},
+            ],
+          },
+        },
+        serviceRows: [],
+      });
+
+      const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId === 'control_plane_publications-p1' &&
+        entry.operationId === followupOperationId,
+      );
+      t.ok(targetSnapshot,
+        'summary-backed follow-up creation should remain visible through the admin control snapshot path');
+      t.same(
+        decisionSnapshots.partitionIdsBySemanticState,
+        {
+          converged: [],
+          spread_satisfied_in_flight: [],
+          needs_operation: [],
+          operation_stalled: [],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: ['control_plane_publications-p1'],
+          blocked_unclassified: [],
+        },
+        'admin control snapshots should classify the partition from the newer follow-up summary row rather than the stale terminal cache row',
+      );
+      t.notOk(
+        targetSnapshot.blockerReasons.includes(
+          'eligible_but_no_operation_created',
+        ),
+        'admin control snapshots should not reintroduce the synthetic eligible/no-operation blocker once the summary rows show the follow-up operation',
       );
     });
 

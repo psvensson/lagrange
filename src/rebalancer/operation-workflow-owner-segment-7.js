@@ -103,6 +103,12 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const STOPPING_REPLICA_OBSERVATION_STATE = Object.freeze({
+  OBSERVED: "observed",
+  ABSENT: "absent",
+  UNAVAILABLE: "unavailable",
+});
+
 class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   isObservedProgressOperationCandidate(operation) {
     if (
@@ -202,20 +208,15 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
     ) {
       return false;
     }
-    let operation = await this.repository.queryAuthoritativeOperationById(
-      operationId,
-      {
-        requireOwnerRpcRead: true,
-      },
-    );
-    if (!operation) {
-      operation = await this.repository.queryAuthoritativeOperationById(
+    const visibilityObservation =
+      await this.repository.getOperationByIdVisibilityObservation(
         operationId,
         {
           requireOwnerRpcRead: false,
+          allowPriorityRecoveryDeferredVisibility: true,
         },
       );
-    }
+    const operation = visibilityObservation?.operation || null;
     if (!this.isObservedProgressOperationCandidate(operation)) {
       this.clearObservedProgressRetry(operationId);
       return false;
@@ -264,6 +265,49 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
   // --- Reconciliation and timeout ---
 
   /**
+   * Observe one source-removal replica state without collapsing authoritative
+   * absence and authoritative visibility loss into the same outcome.
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {string} targetNodeId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async observeStoppingReplicaProgress(replicaId, partitionId, targetNodeId) {
+    if (
+      this.repository &&
+      typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
+    ) {
+      const observation = await this.repository.getActualReplicaObservation(
+        replicaId,
+        partitionId,
+        targetNodeId,
+      );
+      const observationState =
+        observation?.state || STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+      return Object.freeze({
+        state: observationState,
+        lifecycleStatus:
+          observationState === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED ?
+            observation.lifecycleStatus :
+            null,
+      });
+    }
+    const actualStatus = await this.getActualReplicaStatus(
+      replicaId,
+      partitionId,
+      targetNodeId,
+    );
+    return Object.freeze({
+      state:
+        actualStatus === null ?
+          STOPPING_REPLICA_OBSERVATION_STATE.ABSENT :
+          STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      lifecycleStatus: actualStatus,
+    });
+  }
+
+  /**
    * Reconcile STOPPING remove/replace progression against source replica
    * removal state.
    * @param {Object} operation
@@ -287,19 +331,28 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       return true;
     }
 
-    const actualStatus = await this.getActualReplicaStatus(
+    const stoppingReplicaObservation = await this.observeStoppingReplicaProgress(
       removingReplicaId,
       operation.partitionId,
       removingNodeId,
     );
+    const actualStatus = stoppingReplicaObservation.lifecycleStatus;
 
     if (
-      actualStatus === null ||
+      stoppingReplicaObservation.state ===
+        STOPPING_REPLICA_OBSERVATION_STATE.ABSENT ||
       (operation.type === OperationType.REPLACE &&
         actualStatus === ReplicaStatus.FAILED)
     ) {
       await this.completeOperation(operation);
       return true;
+    }
+
+    if (
+      stoppingReplicaObservation.state ===
+      STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE
+    ) {
+      return false;
     }
 
     if (actualStatus === ReplicaStatus.FAILED) {
@@ -827,12 +880,19 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
       return false;
     }
 
+    const shouldResumeReplaceActivePhase =
+      mapping.action === EXECUTOR_OUTCOME_ACTION.COMPLETE &&
+      workflowStep === WORKFLOW_STEP.ACTIVE &&
+      operation.type === OperationType.REPLACE;
+
     if (mapping.action === EXECUTOR_OUTCOME_ACTION.UPDATE_STEP) {
       await this.updateStep(
         operation,
         workflowStep,
         OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME,
       );
+    } else if (shouldResumeReplaceActivePhase) {
+      await this.reconcileReplaceActualActive(operation);
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.COMPLETE) {
       await this.completeOperation(operation);
     } else if (mapping.action === EXECUTOR_OUTCOME_ACTION.FAIL) {
@@ -962,6 +1022,316 @@ class OperationWorkflowOwnerSegment7 extends OperationWorkflowOwnerSegment6 {
    * Handle node recovery.
    * @return {Promise<Object>}
    */
+  async handleRecovery() {
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START, {
+      nodeId: this.nodeId,
+    });
+
+    const result = {
+      totalIncomplete: NUM.ZERO,
+      markedFailed: NUM.ZERO,
+      reconciled: NUM.ZERO,
+      errors: [],
+    };
+
+    const canUseCacheObservationBoundary =
+      this.repository.hasReplicaOperationCacheObservationBoundary();
+    const cachedIncompleteOps = canUseCacheObservationBoundary ?
+      await this.repository.queryCachedIncompleteOperations() :
+      [];
+    const incompleteOperationObservation =
+      await this.repository.getIncompleteOperationVisibilityObservation({
+        cachedOperations: cachedIncompleteOps,
+        visibilityReadMode:
+          REPLICA_OPERATION_VISIBILITY_READ_MODE
+            .CACHE_PREFERRED_SQL_FALLBACK,
+      });
+    const incompleteOps = Array.isArray(
+      incompleteOperationObservation?.operations,
+    ) ?
+      incompleteOperationObservation.operations :
+      [];
+    result.totalIncomplete = incompleteOps.length;
+    result.incompleteOperationObservationState =
+      incompleteOperationObservation.state;
+    result.incompleteOperationRetryAfterMs =
+      incompleteOperationObservation.retryAfterMs;
+
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND, {
+      count: incompleteOps.length,
+      incompleteOperationObservationState:
+        incompleteOperationObservation.state,
+      incompleteOperationRetryAfterMs:
+        incompleteOperationObservation.retryAfterMs,
+      nodeId: this.nodeId,
+    });
+
+    for (const op of incompleteOps) {
+      if (!this.repository.isOperationLocallyOwned(op)) {
+        continue;
+      }
+
+      const originalStep = op.workflowStep;
+
+      const singleFlightKey = this.getOperationOwnerSingleFlightKey(
+        op.operationId,
+      );
+
+      try {
+        await this.operationWorkflowRunExclusive(
+          singleFlightKey,
+          () => this.reconcileRecoveryOperation(op),
+        );
+      } catch (error) {
+        if (this.deferTransitionRetry(op.operationId, error, {
+          boundary: OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY,
+          workflowStep: op?.workflowStep || null,
+          partitionId: op?.partitionId || null,
+          updatedAt: op?.updatedAt,
+          createdAt: op?.createdAt,
+        })) {
+          continue;
+        }
+        result.errors.push({
+          operationId: op.operationId,
+          error: error.message,
+        });
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED,
+          {
+            operationId: op.operationId,
+            workflowStep: originalStep,
+            partitionId: op.partitionId,
+            error: error.message,
+          },
+        );
+        continue;
+      }
+
+      if (
+        this.isPreSyncStep(originalStep) ||
+        originalStep === WORKFLOW_STEP.STOPPING
+      ) {
+        result.markedFailed++;
+      } else if (originalStep === WORKFLOW_STEP.SYNCING) {
+        result.reconciled++;
+      }
+    }
+
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
+      nodeId: this.nodeId,
+      ...result,
+    });
+
+    const reservationResult = await this.reconcileReservations();
+    result.reservationsExpired = reservationResult.expired;
+    result.reservationsOrphansReleased =
+      reservationResult.orphansReleased;
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED,
+      result,
+    );
+
+    return result;
+  }
+
+  // --- Helpers ---
+
+  /**
+   * @param {string} errorMessage
+   * @return {boolean}
+   */
+  isSafetyPolicyFailure(errorMessage) {
+    if (
+      typeof errorMessage !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
+      !errorMessage
+    ) {
+      return false;
+    }
+    const normalized = errorMessage.toLowerCase();
+    return (
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL
+          .WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM_2,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.SAFETY_CHECK_UNAVAILABLE_2,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_3,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.RECOVERY_PROJECTION_MEMBERSHIP,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.PUBLISHED_MEMBERSHIP,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.PRIORITY_SPREAD,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL.PROJECTED_VOTER_DASH_READY_SPREAD,
+      ) ||
+      normalized.includes(
+        OPERATION_WORKFLOW_OWNER_LITERAL
+          .IS_NO_LONGER_IN_THE_CURRENT_ELIGIBLE_COHORT_FOR
+          .trim(),
+      )
+    );
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {boolean} replaceRemovePhase
+   * @param {string} removeSafetyError
+   * @return {boolean}
+   */
+  async getRemoveSafetyDeferReason(
+    operation,
+    replaceRemovePhase,
+    removeSafetyError,
+  ) {
+    if (!operation || !this.isSafetyPolicyFailure(removeSafetyError)) {
+      return null;
+    }
+    if (operation.type === OperationType.REPLACE && replaceRemovePhase) {
+      return REBALANCE_COORDINATOR_DEFER_REASON
+        .REPLACE_REMOVE_SAFETY_BLOCKED;
+    }
+    if (
+      operation.type !== OperationType.REMOVE ||
+      !await this.isCriticalRemoveOverReplicated(operation)
+    ) {
+      return null;
+    }
+    return REBALANCE_COORDINATOR_DEFER_REASON.REMOVE_SAFETY_BLOCKED;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   */
+  async isCriticalRemoveOverReplicated(operation) {
+    if (
+      !operation ||
+      operation.type !== OperationType.REMOVE ||
+      !this.isCriticalSystemPartition(operation.partitionId)
+    ) {
+      return false;
+    }
+    const criticalReplicaRows = await this.getCriticalReplicaRowsForSafety(
+      operation.partitionId,
+    );
+    const minReplicaCount = await this.getCriticalMinReplicaCount(
+      operation.partitionId,
+    );
+    return criticalReplicaRows.length > minReplicaCount;
+  }
+
+  /**
+   * @param {string|null|undefined} operationId
+   * @return {void}
+   */
+  clearDeferredSafetyBlockState(operationId) {
+    if (
+      typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
+      operationId.length === NUM.ZERO
+    ) {
+      return;
+    }
+    this.clearSafetyDeferredRetry(operationId);
+    this.safetyDeferredLogStateByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {Object} operation
+   * @param {string} errorMessage
+   * @return {void}
+   */
+  logDeferredSafetyBlockedRemove(
+    operation,
+    errorMessage,
+    deferReason,
+  ) {
+    const operationId = operation?.operationId;
+    if (
+      typeof operationId !== OPERATION_WORKFLOW_OWNER_LITERAL.STRING ||
+      operationId.length === NUM.ZERO
+    ) {
+      return;
+    }
+    const now = Date.now();
+    const previousState =
+      this.safetyDeferredLogStateByOperationId.get(operationId) || null;
+    const errorChanged = previousState?.errorMessage !== errorMessage;
+    const throttleElapsed = !previousState ||
+      now - previousState.loggedAtMs >=
+        SAFETY_DEFERRED_LOG_THROTTLE_MS;
+
+    this.safetyDeferredLogStateByOperationId.set(operationId, {
+      errorMessage,
+      loggedAtMs: now,
+    });
+
+    if (!errorChanged && !throttleElapsed) {
+      return;
+    }
+
+    this.logger.warn(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_DEFERRED_BY_SAFETY_POLICY,
+      {
+        operationId,
+        partitionId: operation.partitionId,
+        sourceNodeId: operation.sourceNodeId,
+        targetNodeId: operation.targetNodeId,
+        workflowStep: operation.workflowStep,
+        reason: deferReason,
+        errorMessage,
+      },
+    );
+  }
+
+  /**
+   * @param {*} errorLike
+   * @param {string} fallbackMessage
+   * @return {string}
+   */
+  normalizeErrorMessage(errorLike, fallbackMessage) {
+    if (
+      typeof errorLike === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+      errorLike.trim()
+    ) {
+      return errorLike;
+    }
+
+    if (
+      !errorLike ||
+      typeof errorLike !== OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
+    ) {
+      return fallbackMessage;
+    }
+
+    const candidateValues = [
+      errorLike.message,
+      errorLike.errorMessage,
+      errorLike.error?.message,
+      errorLike.error?.errorMessage,
+      errorLike.details?.message,
+      errorLike.details?.errorMessage,
+    ];
+
+    for (const candidate of candidateValues) {
+      if (
+        typeof candidate === OPERATION_WORKFLOW_OWNER_LITERAL.STRING &&
+        candidate.trim()
+      ) {
+        return candidate;
+      }
+    }
+
+    return fallbackMessage;
+  }
 }
 
 export { OperationWorkflowOwnerSegment7 };

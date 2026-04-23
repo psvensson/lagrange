@@ -118,6 +118,12 @@ class BootstrapRequestOwner {
     };
   }
 
+  buildBootstrapResponseTopologySnapshotEnvelope(options) {
+    return this.delegates.buildBootstrapResponseTopologySnapshotEnvelope?.(
+      options,
+    ) || this.buildBootstrapTopologySnapshotEnvelope(options);
+  }
+
   getClusterConfiguration() {
     return this.delegates.getClusterConfiguration?.() || {};
   }
@@ -293,7 +299,7 @@ class BootstrapRequestOwner {
       const {
         systemTableSnapshots,
         topologySnapshotMeta,
-      } = this.buildBootstrapTopologySnapshotEnvelope({
+      } = this.buildBootstrapResponseTopologySnapshotEnvelope({
         currentEpoch,
       });
       const clusterConfig = this.getClusterConfiguration();

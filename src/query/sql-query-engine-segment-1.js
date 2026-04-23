@@ -166,6 +166,8 @@ class SQLQueryEngineSegment1 {
         this.getAuthoritativeRoutingOverlayPartition(partitionId),
       getServicesForPartition: (partitionId) =>
         this.getAuthoritativeRoutingOverlayServices(partitionId),
+      shouldMaskCacheServicesForPartition: (partitionId) =>
+        this.shouldAuthoritativeRoutingOverlayMaskCacheServices(partitionId),
       refreshPartitionRouting: async (partitionId, overlayOptions = {}) =>
         this.refreshAuthoritativeRoutingOverlay(partitionId, overlayOptions),
     };

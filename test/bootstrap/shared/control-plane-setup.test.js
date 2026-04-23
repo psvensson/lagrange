@@ -15,6 +15,15 @@ import {DistributedTransactionCoordinator} from
 import {LEASE_STATE} from
   '../../../src/control-plane/lease-service-constants.js';
 
+const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze(['cluster_incarnation_identity_mismatch']),
+  localIdentityState: 'mismatched',
+  durableMembershipState: 'present',
+  peerProofState: 'recovered',
+});
+
 describe('ControlPlaneSetup', () => {
   let mockMessageRouter;
   let mockCdcIntegrationService;
@@ -386,6 +395,48 @@ describe('ControlPlaneSetup', () => {
         assert.strictEqual(
           result.rebalanceCoordinator.transactionCoordinator,
           mockCdcIntegrationService.sqlQueryEngine.transactionCoordinator,
+        );
+      });
+
+    it('should pass the local cluster-incarnation fence into readiness planning',
+      async () => {
+        const result = await ControlPlaneSetup.create({
+          nodeId: 'test-node',
+          nodeAddress: 'localhost:8080',
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          systemTableCache: mockSystemTableCache,
+          tablePolicyService: mockTablePolicyService,
+          getLocalClusterIncarnationFence: () =>
+            TEST_CLUSTER_INCARNATION_FENCE_BLOCKED,
+        });
+
+        createdServices.push(result);
+
+        const planningSnapshot =
+          result.rebalanceCoordinator.controlPlaneReadinessService
+            .buildMembershipPublicationPlanningSnapshot({
+              nodeId: 'test-node',
+              membershipPublication: {
+                publicationEpoch: 12,
+                status: 'PUBLISHED',
+                publishedActiveNodeIds: ['test-node'],
+                requiredAckNodeIds: ['test-node'],
+                acknowledgedNodeIds: ['test-node'],
+              },
+            });
+
+        assert.strictEqual(
+          planningSnapshot.admissionState,
+          'blocked',
+        );
+        assert.deepStrictEqual(
+          planningSnapshot.admissionReasonCodes,
+          ['cluster_incarnation_identity_mismatch'],
+        );
+        assert.deepStrictEqual(
+          planningSnapshot.clusterIncarnationFence,
+          TEST_CLUSTER_INCARNATION_FENCE_BLOCKED,
         );
       });
 

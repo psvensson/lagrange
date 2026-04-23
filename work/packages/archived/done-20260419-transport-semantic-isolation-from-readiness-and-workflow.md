@@ -2,12 +2,13 @@
 
 ## Status
 
-Active on 2026-04-19.
+Closed on 2026-04-20.
 
 Focused proof is now green. Router/query-transport selection, local transport
 readiness normalization, authoritative control-plane fallback, readiness
 evidence, and seed-side owner-read diagnosis all consume the shared typed
-transport outcome. Named harness evidence remains the final closure gate.
+transport outcome. Sprint-level scenario confirmation remains downstream and is
+not a package-local closure gate.
 
 ## Why
 
@@ -52,9 +53,10 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 - [x] One typed delivery outcome is reused across readiness and workflow
       consumers.
 - [x] Router-local quarantine/reconnect details stop driving semantic gates.
-- [ ] Focused transport/readiness proof and named harness evidence are green.
+- [x] Focused transport/readiness proof is green and package-local closure no
+      longer waits on named harness evidence.
   Focused proof is green with:
   `npm test -- test/transport/message-router.test.js test/control-plane/authoritative-control-plane-view.test.js test/integration/seed-owner-read-diagnosis.integration.test.js`
   and
   `npm test -- test/integration/replica-operations-owner-read-transport-readiness.integration.test.js`.
-  Named harness evidence has not been rerun yet in this package.
+  Named harness confirmation is now owned by the sprint-level scenario pass.

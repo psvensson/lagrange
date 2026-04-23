@@ -742,6 +742,128 @@ async (t) => {
   t.end();
 });
 
+test('QueryExecutor - executeOnPartition widens owner-missing priority ' +
+  'recovery reads away from a stale service-role-derived leader node after ' +
+  'a no-handler witness', async (t) => {
+  const deliveries = [];
+  const partitionId = 'replica_operations-p1';
+  const staleAddress = 'leader-node/partition/replica_operations-p1-r1';
+  const siblingAddress = 'leader-node/partition/replica_operations-p1-r2';
+  const recoveryAddress = 'recovery-node/partition/replica_operations-p1-r3';
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: null,
+        table_name: TABLES.REPLICA_OPERATIONS,
+      },
+    ],
+    services: [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: staleAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'replica_operations-p1-r2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'follower',
+        address: siblingAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'replica_operations-p1-r3',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'recovery-node',
+        raft_role: 'follower',
+        address: recoveryAddress,
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return this.services.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === staleAddress) {
+        return {
+          acknowledged: true,
+          success: false,
+          noHandler: true,
+          error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
+        };
+      }
+      if (address === siblingAddress) {
+        return {
+          acknowledged: true,
+          success: false,
+          error: 'unexpected sibling retry on stale service-role-derived leader node',
+        };
+      }
+      if (address === recoveryAddress) {
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [{operation_id: 'op-1'}],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected address',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'SELECT * FROM replica_operations WHERE operation_id = ?',
+    ['op-1'],
+    true,
+    true,
+    false,
+    {
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    },
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [staleAddress, recoveryAddress],
+    'owner-missing priority recovery reads should treat the runtime no-handler witness as evidence against retrying the disproven leader node first',
+  );
+  t.end();
+});
+
 test('QueryExecutor - executeOnPartition honors overlay refresh when service id is unchanged', async (t) => {
   const fixture = createStaleOverlayOwnerHandoffFixture({
     sameServiceId: true,
@@ -1110,10 +1232,9 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   );
 });
 
-test('QueryExecutor - executeOnPartition defers retryable routed control-plane ' +
-  'transport failures instead of widening in the same attempt', async (t) => {
+test('QueryExecutor - executeOnPartition widens deferred priority ' +
+  'control-plane transport failures to another live replica', async (t) => {
   const deliveries = [];
-  const retryDelays = [];
   const partitionId = 'replica_operations-p1';
   const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
   const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
@@ -1188,6 +1309,121 @@ test('QueryExecutor - executeOnPartition defers retryable routed control-plane '
           rows: [],
         };
       }
+      if (address === fallbackAddress) {
+        return {
+          acknowledged: true,
+          success: true,
+          changes: 1,
+          rows: [],
+        };
+      }
+      return {
+        acknowledged: true,
+        success: false,
+        error: 'unexpected fallback delivery',
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+    nodeId: 'local-node',
+  });
+
+  const result = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-1'],
+    false,
+  );
+
+  t.equal(result.success, true);
+  t.same(
+    deliveries,
+    [leaderAddress, fallbackAddress],
+    'priority recovery should widen to another live replica after a deferred ' +
+      'leader-unavailable transport failure',
+  );
+});
+
+test('QueryExecutor - executeOnPartition keeps deferred non-priority ' +
+  'system-table transport failures on the same leader address', async (t) => {
+  const deliveries = [];
+  const retryDelays = [];
+  const partitionId = 'services-p1';
+  const leaderAddress = 'leader-node/partition/services-p1-r1';
+  let leaderAttempts = 0;
+
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: partitionId,
+        leader_node_id: 'leader-node',
+        table_name: TABLES.SERVICES,
+      },
+    ],
+    services: [
+      {
+        service_id: 'services-p1-r1',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'leader-node',
+        raft_role: 'leader',
+        address: leaderAddress,
+        status: 'active',
+      },
+      {
+        service_id: 'services-p1-r2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'follower-node',
+        raft_role: 'follower',
+        address: 'follower-node/partition/services-p1-r2',
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const messageRouter = {
+    async deliver(address) {
+      deliveries.push(address);
+      if (address === leaderAddress) {
+        leaderAttempts += 1;
+        if (leaderAttempts === 1) {
+          return {
+            acknowledged: true,
+            success: false,
+            error: 'Connection to node leader-node closed',
+            errorCode: 'ROUTER_CONNECTION_CLOSED',
+            deferRetry: true,
+            retryAfterMs: 250,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+          changes: 1,
+          rows: [],
+        };
+      }
       return {
         acknowledged: true,
         success: false,
@@ -1207,8 +1443,8 @@ test('QueryExecutor - executeOnPartition defers retryable routed control-plane '
 
   const result = await executor.executeOnPartition(
     partitionId,
-    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
-    ['active', 'op-1'],
+    'UPDATE services SET status = ? WHERE service_id = ?',
+    ['active', 'svc-1'],
     false,
   );
 
@@ -1216,8 +1452,8 @@ test('QueryExecutor - executeOnPartition defers retryable routed control-plane '
   t.same(
     deliveries,
     [leaderAddress, leaderAddress],
-    'deferred control-plane transport failures should retry after backoff ' +
-      'instead of widening to other live replicas in the same attempt',
+    'non-priority system-table writes should keep the bounded same-address ' +
+      'retry contract after a deferred transport failure',
   );
   t.equal(retryDelays.length, 1,
     'deferred failures should schedule one bounded partition retry');

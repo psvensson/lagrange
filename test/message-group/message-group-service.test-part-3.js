@@ -35,6 +35,9 @@ import {
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
+  buildCriticalVisibilityCdcPropagationDeliverySource,
+} from '../../src/cache/cdc-propagation-delivery-profile.js';
+import {
   COLUMN,
   CDC_OPERATION,
   SERVICE_TYPE,
@@ -642,6 +645,7 @@ test(
       let selectionCalls = 0;
       let repairCalls = 0;
       let deliveredAddress = null;
+      let deliveredOptions = null;
       service.resolveCDCForwardSelection = () => {
         selectionCalls += 1;
         if (selectionCalls === 1) {
@@ -666,8 +670,9 @@ test(
         repairCalls += 1;
         return true;
       };
-      service.transport.deliver = async (address) => {
+      service.transport.deliver = async (address, _payload, options) => {
         deliveredAddress = address;
+        deliveredOptions = options;
         return {acknowledged: true, success: true};
       };
 
@@ -688,6 +693,16 @@ test(
         deliveredAddress,
         'peer-node-a/message-group/mg-forward-repair-r1',
         'strict forward should deliver to the repaired leader target',
+      );
+      t.equal(
+        deliveredOptions?.deliveryPriority,
+        TEST_DELIVERY_PRIORITY.CRITICAL,
+        'strict forward should keep priority CDC traffic on the critical lane',
+      );
+      t.equal(
+        deliveredOptions?.deliverySource,
+        buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.NODES),
+        'strict forward should forward one explicit table-scoped delivery source',
       );
     } finally {
       await cleanup();

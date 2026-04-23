@@ -145,30 +145,50 @@ const MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD = Object.freeze({
   ADDRESSED_STRICT_CONVERGENCE: 'addressedStrictConvergence',
 });
 
-function extractCDCForwardPayloadRows(payload = null) {
-  const events = Array.isArray(payload?.events) ?
+function normalizeCDCForwardDeliveryEvents(
+  tableName,
+  payload = null,
+) {
+  const fallbackTableName =
+    typeof payload?.tableName === TYPEOF.STRING &&
+      payload.tableName.length > NUM.ZERO ?
+      payload.tableName :
+      typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO ?
+        tableName :
+        null;
+  const payloadEvents = Array.isArray(payload?.events) ?
     payload.events :
     [payload];
-  return events
-    .map((event) => event?.data && typeof event.data === TYPEOF.OBJECT ?
-      event.data :
-      null)
-    .filter(Boolean);
+  const normalizedEvents = payloadEvents
+    .filter((event) => event && typeof event === TYPEOF.OBJECT)
+    .map((event) => ({
+      tableName:
+        typeof event?.tableName === TYPEOF.STRING &&
+          event.tableName.length > NUM.ZERO ?
+          event.tableName :
+          fallbackTableName,
+      data: event?.data && typeof event.data === TYPEOF.OBJECT ?
+        event.data :
+        null,
+    }));
+  if (normalizedEvents.length === NUM.ZERO) {
+    return [{
+      tableName: fallbackTableName,
+      data: null,
+    }];
+  }
+  return normalizedEvents;
 }
 
-function resolveCDCForwardDeliveryPriority(
+function resolveCDCForwardDeliveryProfile(
   tableName,
   payload = null,
   replayOnly = false,
 ) {
-  const payloadRows = extractCDCForwardPayloadRows(payload);
-  const deliveryProfile = resolveCdcPropagationDeliveryProfile(
-    payloadRows.length > NUM.ZERO ?
-      payloadRows.map((row) => ({tableName, data: row})) :
-      [{tableName, data: null}],
+  return resolveCdcPropagationDeliveryProfile(
+    normalizeCDCForwardDeliveryEvents(tableName, payload),
     {replayOnly},
   );
-  return deliveryProfile.deliveryPriority;
 }
 
 function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
@@ -1269,7 +1289,7 @@ Object.assign(
   createMessageGroupForwardingOwnerDeliveryMethods({
     buildMessageGroupLeaderIdentitySnapshot,
     buildForwardTopologyRepairReadOptions,
-    resolveCDCForwardDeliveryPriority,
+    resolveCDCForwardDeliveryProfile,
     getSystemCachePrimaryKeyFieldOrFallback,
     buildControlPlaneWorkloadProfile,
     normalizeCauseId,

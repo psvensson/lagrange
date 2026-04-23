@@ -1033,10 +1033,14 @@ class ReplicaHandlerPart1 extends EventEmitter {
       partitionId,
       startedAt: Date.now(),
     });
+    const removalIngressStatus =
+      replica.status === ReplicaStatus.FAILED ?
+        ReplicaStatus.FAILED :
+        ReplicaStatus.REMOVING;
     this.setLocalReplica(replicaId, {
       replicaId,
       partitionId,
-      status: ReplicaStatus.REMOVING,
+      status: removalIngressStatus,
       service: replica.service || this.getTrackedService(replicaId),
     });
     // Start async removal after ACK has returned.

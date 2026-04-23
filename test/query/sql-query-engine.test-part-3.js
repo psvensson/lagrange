@@ -1307,3 +1307,72 @@ test('SQLQueryEngine - failed non-transactional INSERT persists one ' +
   upsertResolvers = [];
   await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
 });
+
+test('SQLQueryEngine - retryable control-plane deferred non-transactional ' +
+  'INSERT does not persist terminal write-tracking rows', async (t) => {
+  const SLOW_PERSIST_MS = 50;
+  const upserts = [];
+  let upsertResolvers = [];
+
+  const cache = createMockSystemCache(
+    [{table_name: 'users', primaryKey: 'id'}],
+    [{
+      partition_id: 'p1',
+      table_name: 'users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }],
+  );
+
+  const cdcIntegrationService = {
+    async upsertSystemTableRow(tableName, row) {
+      upserts.push({tableName, row, timestamp: Date.now()});
+      await new Promise((resolve) => {
+        upsertResolvers.push(resolve);
+        setTimeout(resolve, SLOW_PERSIST_MS);
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    cdcIntegrationService,
+  });
+  engine.distributedWriteCoordinator.executePlan = async () => {
+    return {
+      success: false,
+      error: 'query_admission_deferred',
+      retryAfterMs: 25,
+      pressureAction: 'defer',
+      pressureReason: 'transport_backpressure',
+    };
+  };
+
+  const startMs = Date.now();
+  const result = await engine.executeQuery(
+    'INSERT INTO users (id, name) VALUES (\'alice\', \'Alice\')',
+  );
+  const durationMs = Date.now() - startMs;
+
+  t.equal(result.success, false,
+    'retryable admission defer should still surface a failed query result');
+  t.equal(result.error, 'query_admission_deferred',
+    'retryable admission defer should preserve the shared admission error');
+  t.ok(
+    durationMs < SLOW_PERSIST_MS,
+    `deferred INSERT took ${durationMs}ms, expected < ${SLOW_PERSIST_MS}ms ` +
+    '(write tracking should remain fire-and-forget)',
+  );
+
+  await Promise.resolve();
+  t.equal(upserts.length, 0,
+    'retryable admission defers must not persist terminal sql_write_operations rows');
+
+  for (const resolver of upsertResolvers) {
+    resolver();
+  }
+  upsertResolvers = [];
+  await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});

@@ -20,6 +20,9 @@ import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests} from './reb
 const PRIORITY_RECOVERY_DEFERRED_COMPLETION_STATE =
   'operation_visibility_deferred';
 const EMERGENCY_PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
+const INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT =
+  'source_node_id = ? OR target_node_id = ?';
 
 function buildTransactionCoordinator() {
   return {
@@ -1107,10 +1110,15 @@ test('coordinator SQL reads use shared control-plane timeout options',
       'probe should execute coordinator SQL reads',
     );
     for (const call of executeQueryCalls) {
+      const expectedTimeoutMs = call.sql.includes(
+        INCOMPLETE_OPERATION_OWNER_QUERY_SQL_FRAGMENT,
+      ) ?
+        REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS :
+        CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS;
       t.equal(
         call.options.timeoutMs,
-        CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-        `coordinator read should pass shared timeout on ${call.sql}`,
+        expectedTimeoutMs,
+        `coordinator read should pass the expected timeout on ${call.sql}`,
       );
     }
   });

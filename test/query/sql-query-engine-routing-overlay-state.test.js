@@ -9,6 +9,19 @@ import {
 const SYSTEM_TABLE_BRIDGE_RETENTION_MODE = 'system_table_service_gap_bridge';
 const SYSTEM_TABLE_NODES = TABLES.NODES;
 const NON_EXPIRING_RETENTION_MS = Number.POSITIVE_INFINITY;
+const AUTHORITATIVE_OVERLAY_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  AUTHORITATIVE_MISSING: 'authoritative_missing',
+  MISSING: 'missing',
+});
+const AUTHORITATIVE_OVERLAY_PARTITION_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+const AUTHORITATIVE_OVERLAY_CACHE_SERVICE_STATE = Object.freeze({
+  ELIGIBLE: 'eligible',
+  MASKED: 'masked',
+});
 
 function createEngine() {
   const engine = Object.create(SQLQueryEngine.prototype);
@@ -31,8 +44,9 @@ test('SQLQueryEngine exposes missing authoritative overlay state explicitly',
     t.same(
       engine.getAuthoritativeRoutingOverlayEntryState('partition-1'),
       {
-        state: 'missing',
-        partitionState: 'unavailable',
+        state: AUTHORITATIVE_OVERLAY_STATE.MISSING,
+        partitionState: AUTHORITATIVE_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+        cacheServiceState: AUTHORITATIVE_OVERLAY_CACHE_SERVICE_STATE.ELIGIBLE,
         services: [],
       },
       'missing authoritative overlay entries should use an explicit state',
@@ -50,9 +64,42 @@ test('SQLQueryEngine exposes authoritative overlay service-only state explicitly
 
     const state = engine.getAuthoritativeRoutingOverlayEntryState('partition-1');
 
-    t.equal(state.state, 'available');
-    t.equal(state.partitionState, 'unavailable');
+    t.equal(state.state, AUTHORITATIVE_OVERLAY_STATE.AVAILABLE);
+    t.equal(
+      state.partitionState,
+      AUTHORITATIVE_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+    );
+    t.equal(
+      state.cacheServiceState,
+      AUTHORITATIVE_OVERLAY_CACHE_SERVICE_STATE.MASKED,
+    );
     t.same(state.services, [{service_id: 'svc-1'}]);
+  });
+
+test('SQLQueryEngine exposes authoritative-missing overlay state explicitly',
+  async (t) => {
+    const engine = createEngine();
+    engine.authoritativeRoutingOverlayEntries.set('partition-1', {
+      state: AUTHORITATIVE_OVERLAY_STATE.AUTHORITATIVE_MISSING,
+      partition: null,
+      services: [],
+    });
+
+    t.same(
+      engine.getAuthoritativeRoutingOverlayEntryState('partition-1'),
+      {
+        state: AUTHORITATIVE_OVERLAY_STATE.AUTHORITATIVE_MISSING,
+        partitionState: AUTHORITATIVE_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+        cacheServiceState: AUTHORITATIVE_OVERLAY_CACHE_SERVICE_STATE.MASKED,
+        services: [],
+      },
+      'authoritative absence should remain explicit so stale cache rows can be masked',
+    );
+    t.equal(
+      engine.shouldAuthoritativeRoutingOverlayMaskCacheServices('partition-1'),
+      true,
+      'authoritative absence should suppress stale cached service rows',
+    );
   });
 
 test('SQLQueryEngine expires bootstrap overlay entries into an explicit state',

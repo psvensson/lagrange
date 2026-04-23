@@ -1,3 +1,5 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { FAILURE_BUNDLE_SEGMENT_2 } from "./failure-bundle-segment-2.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -90,6 +92,7 @@ const {
   resolveRoutingDiagnostics,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
+  buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,
@@ -485,6 +488,11 @@ function resolveControlPlaneDiagnostics(entry) {
     typeof directDiagnostics.publicationConvergence === "object"
       ? directDiagnostics.publicationConvergence
       : null;
+  let priorityRecoveryObservation =
+    directDiagnostics?.priorityRecoveryObservation &&
+    typeof directDiagnostics.priorityRecoveryObservation === "object"
+      ? directDiagnostics.priorityRecoveryObservation
+      : null;
   let priorityRecoveryDecisionSnapshots =
     normalizePriorityRecoveryDecisionSnapshots(
       directDiagnostics?.priorityRecoveryDecisionSnapshots,
@@ -542,6 +550,14 @@ function resolveControlPlaneDiagnostics(entry) {
         typeof controlPlaneDiagnostics.publicationConvergence === "object"
       ) {
         publicationConvergence = controlPlaneDiagnostics.publicationConvergence;
+      }
+      if (
+        !priorityRecoveryObservation &&
+        controlPlaneDiagnostics.priorityRecoveryObservation &&
+        typeof controlPlaneDiagnostics.priorityRecoveryObservation === "object"
+      ) {
+        priorityRecoveryObservation =
+          controlPlaneDiagnostics.priorityRecoveryObservation;
       }
       priorityRecoveryDecisionSnapshots =
         mergePriorityRecoveryDecisionSnapshots(
@@ -708,6 +724,7 @@ function resolveControlPlaneDiagnostics(entry) {
     Object.keys(recoveryEpochsByNodeId).length === ZERO &&
     controlPlaneOperations.length === ZERO &&
     startupRecovery === null &&
+    priorityRecoveryObservation === null &&
     priorityRecoveryDecisionSnapshots === null &&
     priorityRecoveryInvariants === null &&
     directDiagnostics === null
@@ -730,6 +747,7 @@ function resolveControlPlaneDiagnostics(entry) {
     recoveryEpochsByNodeId,
     controlPlaneOperations,
     startupRecovery,
+    priorityRecoveryObservation,
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryInvariants,
     ...(directDiagnostics || {}),
@@ -1265,6 +1283,7 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   resolveRoutingDiagnostics,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
+  buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,

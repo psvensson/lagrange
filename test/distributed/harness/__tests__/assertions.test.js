@@ -21,6 +21,12 @@ import {
   buildSequencedConvergenceNode,
 } from './assertions-test-helpers.js';
 
+const DEFAULT_CONVERGED_PARTITION_IDS = ['p1'];
+const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID = 'control_plane_publications-p1';
+const CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID =
+  'op-cache-visible-spread-satisfied';
+const CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID = 'node-d';
+
 /**
  * Feature: distributed-testing-framework
  * Property 9: Convergence Threshold Configuration
@@ -885,6 +891,114 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
     assert.ok(result.settledAfterMs >= 0);
   });
 
+test(
+  'waitForConvergence — can ignore cache-visible spread-satisfied priority recovery operations',
+  async () => {
+    const node = {
+      id: 'mock-cache-visible-priority-recovery-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId: 'mock-cache-visible-priority-recovery-node',
+          partitionIds: [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID],
+          servicesRows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address:
+                'mock-cache-visible-priority-recovery-node/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r0',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-b/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r1',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-c/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r2',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID +
+                '/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r4',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+          ],
+          operationRows: [{
+            operation_id: CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID,
+            type: 'REPLACE',
+            partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            source_node_id: 'node-a',
+            target_node_id: CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID,
+            replica_id:
+              CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID + '-r4',
+            status: 'syncing',
+            workflow_step: 'SYNCING',
+            updated_at: Date.now() - 1000,
+          }],
+          controlPlaneDiagnostics: {
+            replicaOperations: {
+              staleInFlightCount: 0,
+            },
+            publicationConvergence: {
+              priorityRecoveryPartitionWitnesses: [{
+                partitionId: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+                semanticState: 'spread_satisfied_in_flight',
+                completionState: 'spread_satisfied_in_flight',
+                visibilityState: 'cache_visible',
+                operationIds: [CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID],
+              }],
+            },
+          },
+        })],
+      }),
+    };
+
+    await assert.rejects(
+      waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      }),
+      /Convergence timeout/,
+      'cache-visible spread-satisfied operations should still gate convergence by default',
+    );
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  },
+);
+
 test('waitForConvergence — requires leader coverage for all partitions',
   async () => {
     const snapshot = buildControlSnapshotRecord({
@@ -1087,7 +1201,22 @@ test('waitForConvergence — transient remove with leader gap recovers to stable
     });
 
     assert.strictEqual(typeof result.settledAfterMs, 'number');
+  assert.ok(result.settledAfterMs >= 0);
+});
+
+test('waitForConvergence — default option path does not depend on undeclared segment locals',
+  async () => {
+    const node = buildConvergedMockNode(
+      DEFAULT_CONVERGED_PARTITION_IDS,
+      CONVERGENCE_DEFAULTS.targetVoterCount,
+    );
+
+    const result = await waitForConvergence([node]);
+
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
     assert.ok(result.settledAfterMs >= 0);
+    assert.strictEqual(typeof result.leaderChanges, 'number');
+    assert.strictEqual(typeof result.maxOverTargetMs, 'number');
   });
 
 test('waitForConvergence — waits for in-flight replica operations to settle',
@@ -1290,6 +1419,84 @@ test('waitForConvergence — timeout diagnostics include control-plane context',
       );
     }
   });
+
+test('waitForConvergence — preserves last meaningful control-plane context ' +
+  'when later polls degrade', async () => {
+  const partitionId = 'p1';
+  const stableRows = [
+    buildPartitionReplicaRow(partitionId, 'seed-1', 'leader'),
+    buildPartitionReplicaRow(partitionId, 'joiner-1', 'follower'),
+    buildPartitionReplicaRow(partitionId, 'joiner-2', 'follower'),
+  ];
+  let snapshotCallCount = 0;
+  const node = {
+    id: 'seed-1',
+    isReachable: async () => true,
+    getControlSnapshot: async () => {
+      snapshotCallCount += 1;
+      if (snapshotCallCount === 1) {
+        return {
+          rows: [buildControlSnapshotRecord({
+            nodeId: 'seed-1',
+            partitionIds: [partitionId],
+            snapshotRevision: 22,
+            snapshotRevisionState: 'stale_usable',
+            snapshotExpectedMinimumRevision: 24,
+            snapshotRevisionGap: 2,
+            snapshotResumeToken: 'control-plane-revision:captured_at:22',
+            servicesRows: stableRows,
+            operationRows: [{operation_id: 'op-1', status: 'creating'}],
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 8,
+                publicationStatus: 'ack_pending',
+                pendingAckNodeIds: ['joiner-1'],
+                publishedActiveNodeIds: ['seed-1', 'joiner-2'],
+              },
+            },
+          })],
+        };
+      }
+      return {
+        rows: [buildControlSnapshotRecord({
+          nodeId: 'seed-1',
+          partitionIds: [partitionId],
+          servicesRows: stableRows,
+          operationRows: [{operation_id: 'op-1', status: 'creating'}],
+        })],
+      };
+    },
+  };
+
+  try {
+    await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 100,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+    assert.fail('Expected convergence timeout with in-flight operations');
+  } catch (err) {
+    assert.ok(err.diagnostics, 'should include timeout diagnostics');
+    assert.ok(
+      err.diagnostics.controlPlaneDiagnostics,
+      'should preserve the last meaningful control-plane diagnostics',
+    );
+    assert.strictEqual(
+      err.diagnostics.controlPlaneDiagnostics.publicationConvergence.publicationEpoch,
+      8,
+    );
+    assert.strictEqual(err.diagnostics.snapshotRevision, 22);
+    assert.strictEqual(err.diagnostics.snapshotRevisionState, 'stale_usable');
+    assert.strictEqual(err.diagnostics.snapshotExpectedMinimumRevision, 24);
+    assert.strictEqual(err.diagnostics.snapshotRevisionGap, 2);
+    assert.strictEqual(
+      err.diagnostics.snapshotResumeToken,
+      'control-plane-revision:captured_at:22',
+    );
+  }
+});
 
 test('waitForConvergence — escalates to forceRepair snapshots after threshold', async () => {
   const calls = [];

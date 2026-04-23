@@ -499,63 +499,14 @@ class JoinCleanupHandler {
       partitionServices: partitionServices.size,
     });
     this.delegates.stopJoiningLifecycleOwners();
-
-    const rebalanceCoordinator =
-      this.delegates.getRebalanceCoordinator();
-    if (rebalanceCoordinator) {
-      try {
-        await rebalanceCoordinator.shutdown();
-      } catch (error) {
-        logger.warn(JOINING_LOG_MSG.CLEANUP_STEP_FAILED, {
-          nodeId: this.nodeId,
-          step: 'rebalanceCoordinator.shutdown',
-          error: error.message,
-        });
-      }
-      this.delegates.setRebalanceCoordinator(null);
-    }
-
+    await this.shutdownRebalanceCoordinator(logger);
     const latencyTopology = this.delegates.getLatencyTopology();
     await LatencyTopologySetup.stop(latencyTopology);
     this.delegates.setLatencyTopology(null);
-
-    // Shutdown replica state machine
-    const replicaStateMachine =
-      this.delegates.getReplicaStateMachine();
-    if (replicaStateMachine) {
-      replicaStateMachine.stopTimeoutChecker();
-      replicaStateMachine.clear();
-      this.delegates.setReplicaStateMachine(null);
-    }
-
-    // Shutdown RPC client to cancel pending requests
-    const rpcClient = this.delegates.getRpcClient();
-    if (rpcClient) {
-      await rpcClient.shutdown();
-      this.delegates.setRpcClient(null);
-    }
-
-    // Shutdown control plane services
-    const heartbeatService = this.delegates.getHeartbeatService();
-    if (heartbeatService) {
-      heartbeatService.stop();
-      this.delegates.setHeartbeatService(null);
-    }
-    const leaseService = this.delegates.getLeaseService();
-    if (leaseService) {
-      leaseService.stop();
-      this.delegates.setLeaseService(null);
-    }
-    const endpointService = this.delegates.getEndpointService();
-    if (endpointService) {
-      endpointService.stop();
-      this.delegates.setEndpointService(null);
-    }
-    const dispatchService = this.delegates.getDispatchService();
-    if (dispatchService) {
-      dispatchService.stop();
-      this.delegates.setDispatchService(null);
-    }
+    this.clearReplicaStateMachine();
+    await this.shutdownRpcClient();
+    await this.shutdownCdcSqlQueryEngine();
+    this.stopControlPlaneServices();
 
     // Shutdown replica handler
     const replicaHandler = this.delegates.getReplicaHandler();
@@ -566,67 +517,135 @@ class JoinCleanupHandler {
       this.delegates.setReplicaHandler(null);
     }
 
-    // Shutdown partition services
-    for (const [replicaId, partition] of partitionServices) {
-      try {
-        if (partition.shutdown) {
-          await partition.shutdown();
-        }
-        logger.debug(JOINING_LOG_MSG.PARTITION_CLEANED,
-          {replicaId});
-      } catch (err) {
-        logger.warn(JOINING_LOG_MSG.PARTITION_CLEAN_FAILED, {
-          replicaId,
-          error: err.message,
-        });
-        // Continue best-effort cleanup to avoid leaving services
-        // running.
-      }
-    }
+    await this.shutdownServiceMap({
+      logger,
+      services: partitionServices,
+      successLogMessage: JOINING_LOG_MSG.PARTITION_CLEANED,
+      failureLogMessage: JOINING_LOG_MSG.PARTITION_CLEAN_FAILED,
+    });
     partitionServices.clear();
 
-    // Shutdown message group services
-    for (const [replicaId, messageGroup] of
-      messageGroupServices) {
-      try {
-        if (messageGroup.shutdown) {
-          await messageGroup.shutdown();
-        }
-        logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_CLEANED,
-          {replicaId});
-      } catch (err) {
-        logger.warn(JOINING_LOG_MSG.MESSAGE_GROUP_CLEAN_FAILED, {
-          replicaId,
-          error: err.message,
-        });
-        // Continue best-effort cleanup to avoid leaving services
-        // running.
-      }
-    }
+    await this.shutdownServiceMap({
+      logger,
+      services: messageGroupServices,
+      successLogMessage: JOINING_LOG_MSG.MESSAGE_GROUP_CLEANED,
+      failureLogMessage: JOINING_LOG_MSG.MESSAGE_GROUP_CLEAN_FAILED,
+    });
     messageGroupServices.clear();
 
-    // Clear transport
     const transport = this.delegates.getTransport();
+    await this.shutdownTransportAndRouter(transport, messageRouter);
+    this.delegates.setCdcIntegrationService(null);
+
+    logger.info(JOINING_LOG_MSG.CLEANUP_COMPLETE,
+      {nodeId: this.nodeId});
+  }
+
+  async shutdownRebalanceCoordinator(logger) {
+    const rebalanceCoordinator = this.delegates.getRebalanceCoordinator();
+    if (!rebalanceCoordinator) {
+      return;
+    }
+    try {
+      await rebalanceCoordinator.shutdown();
+    } catch (error) {
+      logger.warn(JOINING_LOG_MSG.CLEANUP_STEP_FAILED, {
+        nodeId: this.nodeId,
+        step: 'rebalanceCoordinator.shutdown',
+        error: error.message,
+      });
+    }
+    this.delegates.setRebalanceCoordinator(null);
+  }
+
+  clearReplicaStateMachine() {
+    const replicaStateMachine = this.delegates.getReplicaStateMachine();
+    if (!replicaStateMachine) {
+      return;
+    }
+    replicaStateMachine.stopTimeoutChecker();
+    replicaStateMachine.clear();
+    this.delegates.setReplicaStateMachine(null);
+  }
+
+  async shutdownRpcClient() {
+    const rpcClient = this.delegates.getRpcClient();
+    if (!rpcClient) {
+      return;
+    }
+    await rpcClient.shutdown();
+    this.delegates.setRpcClient(null);
+  }
+
+  async shutdownCdcSqlQueryEngine() {
+    const cdcIntegrationService = this.delegates.getCdcIntegrationService();
+    const sqlQueryEngine = cdcIntegrationService?.sqlQueryEngine || null;
+    if (sqlQueryEngine && typeof sqlQueryEngine.shutdown === 'function') {
+      await sqlQueryEngine.shutdown();
+    }
+    if (cdcIntegrationService?.sqlQueryEngine === sqlQueryEngine) {
+      cdcIntegrationService.sqlQueryEngine = null;
+    }
+  }
+
+  stopControlPlaneServices() {
+    this.stopControlPlaneService(
+      this.delegates.getHeartbeatService(),
+      this.delegates.setHeartbeatService,
+    );
+    this.stopControlPlaneService(
+      this.delegates.getLeaseService(),
+      this.delegates.setLeaseService,
+    );
+    this.stopControlPlaneService(
+      this.delegates.getEndpointService(),
+      this.delegates.setEndpointService,
+    );
+    this.stopControlPlaneService(
+      this.delegates.getDispatchService(),
+      this.delegates.setDispatchService,
+    );
+  }
+
+  stopControlPlaneService(service, setter) {
+    if (!service) {
+      return;
+    }
+    service.stop();
+    if (typeof setter === TYPEOF.FUNCTION) {
+      setter.call(this.delegates, null);
+    }
+  }
+
+  async shutdownServiceMap(options) {
+    for (const [replicaId, service] of options.services) {
+      try {
+        if (service.shutdown) {
+          await service.shutdown();
+        }
+        options.logger.debug(options.successLogMessage, {replicaId});
+      } catch (error) {
+        options.logger.warn(options.failureLogMessage, {
+          replicaId,
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  async shutdownTransportAndRouter(transport, messageRouter) {
     if (
-      transport && transport.shutdown &&
+      transport &&
+      transport.shutdown &&
       transport !== messageRouter
     ) {
       await transport.shutdown();
     }
     this.delegates.setTransport(null);
-
-    // Clear messageRouter
-    if (messageRouter) {
-      if (messageRouter.shutdown) {
-        await messageRouter.shutdown();
-      }
-      this.delegates.setMessageRouter(null);
+    if (messageRouter?.shutdown) {
+      await messageRouter.shutdown();
     }
-
-    this.delegates.setCdcIntegrationService(null);
-
-    logger.info(JOINING_LOG_MSG.CLEANUP_COMPLETE,
-      {nodeId: this.nodeId});
+    this.delegates.setMessageRouter(null);
   }
 }
 

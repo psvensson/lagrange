@@ -1111,6 +1111,39 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
    * Get rebalancer statistics including coordinator stats (async).
    * @return {Promise<Object>} Statistics object with coordinator stats.
    */
+  async getStatsAsync() {
+    const stats = this.getStats();
+
+    if (this.rebalanceCoordinator && this.rebalanceCoordinator.getStats) {
+      const coordStats = await this.rebalanceCoordinator.getStats();
+      stats.coordinatorStats = {
+        inFlightOperations: coordStats.inFlightOperations,
+        operationsCreated: coordStats.operationsCreated,
+        operationsCompleted: coordStats.operationsCompleted,
+        operationsFailed: coordStats.operationsFailed,
+      };
+    }
+
+    return stats;
+  }
+
+  /**
+   * Shutdown the rebalancer.
+   */
+  shutdown() {
+    this.isShuttingDown = true;
+    this.isLeader = false;
+    this.cancelScheduledCheck();
+    this.rebalanceCheckQueue.shutdown();
+    this.cancelStabilizationTimer();
+    this.lastStateChangeTime = null;
+    this.initialized = false;
+
+    this.logger.info(REBALANCER_LOG_MSG.SHUTDOWN, {
+      entityId: this.entityId,
+      entityType: this.entityType,
+    });
+  }
 }
 
 export { UnifiedRebalancerSegment5 };

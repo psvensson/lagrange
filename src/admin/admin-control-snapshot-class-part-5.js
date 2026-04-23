@@ -45,6 +45,8 @@ import {
 import { buildPublicationRecoveryProtocolSnapshot } from "../control-plane/recovery-protocol-snapshot.js";
 import { normalizeControlPlanePublicationRow } from "../control-plane/system-row-normalizers.js";
 import { buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots } from "../control-plane/priority-recovery-snapshot.js";
+import {buildPriorityRecoveryObservationSnapshot} from
+  "../control-plane/priority-recovery-observation-snapshot.js";
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
@@ -1098,6 +1100,8 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         readinessEntries,
         observedMembershipPublication,
       );
+    const publicationConvergenceGate =
+      this.resolvePublicationConvergenceGateDiagnostics(readinessEntries);
     const readinessTransitionsByNodeId =
       this.resolveReadinessTransitionHistory();
     const priorityControlPlaneRecoveryByNodeId =
@@ -1127,6 +1131,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       this.systemTableCache?.getAll(TABLES.SERVICES) || ADMIN_CACHE_DUMP.EMPTY;
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+    const logsTable = buildLogsTableRetentionDiagnostics();
     const priorityRecoveryDecisionSnapshots =
       this.buildPriorityRecoveryDecisionSnapshots({
         capturedAt,
@@ -1139,6 +1144,14 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         replicaOperationRows,
         replicaOperations,
         serviceRows,
+        logsTable,
+      });
+    const priorityRecoveryObservation =
+      buildPriorityRecoveryObservationSnapshot({
+        publicationConvergence,
+        publicationConvergenceGate,
+        priorityRecoveryDecisionSnapshots,
+        logsTable,
       });
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
     const partitionServices =
@@ -1146,7 +1159,6 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       typeof this.resolveLocalPartitionServices === TYPEOF.FUNCTION
         ? this.resolveLocalPartitionServices()
         : null;
-    const logsTable = buildLogsTableRetentionDiagnostics();
     const cdcReplay = buildCdcReplayRetentionDiagnostics(partitionServices);
     return {
       schemaVersion: CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION,
@@ -1154,6 +1166,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       capturedAt,
       publicationMode,
       publicationConvergence,
+      publicationConvergenceGate,
       publishedMembershipObservation:
         this.resolvePublicationConvergenceDiagnostics(
           ADMIN_CACHE_DUMP.EMPTY,
@@ -1174,6 +1187,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       timeoutClassifications: workflowDiagnostics.timeoutClassifications,
       controlPlaneOperations,
       priorityRecoveryDecisionSnapshots,
+      priorityRecoveryObservation,
       replicaOperations,
       splitEvaluation,
       logsTable,

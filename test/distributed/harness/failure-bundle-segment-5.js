@@ -1,3 +1,5 @@
+import { STARTUP_READINESS_MODE_STARTUP } from "./startup-readiness-evidence.js";
+import { PRIORITY_RECOVERY_INVARIANT_FALLBACK } from "../../../src/control-plane/priority-recovery-diagnostics-constants.js";
 import { FAILURE_BUNDLE_SEGMENT_4 } from "./failure-bundle-segment-4.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -299,6 +301,11 @@ function buildFailureClassification({
       .map((artifact) => artifact?.latestStartupDecision || null)
       .filter(Boolean)
       .slice(-1)[ZERO] || null;
+  const dominantProgressWitness =
+    publicationConvergence?.priorityRecoveryProgressSummary?.dominantWitness &&
+    isRecord(publicationConvergence.priorityRecoveryProgressSummary.dominantWitness)
+      ? publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
+      : null;
   const hasStartupReadinessBlocker =
     readinessFailure?.mode === STARTUP_READINESS_MODE_STARTUP;
 
@@ -360,6 +367,33 @@ function buildFailureClassification({
     ) {
       signals.push(
         "closureWitnessClass=" + publicationConvergence.closureWitnessClass,
+      );
+    }
+    if (dominantProgressWitness?.partitionId) {
+      signals.push(
+        "priorityRecoveryPartition=" + dominantProgressWitness.partitionId,
+      );
+    }
+    if (dominantProgressWitness?.currentOwner) {
+      signals.push(
+        "priorityRecoveryOwner=" + dominantProgressWitness.currentOwner,
+      );
+    }
+    if (dominantProgressWitness?.blockingBoundary) {
+      signals.push(
+        "priorityRecoveryBoundary=" +
+          dominantProgressWitness.blockingBoundary,
+      );
+    }
+    if (dominantProgressWitness?.waitMode) {
+      signals.push(
+        "priorityRecoveryWaitMode=" + dominantProgressWitness.waitMode,
+      );
+    }
+    if (dominantProgressWitness?.nextRequiredAction) {
+      signals.push(
+        "priorityRecoveryNextAction=" +
+          dominantProgressWitness.nextRequiredAction,
       );
     }
     return {
@@ -849,6 +883,9 @@ function buildScenarioTriageSummary(bundleJson, links = {}) {
       failureBundleMarkdownPath: links.markdownPath || null,
     },
     load: buildTriageLoadSummary(bundleJson?.topFailures?.loadMetrics),
+    publicationConvergence: isRecord(bundleJson?.publicationConvergence)
+      ? cloneJsonValue(bundleJson.publicationConvergence)
+      : null,
     playback: {
       firstFaultTimeline: isRecord(bundleJson?.diagnostics?.firstFaultTimeline)
         ? bundleJson.diagnostics.firstFaultTimeline
@@ -876,6 +913,35 @@ function buildScenarioTriageSummary(bundleJson, links = {}) {
   };
 }
 
+function formatReadinessFailure(readinessFailure) {
+  const normalized = normalizeReadinessFailure(readinessFailure);
+  if (!normalized) {
+    return UNKNOWN_VALUE;
+  }
+  const parts = [
+    "class=" + String(normalized.classCode || UNKNOWN_VALUE),
+    "mode=" + String(normalized.mode || UNKNOWN_VALUE),
+    "recoverability=" + String(normalized.recoverability || UNKNOWN_VALUE),
+  ];
+  if (normalized.source) {
+    parts.push("source=" + normalized.source);
+  }
+  if (normalized.cause) {
+    parts.push("cause=" + normalized.cause);
+  }
+  if (normalized.terminalReason) {
+    parts.push("terminalReason=" + normalized.terminalReason);
+  }
+  if (Number.isInteger(normalized.progressSignal?.attemptsSinceProgress)) {
+    const attempts = String(normalized.progressSignal.attemptsSinceProgress);
+    const maxAttempts = Number.isInteger(normalized.progressSignal?.maxAttempts)
+      ? String(normalized.progressSignal.maxAttempts)
+      : UNKNOWN_VALUE;
+    parts.push("attemptsSinceProgress=" + attempts + "/" + maxAttempts);
+  }
+  return parts.join(", ");
+}
+
 function renderScenarioTriageSummaryMarkdown(summary) {
   const lines = [
     "# Scenario Triage Summary",
@@ -901,6 +967,104 @@ function renderScenarioTriageSummaryMarkdown(summary) {
 
   lines.push("", "## Stability Gates", "");
   lines.push(formatStabilityGateSummary(summary?.summary?.stabilityGates));
+
+  const publicationConvergence = isRecord(summary?.publicationConvergence)
+    ? summary.publicationConvergence
+    : null;
+  if (publicationConvergence) {
+    lines.push("", "## Publication Convergence", "");
+    lines.push(
+      `- Publication Epoch: ${
+        String(publicationConvergence.publicationEpoch ?? UNKNOWN_VALUE)
+      }`,
+    );
+    lines.push(
+      `- Publication Status: ${
+        publicationConvergence.publicationStatus || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Recovery Protocol State: ${
+        publicationConvergence.recoveryProtocolState || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Pending Ack Count: ${
+        String(publicationConvergence.pendingAckCount ?? UNKNOWN_VALUE)
+      }`,
+    );
+    lines.push(
+      `- Pending Ack Nodes: ${
+        formatObservedList(publicationConvergence.pendingAckNodeIds)
+      }`,
+    );
+    lines.push(
+      `- Publication Gate Reasons: ${
+        formatObservedList(
+          publicationConvergence.publicationConvergenceGateReasons,
+        )
+      }`,
+    );
+    lines.push(
+      `- Blocked Partition Count: ${
+        String(
+          publicationConvergence.priorityRecoveryBlockedPartitionCount ??
+            UNKNOWN_VALUE,
+        )
+      }`,
+    );
+    lines.push(
+      `- Blocked Partitions: ${
+        formatObservedList(
+          publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        )
+      }`,
+    );
+    lines.push(
+      `- Unresolved Partition Count: ${
+        String(
+          publicationConvergence.priorityRecoveryUnresolvedPartitionCount ??
+            UNKNOWN_VALUE,
+        )
+      }`,
+    );
+    lines.push(
+      `- Unresolved Partitions: ${
+        formatObservedList(
+          publicationConvergence.priorityRecoveryUnresolvedPartitionIds,
+        )
+      }`,
+    );
+    lines.push(
+      `- Closure Record Id: ${
+        publicationConvergence.closureRecordId || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Closure Witness Class: ${
+        publicationConvergence.closureWitnessClass || UNKNOWN_VALUE
+      }`,
+    );
+    lines.push(
+      `- Projection Diagnostics: ${
+        formatProjectionDiagnostics(publicationConvergence.projectionDiagnostics)
+      }`,
+    );
+    lines.push(
+      `- Failing Invariants: ${
+        formatObservedList(
+          publicationConvergence.priorityRecoveryInvariantFailingIds,
+        )
+      }`,
+    );
+    lines.push(
+      `- Progress Summary: ${
+        formatPriorityRecoveryProgressSummary(
+          publicationConvergence.priorityRecoveryProgressSummary,
+        )
+      }`,
+    );
+  }
 
   lines.push(
     "",
@@ -1059,6 +1223,86 @@ function formatList(values) {
         .filter((value) => value.length > ZERO)
     : [];
   return items.length > ZERO ? items.join(", ") : UNKNOWN_VALUE;
+}
+
+function formatObservedList(values) {
+  if (!Array.isArray(values)) {
+    return UNKNOWN_VALUE;
+  }
+  const items = values
+    .map((value) => String(value || "").trim())
+    .filter((value) => value.length > ZERO);
+  return items.length > ZERO ? items.join(", ") : "none";
+}
+
+function formatProjectionDiagnostics(projectionDiagnostics) {
+  if (!isRecord(projectionDiagnostics)) {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    "mode=" +
+      String(projectionDiagnostics.readinessDecisionMode || UNKNOWN_VALUE),
+    "dimensions=" +
+      formatObservedList(projectionDiagnostics.readinessDecisionDimensions),
+    "recoveryEligibleProjectionEnabled=" +
+      String(
+        projectionDiagnostics.recoveryEligibleProjectionEnabled === true,
+      ),
+    "recoveryEligibleIncluded=" +
+      formatObservedList(
+        projectionDiagnostics.recoveryEligibleIncludedNodeIds,
+      ),
+    "readinessExcluded=" +
+      formatObservedList(projectionDiagnostics.readinessExcludedNodeIds),
+    "clusterMemberUnhealthyExcluded=" +
+      formatObservedList(
+        projectionDiagnostics.clusterMemberUnhealthyExcludedNodeIds,
+      ),
+  ].join(", ");
+}
+
+function formatPriorityRecoveryProgressSummary(progressSummary) {
+  if (!isRecord(progressSummary)) {
+    return UNKNOWN_VALUE;
+  }
+  const dominantWitness =
+    progressSummary?.dominantWitness && isRecord(progressSummary.dominantWitness)
+      ? progressSummary.dominantWitness
+      : null;
+  const parts = [
+    "partitionCount=" + String(progressSummary.partitionCount ?? UNKNOWN_VALUE),
+  ];
+  if (dominantWitness?.partitionId) {
+    parts.push("partition=" + dominantWitness.partitionId);
+  }
+  if (dominantWitness?.currentOwner) {
+    parts.push("owner=" + dominantWitness.currentOwner);
+  }
+  if (dominantWitness?.actuationState) {
+    parts.push("actuation=" + dominantWitness.actuationState);
+  }
+  if (dominantWitness?.blockingBoundary) {
+    parts.push("boundary=" + dominantWitness.blockingBoundary);
+  }
+  if (dominantWitness?.waitMode) {
+    parts.push("waitMode=" + dominantWitness.waitMode);
+  }
+  if (dominantWitness?.nextRequiredAction) {
+    parts.push("nextAction=" + dominantWitness.nextRequiredAction);
+  }
+  if (dominantWitness?.progressContractState) {
+    parts.push("contractState=" + dominantWitness.progressContractState);
+  }
+  if (dominantWitness?.pressureState) {
+    parts.push("pressure=" + dominantWitness.pressureState);
+  }
+  if (dominantWitness?.retryAfterMs !== undefined) {
+    parts.push("retryAfterMs=" + String(dominantWitness.retryAfterMs));
+  }
+  if (dominantWitness?.lastProgressAtMs !== undefined) {
+    parts.push("lastProgressAtMs=" + String(dominantWitness.lastProgressAtMs));
+  }
+  return parts.join(", ");
 }
 
 function formatCountEntries(entries) {
@@ -1359,10 +1603,12 @@ export const FAILURE_BUNDLE_SEGMENT_5 = {
   buildScenarioTriageSummary,
   renderScenarioTriageSummaryMarkdown,
   formatList,
+  formatObservedList,
   formatCountEntries,
   formatPartitioningConvergenceEvaluations,
   formatStabilityGate,
   formatStabilityGateSummary,
   formatReasonPartitionEntries,
+  formatProjectionDiagnostics,
   formatPriorityRecoveryInvariantFailures,
 };

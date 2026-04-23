@@ -1,5 +1,8 @@
 import {registerReplicaOperationRepositoryTailMoreTests} from './replica-operation-repository-tail-more-test-cases.js';
 
+const OWNER_PERSISTED_TRANSITION_VISIBILITY_RETRYABLE_FAILURE_SOURCE =
+  'owner_persisted_transition_authoritative_operation_visibility_retryable_failure';
+
 export function registerReplicaOperationRepositoryTailTests({
   test,
   createTestRepository,
@@ -33,6 +36,7 @@ export function registerReplicaOperationRepositoryTailTests({
   PRIORITY_RECOVERY_COMPLETION_REASON,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   OperationType,
+  ReplicaOperationRepository,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   TERMINAL_STATUSES,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -360,7 +364,8 @@ test('persistNewOperation accepts retryable mutation failures when one authorita
 });
 
 test(
-  'persistNewOperation fails when authoritative confirmation ' + 'cannot observe the row',
+  'persistNewOperation preserves one canonical deferred confirmation ' +
+    'outcome when an owner-persisted transition keeps authoritative visibility empty',
   async (t) => {
     const repo = createTestRepository({
       controlPlaneSystemTableGateway: {
@@ -371,18 +376,35 @@ test(
     });
 
     const op = repo.rowToOperation(makeRow({updated_at: 200}));
+    const result = await repo.persistNewOperation(op);
+    const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
 
-    await t.rejects(
-      repo.persistNewOperation(op),
-      /Authoritative replica operation not confirmed/,
-      'unconfirmed authoritative writes should still fail hard',
+    t.equal(
+      result,
+      true,
+      'a recent owner-persisted insert should defer instead of failing hard on one empty authoritative read boundary',
+    );
+    t.equal(
+      outcome?.confirmationState,
+      VISIBILITY_CONFIRMATION_STATE_DEFERRED,
+      'the repository should preserve the canonical deferred visibility state',
+    );
+    t.equal(
+      outcome?.reasonCode,
+      OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON,
+      'the deferred outcome should identify the owner-persisted transition confirmation reason',
+    );
+    t.equal(
+      outcome?.source,
+      OWNER_PERSISTED_TRANSITION_VISIBILITY_EMPTY_READ_SOURCE,
+      'the deferred outcome should distinguish the owner-persisted empty-read source',
     );
   },
 );
 
 test(
   'persistNewOperation preserves one canonical deferred confirmation ' +
-    'outcome when priority recovery blocks the authoritative owner read',
+    'outcome when an owner-persisted transition hits a retryable authoritative owner read during priority recovery',
   async (t) => {
     let readCalls = 0;
     const repo = createTestRepository({
@@ -445,13 +467,13 @@ test(
     );
     t.equal(
       outcome?.completionState,
-      PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
-      'the deferred outcome should preserve the canonical completion state',
+      null,
+      'owner-persisted transition confirmation should stay on its canonical deferred state even while priority recovery is active',
     );
     t.equal(
       outcome?.reasonCode,
-      PRIORITY_RECOVERY_COMPLETION_REASON.AUTHORITATIVE_OPERATION_READ_DEFERRED,
-      'the deferred outcome should preserve the canonical reason code',
+      OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON,
+      'the deferred outcome should preserve the owner-persisted transition confirmation reason',
     );
     t.equal(
       outcome?.retryAfterMs,
@@ -465,15 +487,15 @@ test(
     );
     t.equal(
       outcome?.source,
-      PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_FAILURE_SOURCE,
-      'the deferred outcome should preserve the authoritative read-failure source',
+      OWNER_PERSISTED_TRANSITION_VISIBILITY_RETRYABLE_FAILURE_SOURCE,
+      'the deferred outcome should preserve the owner-persisted retryable read-failure source',
     );
   },
 );
 
 test(
   'persistNewOperation preserves one canonical deferred confirmation ' +
-    'outcome when priority recovery keeps authoritative visibility empty',
+    'outcome when an owner-persisted transition keeps authoritative visibility empty during priority recovery',
   async (t) => {
     const repo = createTestRepository({
       authoritativeVisibilityTimeoutMs: 0,
@@ -522,14 +544,14 @@ test(
       'empty visibility should still preserve the canonical deferred state',
     );
     t.equal(
-      outcome?.completionState,
-      PRIORITY_RECOVERY_COMPLETION_STATE.AUTHORITATIVE_OPERATION_READ_DEFERRED,
-      'empty visibility should still preserve the canonical completion state',
+      outcome?.reasonCode,
+      OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON,
+      'empty visibility should still preserve the owner-persisted transition confirmation reason',
     );
     t.equal(
       outcome?.source,
-      PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_EMPTY_READ_SOURCE,
-      'the deferred outcome should distinguish the empty-read confirmation source',
+      OWNER_PERSISTED_TRANSITION_VISIBILITY_EMPTY_READ_SOURCE,
+      'the deferred outcome should distinguish the owner-persisted empty-read confirmation source',
     );
   },
 );
@@ -874,15 +896,16 @@ test('persistOperationUpdate forwards the enclosing timeout budget', async (t) =
     CONTROL_PLANE_READINESS_REASON,
     CONTROL_PLANE_WORKLOAD_CLASS,
     CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-    CONTROL_PLANE_MUTATION_MERGE_POLICY,
-    PRIORITY_RECOVERY_COMPLETION_REASON,
-    PRIORITY_RECOVERY_COMPLETION_STATE,
-    OperationType,
-    REPLICA_OPERATION_SEMANTIC_PHASE,
-    TERMINAL_STATUSES,
-    INCOMPLETE_OPERATION_OBSERVATION_STATE,
-    INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
-    REPLICA_OPERATION_VISIBILITY_READ_MODE,
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+  PRIORITY_RECOVERY_COMPLETION_REASON,
+  PRIORITY_RECOVERY_COMPLETION_STATE,
+  OperationType,
+  ReplicaOperationRepository,
+  REPLICA_OPERATION_SEMANTIC_PHASE,
+  TERMINAL_STATUSES,
+  INCOMPLETE_OPERATION_OBSERVATION_STATE,
+  INCOMPLETE_OPERATION_VISIBILITY_SUPPLEMENT_MODE,
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
     READ_MODEL_DIVERGENCE_TYPE,
     SQL_RECONCILIATION_REASON,
     REBALANCE_COORDINATOR_EVENT,

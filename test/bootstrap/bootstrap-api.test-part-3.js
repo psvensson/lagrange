@@ -1158,6 +1158,72 @@ test('BootstrapAPI - returns bootstrap-not-ready when control-plane dependencies
     await api.shutdown();
   });
 
+test('BootstrapAPI - handleBootstrapRequest uses bounded bootstrap response topology snapshot projection',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    api.determineAndReserveMessageGroupAssignment = async () => ({
+      strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+      groupId: 'mg-test',
+    });
+    let boundedSnapshotCallCount = 0;
+    let fullSnapshotCallCount = 0;
+    api.buildBootstrapResponseTopologySnapshotEnvelope = () => {
+      boundedSnapshotCallCount++;
+      return {
+        systemTableSnapshots: {},
+        topologySnapshotMeta: null,
+      };
+    };
+    api.buildBootstrapTopologySnapshotEnvelope = () => {
+      fullSnapshotCallCount++;
+      return {
+        systemTableSnapshots: {
+          shouldNotBeUsed: true,
+        },
+        topologySnapshotMeta: {
+          shouldNotBeUsed: true,
+        },
+      };
+    };
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => [];
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440112',
+        nodeAddress: 'ws://localhost:9092',
+      },
+    });
+
+    t.equal(response.statusCode, 200, 'bootstrap request should still succeed');
+    t.equal(
+      boundedSnapshotCallCount,
+      1,
+      'request owner should use the bounded bootstrap response projection',
+    );
+    t.equal(
+      fullSnapshotCallCount,
+      0,
+      'request owner should not force a full authoritative snapshot refresh on the HTTP hot path',
+    );
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - forwards durable rejoin startup mode to assignment',
   async (t) => {
     initializeTestEnvironment();

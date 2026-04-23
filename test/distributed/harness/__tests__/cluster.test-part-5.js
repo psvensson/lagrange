@@ -15,7 +15,34 @@ import {resolve as resolvePath} from 'node:path';
 import fc from 'fast-check';
 import {validate as uuidValidate} from 'uuid';
 import {WebSocketServer} from 'ws';
-import {distributeNodes} from '../cluster.js';
+import {
+  ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
+  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
+  BENCHMARK_DEGRADATION_STATE,
+  BENCHMARK_LOAD_ADMISSION_STATE,
+  buildCriticalSystemDiscoverySnapshot,
+  Cluster,
+  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
+  CONTAINER_ENV_KEYS,
+  createCluster,
+  distributeNodes,
+  ENTRYPOINT_ENV,
+  LABELS,
+  LOAD_STOP_DISPATCH_SETTLE_MS,
+  LOAD_STOP_WAIT_TIMEOUT_MS,
+  NodeHandle,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+  NODE_ROLES,
+  PLAYBACK_EVENT_TYPE,
+  PORTS,
+  RAFT_PROVIDER_DEFAULTS,
+} from './cluster-test-helpers.js';
 
 const REUSE_START_COMMAND =
   'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
@@ -635,6 +662,36 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
         projectionDiagnostics: null,
       },
       'coverage probe should surface the last published membership separately from newer open publications',
+    );
+    assert.deepStrictEqual(
+      {
+        publicationEpoch:
+          coverage.selectedPriorityRecoveryObservation?.publicationEpoch,
+        publicationStatus:
+          coverage.selectedPriorityRecoveryObservation?.publicationStatus,
+        recoveryProtocolState:
+          coverage.selectedPriorityRecoveryObservation?.recoveryProtocolState,
+        priorityRecoveryReasonCodes:
+          coverage.selectedPriorityRecoveryObservation
+            ?.priorityRecoveryReasonCodes,
+        pendingAckCount:
+          coverage.selectedPriorityRecoveryObservation?.pendingAckCount,
+        priorityRecoveryBlockedPartitionCount:
+          coverage.selectedPriorityRecoveryObservation
+            ?.priorityRecoveryBlockedPartitionCount,
+      },
+      {
+        publicationEpoch: 18,
+        publicationStatus: 'OPEN',
+        recoveryProtocolState: 'publication_pending',
+        priorityRecoveryReasonCodes: [
+          'priority_partitions_not_spread',
+          'publication_epoch_pending',
+        ],
+        pendingAckCount: 1,
+        priorityRecoveryBlockedPartitionCount: 0,
+      },
+      'coverage probe should preserve the canonical priority-recovery observation for the selected snapshot',
     );
     assert.deepStrictEqual(
       coverage.selectedHealthyReadinessNodeIds,

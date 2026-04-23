@@ -274,6 +274,87 @@ test('LogsTableService drops low-priority and duplicate entries while write ' +
   await service.shutdown();
 });
 
+test('LogsTableService collapses transient-family outage noise across nodes ' +
+  'while write pressure is active', async (t) => {
+  LogsTableService.resetInstance();
+  let currentNow = 1000;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    now: () => currentNow,
+    maxPendingWrites: 10,
+    pressureHighWatermark: 10,
+  });
+  service.initialize();
+  service.writeDeferredUntilMs = 2000;
+
+  await service.writeLogEntry({
+    logId: 'error-1',
+    timestamp: currentNow,
+    level: 'ERROR',
+    nodeId: 'node-a',
+    message: 'Query routing failed',
+    createdAt: currentNow,
+    metadata: {
+      subsystem: 'query-executor',
+      partitionId: 'logs-p1',
+    },
+  });
+  await service.writeLogEntry({
+    logId: 'error-2',
+    timestamp: currentNow + 1,
+    level: 'ERROR',
+    nodeId: 'node-b',
+    message: 'Query routing failed',
+    createdAt: currentNow + 1,
+    metadata: {
+      subsystem: 'query-executor',
+      partitionId: 'logs-p1',
+    },
+  });
+  await service.writeLogEntry({
+    logId: 'error-3',
+    timestamp: currentNow + 2,
+    level: 'ERROR',
+    nodeId: 'node-c',
+    message: 'Parallel query execution failed',
+    createdAt: currentNow + 2,
+    metadata: {
+      subsystem: 'parallel-query-coordinator',
+      partitionId: 'logs-p1',
+    },
+  });
+  await service.writeLogEntry({
+    logId: 'error-4',
+    timestamp: currentNow + 3,
+    level: 'ERROR',
+    nodeId: 'node-d',
+    message: 'Query execution failed',
+    createdAt: currentNow + 3,
+    metadata: {
+      subsystem: 'sql-query-engine',
+      partitionId: 'logs-p1',
+    },
+  });
+
+  t.same(
+    service.pendingWrites.map((entry) => entry.message).sort(),
+    [
+      'Parallel query execution failed',
+      'Query execution failed',
+      'Query routing failed',
+    ],
+    'pressure mode should keep one transient exemplar per subsystem/resource family instead of one per node',
+  );
+  t.equal(
+    service.getStats().droppedWrites,
+    1,
+    'cross-node transient-family duplicates should be dropped under pressure',
+  );
+
+  currentNow = 2100;
+  await service.shutdown();
+});
+
 test('LogsTableService admits higher-priority logs by evicting lower-priority ' +
   'queued entries', async (t) => {
   LogsTableService.resetInstance();

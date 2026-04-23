@@ -3,8 +3,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
     options.buildMessageGroupLeaderIdentitySnapshot;
   const buildForwardTopologyRepairReadOptions =
     options.buildForwardTopologyRepairReadOptions;
-  const resolveCDCForwardDeliveryPriority =
-    options.resolveCDCForwardDeliveryPriority;
+  const resolveCDCForwardDeliveryProfile =
+    options.resolveCDCForwardDeliveryProfile;
   const getSystemCachePrimaryKeyFieldOrFallback =
     options.getSystemCachePrimaryKeyFieldOrFallback;
   const buildControlPlaneWorkloadProfile =
@@ -754,11 +754,13 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const operation = logContext.operation || null;
       const replayOnly =
         logContext.replayOnly === true || payload?.replayOnly === true;
-      const deliveryPriority = resolveCDCForwardDeliveryPriority(
+      const deliveryProfile = resolveCDCForwardDeliveryProfile(
         tableName,
         payload,
         replayOnly,
       );
+      const deliveryPriority = deliveryProfile.deliveryPriority;
+      const deliverySource = deliveryProfile.deliverySource;
       const relayDepth = Number.isInteger(logContext.relayDepth) ?
         logContext.relayDepth :
         num.ZERO;
@@ -828,7 +830,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
           const deliveryResult = await service.transport.deliver(
             leaderAddress,
             payload,
-            {deliveryPriority},
+            {deliveryPriority, deliverySource},
           );
           const deliveryAcked = deliveryResult?.acknowledged === true;
           const deliverySucceeded = deliveryResult?.success !== false;
@@ -883,6 +885,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 noHandler: deliveryResult?.noHandler === true,
                 replayIsolationEngaged: replayOnly,
                 deliveryPriority,
+                deliverySource,
                 strictForwarding,
                 strictForwardRetryAfterMs,
                 error: deliveryErrorMessage,

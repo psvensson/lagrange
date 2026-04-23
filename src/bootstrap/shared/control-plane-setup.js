@@ -128,6 +128,7 @@ class ControlPlaneSetup {
       rebalanceCoordinator: existingCoordinator,
       cdcGroupPropagationService,
       bootstrapReadinessState,
+      getLocalClusterIncarnationFence,
     } = options;
 
     // Validate required dependencies
@@ -226,6 +227,7 @@ class ControlPlaneSetup {
         cdcIntegrationService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
         controlPlaneSystemTableGateway,
+        getLocalClusterIncarnationFence,
         strictOwnerDependencies: true,
       });
     }

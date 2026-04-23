@@ -25,8 +25,15 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  PressureGovernor,
+  PRESSURE_WORK_CLASS,
+} from '../../src/control-plane/pressure-governor.js';
+import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
+import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -486,6 +493,91 @@ test('CDCIntegrationService - forwards pressure admission metadata to routed ' +
     mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
     'background',
     'delivery priority should survive the CDC SQL handoff',
+  );
+  t.end();
+});
+
+test('CDCIntegrationService - derives routed SQL admission defaults from one ' +
+  'mutation workload class', async (t) => {
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+
+  let evaluateArgs = null;
+  const originalGetShared = PressureGovernor.getShared;
+  PressureGovernor.getShared = () => ({
+    evaluate(args) {
+      evaluateArgs = args;
+      return {
+        action: 'allow',
+        reason: 'test-allow',
+        summary: null,
+        retryAfterMs: 0,
+      };
+    },
+  });
+  t.after(() => {
+    PressureGovernor.getShared = originalGetShared;
+  });
+
+  await service.upsertSystemTableRow(
+    SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+    {
+      transaction_id: 'tx-workload-1',
+      session_id: 'session-workload-1',
+      status: 'ACTIVE',
+      transaction_epoch: 1,
+      timeout_deadline: 1000,
+      created_at: 1,
+      updated_at: 2,
+    },
+    {
+      skipCacheWait: true,
+      workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+    },
+  );
+
+  t.equal(mockSqlEngine.executedQueries.length, 1,
+    'workload-owned routed SQL write should execute once');
+  t.equal(
+    evaluateArgs?.workClass,
+    PRESSURE_WORK_CLASS.CRITICAL,
+    'pressure admission should derive the workload-owned critical work class',
+  );
+  t.equal(
+    evaluateArgs?.allowDefer,
+    false,
+    'pressure admission should derive the workload-owned no-defer contract',
+  );
+  t.ok(
+    evaluateArgs?.resourceKeys?.includes(
+      'control-plane:transaction-control:recovery',
+    ),
+    'pressure admission should use the shared transaction-control recovery resource key',
+  );
+  t.ok(
+    evaluateArgs?.resourceKeys?.includes(
+      'control-plane:table:sql_transactions',
+    ),
+    'pressure admission should keep the table-scoped fairness key alongside the workload key',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+    'routed SQL writes should preserve the mutation workload class',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.workClass,
+    PRESSURE_WORK_CLASS.CRITICAL,
+    'routed SQL writes should preserve the workload-owned critical work class',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.allowPressureDefer,
+    false,
+    'routed SQL writes should preserve the workload-owned no-defer contract',
   );
   t.end();
 });

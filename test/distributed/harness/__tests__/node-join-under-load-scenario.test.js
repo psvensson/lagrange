@@ -823,6 +823,18 @@ describe('node-join-under-load scenario', () => {
 
   it('copies retained-object diagnostics from control snapshots into failures',
     async () => {
+      const RETAINED_PRIORITY_RECOVERY_PARTITION_ID = 'replica_operations-p1';
+      const RETAINED_PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE = 'blocked';
+      const RETAINED_PRIORITY_RECOVERY_CURRENT_OWNER = 'rebalancer_leader';
+      const RETAINED_PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION =
+        'schedule_followup_rebalance';
+      const RETAINED_PRIORITY_RECOVERY_BLOCKING_BOUNDARY =
+        'rebalancer_handoff';
+      const RETAINED_PRIORITY_RECOVERY_WAIT_MODE = 'stalled';
+      const RETAINED_PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE =
+        'target_creation';
+      const RETAINED_PRIORITY_RECOVERY_STEP_AGE_MS = 62050;
+      const RETAINED_PRIORITY_RECOVERY_STEP_TIMEOUT_MS = 60000;
       const cluster = {
         startLoad: () => ({
           waitComplete: async () => ({
@@ -853,8 +865,31 @@ describe('node-join-under-load scenario', () => {
                   ],
                   priorityPartitionSummary: {
                     satisfied: false,
+                    blockedPartitions: [{
+                      partitionId: 'replica_operations-p1',
+                      spreadGap: 2,
+                    }],
                     missingPartitionIds: ['replica_operations-p1'],
                   },
+                },
+                priorityRecoveryObservation: {
+                  priorityRecoveryPartitionWitnesses: [{
+                    partitionId: RETAINED_PRIORITY_RECOVERY_PARTITION_ID,
+                    progressContractState:
+                      RETAINED_PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE,
+                    currentOwner: RETAINED_PRIORITY_RECOVERY_CURRENT_OWNER,
+                    nextRequiredAction:
+                      RETAINED_PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+                    blockingBoundary:
+                      RETAINED_PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+                    waitMode: RETAINED_PRIORITY_RECOVERY_WAIT_MODE,
+                    workflowProgressPhaseId:
+                      RETAINED_PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+                    stepAgeMs: RETAINED_PRIORITY_RECOVERY_STEP_AGE_MS,
+                    stepTimeoutMs:
+                      RETAINED_PRIORITY_RECOVERY_STEP_TIMEOUT_MS,
+                    lastProgressAtMs: 1234,
+                  }],
                 },
                 logsTable: {
                   pendingWriteGrowthCount: 2,
@@ -897,8 +932,49 @@ describe('node-join-under-load scenario', () => {
                 ],
                 priorityPartitionSummary: {
                   satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 2,
+                    reasons: [],
+                  }],
                   missingPartitionIds: ['replica_operations-p1'],
+                  blockedPartitionCount: 1,
+                  largestSpreadGap: 2,
+                  totalSpreadGap: 2,
                 },
+              },
+              priorityRecoveryObservation: {
+                priorityRecoveryPartitionWitnesses: [{
+                  partitionId: RETAINED_PRIORITY_RECOVERY_PARTITION_ID,
+                  progressContractState:
+                    RETAINED_PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE,
+                  currentOwner: RETAINED_PRIORITY_RECOVERY_CURRENT_OWNER,
+                  nextRequiredAction:
+                    RETAINED_PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
+                  blockingBoundary:
+                    RETAINED_PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+                  waitMode: RETAINED_PRIORITY_RECOVERY_WAIT_MODE,
+                  workflowProgressPhaseId:
+                    RETAINED_PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+                  stepAgeMs: RETAINED_PRIORITY_RECOVERY_STEP_AGE_MS,
+                  stepTimeoutMs:
+                    RETAINED_PRIORITY_RECOVERY_STEP_TIMEOUT_MS,
+                  lastProgressAtMs: 1234,
+                  witnessIds: [],
+                  eligibleNodeIds: [],
+                  recoveryEligibleExcludedNodeIds: [],
+                  activeLearnerNodeIds: [],
+                  promotableLearnerNodeIds: [],
+                  operationIds: [],
+                  completionState: null,
+                  workflowState: null,
+                  visibilityState: null,
+                  convergenceState: null,
+                  workflowSource: null,
+                  snapshotCapturedAt: null,
+                  latestOperationWorkflowStep: null,
+                  latestOperationStatus: null,
+                }],
               },
               logsTable: {
                 pendingWriteGrowthCount: 2,
@@ -915,6 +991,296 @@ describe('node-join-under-load scenario', () => {
           throw error;
         }
       }, /dispatch backlog/i);
+    });
+
+  it('merges direct convergence diagnostics with retained control-snapshot diagnostics',
+    async () => {
+      const convergenceError = new Error('Cluster did not converge within SLO');
+      convergenceError.diagnostics = {
+        controlPlaneDiagnostics: {
+          publicationConvergenceGate: {
+            ready: false,
+            reasons: ['priority_control_plane_spread_pending'],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: 'control_plane_publications-p1',
+                spreadGap: 1,
+              }],
+            },
+          },
+          activeGateProgress: {
+            closureRecordId: 'CL-900',
+            closureWitnessClass:
+              'publication_converged_priority_spread_pending',
+          },
+          priorityRecoveryInvariants: {
+            passed: false,
+            failingInvariantIds: ['priority_recovery_cluster_marked_active'],
+          },
+        },
+      };
+      const cluster = {
+        startLoad: () => ({
+          waitComplete: async () => ({
+            total: 10,
+            success: 10,
+            failed: 0,
+            errors: 0,
+            targetOperations: 10,
+            undispatchedOperations: 0,
+            queueDelay: {p95: 10},
+          }),
+        }),
+        addNode: async () => ({id: 'joiner-3'}),
+        getNodes: () => [{
+          id: 'seed',
+          getControlSnapshot: async () => ({
+            rows: [{
+              controlPlaneDiagnostics: {
+                publicationConvergence: {
+                  publicationEpoch: 14,
+                  publicationStatus: 'PUBLISHED',
+                  publishedActiveNodeIds: ['seed', 'joiner-3'],
+                  pendingAckNodeIds: [],
+                  recoveryProtocolState: 'priority_spread_pending',
+                  priorityRecoveryReasonCodes: [
+                    'priority_partitions_not_spread',
+                  ],
+                  priorityPartitionSummary: {
+                    satisfied: false,
+                    blockedPartitions: [{
+                      partitionId: 'replica_operations-p1',
+                      spreadGap: 2,
+                    }],
+                    missingPartitionIds: ['replica_operations-p1'],
+                  },
+                },
+                logsTable: {
+                  pendingWriteGrowthCount: 4,
+                },
+              },
+            }],
+          }),
+        }],
+        waitForConvergence: async () => {
+          throw convergenceError;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await assert.rejects(async () => {
+        try {
+          await run(cluster, {
+            preJoinSettleMs: 0,
+          });
+        } catch (error) {
+          const controlPlaneDiagnostics =
+            error.diagnostics?.controlPlaneDiagnostics || {};
+          const {
+            priorityRecoveryObservation,
+            ...controlPlaneDiagnosticsWithoutObservation
+          } = controlPlaneDiagnostics;
+          assert.deepEqual(
+            controlPlaneDiagnosticsWithoutObservation,
+            {
+              publicationConvergence: {
+                publicationEpoch: 14,
+                publicationStatus: 'PUBLISHED',
+                publishedActiveNodeIds: ['seed', 'joiner-3'],
+                pendingAckNodeIds: [],
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 2,
+                    reasons: [],
+                  }],
+                  missingPartitionIds: ['replica_operations-p1'],
+                  blockedPartitionCount: 1,
+                  largestSpreadGap: 2,
+                  totalSpreadGap: 2,
+                },
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: ['priority_control_plane_spread_pending'],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'control_plane_publications-p1',
+                    spreadGap: 1,
+                    reasons: [],
+                  }],
+                  blockedPartitionCount: 1,
+                  largestSpreadGap: 1,
+                  totalSpreadGap: 1,
+                },
+              },
+              activeGateProgress: {
+                closureRecordId: 'CL-900',
+                closureWitnessClass:
+                  'publication_converged_priority_spread_pending',
+              },
+              priorityRecoveryInvariants: {
+                passed: false,
+                failingInvariantIds: ['priority_recovery_cluster_marked_active'],
+              },
+              logsTable: {
+                pendingWriteGrowthCount: 4,
+              },
+            },
+            'scenario failures should merge direct diagnostics with retained control-snapshot evidence',
+          );
+          assert.deepEqual(
+            {
+              publicationEpoch: priorityRecoveryObservation?.publicationEpoch,
+              publicationStatus:
+                priorityRecoveryObservation?.publicationStatus,
+              recoveryProtocolState:
+                priorityRecoveryObservation?.recoveryProtocolState,
+              priorityRecoveryReasonCodes:
+                priorityRecoveryObservation?.priorityRecoveryReasonCodes,
+              priorityRecoveryBlockedPartitionIds:
+                priorityRecoveryObservation?.priorityRecoveryBlockedPartitionIds,
+              priorityRecoveryBlockedPartitionCount:
+                priorityRecoveryObservation?.priorityRecoveryBlockedPartitionCount,
+              closureRecordId:
+                priorityRecoveryObservation?.closureRecordId,
+              closureWitnessClass:
+                priorityRecoveryObservation?.closureWitnessClass,
+              activeGateProgress:
+                priorityRecoveryObservation?.activeGateProgress,
+              pendingAckNodeIds:
+                priorityRecoveryObservation?.pendingAckNodeIds,
+              pendingAckCount:
+                priorityRecoveryObservation?.pendingAckCount,
+            },
+            {
+              publicationEpoch: 14,
+              publicationStatus: 'PUBLISHED',
+              recoveryProtocolState: 'priority_spread_pending',
+              priorityRecoveryReasonCodes: [
+                'priority_control_plane_spread_pending',
+                'priority_partitions_not_spread',
+              ],
+              priorityRecoveryBlockedPartitionIds: ['replica_operations-p1'],
+              priorityRecoveryBlockedPartitionCount: 1,
+              closureRecordId: 'CL-900',
+              closureWitnessClass:
+                'publication_converged_priority_spread_pending',
+              activeGateProgress: {
+                closureRecordId: 'CL-900',
+                closureWitnessClass:
+                  'publication_converged_priority_spread_pending',
+              },
+              pendingAckNodeIds: [],
+              pendingAckCount: 0,
+            },
+            'scenario failures should retain the shared priority-recovery observation snapshot',
+          );
+          throw error;
+        }
+      }, /Cluster did not converge within SLO/i);
+    });
+
+  it('preserves direct convergence diagnostics when retained control snapshots are unavailable',
+    async () => {
+      const convergenceError = new Error('Cluster did not converge within SLO');
+      convergenceError.diagnostics = {
+        controlPlaneDiagnostics: {
+          publicationConvergence: {
+            publicationEpoch: 21,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: ['seed', 'joiner-3'],
+            pendingAckNodeIds: [],
+            recoveryProtocolState: 'priority_spread_pending',
+            priorityRecoveryReasonCodes: [
+              'priority_partitions_not_spread',
+            ],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: 'replica_operations-p1',
+                spreadGap: 1,
+              }],
+            },
+          },
+          publicationConvergenceGate: {
+            ready: false,
+            reasons: ['priority_control_plane_spread_pending'],
+          },
+        },
+      };
+      const cluster = {
+        startLoad: () => ({
+          waitComplete: async () => ({
+            total: 10,
+            success: 10,
+            failed: 0,
+            errors: 0,
+            targetOperations: 10,
+            undispatchedOperations: 0,
+            queueDelay: {p95: 10},
+          }),
+        }),
+        addNode: async () => ({id: 'joiner-3'}),
+        getNodes: () => [{
+          id: 'seed',
+          getControlSnapshot: async () => {
+            throw new Error('control snapshot unavailable under pressure');
+          },
+        }],
+        waitForConvergence: async () => {
+          throw convergenceError;
+        },
+        waitForConsistencyConvergence: async () => {},
+      };
+
+      await assert.rejects(async () => {
+        try {
+          await run(cluster, {
+            preJoinSettleMs: 0,
+          });
+        } catch (error) {
+          assert.deepEqual(
+            error.diagnostics?.controlPlaneDiagnostics,
+            {
+              publicationConvergence: {
+                publicationEpoch: 21,
+                publicationStatus: 'PUBLISHED',
+                publishedActiveNodeIds: ['seed', 'joiner-3'],
+                pendingAckNodeIds: [],
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                    reasons: [],
+                  }],
+                  blockedPartitionCount: 1,
+                  largestSpreadGap: 1,
+                  totalSpreadGap: 1,
+                },
+              },
+              publicationConvergenceGate: {
+                ready: false,
+                reasons: ['priority_control_plane_spread_pending'],
+              },
+            },
+            'scenario failures should keep direct convergence diagnostics when the retained control snapshot is unavailable',
+          );
+          throw error;
+        }
+      }, /Cluster did not converge within SLO/i);
     });
 
   it('counts overlapping failed/errors once in failure assertions', async () => {

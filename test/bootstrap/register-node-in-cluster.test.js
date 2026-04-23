@@ -9,6 +9,8 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {STARTUP_JOIN_MODE} from
   '../../src/bootstrap/rejoin-hints-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {CONTROL_PLANE_PHASE_SCOPE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   ENDPOINT_STATUS,
   SERVICE_STATUS,
@@ -265,6 +267,12 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
         call.options.queryTimeoutMs > 0),
       'join-time endpoint upserts should carry a bounded routed query timeout',
     );
+    t.ok(
+      upsertCalls.every((call) =>
+        call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      ),
+      'join-time endpoint upserts should declare join phase scope explicitly',
+    );
   });
 
 test('registerNodeInCluster() - should skip cache waits even after CDC subscriptions are marked active',
@@ -319,6 +327,70 @@ test('registerNodeInCluster() - should skip cache waits even after CDC subscript
       upsertCalls.every((call) => Number.isFinite(call.options?.queryTimeoutMs) &&
         call.options.queryTimeoutMs > 0),
       'join admission writes should carry a bounded routed query timeout even after CDC subscriptions become active',
+    );
+    t.ok(
+      upsertCalls.every((call) =>
+        call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      ),
+      'join admission writes should keep join phase scope while readiness still owns convergence',
+    );
+  });
+
+test('registerNodeInCluster() - should use join phase SQL fallback when CDC mutation helpers are not ready',
+  async (t) => {
+    const queryCalls = [];
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-sql-fallback',
+      nodeAddress: 'ws://localhost:9014',
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 9014,
+    });
+    service.cdcIntegrationService = {};
+    service.querySystemStatePhase.joinAdmissionSqlQueryEngine = {
+      executeQuery: async (sql, params, options) => {
+        queryCalls.push({sql, params, options});
+        return {success: true};
+      },
+    };
+    service.seedJoinTimeCacheRow = () => {};
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+    service.getNodeStorageBudgetService = () => ({
+      resolveBudgetRow: (nodeRow) => ({
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 1024,
+          storage_budget_source: 'test',
+          storage_budget_updated_at: nodeRow.created_at,
+        },
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      }),
+    });
+
+    await service.registerNodeInCluster();
+
+    t.ok(queryCalls.length > 0,
+      'join admission should route through the startup SQL fallback when CDC mutation helpers are unavailable');
+    t.ok(
+      queryCalls.every((call) =>
+        call.options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      ),
+      'join-phase SQL fallback should carry explicit join phase scope',
+    );
+    t.ok(
+      queryCalls.every((call) => call.options?.skipCacheWait === true),
+      'join-phase SQL fallback should still skip cache waits during join admission',
+    );
+    t.match(
+      queryCalls[0].sql,
+      /INSERT OR REPLACE INTO nodes/i,
+      'join-phase SQL fallback should write the canonical nodes row first',
     );
   });
 

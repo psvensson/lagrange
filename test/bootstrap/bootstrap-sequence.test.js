@@ -21,8 +21,17 @@ import {
 } from '../../src/constants/index.js';
 
 const ports = createPortAllocator(import.meta.url);
+const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
+const NOOP_SYNC = () => {};
+const NOOP_ASYNC = async () => {};
+const EMPTY_SERVICE_HANDLE = Object.freeze({
+  stop: NOOP_SYNC,
+  shutdown: NOOP_ASYNC,
+  unregisterFromRouter: NOOP_SYNC,
+});
 
 t.jobs = 1;
+t.setTimeout(BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS);
 
 function createLocalServiceEndpointCache(nodeId) {
   const endpointRows = [{
@@ -76,6 +85,33 @@ function getRandomPort() {
   return ports.getPort();
 }
 
+function disablePostPartitionBootstrapWork(bootstrap) {
+  bootstrap.seedRegistrationPhase.phaseRegistration = NOOP_ASYNC;
+  bootstrap.seedCacheHydrationPhase.phaseCacheHydration = NOOP_ASYNC;
+  bootstrap.initializeReplicaHandler = NOOP_SYNC;
+  bootstrap.initializeMessageGroupServiceHandler = () => {
+    bootstrap.messageGroupServiceHandler = EMPTY_SERVICE_HANDLE;
+  };
+  bootstrap.initializeControlPlaneService = async () => {
+    bootstrap.heartbeatService = EMPTY_SERVICE_HANDLE;
+    bootstrap.leaseService = EMPTY_SERVICE_HANDLE;
+    bootstrap.endpointService = EMPTY_SERVICE_HANDLE;
+    bootstrap.dispatchService = EMPTY_SERVICE_HANDLE;
+  };
+  bootstrap.notifyLocalAdminRuntimeReady = async () => {
+    bootstrap.localAdminRuntimeReadyNotified = true;
+  };
+  bootstrap.registerSeedNodeWithControlPlane = NOOP_ASYNC;
+  bootstrap.activateMessageGroupServiceRows = NOOP_ASYNC;
+  bootstrap.initializeRuntimeServiceHandler = () => {
+    bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
+  };
+  bootstrap.activateControlPlaneBackgroundWriters = NOOP_SYNC;
+  bootstrap.activateDistributedTransactionRecovery = NOOP_SYNC;
+  bootstrap.startLatencyTopologyLifecycle = NOOP_SYNC;
+  bootstrap.openExternalTransportAdmission = NOOP_SYNC;
+}
+
 test('Bootstrap sequence - server starts before services', async (t) => {
   initializeTestEnvironment();
 
@@ -92,6 +128,7 @@ test('Bootstrap sequence - server starts before services', async (t) => {
       partitionDbPath: ':memory:',
     },
   });
+  disablePostPartitionBootstrapWork(bootstrap);
 
   // Track phase order
   const phaseOrder = [];
@@ -208,6 +245,8 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.activateControlPlaneBackgroundWriters = () => {
       order.push('background-writers');
     };
+    bootstrap.activateDistributedTransactionRecovery = () => {};
+    bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},
       debug() {},
@@ -215,21 +254,25 @@ test('BootstrapService - activates message-group rows after seed registration',
       error() {},
     };
 
-    const result = await bootstrap.bootstrap();
+    try {
+      const result = await bootstrap.bootstrap();
 
-    t.equal(result.success, true, 'bootstrap should succeed');
-    t.equal(bootstrap.hasPublishedLocalServiceEndpoints(), true,
-      'bootstrap should observe local endpoint publication before activation');
-    t.ok(
-      order.indexOf('message-group-handler') <
-        order.indexOf('seed-registration'),
-      'handler registration should complete before seed control-plane registration',
-    );
-    t.ok(
-      order.indexOf('seed-registration') <
-        order.indexOf('activate-message-group-rows'),
-      'message-group rows should activate after seed control-plane registration',
-    );
+      t.equal(result.success, true, 'bootstrap should succeed');
+      t.equal(bootstrap.hasPublishedLocalServiceEndpoints(), true,
+        'bootstrap should observe local endpoint publication before activation');
+      t.ok(
+        order.indexOf('message-group-handler') <
+          order.indexOf('seed-registration'),
+        'handler registration should complete before seed control-plane registration',
+      );
+      t.ok(
+        order.indexOf('seed-registration') <
+          order.indexOf('activate-message-group-rows'),
+        'message-group rows should activate after seed control-plane registration',
+      );
+    } finally {
+      await bootstrap.shutdown();
+    }
   });
 
 test('BootstrapService - notifies local admin runtime before seed self-publication',
@@ -276,6 +319,8 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     bootstrap.initializeRuntimeServiceHandler = () => {};
     bootstrap.seedCacheHydrationPhase.startLatencyTopologyLifecycle = () => {};
     bootstrap.activateControlPlaneBackgroundWriters = () => {};
+    bootstrap.activateDistributedTransactionRecovery = () => {};
+    bootstrap.openExternalTransportAdmission = () => {};
     bootstrap.logger = {
       info() {},
       debug() {},
@@ -283,17 +328,21 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
       error() {},
     };
 
-    const result = await bootstrap.bootstrap();
+    try {
+      const result = await bootstrap.bootstrap();
 
-    t.equal(result.success, true, 'bootstrap should succeed');
-    t.ok(
-      order.indexOf('control-plane') < order.indexOf('local-admin-runtime'),
-      'local admin callback should wait for control-plane wiring',
-    );
-    t.ok(
-      order.indexOf('local-admin-runtime') < order.indexOf('seed-registration'),
-      'local admin callback should run before seed self-publication blocks startup',
-    );
+      t.equal(result.success, true, 'bootstrap should succeed');
+      t.ok(
+        order.indexOf('control-plane') < order.indexOf('local-admin-runtime'),
+        'local admin callback should wait for control-plane wiring',
+      );
+      t.ok(
+        order.indexOf('local-admin-runtime') < order.indexOf('seed-registration'),
+        'local admin callback should run before seed self-publication blocks startup',
+      );
+    } finally {
+      await bootstrap.shutdown();
+    }
   });
 
 test('Bootstrap sequence - self-connection established before services', async (t) => {
@@ -312,6 +361,7 @@ test('Bootstrap sequence - self-connection established before services', async (
       partitionDbPath: ':memory:',
     },
   });
+  disablePostPartitionBootstrapWork(bootstrap);
 
   let selfConnectionBeforeServices = false;
 
@@ -352,6 +402,7 @@ test('Bootstrap sequence - services created after self-connection', async (t) =>
       partitionDbPath: ':memory:',
     },
   });
+  disablePostPartitionBootstrapWork(bootstrap);
 
   try {
     const result = await bootstrap.bootstrap();
@@ -437,6 +488,7 @@ test('Bootstrap sequence - partition leadership wait fails when no leaders', asy
     t.match(error.message, /nodes-p1/, 'should list nodes partition');
   } finally {
     Date.now = originalNow;
+    await bootstrap.shutdown();
   }
 });
 
@@ -472,6 +524,7 @@ test('Bootstrap sequence - partition leadership wait honors configured timeout b
     t.pass('configured leadership wait budget should allow later leader election');
   } finally {
     Date.now = originalNow;
+    await bootstrap.shutdown();
   }
 });
 
@@ -507,8 +560,12 @@ test('Bootstrap sequence - partition leadership wait allows priority control-pla
     ],
   ]);
 
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-  t.pass('priority control-plane recovery should not require a local leader before bootstrap direct writes');
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    t.pass('priority control-plane recovery should not require a local leader before bootstrap direct writes');
+  } finally {
+    await bootstrap.shutdown();
+  }
 });
 
 test('Bootstrap sequence - partition leadership wait allows init-phase priority control-plane bootstrap bypass', async (t) => {
@@ -548,8 +605,12 @@ test('Bootstrap sequence - partition leadership wait allows init-phase priority 
     ],
   ]);
 
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-  t.pass('init-phase priority control-plane bootstrap readiness should not block seed direct-write startup on a missing local sql_transactions leader');
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    t.pass('init-phase priority control-plane bootstrap readiness should not block seed direct-write startup on a missing local sql_transactions leader');
+  } finally {
+    await bootstrap.shutdown();
+  }
 });
 
 test('Bootstrap sequence - partition leadership wait allows direct bootstrap priority partition bypass during registration', async (t) => {
@@ -585,8 +646,12 @@ test('Bootstrap sequence - partition leadership wait allows direct bootstrap pri
     ],
   ]);
 
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-  t.pass('registration should not block bootstrap-direct startup on a local priority control-plane partition before the SQL engine exists');
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    t.pass('registration should not block bootstrap-direct startup on a local priority control-plane partition before the SQL engine exists');
+  } finally {
+    await bootstrap.shutdown();
+  }
 });
 
 test('Bootstrap sequence - partition leadership wait memoizes satisfied bootstrap partition set', async (t) => {
@@ -631,11 +696,15 @@ test('Bootstrap sequence - partition leadership wait memoizes satisfied bootstra
     ],
   ]);
 
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-  allowBootstrapBypass = false;
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    allowBootstrapBypass = false;
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
 
-  t.pass('registration should not re-block on the same partition set after partitions phase already satisfied startup leadership');
+    t.pass('registration should not re-block on the same partition set after partitions phase already satisfied startup leadership');
+  } finally {
+    await bootstrap.shutdown();
+  }
 });
 
 test('Bootstrap sequence - partition leadership wait allows canonical remote leader bypass', async (t) => {
@@ -696,6 +765,10 @@ test('Bootstrap sequence - partition leadership wait allows canonical remote lea
     },
   };
 
-  await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
-  t.pass('initialized follower replicas should not require local leadership when canonical leader metadata already exists');
+  try {
+    await bootstrap.seedPartitionsPhase.waitForPartitionLeadership();
+    t.pass('initialized follower replicas should not require local leadership when canonical leader metadata already exists');
+  } finally {
+    await bootstrap.shutdown();
+  }
 });

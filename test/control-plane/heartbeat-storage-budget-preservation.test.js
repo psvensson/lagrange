@@ -240,8 +240,8 @@ async (t) => {
   }
 });
 
-test('sendHeartbeat coalesces deferred heartbeat metadata writes through the ' +
-  'shared control-plane gateway contract',
+test('sendHeartbeat keeps recovery heartbeat metadata writes on the ' +
+  'non-deferrable control-plane contract while endpoint writes stay deferred',
 async (t) => {
   initEnv();
 
@@ -280,7 +280,7 @@ async (t) => {
       nodeWrites[0].options,
       {
         allowCoalescing: true,
-        allowPressureDefer: true,
+        allowPressureDefer: false,
         coalescingKey: `heartbeat:nodes:${TEST_NODE_ID}`,
         deliveryPriority: 'critical',
         mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
@@ -290,7 +290,7 @@ async (t) => {
         workloadClass: 'node_state_publication_critical',
         workClass: PRESSURE_WORK_CLASS.CRITICAL,
       },
-      'initial node heartbeat writes should use the deferred freshness-recovery write contract',
+      'initial node heartbeat writes should use the non-deferrable recovery write contract',
     );
 
     t.equal(endpointWrites.length, 1, 'heartbeat should issue one endpoint upsert');

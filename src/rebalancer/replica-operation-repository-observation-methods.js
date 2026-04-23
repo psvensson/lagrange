@@ -3,6 +3,7 @@ function assignReplicaOperationRepositoryObservationMethods(
   options = {},
 ) {
   const {
+    CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
     COORDINATOR_OWNER_COMPONENT,
     NUM,
     RAFT_ROLE,
@@ -10,6 +11,7 @@ function assignReplicaOperationRepositoryObservationMethods(
     REBALANCE_COORDINATOR_EVENT,
     REBALANCE_COORDINATOR_LOG_MSG,
     REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
+    REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     ReplicaStatus,
     SERVICE_TYPE,
@@ -152,14 +154,37 @@ function assignReplicaOperationRepositoryObservationMethods(
       );
     }
     /**
+   * Resolve the authoritative services read contract for one status probe.
+   * @param {Object} [readOptions={}]
+   * @return {Object}
+   */
+    resolveActualReplicaStatusReadQueryOptions(readOptions = {}) {
+      if (
+        readOptions?.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
+      ) {
+        return REPLICA_OPERATION_LOCAL_STATUS_READ_QUERY_OPTIONS;
+      }
+      return REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS;
+    }
+    /**
    * Get authoritative replica status via SQL, with cache
    * fallback for degraded conditions.
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
+   * @param {Object} [readOptions={}]
    * @return {Promise<Object>}
    */
-    async getActualReplicaObservation(replicaId, partitionId, targetNodeId) {
+    async getActualReplicaObservation(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      readOptions = {},
+    ) {
+      const statusReadQueryOptions =
+        this.resolveActualReplicaStatusReadQueryOptions(readOptions);
+      const allowCacheFallback = readOptions?.allowCacheFallback !== false;
       let observedRow = null;
       let authoritativeReadAttempted = false;
       let authoritativeReadFailed = false;
@@ -182,7 +207,7 @@ function assignReplicaOperationRepositoryObservationMethods(
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_STATUS,
           [replicaId],
-          REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
+          statusReadQueryOptions,
         );
         recordAuthoritativeResult(result);
       }
@@ -194,11 +219,15 @@ function assignReplicaOperationRepositoryObservationMethods(
           SYSTEM_TABLE_NAME.SERVICES,
           SQL.SELECT_REPLICA_BY_PARTITION_NODE,
           [partitionId, targetNodeId],
-          REPLICA_OPERATION_CANONICAL_STATUS_READ_QUERY_OPTIONS,
+          statusReadQueryOptions,
         );
         recordAuthoritativeResult(result);
       }
-      if (!observedRow && (!authoritativeReadAttempted || authoritativeReadFailed)) {
+      if (
+        !observedRow &&
+        allowCacheFallback &&
+        (!authoritativeReadAttempted || authoritativeReadFailed)
+      ) {
         observedRow = this.getObservedReplicaRowFromCache(replicaId, partitionId, targetNodeId);
         if (observedRow) {
           return Object.freeze({
@@ -220,10 +249,14 @@ function assignReplicaOperationRepositoryObservationMethods(
       }
       return Object.freeze({
         state:
+        authoritativeReadFailed === true ?
+          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
         authoritativeReadAttempted === true ?
           REPLICA_OPERATION_REPOSITORY_LITERAL.ABSENT :
           REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
         source:
+        authoritativeReadFailed === true ?
+          REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE :
         authoritativeReadAttempted === true ?
           REPLICA_OPERATION_REPOSITORY_LITERAL.AUTHORITATIVE :
           REPLICA_OPERATION_REPOSITORY_LITERAL.UNAVAILABLE,
@@ -235,13 +268,20 @@ function assignReplicaOperationRepositoryObservationMethods(
    * @param {string} replicaId
    * @param {string} partitionId
    * @param {string} targetNodeId
+   * @param {Object} [readOptions={}]
    * @return {Promise<string|null>}
    */
-    async getActualReplicaStatus(replicaId, partitionId, targetNodeId) {
+    async getActualReplicaStatus(
+      replicaId,
+      partitionId,
+      targetNodeId,
+      readOptions = {},
+    ) {
       const observation = await this.getActualReplicaObservation(
         replicaId,
         partitionId,
         targetNodeId,
+        readOptions,
       );
       return observation.state === REPLICA_OPERATION_REPOSITORY_LITERAL.OBSERVED ?
         observation.lifecycleStatus :

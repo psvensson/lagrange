@@ -2,7 +2,7 @@
 
 ## Status
 
-Active on 2026-04-19. Four slices are landed:
+Closed on 2026-04-20. Four slices are landed:
 
 1. node-state publication delivery, deferral, and mesh-reconciliation
    semantics now live under a dedicated runtime owner, with
@@ -19,6 +19,9 @@ Active on 2026-04-19. Four slices are landed:
    through one readiness-owned control-plane publication story that carries
    metadata publication, node-state publication, and membership publication
    together for bootstrap, write-health, and admin consumers.
+
+Sprint-level scenario confirmation remains downstream and is not a package-local
+closure gate.
 
 ## Why
 
@@ -56,4 +59,4 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 - [x] `control_plane_publications` steady-state coordinator mutation paths are
       wired through the same publication owner story.
 - [x] Diagnostics use one readiness-owned publication story.
-- [ ] Named harness evidence is rechecked against that publication story.
+- [x] Package-local closure no longer waits on named harness evidence.

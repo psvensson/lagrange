@@ -11,6 +11,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
     NUM,
     OperationType,
     REBALANCE_COORDINATOR_LOG_MSG,
+    REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,
     REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS,
     REPLICA_OPERATION_READINESS_DIMENSION,
@@ -184,10 +185,15 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       options?.allowPriorityRecoveryDeferredVisibility === true;
       const allowOwnerPersistedTransitionDeferredVisibility =
       options?.allowOwnerPersistedTransitionDeferredVisibility === true;
+      const expectedOperation =
+      options?.expectedOperation ||
+      (allowOwnerPersistedTransitionDeferredVisibility ?
+        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId) :
+        null);
       const ownerPersistedTransitionWitness = allowOwnerPersistedTransitionDeferredVisibility ?
         this.getOwnerPersistedTransitionVisibilityWitness(
           operationId,
-          options?.expectedOperation || null,
+          expectedOperation,
         ) :
         null;
       let readQueryOptions = REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS;
@@ -195,7 +201,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         options?.authoritativeReadMode ===
         CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
       ) {
-        readQueryOptions = REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS;
+        readQueryOptions = REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS;
       } else if (
         options?.requireOwnerRpcRead === true ||
       options?.authoritativeReadMode === CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
@@ -216,12 +222,23 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
       if (!result.success || !Array.isArray(result.rows) || result.rows.length === NUM.ZERO) {
         const isEmptyRead =
         result.success === true && Array.isArray(result.rows) && result.rows.length === NUM.ZERO;
+        const isRetryableAuthoritativeFailure =
+          result.success === false && isRetryableControlPlaneError(result);
         let deferredOutcome = null;
-        if (isEmptyRead && ownerPersistedTransitionWitness) {
+        if (ownerPersistedTransitionWitness && (isEmptyRead || isRetryableAuthoritativeFailure)) {
           deferredOutcome = this.buildOwnerPersistedTransitionDeferredVisibilityOutcome({
-            retryAfterMs: this.replicaOperationAuthoritativeVisibilityRetryDelayMs,
+            retryAfterMs:
+              isEmptyRead ?
+                this.replicaOperationAuthoritativeVisibilityRetryDelayMs :
+                this.getRetryableReplicaOperationReadRetryDelayMs(result),
             queryDurationMs,
             operationId,
+            source:
+              isEmptyRead ?
+                REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
+                  .OWNER_PERSISTED_TRANSITION_EMPTY_READ :
+                REPLICA_OPERATION_VISIBILITY_OUTCOME_SOURCE
+                  .OWNER_PERSISTED_TRANSITION_RETRYABLE_FAILURE,
           });
         }
         if (!deferredOutcome) {
@@ -260,7 +277,7 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         allowOwnerPersistedTransitionDeferredVisibility &&
       ownerPersistedTransitionWitness &&
       this.isOwnerPersistedTransitionVisibilityLagCandidate(
-        options?.expectedOperation || null,
+        expectedOperation,
         operation,
         ownerPersistedTransitionWitness,
       )
@@ -276,6 +293,15 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
               .OWNER_PERSISTED_TRANSITION_STALE_READ,
           }),
         });
+      }
+      if (
+        ownerPersistedTransitionWitness &&
+      this.isReplicaOperationVisibilitySatisfied(
+        ownerPersistedTransitionWitness.operation,
+        operation,
+      )
+      ) {
+        this.clearOwnerPersistedTransitionVisibilityWitness(operationId);
       }
       return Object.freeze({
         operation: isCoordinatorOwnedOperationType(operation?.type) ? operation : null,
@@ -300,13 +326,21 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
           requireOwnerRpcRead: options?.requireOwnerRpcRead === true,
           allowPriorityRecoveryDeferredVisibility:
           options?.allowPriorityRecoveryDeferredVisibility === true,
+          allowOwnerPersistedTransitionDeferredVisibility:
+          options?.allowOwnerPersistedTransitionDeferredVisibility !== false,
         },
       );
       if (authoritativeObservation?.operation) {
         return this.buildOperationVisibilityObservation(authoritativeObservation.operation, null);
       }
-      const fallbackOperation =
+      const ownerPersistedFallbackOperation =
+      options?.allowOwnerPersistedTransitionDeferredVisibility === false ?
+        null :
+        this.getOwnerPersistedTransitionVisibilityFallbackOperation(operationId);
+      const cacheFallbackOperation =
       options?.allowFallbackQuery === false ? null : await this.queryOperationById(operationId);
+      const fallbackOperation =
+      ownerPersistedFallbackOperation || cacheFallbackOperation;
       return this.buildOperationVisibilityObservation(
         fallbackOperation,
         authoritativeObservation?.deferredOutcome || null,
@@ -731,6 +765,15 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
         entityType,
         entityId,
       }).map((row) => this.rowToOperation(row));
+      const ownerPersistedFallbackOperations =
+      this.getOwnerPersistedTransitionVisibilityFallbackOperationsForEntity(
+        entityType,
+        entityId,
+      );
+      const fallbackOperations = this.mergeIncompleteOperationVisibilityOperations(
+        cachedOperations,
+        ownerPersistedFallbackOperations,
+      );
 
       if (!result.success || !result.rows) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
@@ -739,8 +782,8 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             planningSnapshot,
           ),
           retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
-          cachedOperations,
-          fallbackOperations: cachedOperations,
+          cachedOperations: fallbackOperations,
+          fallbackOperations,
           queryDurationMs,
           entityType,
           entityId,
@@ -749,18 +792,24 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_FAILURE,
         });
         if (deferredOutcome) {
-          return this.buildEntityOperationVisibilityObservation(cachedOperations, deferredOutcome);
+          return this.buildEntityOperationVisibilityObservation(
+            fallbackOperations,
+            deferredOutcome,
+          );
         }
         return this.buildEntityOperationVisibilityObservation([], null);
       }
 
-      const operations = result.rows.map((row) => this.rowToOperation(row));
+      const operations = this.mergeIncompleteOperationVisibilityOperations(
+        result.rows.map((row) => this.rowToOperation(row)),
+        ownerPersistedFallbackOperations,
+      );
       if (this.shouldDeferEntityOperationEmptyRead(result, queryDurationMs, planningSnapshot)) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
           priorityRecoveryActive: true,
           retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
-          cachedOperations,
-          fallbackOperations: cachedOperations,
+          cachedOperations: fallbackOperations,
+          fallbackOperations,
           queryDurationMs,
           entityType,
           entityId,
@@ -769,7 +818,10 @@ function assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository,
             .PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_EMPTY_READ,
         });
         if (deferredOutcome) {
-          return this.buildEntityOperationVisibilityObservation(cachedOperations, deferredOutcome);
+          return this.buildEntityOperationVisibilityObservation(
+            fallbackOperations,
+            deferredOutcome,
+          );
         }
       }
 

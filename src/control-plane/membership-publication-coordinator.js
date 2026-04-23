@@ -317,6 +317,22 @@ function buildLocalAuthoritativeMembershipReadOptions(options = {}) {
   };
 }
 function buildMembershipPublicationEvidenceSnapshot(options = {}) {
+  const priorityRecoveryPlanningSnapshot =
+    options.priorityRecoveryPlanningSnapshot &&
+      typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
+      options.priorityRecoveryPlanningSnapshot :
+      null;
+  const targetNodeId =
+    typeof options.targetNodeId === TYPEOF.STRING &&
+      options.targetNodeId.length > NUM.ZERO ?
+      options.targetNodeId :
+      typeof options.publisherNodeId === TYPEOF.STRING &&
+        options.publisherNodeId.length > NUM.ZERO ?
+        options.publisherNodeId :
+        typeof priorityRecoveryPlanningSnapshot?.targetNodeId === TYPEOF.STRING &&
+          priorityRecoveryPlanningSnapshot.targetNodeId.length > NUM.ZERO ?
+          priorityRecoveryPlanningSnapshot.targetNodeId :
+          null;
   return Object.freeze({
     latestPublicationRow: options.latestPublicationRow || null,
     latestPublishedPublicationRow: options.latestPublishedPublicationRow || null,
@@ -348,16 +364,34 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
       typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
         options.priorityPartitionSummary :
         null,
-    priorityRecoveryPlanningSnapshot:
-      options.priorityRecoveryPlanningSnapshot &&
-      typeof options.priorityRecoveryPlanningSnapshot === TYPEOF.OBJECT ?
-        options.priorityRecoveryPlanningSnapshot :
-        null,
+    priorityRecoveryPlanningSnapshot,
     membershipLifecycleSummary:
       options.membershipLifecycleSummary &&
       typeof options.membershipLifecycleSummary === TYPEOF.OBJECT ?
         options.membershipLifecycleSummary :
         null,
+    targetNodeId,
+    admissionState:
+      typeof options.admissionState === TYPEOF.STRING &&
+        options.admissionState.length > NUM.ZERO ?
+        options.admissionState :
+        typeof priorityRecoveryPlanningSnapshot?.admissionState === TYPEOF.STRING &&
+          priorityRecoveryPlanningSnapshot.admissionState.length > NUM.ZERO ?
+          priorityRecoveryPlanningSnapshot.admissionState :
+          null,
+    admissionReasonCodes: Array.isArray(options.admissionReasonCodes) ?
+      options.admissionReasonCodes :
+      Array.isArray(priorityRecoveryPlanningSnapshot?.admissionReasonCodes) ?
+        priorityRecoveryPlanningSnapshot.admissionReasonCodes :
+        [],
+    clusterIncarnationFence:
+      options.clusterIncarnationFence &&
+        typeof options.clusterIncarnationFence === TYPEOF.OBJECT ?
+        options.clusterIncarnationFence :
+        priorityRecoveryPlanningSnapshot?.clusterIncarnationFence &&
+          typeof priorityRecoveryPlanningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+          priorityRecoveryPlanningSnapshot.clusterIncarnationFence :
+          null,
     publisherNodeId: String(
       options.publisherNodeId || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
     ),

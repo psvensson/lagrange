@@ -428,6 +428,28 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
    * @return {Promise<string|null>}
    */
   async getReconciledReplicaStatus(replicaId, partitionId, targetNodeId) {
+    const shouldPreferLocalPriorityReplicaObservation =
+      targetNodeId === this.nodeId &&
+      isPriorityControlPlanePartition({partitionId});
+    if (
+      shouldPreferLocalPriorityReplicaObservation &&
+      this.repository &&
+      typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
+    ) {
+      const localObservation = await this.repository.getActualReplicaObservation(
+        replicaId,
+        partitionId,
+        targetNodeId,
+        {
+          authoritativeReadMode:
+            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
+          allowCacheFallback: false,
+        },
+      );
+      if (localObservation?.state === OPERATION_WORKFLOW_OWNER_LITERAL.OBSERVED) {
+        return localObservation.lifecycleStatus;
+      }
+    }
     if (
       this.repository &&
       typeof this.repository.getActualReplicaObservation === TYPEOF.FUNCTION
@@ -589,6 +611,11 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
           partitionId: options.partitionId || null,
           updatedAt: operationInput?.updatedAt,
           createdAt: operationInput?.createdAt,
+          operationSnapshot:
+            operationInput &&
+            typeof operationInput === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT ?
+              operationInput :
+              null,
         })
       ) {
         return this.buildSkippedOperationResult(

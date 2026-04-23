@@ -70,6 +70,7 @@ import {
 import { LIFECYCLE_REASON } from "../bootstrap/lifecycle-controller-constants.js";
 import { isPriorityControlPlanePartition } from "../bootstrap/system-partition-classification.js";
 import {
+  buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   hasPriorityRecoverySpreadGap,
@@ -329,6 +330,7 @@ export const PARTITION_SERVICE_SHARED = {
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
   buildPriorityRecoveryCompletion,
+  buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   cloneSplitRoutingEntry,

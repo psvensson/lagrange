@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import {readdir, readFile, rename, stat, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
 import {
   REJOIN_HINTS_FILENAME,
   REJOIN_HINTS_TEMP_SUFFIX,
@@ -469,6 +470,18 @@ async function collectAutoRejoinDecisionContext(options = {}) {
   const durableStateDetected = hintsIdentityMatched ||
     durableSnapshot.hasDurableNodesTable ||
     clusterNodeCount > NUM.ZERO;
+  const clusterIncarnationFence = buildClusterIncarnationFence({
+    durableStateDetected,
+    localIdentityMatched:
+      hintsIdentityMatched || durableSnapshot.matchedLocalIdentity === true,
+    peerProofRequired: deriveRequiresPeerRejoin({
+      nodeRole: localNodeRole,
+      clusterNodeCount,
+      peerAddresses,
+    }) &&
+      localNodeRole !== REJOIN_ROLE_SEED,
+    peerAddresses,
+  });
 
   return {
     durableSnapshot,
@@ -480,6 +493,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     selectedPeerAddress,
     preferredPeerAddress,
     durableStateDetected,
+    clusterIncarnationFence,
     requiresPeerRejoin: deriveRequiresPeerRejoin({
       nodeRole: localNodeRole,
       clusterNodeCount,
@@ -519,6 +533,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         durableStateDetected: true,
         identityMismatch: true,
+        clusterIncarnationFence: context.clusterIncarnationFence,
         error: IDENTITY_MISMATCH_ERROR_MESSAGE,
       };
     case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
@@ -531,6 +546,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.SEED,
         durableStateDetected: context.durableStateDetected,
         identityMismatch: false,
+        clusterIncarnationFence: context.clusterIncarnationFence,
       };
     case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
       return {
@@ -542,6 +558,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         durableStateDetected: true,
         identityMismatch: false,
+        clusterIncarnationFence: context.clusterIncarnationFence,
       };
     case AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER:
       return {
@@ -555,6 +572,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         durableStateDetected: true,
         identityMismatch: false,
+        clusterIncarnationFence: context.clusterIncarnationFence,
       };
     case AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING:
       return {
@@ -568,6 +586,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
         durableStateDetected: true,
         identityMismatch: false,
+        clusterIncarnationFence: context.clusterIncarnationFence,
         error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
       };
     case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
@@ -580,6 +599,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
         startupMode: STARTUP_JOIN_MODE.SEED,
         durableStateDetected: false,
         identityMismatch: false,
+        clusterIncarnationFence: context.clusterIncarnationFence,
       };
     default:
       throw new Error(

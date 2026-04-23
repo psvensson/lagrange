@@ -5,6 +5,9 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  CONTROL_PLANE_DELIVERY_PRIORITY,
+} from '../../src/control-plane/control-plane-constants.js';
+import {
   CONTROL_PLANE_CACHE_RECONCILE_INTENT,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -195,6 +198,8 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
             tableName: readIntent?.tableName,
             routingReadinessDimension: options?.routingReadinessDimension,
             workloadClass: options?.workloadClass,
+            workClass: options?.workClass,
+            deliveryPriority: options?.deliveryPriority,
           });
           return {
             success: true,
@@ -229,6 +234,17 @@ test('AdminServiceDiscovery authoritative cache repair reads use control-plane r
       ),
       true,
       'service-discovery repair reads should carry the shared workload class',
+    );
+    t.equal(
+      readCalls.every((call) => call.workClass === 'background'),
+      true,
+      'service-discovery repair reads should stay on the diagnostic work class',
+    );
+    t.equal(
+      readCalls.every((call) =>
+        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND),
+      true,
+      'service-discovery repair reads should stay off the critical transport lane',
     );
   });
 
@@ -281,21 +297,22 @@ test('AdminServiceDiscovery control snapshot repair reads bypass pressure degrad
     );
     t.equal(
       readCalls.every((call) =>
-        call.workClass === 'critical'),
+        call.workClass === 'background'),
       true,
-      'control snapshot repair should use the critical work class',
+      'control snapshot repair should stay on the diagnostic work class',
     );
     t.equal(
       readCalls.every((call) =>
         call.workloadClass ===
-          CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR),
+          CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ),
       true,
-      'control snapshot repair should carry the shared repair workload class',
+      'control snapshot repair should carry the shared admin diagnostic workload class',
     );
     t.equal(
-      readCalls.every((call) => call.deliveryPriority === 'critical'),
+      readCalls.every((call) =>
+        call.deliveryPriority === CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND),
       true,
-      'control snapshot repair should use critical delivery priority',
+      'control snapshot repair should stay off the critical transport lane',
     );
     t.equal(
       readCalls.every((call) =>

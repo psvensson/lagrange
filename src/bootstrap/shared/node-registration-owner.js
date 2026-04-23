@@ -1,5 +1,4 @@
 import os from 'os';
-import {assertCritical} from '../../utils/assert.js';
 import {NodeStorageBudgetSetup} from './node-storage-budget-setup.js';
 import {NodeService} from '../../node/node-service.js';
 import {
@@ -10,8 +9,13 @@ import {createBootstrapCacheHydrationApplier} from
 import {
   MembershipPublicationRuntimeOwner,
 } from '../../control-plane/owners/membership-publication-runtime-owner.js';
+import {createControlPlaneRuntimeBundle} from
+  '../../control-plane/control-plane-runtime-bundle.js';
+import {CONTROL_PLANE_PHASE_SCOPE} from
+  '../../control-plane/control-plane-system-table-gateway.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../../control-plane/control-plane-system-table-gateway.js';
 import {
-  JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {
@@ -32,8 +36,10 @@ import {
   MEMBERSHIP_LIFECYCLE_INTENT,
   resolveMembershipJoinIntentType,
 } from '../../control-plane/membership-lifecycle-controller.js';
+import {resolveAutoRejoinStartupDecision} from '../rejoin-hints.js';
 import {AuthoritativeControlPlaneView} from
   '../../control-plane/authoritative-control-plane-view.js';
+import {runRetryableControlPlaneWrite} from './retryable-control-plane-write.js';
 
 const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
@@ -55,6 +61,8 @@ const JOIN_ADMISSION_PUBLICATION = Object.freeze({
   NODE_MEMBERSHIP_REFRESH: 'durable rejoin membership refresh',
 });
 const NODE_REGISTRATION_ERROR = Object.freeze({
+  JOIN_ADMISSION_GATEWAY_REQUIRED:
+    'Join admission control-plane gateway required for join service registration',
   UNSUPPORTED_PUBLICATION_TABLE:
     'Unsupported join publication table for node registration',
 });
@@ -71,6 +79,7 @@ const REUSABLE_JOIN_ADMISSION_CONNECTION_STATES = Object.freeze([
   STATE.CONNECTED,
   STATE.READY,
 ]);
+const JOIN_ADMISSION_PHASE_SCOPE = CONTROL_PLANE_PHASE_SCOPE.JOIN;
 
 const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
 const normalizeString = (value) =>
@@ -85,6 +94,7 @@ class NodeRegistrationOwner {
     this.authoritativeControlPlaneView = null;
     this.membershipPublicationRuntimeOwner =
       options.membershipPublicationRuntimeOwner || null;
+    this.joinAdmissionControlPlaneSystemTableGateway = null;
   }
 
   async registerNodeInCluster() {
@@ -94,11 +104,6 @@ class NodeRegistrationOwner {
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
     });
-
-    assertCritical(
-      this.delegates.getCdcIntegrationService()?.sqlQueryEngine,
-      JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
-    );
 
     const now = this.delegates.getNow()();
     const nodeRow = this.buildNodeRegistrationRow(now);
@@ -270,6 +275,10 @@ class NodeRegistrationOwner {
       return null;
     }
 
+    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+      return null;
+    }
+
     const authoritativeNodeRow =
       await this.readAuthoritativeDurableRejoinNodeRow();
     if (!authoritativeNodeRow) {
@@ -352,6 +361,10 @@ class NodeRegistrationOwner {
   }
 
   async resolveExistingJoinAdmissionProgress() {
+    if (await this.durableRejoinBlockedByClusterIncarnationFence()) {
+      return null;
+    }
+
     const authoritativeNodeRow =
       await this.readAuthoritativeDurableRejoinNodeRow();
     if (!this.canReuseObservedJoinAdmissionNodeRow(authoritativeNodeRow)) {
@@ -370,6 +383,43 @@ class NodeRegistrationOwner {
         source: JOIN_ADMISSION_RESOLUTION_SOURCE.EXISTING_PROGRESS,
       },
     };
+  }
+
+  async durableRejoinBlockedByClusterIncarnationFence() {
+    const fence = await this.resolveClusterIncarnationFence();
+    if (!fence || typeof fence !== TYPEOF.OBJECT) {
+      return false;
+    }
+    return fence.allowed !== true;
+  }
+
+  async resolveClusterIncarnationFence() {
+    if (hasFunction(this.delegates.getClusterIncarnationFence)) {
+      const delegatedFence = await this.delegates.getClusterIncarnationFence();
+      return delegatedFence &&
+        typeof delegatedFence === TYPEOF.OBJECT ?
+        delegatedFence :
+        null;
+    }
+
+    const dataDir = normalizeString(this.delegates.getDataDir?.());
+    if (dataDir.length === NUM.ZERO) {
+      return null;
+    }
+
+    try {
+      const startupDecision = await resolveAutoRejoinStartupDecision({
+        dataDir,
+        nodeId: this.nodeId,
+        nodeAddress: this.nodeAddress,
+      });
+      return startupDecision?.clusterIncarnationFence &&
+        typeof startupDecision.clusterIncarnationFence === TYPEOF.OBJECT ?
+        startupDecision.clusterIncarnationFence :
+        null;
+    } catch (_error) {
+      return null;
+    }
   }
 
   async refreshExistingDurableRejoinMembership(existingMembership) {
@@ -642,12 +692,65 @@ class NodeRegistrationOwner {
           NodeService.getInstance().getSystemTableCache() ||
           null,
         messageRouter: this.delegates.getMessageRouter?.() || null,
+        controlPlaneSystemTableGateway:
+          this.getJoinAdmissionControlPlaneSystemTableGateway(),
         controlPlaneWriteRetryTimeoutMs:
           this.getJoinAdmissionWriteRetryTimeoutMs(),
         controlPlaneWriteRetryNow: () => this.delegates.getNow()(),
         controlPlaneWriteRetrySleep: (delayMs) => this.sleep(delayMs),
       });
     return this.membershipPublicationRuntimeOwner;
+  }
+
+  resolveJoinAdmissionSqlQueryEngine() {
+    return this.delegates.getJoinAdmissionSqlQueryEngine?.() || null;
+  }
+
+  getJoinAdmissionControlPlaneSystemTableGateway() {
+    const delegatedGateway =
+      this.delegates.getJoinAdmissionControlPlaneSystemTableGateway?.() || null;
+    if (delegatedGateway) {
+      return delegatedGateway;
+    }
+
+    const joinAdmissionSqlQueryEngine =
+      this.resolveJoinAdmissionSqlQueryEngine();
+    if (!joinAdmissionSqlQueryEngine) {
+      return null;
+    }
+
+    const cdcIntegrationService =
+      joinAdmissionSqlQueryEngine ?
+        null :
+        this.delegates.getCdcIntegrationService?.() || null;
+    const systemTableCache =
+      this.delegates.getSystemTableCache?.() ||
+      NodeService.getInstance().getSystemTableCache() ||
+      null;
+    const messageRouter = this.delegates.getMessageRouter?.() || null;
+
+    if (this.joinAdmissionControlPlaneSystemTableGateway) {
+      this.joinAdmissionControlPlaneSystemTableGateway.setSqlQueryEngine?.(
+        joinAdmissionSqlQueryEngine,
+      );
+      this.joinAdmissionControlPlaneSystemTableGateway
+        .setCdcIntegrationService?.(cdcIntegrationService);
+      this.joinAdmissionControlPlaneSystemTableGateway
+        .setSystemTableCache?.(systemTableCache);
+      this.joinAdmissionControlPlaneSystemTableGateway
+        .setMessageRouter?.(messageRouter);
+      return this.joinAdmissionControlPlaneSystemTableGateway;
+    }
+
+    this.joinAdmissionControlPlaneSystemTableGateway =
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        sqlQueryEngine: joinAdmissionSqlQueryEngine,
+        cdcIntegrationService,
+        systemTableCache,
+        messageRouter,
+      }).controlPlaneSystemTableGateway;
+    return this.joinAdmissionControlPlaneSystemTableGateway;
   }
 
   buildJoinAdmissionRetryLogger(tableName, admissionTarget = null) {
@@ -695,6 +798,45 @@ class NodeRegistrationOwner {
     );
   }
 
+  async upsertJoinServiceRowWithRetry(rowData, options = {}) {
+    const controlPlaneSystemTableGateway =
+      this.getJoinAdmissionControlPlaneSystemTableGateway();
+    if (
+      !controlPlaneSystemTableGateway ||
+      typeof controlPlaneSystemTableGateway.submitMutation !==
+        TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        NODE_REGISTRATION_ERROR.JOIN_ADMISSION_GATEWAY_REQUIRED,
+      );
+    }
+
+    const joinTimeOptions = this.getJoinTimeUpsertOptions();
+    const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
+    return runRetryableControlPlaneWrite(
+      () => controlPlaneSystemTableGateway.submitMutation(
+        {
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+          tableName: TABLES.SERVICES,
+          row: rowData,
+        },
+        {
+          ...joinTimeOptions,
+          queryTimeoutMs,
+        },
+      ),
+      {
+        timeoutMs: queryTimeoutMs,
+        now: () => this.delegates.getNow()(),
+        onRetry: this.buildJoinAdmissionRetryLogger(
+          TABLES.SERVICES,
+          options.admissionTarget || null,
+        ),
+        sleep: (delayMs) => this.sleep(delayMs),
+      },
+    );
+  }
+
   async upsertSystemTableRowWithRetry(
     tableName,
     rowData,
@@ -738,6 +880,7 @@ class NodeRegistrationOwner {
   getJoinTimeUpsertOptions() {
     return {
       deliveryPriority: JOIN_ADMISSION_DELIVERY_PRIORITY,
+      phaseScope: JOIN_ADMISSION_PHASE_SCOPE,
       skipCacheWait: true,
       queryTimeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
     };

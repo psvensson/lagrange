@@ -31,6 +31,11 @@ import {
 import {registerRebalanceCoordinatorAtomicTransitionTailTests} from './rebalance-coordinator-atomic-transitions-tail-test-cases.js';
 
 const MOCK_NODE_ID = 'node-local';
+const TRANSITION_RETRY_FALLBACK_PARTITION_ID = 'replica_operations-p1';
+const TRANSITION_RETRY_FALLBACK_REPLICA_ID =
+  `${TRANSITION_RETRY_FALLBACK_PARTITION_ID}-r4`;
+const TRANSITION_RETRY_VISIBILITY_DEFERRED_COMPLETION_STATE =
+  'authoritative_operation_read_deferred';
 
 function createMinimalCoordinator(overrides = {}) {
   const transactionCoordinator =
@@ -1442,6 +1447,164 @@ test('deferred transition retry resumes a stale critical pending operation ' +
       String(operation.status || '').toUpperCase(),
       'FAILED',
       'critical deferred retries should not collapse into terminal timeout before retry execution',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('deferred transition retry reuses the last owner snapshot when ' +
+  'operation visibility is still deferred', async (t) => {
+  const deferredTimers = [];
+  const deliveries = [];
+  const operation = createTestOperation({
+    operationId: 'op-transition-retry-fallback-snapshot',
+    createdAt: Date.now() - 1000,
+    updatedAt: Date.now() - 1000,
+  });
+  let persistCalls = 0;
+  const coordinator = createMinimalCoordinator({
+    messageRouter: {
+      async deliver(target, payload, options) {
+        deliveries.push({target, payload, options});
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+  coordinator.repository.getOperationByIdVisibilityObservation =
+    async () => ({
+      operation: null,
+      deferredOutcome: {
+        completionState:
+          TRANSITION_RETRY_VISIBILITY_DEFERRED_COMPLETION_STATE,
+        retryAfterMs: 25,
+      },
+      retryAfterMs: 25,
+    });
+  coordinator.repository.persistOperationUpdate =
+    async (nextOperation) => {
+      persistCalls += 1;
+      if (persistCalls === 1) {
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+        );
+      }
+      operation.workflowStep = nextOperation.workflowStep;
+      operation.status = nextOperation.status;
+      operation.updatedAt = nextOperation.updatedAt;
+      operation.completedAt = nextOperation.completedAt;
+      operation.errorMessage = nextOperation.errorMessage;
+      operation.replicaId = nextOperation.replicaId;
+      operation.stepsHistory = nextOperation.stepsHistory.map(
+        (entry) => ({...entry}),
+      );
+    };
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = await coordinator.dispatchOperation(operation);
+
+    t.equal(
+      firstAttempt?.reason,
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      'retryable transition contention should defer through the shared retry lane',
+    );
+    t.equal(
+      deferredTimers.length,
+      1,
+      'the deferred retry should arm one owner-lane timer',
+    );
+
+    await deferredTimers[0].fn();
+
+    t.equal(
+      deliveries.length,
+      1,
+      'the deferred retry should still reach dispatch when visibility is only recoverable from the last owner snapshot',
+    );
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.CREATING,
+      'the fallback owner snapshot should let the retry advance the operation',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('deferred transition retry clears stale grace once the retry lane can no ' +
+  'longer see the operation', async (t) => {
+  const deferredTimers = [];
+  const operation = createTestOperation({
+    operationId: 'op-transition-retry-clears-stale-grace',
+    partitionId: TRANSITION_RETRY_FALLBACK_PARTITION_ID,
+    replicaId: TRANSITION_RETRY_FALLBACK_REPLICA_ID,
+    createdAt: Date.now() - 1000,
+    updatedAt: Date.now() - 1000,
+  });
+  const coordinator = createMinimalCoordinator({
+    setTimeoutFn(fn, delayMs) {
+      const handle = {fn, delayMs};
+      deferredTimers.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+  coordinator.repository.queryOperationById = async () => operation;
+  coordinator.repository.getOperationByIdVisibilityObservation =
+    async () => ({
+      operation: null,
+      deferredOutcome: {
+        completionState:
+          TRANSITION_RETRY_VISIBILITY_DEFERRED_COMPLETION_STATE,
+        retryAfterMs: 25,
+      },
+      retryAfterMs: 25,
+    });
+  coordinator.repository.persistOperationUpdate = async () => {
+    throw new Error(
+      PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+    );
+  };
+  coordinator.initialize();
+
+  try {
+    const firstAttempt = await coordinator.dispatchOperation(
+      operation.operationId,
+    );
+
+    t.equal(
+      firstAttempt?.reason,
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      'retryable transition contention should still arm the retry lane',
+    );
+    t.equal(
+      deferredTimers.length,
+      1,
+      'the deferred retry timer should be scheduled once',
+    );
+    t.equal(
+      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+        operation.operationId,
+      ),
+      true,
+      'the retry lane should start with active timeout grace',
+    );
+
+    await deferredTimers[0].fn();
+
+    t.equal(
+      coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+        operation.operationId,
+      ),
+      false,
+      'retry grace should clear once the retry lane cannot recover the operation',
     );
   } finally {
     await coordinator.shutdown();

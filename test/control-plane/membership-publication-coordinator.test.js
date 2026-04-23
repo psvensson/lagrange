@@ -21,6 +21,17 @@ import {ControlPlanePublicationsOwner} from
   '../../src/control-plane/owners/control-plane-publications-owner.js';
 import {registerMembershipPublicationCoordinatorTailTests} from './membership-publication-coordinator-tail-test-cases.js';
 
+const MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED = 'blocked';
+const MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY =
+  'cluster_incarnation_identity_mismatch';
+const MEMBERSHIP_PUBLICATION_BLOCKED_FENCE = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze([
+    MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY,
+  ]),
+});
+
 test('membership lifecycle model encodes the hard-cutover publication transitions',
   async (t) => {
     t.equal(
@@ -1114,6 +1125,261 @@ test('deriveMembershipPublicationCandidate keeps the latest in-flight publicatio
       candidate.publicationEpoch,
       11,
       'stable convergence floors should keep the current publication epoch until acknowledgements close it',
+    );
+  });
+
+test('deriveMembershipPublicationCandidate excludes an admission-blocked publisher from the next published cohort',
+  async (t) => {
+    const candidate = deriveMembershipPublicationCandidate({
+      planningSnapshot: {
+        publisherNodeId: 'node-3',
+        targetNodeId: 'node-3',
+        admissionState: MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED,
+        admissionReasonCodes: [
+          MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY,
+        ],
+        clusterIncarnationFence: MEMBERSHIP_PUBLICATION_BLOCKED_FENCE,
+        latestPublishedPublicationRow: {
+          publication_epoch: 30,
+          status: 'PUBLISHED',
+          published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+          required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        },
+        latestPublicationRow: {
+          publication_epoch: 30,
+          status: 'PUBLISHED',
+          published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+          required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+          acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        },
+        nodeRows: [
+          {
+            node_id: 'node-1',
+            status: 'active',
+            connection_state: 'ready',
+            ready_lease_expires_at: 6000,
+          },
+          {
+            node_id: 'node-2',
+            status: 'active',
+            connection_state: 'ready',
+            ready_lease_expires_at: 6000,
+          },
+          {
+            node_id: 'node-3',
+            status: 'active',
+            connection_state: 'ready',
+            ready_lease_expires_at: 6000,
+          },
+        ],
+        readinessEntries: [
+          {nodeId: 'node-1', dimensions: {clusterMemberHealthy: true}},
+          {nodeId: 'node-2', dimensions: {clusterMemberHealthy: true}},
+          {nodeId: 'node-3', dimensions: {clusterMemberHealthy: true}},
+        ],
+        nodeEndpointRows: [
+          {
+            endpoint_id: 'node-1-ws',
+            node_id: 'node-1',
+            transport_type: 'ws',
+            status: 'active',
+            address: 'ws://node-1:8082',
+          },
+          {
+            endpoint_id: 'node-2-ws',
+            node_id: 'node-2',
+            transport_type: 'ws',
+            status: 'active',
+            address: 'ws://node-2:8082',
+          },
+          {
+            endpoint_id: 'node-3-ws',
+            node_id: 'node-3',
+            transport_type: 'ws',
+            status: 'active',
+            address: 'ws://node-3:8082',
+          },
+        ],
+        serviceRows: [
+          {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+          {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+          {service_id: 'svc-3', node_id: 'node-3', status: 'active'},
+        ],
+        nowMs: 1000,
+      },
+    });
+
+    t.same(
+      candidate.publishedActiveNodeIds,
+      ['node-1', 'node-2'],
+      'the next publication cohort should be rebuilt from admitted participation rather than the stale published baseline',
+    );
+    t.match(
+      candidate.targetParticipation,
+      {
+        nodeId: 'node-3',
+        admissionState: MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED,
+        admitted: false,
+        admissionReasonCodes: [
+          MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY,
+        ],
+      },
+      'the candidate should retain explicit admission evidence for the blocked target node',
+    );
+    t.match(
+      candidate.membershipLifecycleSummary?.participationByNodeId,
+      {
+        'node-3': {
+          admissionState: MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED,
+          admitted: false,
+        },
+      },
+      'the persisted lifecycle summary should carry the admitted-participation cutover state',
+    );
+  });
+
+test('MembershipPublicationCoordinator reuses startup-owned admission evidence from the readiness planning answer',
+  async (t) => {
+    const nodeId = 'node-3';
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId,
+      systemTableCache: {
+        get() {
+          return null;
+        },
+        getAll() {
+          return [];
+        },
+        filter() {
+          return [];
+        },
+        onCacheChange() {},
+      },
+      getLocalClusterIncarnationFence: () =>
+        MEMBERSHIP_PUBLICATION_BLOCKED_FENCE,
+      membershipPublicationService: {
+        async getLatestPublicationForNode(targetNodeId) {
+          if (targetNodeId !== nodeId) {
+            return null;
+          }
+          return {
+            publicationEpoch: 30,
+            status: 'PUBLISHED',
+            createdAt: 900,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+            acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+          };
+        },
+        getLatestPublicationForNodeSync(targetNodeId) {
+          if (targetNodeId !== nodeId) {
+            return null;
+          }
+          return {
+            publicationEpoch: 30,
+            status: 'PUBLISHED',
+            createdAt: 900,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+            acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+          };
+        },
+      },
+      now: () => 1000,
+    });
+    const coordinator = new MembershipPublicationCoordinator({
+      nodeId,
+      controlPlaneReadinessService: readinessService,
+      now: () => 1000,
+    });
+
+    const candidate = await coordinator.deriveClusterMembershipCandidate({
+      publisherNodeId: nodeId,
+      latestPublishedPublicationRow: {
+        publication_epoch: 30,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+      },
+      latestPublicationRow: {
+        publication_epoch: 30,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+      },
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 6000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 6000,
+        },
+        {
+          node_id: nodeId,
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 6000,
+        },
+      ],
+      readinessEntries: [
+        {nodeId: 'node-1', dimensions: {clusterMemberHealthy: true}},
+        {nodeId: 'node-2', dimensions: {clusterMemberHealthy: true}},
+        {nodeId, dimensions: {clusterMemberHealthy: true}},
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+        {
+          endpoint_id: 'node-3-ws',
+          node_id: nodeId,
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-3:8082',
+        },
+      ],
+      serviceRows: [
+        {service_id: 'svc-1', node_id: 'node-1', status: 'active'},
+        {service_id: 'svc-2', node_id: 'node-2', status: 'active'},
+        {service_id: 'svc-3', node_id: nodeId, status: 'active'},
+      ],
+      nowMs: 1000,
+    });
+
+    t.same(
+      candidate.publishedActiveNodeIds,
+      ['node-1', 'node-2'],
+      'nested planning reads should exclude the blocked local node from the next publication cohort',
+    );
+    t.equal(
+      candidate.admissionState,
+      MEMBERSHIP_PUBLICATION_ADMISSION_STATE_BLOCKED,
+      'the publication candidate should preserve the readiness-owned admission state',
+    );
+    t.same(
+      candidate.admissionReasonCodes,
+      [MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY],
+      'the publication candidate should preserve the readiness-owned admission reasons',
     );
   });
 

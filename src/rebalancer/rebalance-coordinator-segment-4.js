@@ -257,6 +257,38 @@ class RebalanceCoordinatorSegment4 extends RebalanceCoordinatorSegment3 {
   }
 
   /**
+   * Build a typed conflict error when one entity already owns a live
+   * REPLACE source-removal phase workflow and callers try to admit another
+   * add-like lifecycle for that same entity.
+   * @param {string|null} normalizedMoveType
+   * @param {string|null} entityId
+   * @param {Object} conflictingOperation
+   * @return {Error}
+   * @private
+   */
+  createEntityConflictingOperationInFlightError(
+    normalizedMoveType,
+    entityId,
+    conflictingOperation,
+  ) {
+    const operationTypeText = String(
+      normalizedMoveType || "operation",
+    ).toLowerCase();
+    const error = new Error(
+      `${REBALANCE_COORDINATOR_ERROR_MSG.CONFLICTING_OPERATION_IN_FLIGHT} ` +
+        `${String(entityId || "unknown")}: ${operationTypeText} conflicts with ` +
+        `${String(conflictingOperation?.type || "unknown")} ` +
+        `${String(conflictingOperation?.operationId || "unknown")}`,
+    );
+    error.rebalanceSkipReason =
+      REBALANCER_SKIP_REASON.CONFLICTING_OPERATION_IN_FLIGHT;
+    error.operationType = normalizedMoveType || null;
+    error.entityId = entityId || null;
+    error.conflictingOperationId = conflictingOperation?.operationId || null;
+    return error;
+  }
+
+  /**
    * Ensure storage admission approves one storage-increasing workflow.
    * @param {Object} context
    * @return {Promise<void>}

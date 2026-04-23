@@ -102,6 +102,10 @@ import {
   SeedCleanupHandler,
 } from './phases/seed-cleanup-handler.js';
 import {
+  SEED_STARTUP_CHECKPOINT,
+  SeedStartupSessionStore,
+} from './seed-startup-session-store.js';
+import {
   NodeLifecycleStateMachine,
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
@@ -133,6 +137,31 @@ const PHASE_TO_SUB_PHASE = Object.freeze({
     BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION,
 });
 
+const SEED_WORKFLOW_PLAN_VERSION = 'seed-startup-plan/v1';
+const SEED_WORKFLOW_PHASE = Object.freeze({
+  CONTROL_PLANE_READY: 'seed_workflow:control_plane_ready',
+  RUNTIME_READY: 'seed_workflow:runtime_ready',
+  FINALIZED: 'seed_workflow:finalized',
+});
+
+function resolveBootstrapWorkflowDataDir(options = {}) {
+  if (typeof options.dataDir === 'string' && options.dataDir.length > 0) {
+    return options.dataDir;
+  }
+  const dataDirectoryManager = options.dataDirectoryManager || null;
+  if (typeof dataDirectoryManager?.isInitialized === 'function' &&
+      dataDirectoryManager.isInitialized() === true &&
+      typeof dataDirectoryManager.getDataDir === 'function') {
+    return dataDirectoryManager.getDataDir();
+  }
+  return null;
+}
+
+function isExternalAdmissionOpen(messageRouter) {
+  return typeof messageRouter?.isExternalAdmissionEnabled === 'function' &&
+    messageRouter.isExternalAdmissionEnabled() === true;
+}
+
 
 /**
  * BootstrapService handles system initialization for seed nodes.
@@ -146,6 +175,7 @@ class BootstrapService extends EventEmitter {
    */
   constructor(options = {}) {
     super();
+    const startupWorkflowDataDir = resolveBootstrapWorkflowDataDir(options);
 
     this.rolloutControls = assertRequiredControlPlaneRollout({
       owner: 'BootstrapService',
@@ -180,6 +210,11 @@ class BootstrapService extends EventEmitter {
     ) ?
       Math.max(NUM.ZERO, this.config.nodeReadyRebalanceDelayMs) :
       BOOTSTRAP_REBALANCE_DELAY_MS;
+    this.clusterIncarnationFence =
+      options.clusterIncarnationFence &&
+        typeof options.clusterIncarnationFence === 'object' ?
+        options.clusterIncarnationFence :
+        null;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({
@@ -427,6 +462,8 @@ class BootstrapService extends EventEmitter {
           }
           void sqlQueryEngine.activateDistributedTransactionRecovery();
         },
+        startLatencyTopologyLifecycle: () =>
+          this.seedRuntimeBridgeOwner?.startLatencyTopologyLifecycle?.(),
         onControlPlaneBackgroundWritersActivated: () => {
           this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
             nodeId: this.nodeId,
@@ -453,6 +490,12 @@ class BootstrapService extends EventEmitter {
         getRebalanceCoordinator: () => this.rebalanceCoordinator,
       },
     });
+    this.seedStartupSessionStore =
+      options.seedStartupSessionStore instanceof SeedStartupSessionStore ?
+        options.seedStartupSessionStore :
+        new SeedStartupSessionStore({
+          dataDir: startupWorkflowDataDir,
+        });
     this.seedPhaseOwners = createSeedPhaseOwners(this);
     this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({
       logger: this.logger,
@@ -631,6 +674,10 @@ class BootstrapService extends EventEmitter {
       getLatencyTopology: () => self.latencyTopology,
       getSystemTableWriter: () => self.systemTableWriter,
       getTablePolicyService: () => self.tablePolicyService,
+      getSqlQueryEngine: () =>
+        self.sqlQueryEngine ||
+        self.cdcIntegrationService?.sqlQueryEngine ||
+        null,
       getBootstrapReadinessState: () =>
         self.bootstrapReadinessState,
       getPartitionReplicaProgressReporter: () =>
@@ -674,6 +721,9 @@ class BootstrapService extends EventEmitter {
       },
       setSystemTableWriter: (v) => {
         self.systemTableWriter = v;
+      },
+      setSqlQueryEngine: (v) => {
+        self.sqlQueryEngine = v;
       },
       setCdcIntegrationService: (v) => {
         self.cdcIntegrationService = v;
@@ -997,6 +1047,263 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Determine whether post-pipeline control-plane startup wiring exists.
+   * @return {boolean}
+   * @private
+   */
+  hasSeedControlPlaneReady() {
+    return Boolean(
+      this.replicaHandler &&
+      this.messageGroupServiceHandler &&
+      this.heartbeatService &&
+      this.localAdminRuntimeReadyNotified === true &&
+      this.hasPublishedLocalServiceEndpoints() === true,
+    );
+  }
+
+  /**
+   * Determine whether runtime handoff prerequisites are wired locally.
+   * @return {boolean}
+   * @private
+   */
+  hasSeedRuntimeReady() {
+    return Boolean(
+      this.runtimeServiceHandler &&
+      isExternalAdmissionOpen(this.messageRouter),
+    );
+  }
+
+  /**
+   * Schedule latency-topology activation through the startup handoff owner
+   * without blocking bootstrap completion on topology warm-up.
+   * @return {void}
+   * @private
+   */
+  startLatencyTopologyLifecycle() {
+    if (this.deferredLatencyTopologyStartHandle) {
+      return;
+    }
+    const topologyStartMs = Date.now();
+    const startTopologyAsync = () => {
+      this.deferredLatencyTopologyStartHandle = null;
+      this.deferredLatencyTopologyStartKind = null;
+      if (this.isShuttingDown === true) {
+        return;
+      }
+      try {
+        this.seedRuntimeBridgeOwner.startLatencyTopologyLifecycle();
+        this.logger.info('metrics.bootstrap.post_pipeline.latency_topology', {
+          nodeId: this.nodeId,
+          durationMs: Date.now() - topologyStartMs,
+          deferred: true,
+        });
+      } catch (error) {
+        this.logger.warn('Deferred latency topology lifecycle start failed', {
+          nodeId: this.nodeId,
+          error: error.message,
+        });
+      }
+    };
+    if (typeof setImmediate === 'function') {
+      this.deferredLatencyTopologyStartKind = 'immediate';
+      this.deferredLatencyTopologyStartHandle = setImmediate(startTopologyAsync);
+      return;
+    }
+    this.deferredLatencyTopologyStartKind = 'timeout';
+    this.deferredLatencyTopologyStartHandle = setTimeout(startTopologyAsync, 0);
+  }
+
+  /**
+   * Complete successful seed bootstrap finalization through one owner path.
+   * @return {Object}
+   * @private
+   */
+  completeSuccessfulBootstrap() {
+    const duration = Date.now() - this.startTime;
+    const alreadyComplete = this.phase === BootstrapPhase.COMPLETE;
+
+    if (!alreadyComplete) {
+      const currentState = this.lifecycleStateMachine.getState();
+      if (currentState !== NodeState.CONNECTING) {
+        this.lifecycleStateMachine.transition(NodeState.CONNECTING);
+      }
+      this.phase = BootstrapPhase.COMPLETE;
+      this.clearNodeReadyRebalanceState();
+      activateSteadyStateRuntimeHandoff({
+        owner: this.runtimeHandoffOwner,
+        activateControlPlaneBackgroundWriters: true,
+        startLatencyTopologyLifecycle: true,
+      });
+
+      this.logger.info(BootstrapLog.COMPLETED, {
+        nodeId: this.nodeId,
+        duration,
+        servicesCreated: this.servicesCreated,
+        partitionsCreated: this.partitionsCreated,
+        messageGroupsCreated: this.messageGroupsCreated,
+      });
+
+      this.emit(BootstrapEvent.COMPLETE, {
+        nodeId: this.nodeId,
+        duration,
+        servicesCreated: this.servicesCreated,
+        partitionsCreated: this.partitionsCreated,
+        messageGroupsCreated: this.messageGroupsCreated,
+      });
+    }
+
+    return {
+      success: true,
+      nodeId: this.nodeId,
+      duration,
+      servicesCreated: this.servicesCreated,
+      partitionsCreated: this.partitionsCreated,
+      messageGroupsCreated: this.messageGroupsCreated,
+      messageGroupServices: this.messageGroupServices,
+      partitionServices: this.partitionServices,
+      replicaHandler: this.replicaHandler,
+      replicaStateMachine: this.replicaStateMachine,
+      epochManager: this.epochManager,
+      transport: this.transport,
+      messageRouter: this.messageRouter,
+    };
+  }
+
+  /**
+   * Build checkpointed seed bootstrap steps for the shared workflow runner.
+   * @param {StartupPipelineRunner} startupPipelineRunner
+   * @param {Object} seedPlan
+   * @return {Array<Object>}
+   * @private
+   */
+  buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
+    const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
+    return [
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY,
+        phase: BootstrapPhase.INFRASTRUCTURE,
+        shouldRerun: () => !this.messageRouter,
+        run: async () => {
+          await startupPipelineRunner.run({
+            phases: phases.slice(NUM.ZERO, NUM.ONE),
+          });
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.MESSAGE_GROUPS_READY,
+        phase: BootstrapPhase.MESSAGE_GROUPS,
+        shouldRerun: () => this.messageGroupServices.size === NUM.ZERO,
+        run: async () => {
+          await startupPipelineRunner.run({
+            phases: phases.slice(NUM.ONE, NUM.TWO),
+          });
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.PARTITIONS_READY,
+        phase: BootstrapPhase.PARTITIONS,
+        shouldRerun: () => this.partitionServices.size === NUM.ZERO,
+        run: async () => {
+          await startupPipelineRunner.run({
+            phases: phases.slice(NUM.TWO, NUM.THREE),
+          });
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.REGISTRATION_READY,
+        phase: BootstrapPhase.REGISTRATION,
+        shouldRerun: () => this.cdcIntegrationService === null,
+        run: async () => {
+          await startupPipelineRunner.run({
+            phases: phases.slice(NUM.THREE, NUM.FOUR),
+          });
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED,
+        phase: BootstrapPhase.CACHE_HYDRATION,
+        shouldRerun: () => this.getSystemTableCache() === null,
+        run: async () => {
+          await startupPipelineRunner.run({
+            phases: phases.slice(NUM.FOUR),
+          });
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY,
+        phase: SEED_WORKFLOW_PHASE.CONTROL_PLANE_READY,
+        shouldRerun: () => !this.hasSeedControlPlaneReady(),
+        run: async () => {
+          this.logger.info('metrics.bootstrap.post_pipeline.start', {
+            nodeId: this.nodeId,
+          });
+
+          const replicaHandlerStartMs = Date.now();
+          this.initializeReplicaHandler();
+          this.logger.info('metrics.bootstrap.post_pipeline.replica_handler', {
+            nodeId: this.nodeId,
+            durationMs: Date.now() - replicaHandlerStartMs,
+          });
+
+          const messageGroupHandlerStartMs = Date.now();
+          this.initializeMessageGroupServiceHandler();
+          this.logger.info(
+            'metrics.bootstrap.post_pipeline.message_group_handler',
+            {
+              nodeId: this.nodeId,
+              durationMs: Date.now() - messageGroupHandlerStartMs,
+            },
+          );
+
+          const controlPlaneStartMs = Date.now();
+          await this.initializeControlPlaneService();
+          this.logger.info('metrics.bootstrap.post_pipeline.control_plane', {
+            nodeId: this.nodeId,
+            durationMs: Date.now() - controlPlaneStartMs,
+          });
+          await this.notifyLocalAdminRuntimeReady();
+
+          const registerSeedStartMs = Date.now();
+          await this.registerSeedNodeWithControlPlane();
+          this.logger.info('metrics.bootstrap.post_pipeline.seed_registration', {
+            nodeId: this.nodeId,
+            durationMs: Date.now() - registerSeedStartMs,
+          });
+          await this.activateMessageGroupServiceRows();
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.RUNTIME_READY,
+        phase: SEED_WORKFLOW_PHASE.RUNTIME_READY,
+        shouldRerun: () => !this.hasSeedRuntimeReady(),
+        run: async () => {
+          const runtimeHandlerStartMs = Date.now();
+          this.initializeRuntimeServiceHandler();
+          this.logger.info('metrics.bootstrap.post_pipeline.runtime_handler', {
+            nodeId: this.nodeId,
+            durationMs: Date.now() - runtimeHandlerStartMs,
+          });
+          this.openExternalTransportAdmission();
+        },
+      },
+      {
+        checkpoint: SEED_STARTUP_CHECKPOINT.FINALIZED,
+        phase: SEED_WORKFLOW_PHASE.FINALIZED,
+        terminal: true,
+        shouldRerun: () => {
+          return (
+            this.phase !== BootstrapPhase.COMPLETE ||
+            this.hasActiveControlPlaneBackgroundWriters() !== true
+          );
+        },
+        run: async () => {
+          this.completeSuccessfulBootstrap();
+        },
+      },
+    ];
+  }
+
+  /**
    * Execute the full bootstrap process.
    * @return {Promise<Object>} Bootstrap result.
    */
@@ -1014,134 +1321,23 @@ class BootstrapService extends EventEmitter {
         eventSink: this,
       });
       const seedPlan = createSeedStartupPlan(this);
-      await startupPipelineRunner.run({
-        phases: seedPlan.phases,
-      });
-
-      this.logger.info('metrics.bootstrap.post_pipeline.start', {
+      const seedSessionId = await this.seedStartupSessionStore.resolveSessionId({
         nodeId: this.nodeId,
+        allowResumeLatest: true,
       });
-
-      // Initialize replica handler after all services are ready
-      const replicaHandlerStartMs = Date.now();
-      this.initializeReplicaHandler();
-      this.logger.info('metrics.bootstrap.post_pipeline.replica_handler', {
+      await startupPipelineRunner.runWorkflow({
         nodeId: this.nodeId,
-        durationMs: Date.now() - replicaHandlerStartMs,
+        sessionId: seedSessionId,
+        allowResumeLatest: true,
+        planVersion: SEED_WORKFLOW_PLAN_VERSION,
+        sessionStore: this.seedStartupSessionStore,
+        steps: this.buildSeedCheckpointSteps(
+          startupPipelineRunner,
+          seedPlan,
+        ),
+        isRetryableFailure: () => false,
       });
-
-      const messageGroupHandlerStartMs = Date.now();
-      this.initializeMessageGroupServiceHandler();
-      this.logger.info('metrics.bootstrap.post_pipeline.message_group_handler', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - messageGroupHandlerStartMs,
-      });
-
-      // Initialize control plane service after cache and handlers are ready
-      const controlPlaneStartMs = Date.now();
-      await this.initializeControlPlaneService();
-      this.logger.info('metrics.bootstrap.post_pipeline.control_plane', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - controlPlaneStartMs,
-      });
-      await this.notifyLocalAdminRuntimeReady();
-
-      const registerSeedStartMs = Date.now();
-      await this.registerSeedNodeWithControlPlane();
-      this.logger.info('metrics.bootstrap.post_pipeline.seed_registration', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - registerSeedStartMs,
-      });
-      await this.activateMessageGroupServiceRows();
-
-      // Start latency topology lifecycle asynchronously so REST bootstrap API
-      // can come up without being blocked by topology/rebalancer warm-up.
-      const topologyStartMs = Date.now();
-      const startTopologyAsync = () => {
-        this.deferredLatencyTopologyStartHandle = null;
-        this.deferredLatencyTopologyStartKind = null;
-        if (this.isShuttingDown === true) {
-          return;
-        }
-        try {
-          this.seedRuntimeBridgeOwner
-            .startLatencyTopologyLifecycle();
-          this.logger.info('metrics.bootstrap.post_pipeline.latency_topology', {
-            nodeId: this.nodeId,
-            durationMs: Date.now() - topologyStartMs,
-            deferred: true,
-          });
-        } catch (error) {
-          this.logger.warn('Deferred latency topology lifecycle start failed', {
-            nodeId: this.nodeId,
-            error: error.message,
-          });
-        }
-      };
-      if (typeof setImmediate === 'function') {
-        this.deferredLatencyTopologyStartKind = 'immediate';
-        this.deferredLatencyTopologyStartHandle = setImmediate(startTopologyAsync);
-      } else {
-        this.deferredLatencyTopologyStartKind = 'timeout';
-        this.deferredLatencyTopologyStartHandle = setTimeout(startTopologyAsync, 0);
-      }
-
-      // Initialize runtime service handler AFTER control-plane readiness.
-      // PG wire startup failure is isolated and does not abort bootstrap.
-      const runtimeHandlerStartMs = Date.now();
-      this.initializeRuntimeServiceHandler();
-      this.logger.info('metrics.bootstrap.post_pipeline.runtime_handler', {
-        nodeId: this.nodeId,
-        durationMs: Date.now() - runtimeHandlerStartMs,
-      });
-      this.openExternalTransportAdmission();
-
-      // Bootstrap complete
-      const currentState = this.lifecycleStateMachine.getState();
-      if (currentState !== NodeState.CONNECTING) {
-        // Terminal sub-phase auto-advances to CONNECTING,
-        // but if it hasn't happened yet, force it
-        this.lifecycleStateMachine.transition(NodeState.CONNECTING);
-      }
-      this.phase = BootstrapPhase.COMPLETE;
-      this.clearNodeReadyRebalanceState();
-      activateSteadyStateRuntimeHandoff({
-        owner: this.runtimeHandoffOwner,
-        activateControlPlaneBackgroundWriters: true,
-      });
-      const duration = Date.now() - this.startTime;
-
-      this.logger.info(BootstrapLog.COMPLETED, {
-        nodeId: this.nodeId,
-        duration,
-        servicesCreated: this.servicesCreated,
-        partitionsCreated: this.partitionsCreated,
-        messageGroupsCreated: this.messageGroupsCreated,
-      });
-
-      this.emit(BootstrapEvent.COMPLETE, {
-        nodeId: this.nodeId,
-        duration,
-        servicesCreated: this.servicesCreated,
-        partitionsCreated: this.partitionsCreated,
-        messageGroupsCreated: this.messageGroupsCreated,
-      });
-
-      return {
-        success: true,
-        nodeId: this.nodeId,
-        duration,
-        servicesCreated: this.servicesCreated,
-        partitionsCreated: this.partitionsCreated,
-        messageGroupsCreated: this.messageGroupsCreated,
-        messageGroupServices: this.messageGroupServices,
-        partitionServices: this.partitionServices,
-        replicaHandler: this.replicaHandler,
-        replicaStateMachine: this.replicaStateMachine,
-        epochManager: this.epochManager,
-        transport: this.transport,
-        messageRouter: this.messageRouter,
-      };
+      return this.completeSuccessfulBootstrap();
     } catch (error) {
       return this.handleBootstrapFailure(error);
     }

@@ -83,7 +83,9 @@ const {
   buildControlPlaneQueryOptions,
   buildPriorityRecoveryBlockedPartitionIds,
   buildPriorityRecoveryCompletion,
+  buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
   buildSelectRowsByTransactionIdsSql,
   buildTimeoutClassification,
   classifyTransportDeliveryOutcome,
@@ -103,7 +105,27 @@ const {
   resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS = Object.freeze([
+  WORKFLOW_STEP.PENDING,
+  WORKFLOW_STEP.SENDING,
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.STOPPING,
+]);
+
 class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
+  buildPriorityRecoveryWorkflowStepTimeoutMap(operation = null) {
+    const timeoutMap = {};
+    for (const workflowStep of PRIORITY_RECOVERY_WORKFLOW_TIMEOUT_STEPS) {
+      const stepTimeoutMs = this.getTimeoutForStep(workflowStep, operation);
+      if (!Number.isFinite(stepTimeoutMs) || stepTimeoutMs <= NUM.ZERO) {
+        continue;
+      }
+      timeoutMap[workflowStep] = Math.floor(stepTimeoutMs);
+    }
+    return Object.freeze(timeoutMap);
+  }
+
   async handleStopPhaseSatisfiedResponse(operation, responseStatus) {
     try {
       if (operation?.workflowStep !== WORKFLOW_STEP.STOPPING) {
@@ -1063,6 +1085,161 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
    */
   async getPriorityRecoveryPlanningSnapshotForOperation(operation) {
     return this.getPriorityRecoveryPlanningSnapshot(operation);
+  }
+
+  /**
+   * Reuse the repository-owned deferred observation contract when composing the
+   * runtime priority-recovery snapshot so safety and admission consumers do not
+   * issue a second visibility judgment from planning rows alone.
+   *
+   * @param {Object[]} operations
+   * @return {Object|null}
+   * @private
+   */
+  resolvePriorityRecoveryIncompleteOperationObservation(operations = []) {
+    if (
+      !this.repository ||
+      typeof this.repository.resolveIncompleteOperationObservation !==
+        TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    const normalizedOperations = (Array.isArray(operations) ? operations : [])
+      .filter((operation) => operation && typeof operation === TYPEOF.OBJECT);
+    if (normalizedOperations.length === NUM.ZERO) {
+      return null;
+    }
+    return this.repository.resolveIncompleteOperationObservation(
+      normalizedOperations,
+    );
+  }
+
+  /**
+   * Build one canonical decision snapshot for the given priority partition
+   * using the shared snapshot grammar and the repository-owned visibility
+   * defer contract.
+   *
+   * @param {string} partitionId
+   * @param {Object[]} operations
+   * @param {Object|null} planningSnapshot
+   * @return {Object|null}
+   * @private
+   */
+  buildPriorityRecoveryDecisionSnapshotForOperations(
+    partitionId,
+    operations = [],
+    planningSnapshot = null,
+  ) {
+    const normalizedPartitionId = String(partitionId || "").trim();
+    if (
+      normalizedPartitionId.length === NUM.ZERO ||
+      !planningSnapshot ||
+      typeof planningSnapshot !== TYPEOF.OBJECT
+    ) {
+      return null;
+    }
+    const operationRecords = (Array.isArray(operations) ? operations : [])
+      .filter((operation) => {
+        return operation && typeof operation === TYPEOF.OBJECT;
+      });
+    const representativeOperationRecord =
+      operationRecords.find((operation) =>
+        operation && typeof operation === TYPEOF.OBJECT,
+      ) || null;
+    const capturedAtMs = Date.now();
+    const stepTimeoutMsByWorkflowStep =
+      this.buildPriorityRecoveryWorkflowStepTimeoutMap(
+        representativeOperationRecord,
+      );
+    const operationContexts = operationRecords
+      .map((operation) =>
+        buildPriorityRecoveryOperationContextFromRecord(
+          operation,
+          {
+            nowMs: capturedAtMs,
+            stepTimeoutMsByWorkflowStep,
+          },
+        ),
+      )
+      .filter((operationContext) => {
+        return (
+          operationContext &&
+          operationContext.partitionId === normalizedPartitionId
+        );
+      });
+    const incompleteObservation =
+      this.resolvePriorityRecoveryIncompleteOperationObservation(
+        operationRecords,
+      );
+    const deferredVisibilityOutcome =
+      incompleteObservation?.deferredOutcome || null;
+    const authoritativeOperationReadDeferred =
+      incompleteObservation?.state ===
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED ||
+      deferredVisibilityOutcome?.completionState ===
+        PRIORITY_RECOVERY_COMPLETION_STATE
+          .AUTHORITATIVE_OPERATION_READ_DEFERRED;
+    const representativeOperationContext =
+      operationContexts.length === NUM.ONE ? operationContexts[NUM.ZERO] : null;
+    return buildPriorityRecoveryDecisionSnapshot({
+      partitionId: normalizedPartitionId,
+      capturedAt: capturedAtMs,
+      publicationConvergence: planningSnapshot,
+      operationContexts,
+      operationId: representativeOperationContext?.operationId || null,
+      operationContext: representativeOperationContext,
+      stepTimeoutMsByWorkflowStep,
+      authoritativeOperationReadDeferred,
+    });
+  }
+
+  /**
+   * Expose the canonical runtime-owned priority-recovery decision snapshot for
+   * one in-flight operation.
+   *
+   * @param {Object} operation
+   * @return {Promise<Object|null>}
+   */
+  async getPriorityRecoveryDecisionSnapshotForOperation(operation) {
+    const partitionId = String(
+      operation?.partitionId || operation?.entityId || "",
+    ).trim();
+    if (partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    const planningSnapshot =
+      await this.getPriorityRecoveryPlanningSnapshot(operation);
+    return this.buildPriorityRecoveryDecisionSnapshotForOperations(
+      partitionId,
+      [operation],
+      planningSnapshot,
+    );
+  }
+
+  /**
+   * Expose the canonical runtime-owned priority-recovery decision snapshot for
+   * one partition's current in-flight operations.
+   *
+   * @param {string} partitionId
+   * @param {Object[]} operations
+   * @return {Promise<Object|null>}
+   */
+  async getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+    partitionId,
+    operations = [],
+  ) {
+    const representativeOperation = (Array.isArray(operations) ? operations : [])
+      .find((operation) => operation && typeof operation === TYPEOF.OBJECT);
+    if (!representativeOperation) {
+      return null;
+    }
+    const planningSnapshot =
+      await this.getPriorityRecoveryPlanningSnapshot(representativeOperation);
+    return this.buildPriorityRecoveryDecisionSnapshotForOperations(
+      partitionId,
+      operations,
+      planningSnapshot,
+    );
   }
 
   /**

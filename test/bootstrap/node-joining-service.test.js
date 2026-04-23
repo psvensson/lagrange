@@ -78,6 +78,10 @@ import {EventEmitter} from 'events';
 const DEFAULT_SEED_WS_ADDRESS =
   `ws://localhost:${8080 + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET}`;
 const NODES_ROUTING_PARTITION_ID = 'nodes-p1';
+const QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION =
+  'preferControlPlaneUpsert';
+const QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET =
+  'create-self-hosted join metadata service registration';
 const REMOTE_CANONICAL_LEADER_NODE_ID = 'seed-node-1';
 const REPORTER_FORWARD_NODE_ID = 'joiner-reporter-publication-mode';
 const REPORTER_FORWARD_NODE_ADDRESS = 'ws://localhost:19103';
@@ -150,6 +154,57 @@ test('NodeJoiningService - runtime owner exposes control-plane readiness service
       controlPlaneReadinessService,
       'runtime owner should expose the coordinator readiness service for bootstrap probes',
     );
+  });
+
+test('NodeJoiningService - runtime owner exposes system table cache for bootstrap peers',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const nodeRow = {
+      node_id: 'seed-node-1',
+      node_address: 'ws://localhost:8080',
+      status: 'active',
+    };
+    const runtimeOwnerCache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        return tableName === TABLES.NODES ? [nodeRow] : [];
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+    };
+    NodeService.getInstance().setSystemCacheProxy(runtimeOwnerCache);
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-runtime-owner-cache',
+      nodeAddress: 'ws://localhost:9098',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const bootstrapApi = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: null,
+      runtimeOwner: service.runtimeDependencyOwner,
+    });
+
+    await bootstrapApi.initialize(0, {listen: false});
+
+    t.same(
+      bootstrapApi.buildSystemTableSnapshots()[TABLES.NODES],
+      [nodeRow],
+      'bootstrap peers should see the joined runtime cache through the runtime owner fallback',
+    );
+
+    await bootstrapApi.shutdown();
   });
 
 test('NodeJoiningService - initializeJoinInfrastructure opens external transport admission after handlers are ready',
@@ -1053,8 +1108,8 @@ test('NodeJoiningService - bypasses HTTP register-service for local seed self-re
       },
     });
     service.seedNodeId = 'seed-node-1';
-    service.upsertSystemTableRowWithRetry = async (tableName, row, options) => {
-      upsertCalls.push({tableName, row, options});
+    service.upsertJoinServiceRowWithRetry = async (row, options) => {
+      upsertCalls.push({row, options});
       return {success: true};
     };
     service.seedJoinTimeCacheRow = (tableName, row) => {
@@ -1075,8 +1130,6 @@ test('NodeJoiningService - bypasses HTTP register-service for local seed self-re
     );
     t.equal(upsertCalls.length, 1,
       'local seed shortcut should persist the service row directly');
-    t.equal(upsertCalls[0].tableName, 'services',
-      'local seed shortcut should write to the services table');
     t.equal(
       upsertCalls[0].row.service_id,
       'mg-1-r0',
@@ -1089,6 +1142,63 @@ test('NodeJoiningService - bypasses HTTP register-service for local seed self-re
     );
     t.equal(seededRows.length, 1,
       'local seed shortcut should seed the join-time cache row');
+  });
+
+test('NodeJoiningService - bypasses HTTP register-service for query-state self-hosted metadata publication',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let httpCalls = 0;
+    const upsertCalls = [];
+    const seededRows = [];
+    const service = new NodeJoiningService({
+      nodeId: 'join-node-self-hosted',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      httpPost: async () => {
+        httpCalls += 1;
+        return {success: true};
+      },
+    });
+    service.seedNodeId = 'seed-node-1';
+    service.upsertJoinServiceRowWithRetry = async (row, options) => {
+      upsertCalls.push({row, options});
+      return {success: true};
+    };
+    service.seedJoinTimeCacheRow = (tableName, row) => {
+      seededRows.push({tableName, row});
+    };
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+      {
+        status: SERVICE_STATUS.STOPPED,
+        [QUERY_STATE_SERVICE_REGISTRATION_SHORTCUT_OPTION]: true,
+      },
+    );
+
+    t.equal(
+      httpCalls,
+      0,
+      'query-state self-hosted metadata publication should not loop through bootstrap HTTP',
+    );
+    t.equal(
+      upsertCalls.length,
+      1,
+      'query-state shortcut should persist the service row directly',
+    );
+    t.equal(
+      upsertCalls[0].options?.admissionTarget,
+      QUERY_STATE_SERVICE_REGISTRATION_ADMISSION_TARGET,
+      'query-state shortcut should use the join-time control-plane admission target',
+    );
+    t.equal(
+      seededRows.length,
+      1,
+      'query-state shortcut should seed the join-time cache row',
+    );
   });
 
 test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',

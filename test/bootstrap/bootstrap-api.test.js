@@ -39,6 +39,9 @@ import {
 import {
   CONTROL_PLANE_WORKLOAD_CLASS,
 } from '../../src/control-plane/control-plane-workload-profile.js';
+import {
+  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE,
+} from '../../src/control-plane/startup-authority-snapshot-owner.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -175,6 +178,81 @@ function createPriorityRecoveryAuthorityControlPlaneReadinessService() {
       return {
         publicationEpoch: 14,
         status: 'ACK_PENDING',
+      };
+    },
+  };
+}
+
+const TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON =
+  PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_INCOMPLETE;
+const TRANSITIONAL_PRIORITY_RECOVERY_PROTOCOL_STATE = 'publication_pending';
+const TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS = 'OPEN';
+const TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES = Object.freeze([
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
+]);
+const TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS = Object.freeze([
+  'seed-node-1',
+  'node-2',
+]);
+const TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY = Object.freeze({
+  satisfied: false,
+  missingPartitionIds: Object.freeze(['control_plane_publications-p1']),
+});
+const TRANSITIONAL_PRIORITY_RECOVERY_GATE = Object.freeze({
+  active: true,
+  state: 'publication_pending',
+  reasonCodes: TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
+  publicationStatus: TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
+  priorityPartitionSummary: TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
+});
+
+function createTransitionalPriorityRecoveryFailureControlPlaneReadinessService() {
+  return {
+    getPriorityControlPlaneRecoveryHealthSync() {
+      return {
+        healthy: false,
+        reasonCode: LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+        details: {
+          failureReason: TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON,
+          publicationRecoveryGate: TRANSITIONAL_PRIORITY_RECOVERY_GATE,
+          publicationStatus:
+            TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
+          priorityPartitionSummary:
+            TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
+          recoveryProtocolState:
+            TRANSITIONAL_PRIORITY_RECOVERY_PROTOCOL_STATE,
+          priorityRecoveryReasonCodes:
+            TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
+          canonicalStartupNodeIds:
+            TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS,
+        },
+      };
+    },
+    getStartupAuthoritySnapshotSync() {
+      return {
+        state: 'authority_unavailable',
+        ready: false,
+        authorityAvailable: false,
+        publication: {
+          observationState: 'observation_unavailable',
+        },
+        priorityRecoveryReasonCodes:
+          TRANSITIONAL_PRIORITY_RECOVERY_REASON_CODES,
+        canonicalStartupNodeIds:
+          TRANSITIONAL_PRIORITY_RECOVERY_STARTUP_NODE_IDS,
+        publicationRecoveryGate: TRANSITIONAL_PRIORITY_RECOVERY_GATE,
+        failure: {
+          state: 'present',
+          reason: TRANSITIONAL_PRIORITY_RECOVERY_FAILURE_REASON,
+        },
+      };
+    },
+    getMembershipPublicationDiagnosticsSync() {
+      return {
+        publicationEpoch: 14,
+        status: TRANSITIONAL_PRIORITY_RECOVERY_PUBLICATION_STATUS,
+        priorityPartitionSummary:
+          TRANSITIONAL_PRIORITY_RECOVERY_PARTITION_SUMMARY,
       };
     },
   };
@@ -839,6 +917,66 @@ test('BootstrapAPI - register-service falls back to bootstrap-scoped SQL ' +
     await api.shutdown();
   });
 
+test('BootstrapAPI - register-service reuses runtime owner SQL engine ' +
+  'when bootstrap wiring has not attached one yet',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const submittedMutations = [];
+    const runtimeOwnerSqlQueryEngine = {
+      async executeQuery() {
+        return {success: true, affectedRows: 1};
+      },
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'joiner-node-1',
+      seedNodeAddress: 'ws://localhost:8081',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: null,
+      cdcIntegrationService: null,
+      runtimeOwner: {
+        getSqlQueryEngine() {
+          return runtimeOwnerSqlQueryEngine;
+        },
+      },
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation) {
+          submittedMutations.push(mutation);
+          return {success: true, affectedRows: 1};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    api.waitForRegisteredServiceCacheVisibility = async () => {};
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+        address: 'joiner-node-1/message-group/mg-1-r1',
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'register-service should succeed when the runtime owner already exposes the SQL engine');
+    t.equal(submittedMutations.length, 1,
+      'register-service should continue into canonical mutation ingress once the runtime owner exposes the engine');
+    t.equal(
+      submittedMutations[0].tableName,
+      TABLES.SERVICES,
+      'runtime owner SQL fallback should preserve the canonical services-table target',
+    );
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - register-service acknowledges plain self-hosted registration without waiting for cache visibility',
   async (t) => {
     initializeTestEnvironment();
@@ -1120,6 +1258,63 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated local query tra
       'bootstrap join readiness should project ready=true while local query transport wiring catches up');
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear tolerated local query transport blockers');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness keeps transitional recovery authority open when startup authority is still converging',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'DEGRADED',
+      state: 'degraded',
+      reasons: [
+        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+        LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+      controlPlaneReadinessService:
+        createTransitionalPriorityRecoveryFailureControlPlaneReadinessService(),
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(strictReadyResponse.statusCode, 503,
+      'strict readiness should remain blocked while recovery is still pending');
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay open while transitional recovery authority exists');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true from transitional recovery authority');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear tolerated transitional recovery blockers');
 
     await api.shutdown();
   });

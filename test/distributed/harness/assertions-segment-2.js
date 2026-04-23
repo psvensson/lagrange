@@ -1,3 +1,5 @@
+import { CONVERGENCE_DEFAULTS, TIMEOUTS } from "./constants.js";
+import { normalizeReplicaOperationRecord } from "../../../src/rebalancer/replica-operation-liveness.js";
 import { ASSERTIONS_SEGMENT_1 } from "./assertions-segment-1.js";
 const {
   SERVICES_QUERY,
@@ -93,6 +95,11 @@ const {
   extractControlSnapshotRevisionMetadata,
   queryControlSnapshot,
 } = ASSERTIONS_SEGMENT_1;
+const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  "spread_satisfied_in_flight";
+const PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+  "spread_satisfied_in_flight";
+const PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE = "cache_visible";
 
 async function queryNodeConsistencyStateViaSql(node) {
   const [nodesResult, partResult, svcResult] = await Promise.all([
@@ -492,6 +499,76 @@ async function queryReachableClusterSnapshot(nodes, options = {}) {
     controlPlaneDiagnostics: null,
   };
 }
+function buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
+  controlPlaneDiagnostics = null,
+) {
+  const publicationConvergence =
+    controlPlaneDiagnostics?.publicationConvergence &&
+    typeof controlPlaneDiagnostics.publicationConvergence === "object"
+      ? controlPlaneDiagnostics.publicationConvergence
+      : null;
+  const partitionWitnesses = Array.isArray(
+    publicationConvergence?.priorityRecoveryPartitionWitnesses,
+  )
+    ? publicationConvergence.priorityRecoveryPartitionWitnesses
+    : [];
+  const operationIds = new Set();
+  for (const partitionWitness of partitionWitnesses) {
+    const visibilityState = String(
+      partitionWitness?.visibilityState || "",
+    ).trim();
+    const semanticState = String(partitionWitness?.semanticState || "").trim();
+    const completionState = String(
+      partitionWitness?.completionState || "",
+    ).trim();
+    if (
+      visibilityState !== PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE
+    ) {
+      continue;
+    }
+    if (
+      semanticState !==
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT &&
+      completionState !==
+        PRIORITY_RECOVERY_COMPLETION_STATE_SPREAD_SATISFIED_IN_FLIGHT
+    ) {
+      continue;
+    }
+    for (const operationId of Array.isArray(partitionWitness?.operationIds)
+      ? partitionWitness.operationIds
+      : []) {
+      const normalizedOperationId = String(operationId || "").trim();
+      if (normalizedOperationId.length === 0) {
+        continue;
+      }
+      operationIds.add(normalizedOperationId);
+    }
+  }
+  return operationIds;
+}
+function countCacheVisibleSatisfiedPriorityRecoveryOperations(
+  controlPlaneDiagnostics = null,
+  operationRows = [],
+) {
+  const operationIds =
+    buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
+      controlPlaneDiagnostics,
+    );
+  if (operationIds.size === 0) {
+    return 0;
+  }
+  let matchingOperationCount = 0;
+  for (const operationRow of Array.isArray(operationRows) ? operationRows : []) {
+    const operationId = String(
+      normalizeReplicaOperationRecord(operationRow).operationId || "",
+    ).trim();
+    if (operationId.length === 0 || !operationIds.has(operationId)) {
+      continue;
+    }
+    matchingOperationCount += 1;
+  }
+  return matchingOperationCount > 0 ? matchingOperationCount : operationIds.size;
+}
 
 /**
  * Wait for cluster convergence by polling the Admin API on all
@@ -538,6 +615,7 @@ async function waitForConvergence(nodes, options = {}) {
   let latestOperationRows = [];
   let latestInFlightReplicaOperationCount = 0;
   let latestStaleInFlightReplicaOperationCount = 0;
+  let latestCacheVisibleSatisfiedPriorityRecoveryOperationCount = 0;
   let latestEffectiveInFlightReplicaOperationCount = 0;
   let latestInFlightReplicaOperationStatuses = new Map();
   let latestPartitionMembership = null;
@@ -577,13 +655,35 @@ async function waitForConvergence(nodes, options = {}) {
     latestInFlightReplicaOperationStatuses =
       snapshot.inFlightReplicaOperationStatuses;
     latestPartitionMembership = snapshot.partitionMembership;
-    latestControlPlaneDiagnostics = snapshot.controlPlaneDiagnostics;
-    latestSnapshotRevision = snapshot.snapshotRevision ?? null;
-    latestSnapshotRevisionState = snapshot.snapshotRevisionState || null;
-    latestSnapshotExpectedMinimumRevision =
-      snapshot.snapshotExpectedMinimumRevision ?? null;
-    latestSnapshotRevisionGap = snapshot.snapshotRevisionGap ?? null;
-    latestSnapshotResumeToken = snapshot.snapshotResumeToken || null;
+    if (
+      snapshot.controlPlaneDiagnostics &&
+      typeof snapshot.controlPlaneDiagnostics === "object" &&
+      !Array.isArray(snapshot.controlPlaneDiagnostics)
+    ) {
+      latestControlPlaneDiagnostics = snapshot.controlPlaneDiagnostics;
+    }
+    if (Number.isInteger(snapshot.snapshotRevision)) {
+      latestSnapshotRevision = snapshot.snapshotRevision;
+    }
+    if (
+      typeof snapshot.snapshotRevisionState === "string" &&
+      snapshot.snapshotRevisionState.length > 0
+    ) {
+      latestSnapshotRevisionState = snapshot.snapshotRevisionState;
+    }
+    if (Number.isInteger(snapshot.snapshotExpectedMinimumRevision)) {
+      latestSnapshotExpectedMinimumRevision =
+        snapshot.snapshotExpectedMinimumRevision;
+    }
+    if (Number.isInteger(snapshot.snapshotRevisionGap)) {
+      latestSnapshotRevisionGap = snapshot.snapshotRevisionGap;
+    }
+    if (
+      typeof snapshot.snapshotResumeToken === "string" &&
+      snapshot.snapshotResumeToken.length > 0
+    ) {
+      latestSnapshotResumeToken = snapshot.snapshotResumeToken;
+    }
 
     // When the partitions table is not yet fully in the cache
     // (e.g. after a seed restart) but services rows are
@@ -622,14 +722,25 @@ async function waitForConvergence(nodes, options = {}) {
           ),
         )
       : 0;
+    const cacheVisibleSatisfiedPriorityRecoveryOperationCount =
+      countCacheVisibleSatisfiedPriorityRecoveryOperations(
+        latestControlPlaneDiagnostics,
+        latestOperationRows,
+      );
     latestStaleInFlightReplicaOperationCount =
       staleInFlightReplicaOperationCount;
+    latestCacheVisibleSatisfiedPriorityRecoveryOperationCount =
+      cacheVisibleSatisfiedPriorityRecoveryOperationCount;
+    const staleInFlightDiscountCount = Math.max(
+      staleInFlightReplicaOperationCount,
+      cacheVisibleSatisfiedPriorityRecoveryOperationCount,
+    );
     const effectiveInFlightReplicaOperationCount =
       ignoreStaleInFlightReplicaOperations
         ? Math.max(
             0,
             latestInFlightReplicaOperationCount -
-              staleInFlightReplicaOperationCount,
+              staleInFlightDiscountCount,
           )
         : latestInFlightReplicaOperationCount;
     latestEffectiveInFlightReplicaOperationCount =
@@ -765,6 +876,8 @@ async function waitForConvergence(nodes, options = {}) {
       : latestInFlightReplicaOperationCount,
     staleInFlightReplicaOperationCount:
       latestStaleInFlightReplicaOperationCount,
+    cacheVisibleSatisfiedPriorityRecoveryOperationCount:
+      latestCacheVisibleSatisfiedPriorityRecoveryOperationCount,
     inFlightReplicaOperationStatuses: inFlightReplicaOperationSummary,
     replicaOperationRows: latestOperationRows,
     maxOverTargetMs: maxOT,

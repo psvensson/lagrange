@@ -429,25 +429,11 @@ class UnifiedRebalancerSegment2 extends UnifiedRebalancerSegment1 {
       }
     }
 
-    const requireFullPriorityEndpointVisibility =
-      this.shouldRequireFullPriorityEndpointVisibility();
+    const endpointVisibilityPolicy =
+      this.getCriticalSystemEndpointVisibilityPolicy(activeNodeIds);
     const endpointVisibility = this.evaluateCriticalSystemEndpointVisibility(
       activeNodeIds,
-      {
-        allowReadinessBackfill: !requireFullPriorityEndpointVisibility,
-        requiredReadyNodeCount:
-          this.isControlPlanePriorityPartition() &&
-          !requireFullPriorityEndpointVisibility &&
-          activeNodeIds.length > NUM.ZERO
-            ? Math.max(
-                NUM.ONE,
-                Math.min(
-                  activeNodeIds.length,
-                  this.getPriorityControlPlaneTargetReplicaCount(),
-                ),
-              )
-            : activeNodeIds.length,
-      },
+      endpointVisibilityPolicy,
     );
     if (endpointVisibility.ready !== true) {
       return Object.freeze({

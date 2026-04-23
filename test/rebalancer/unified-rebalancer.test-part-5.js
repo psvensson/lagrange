@@ -48,6 +48,7 @@ import {
   PRESSURE_BEHAVIOR_DECISION,
   PRESSURE_STATE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -407,6 +408,46 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         scheduledDelayMs >= 1 &&
         scheduledDelayMs <= rebalancer.criticalCheckDelayMs,
         'priority control-plane partitions should schedule within the short critical retry window',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
+
+  await t.test(
+    'priority control-plane leadership enqueues immediate reconciliation with scheduled fallback',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'replica_operations-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      rebalancer.initialize();
+
+      const observedReasons = [];
+      const UNSCHEDULED = Symbol('unscheduled');
+      let scheduledDelayMs = UNSCHEDULED;
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        observedReasons.push(reason);
+        return true;
+      };
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      rebalancer.setLeader(true);
+
+      t.same(
+        observedReasons,
+        [RECONCILE_REASON.PERIODIC_CHECK],
+        'priority partitions should enqueue one immediate reconciliation when leadership starts',
+      );
+      t.equal(typeof scheduledDelayMs, 'number');
+      t.ok(
+        scheduledDelayMs >= 1 &&
+          scheduledDelayMs <= rebalancer.criticalCheckDelayMs,
+        'priority partitions should keep the short scheduled fallback window',
       );
 
       rebalancer.shutdown();
@@ -1234,4 +1275,3 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
     },
   );
-

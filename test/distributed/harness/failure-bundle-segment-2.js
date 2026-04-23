@@ -1,3 +1,9 @@
+import {
+  PRIORITY_RECOVERY_INVARIANT_FALLBACK,
+  PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
+  PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import { FAILURE_BUNDLE_SEGMENT_1 } from "./failure-bundle-segment-1.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -90,6 +96,7 @@ const {
   resolveRoutingDiagnostics,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
+  buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,
@@ -321,73 +328,78 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
       semanticStates: normalizeDistinctStringArray(semanticStates),
     }))
     .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
+  const selectLatestPriorityRecoveryPartitionSnapshot = (partitionSnapshots) =>
+    partitionSnapshots
+      .filter((snapshot) => isRecord(snapshot))
+      .sort((left, right) => {
+        const leftUpdatedAtMs = Number(
+          left?.coordinator?.operation?.updatedAtMs ??
+            left?.observation?.provenance?.capturedAt ??
+            decisionSnapshots?.capturedAt ??
+            ZERO,
+        );
+        const rightUpdatedAtMs = Number(
+          right?.coordinator?.operation?.updatedAtMs ??
+            right?.observation?.provenance?.capturedAt ??
+            decisionSnapshots?.capturedAt ??
+            ZERO,
+        );
+        if (leftUpdatedAtMs !== rightUpdatedAtMs) {
+          return rightUpdatedAtMs - leftUpdatedAtMs;
+        }
+        const leftEpoch = Number.isFinite(left?.epoch) ? left.epoch : ZERO;
+        const rightEpoch = Number.isFinite(right?.epoch) ? right.epoch : ZERO;
+        if (leftEpoch !== rightEpoch) {
+          return rightEpoch - leftEpoch;
+        }
+        return String(right?.correlationKey || "").localeCompare(
+          String(left?.correlationKey || ""),
+        );
+      })[0] || null;
   const partitionWitnesses = effectiveBlockedPartitionIds
     .map((partitionId) => {
       const partitionSnapshots = decisionSnapshots.snapshots.filter(
         (snapshot) =>
           String(snapshot?.partitionId || "").trim() === partitionId,
       );
+      const latestPartitionSnapshot =
+        selectLatestPriorityRecoveryPartitionSnapshot(partitionSnapshots);
       const blockerReasons = normalizeDistinctStringArray(
-        partitionSnapshots.flatMap((snapshot) =>
-          Array.isArray(snapshot?.blockerReasons)
-            ? snapshot.blockerReasons
-            : [],
-        ),
+        latestPartitionSnapshot?.blockerReasons,
       );
-      const semanticStates = normalizeDistinctStringArray(
-        partitionSnapshots
-          .map(
-            (snapshot) =>
-              normalizePriorityRecoverySemanticStateId(
-                snapshot?.semanticState,
-              ) || inferPriorityRecoverySemanticState(snapshot, blockerReasons),
-          )
-          .filter(Boolean),
-      );
-      const decisionDimensions = normalizeDistinctStringArray(
-        partitionSnapshots.map((snapshot) =>
-          String(snapshot?.admission?.decisionDimension || "").trim(),
-        ),
-      );
-      const eligibleNodeIds = normalizeDistinctStringArray(
-        partitionSnapshots.flatMap((snapshot) => {
-          const effectiveEligibleNodeIds = Array.isArray(
-            snapshot?.admission?.effectiveEligibleNodeIds,
-          )
-            ? snapshot.admission.effectiveEligibleNodeIds
-            : [];
-          if (effectiveEligibleNodeIds.length > ZERO) {
-            return effectiveEligibleNodeIds;
-          }
-          return Array.isArray(snapshot?.admission?.eligibleNodeIds)
-            ? snapshot.admission.eligibleNodeIds
-            : [];
-        }),
-      );
+      const semanticState =
+        normalizePriorityRecoverySemanticStateId(
+          latestPartitionSnapshot?.semanticState,
+        ) ||
+        inferPriorityRecoverySemanticState(
+          latestPartitionSnapshot,
+          blockerReasons,
+        );
+      const decisionDimension =
+        String(
+          latestPartitionSnapshot?.admission?.decisionDimension || "",
+        ).trim() || null;
+      const effectiveEligibleNodeIds = Array.isArray(
+        latestPartitionSnapshot?.admission?.effectiveEligibleNodeIds,
+      )
+        ? latestPartitionSnapshot.admission.effectiveEligibleNodeIds
+        : [];
+      const eligibleNodeIds =
+        effectiveEligibleNodeIds.length > ZERO ?
+          normalizeDistinctStringArray(effectiveEligibleNodeIds) :
+          normalizeDistinctStringArray(
+            latestPartitionSnapshot?.admission?.eligibleNodeIds,
+          );
       const excludedNodeIds = normalizeDistinctStringArray(
-        partitionSnapshots.flatMap((snapshot) =>
-          Array.isArray(snapshot?.admission?.recoveryEligibleExcludedNodeIds)
-            ? snapshot.admission.recoveryEligibleExcludedNodeIds
-            : [],
-        ),
+        latestPartitionSnapshot?.admission?.recoveryEligibleExcludedNodeIds,
       );
       const activeLearnerNodeIds = normalizeDistinctStringArray(
-        partitionSnapshots.flatMap((snapshot) =>
-          Array.isArray(
-            snapshot?.readiness?.learnerPromotion?.activeLearnerNodeIds,
-          )
-            ? snapshot.readiness.learnerPromotion.activeLearnerNodeIds
-            : [],
-        ),
+        latestPartitionSnapshot?.readiness?.learnerPromotion
+          ?.activeLearnerNodeIds,
       );
       const promotableLearnerNodeIds = normalizeDistinctStringArray(
-        partitionSnapshots.flatMap((snapshot) =>
-          Array.isArray(
-            snapshot?.readiness?.learnerPromotion?.promotableLearnerNodeIds,
-          )
-            ? snapshot.readiness.learnerPromotion.promotableLearnerNodeIds
-            : [],
-        ),
+        latestPartitionSnapshot?.readiness?.learnerPromotion
+          ?.promotableLearnerNodeIds,
       );
       const operationIds = normalizeDistinctStringArray(
         partitionSnapshots.flatMap((snapshot) =>
@@ -396,11 +408,18 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
             : [],
         ),
       );
-      const spreadGap = partitionSnapshots
-        .map((snapshot) => Number(snapshot?.planner?.spreadGap))
-        .filter((value) => Number.isFinite(value))
-        .reduce((maximum, value) => Math.max(maximum, value), ZERO);
-      const latestOperation =
+      const spreadGap = Number.isFinite(
+        latestPartitionSnapshot?.planner?.spreadGap,
+      ) ?
+        Number(latestPartitionSnapshot.planner.spreadGap) :
+        partitionSnapshots
+          .map((snapshot) => Number(snapshot?.planner?.spreadGap))
+          .filter((value) => Number.isFinite(value))
+          .reduce((maximum, value) => Math.max(maximum, value), ZERO);
+      const latestOperation = isRecord(
+        latestPartitionSnapshot?.coordinator?.operation,
+      ) ?
+        latestPartitionSnapshot.coordinator.operation :
         partitionSnapshots
           .map((snapshot) => snapshot?.coordinator?.operation)
           .filter((operation) => isRecord(operation))
@@ -412,15 +431,41 @@ function summarizePriorityRecoveryDecisionSnapshots(value) {
 
       return {
         partitionId,
-        semanticState: semanticStates[0] || null,
+        semanticState: semanticState || null,
         blockerReasons,
         spreadGap,
-        decisionDimension: decisionDimensions[0] || null,
+        decisionDimension,
         eligibleNodeCount: eligibleNodeIds.length,
         recoveryEligibleExcludedNodeIds: excludedNodeIds,
         activeLearnerNodeIds,
         promotableLearnerNodeIds,
         operationIds,
+        completionState:
+          String(latestPartitionSnapshot?.completion?.state || "").trim() ||
+          null,
+        workflowState:
+          String(latestPartitionSnapshot?.observation?.workflowState || "")
+            .trim() || null,
+        visibilityState:
+          String(latestPartitionSnapshot?.observation?.visibilityState || "")
+            .trim() || null,
+        convergenceState:
+          String(latestPartitionSnapshot?.observation?.convergenceState || "")
+            .trim() || null,
+        workflowSource:
+          String(
+            latestPartitionSnapshot?.observation?.provenance?.workflowSource ||
+              "",
+          ).trim() || null,
+        snapshotCapturedAt: Number.isFinite(
+          latestPartitionSnapshot?.observation?.provenance?.capturedAt,
+        ) ?
+          Math.floor(
+            latestPartitionSnapshot.observation.provenance.capturedAt,
+          ) :
+          Number.isFinite(decisionSnapshots?.capturedAt) ?
+            Math.floor(decisionSnapshots.capturedAt) :
+          null,
         latestOperationWorkflowStep:
           String(latestOperation?.workflowStep || "").trim() || null,
         latestOperationStatus:
@@ -653,6 +698,12 @@ function normalizeAffectedNodeIds(entry, fallbackNodeIds = []) {
     .map((value) => String(value || "").trim())
     .filter((value) => value.length > ZERO)
     .slice(ZERO, AFFECTED_NODE_ID_LIMIT);
+}
+
+function toIsoTimestamp(timestampMs) {
+  return Number.isFinite(timestampMs)
+    ? new Date(timestampMs).toISOString()
+    : null;
 }
 
 function buildMarker(timestampMs, loadStartAtMs) {
@@ -1179,6 +1230,7 @@ export const FAILURE_BUNDLE_SEGMENT_2 = {
   resolveRoutingDiagnostics,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
+  buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,

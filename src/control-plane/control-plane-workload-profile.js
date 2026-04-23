@@ -2,12 +2,18 @@ import {NUM} from '../constants/index.js';
 import {TABLES} from '../constants/index.js';
 import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 
+const TRANSACTION_CONTROL_MUTATION_WORKLOAD_CLASS =
+  'transaction_control_mutation';
+const CONTROL_PLANE_TRANSACTION_CONTROL_RECOVERY_RESOURCE_KEY =
+  'control-plane:transaction-control:recovery';
+
 const CONTROL_PLANE_WORKLOAD_CLASS = Object.freeze({
   BOOTSTRAP_CONTROL_PLANE_READ: 'bootstrap_control_plane_read',
   BOOTSTRAP_CONTROL_PLANE_MUTATION: 'bootstrap_control_plane_mutation',
   READINESS_CRITICAL_READ: 'readiness_critical_read',
   AUTHORITATIVE_OPERATION_VISIBILITY: 'authoritative_operation_visibility',
   REPLICA_OPERATION_MUTATION: 'replica_operation_mutation',
+  TRANSACTION_CONTROL_MUTATION: TRANSACTION_CONTROL_MUTATION_WORKLOAD_CLASS,
   ADMIN_DIAGNOSTIC_READ: 'admin_diagnostic_read',
   CONTROL_SNAPSHOT_REPAIR: 'control_snapshot_repair',
   MESSAGE_GROUP_FORWARD_TOPOLOGY_REPAIR:
@@ -64,6 +70,17 @@ const CONTROL_PLANE_WORKLOAD_PROFILE = Object.freeze({
       allowPressureDegrade: false,
       allowPressureDefer: false,
       resourceKeys: Object.freeze(['control-plane:replica-operations:mutation']),
+    }),
+  [CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION]:
+    Object.freeze({
+      workloadClass:
+        CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      allowPressureDegrade: false,
+      allowPressureDefer: false,
+      resourceKeys: Object.freeze([
+        CONTROL_PLANE_TRANSACTION_CONTROL_RECOVERY_RESOURCE_KEY,
+      ]),
     }),
   [CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ]: Object.freeze({
     workloadClass: CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,

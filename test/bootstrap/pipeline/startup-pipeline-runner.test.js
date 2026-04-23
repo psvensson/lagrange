@@ -4,9 +4,16 @@
 
 import {test} from '../../../src/test-helpers/tap.js';
 import {
+  JOIN_CHECKPOINT,
+  JoinSessionStore,
+} from '../../../src/bootstrap/join-session-store.js';
+import {
   STARTUP_PIPELINE_EVENT,
   StartupPipelineRunner,
 } from '../../../src/bootstrap/pipeline/startup-pipeline-runner.js';
+import {
+  STARTUP_WORKFLOW_STATUS,
+} from '../../../src/bootstrap/startup-workflow-store.js';
 
 test('StartupPipelineRunner - runs phases in order', async (t) => {
   const observed = [];
@@ -96,3 +103,97 @@ async (t) => {
 
   t.end();
 });
+
+test(
+  'StartupPipelineRunner - runWorkflow records retryable failure and resumes ' +
+    'from persisted checkpoint',
+  async (t) => {
+    const store = new JoinSessionStore({
+      storage: new Map(),
+      now: () => Date.now(),
+    });
+    const runner = new StartupPipelineRunner();
+    const executedSteps = [];
+    let failInfrastructure = true;
+
+    const steps = [
+      {
+        checkpoint: JOIN_CHECKPOINT.SEED_CONTACTED,
+        phase: 'seed',
+        run: async () => {
+          executedSteps.push('seed');
+        },
+      },
+      {
+        checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+        phase: 'infrastructure',
+        run: async () => {
+          executedSteps.push('infrastructure');
+          if (failInfrastructure) {
+            const error = new Error('infrastructure_retry');
+            error.code = 'INFRASTRUCTURE_RETRY';
+            error.retryable = true;
+            throw error;
+          }
+        },
+      },
+      {
+        checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+        phase: 'membership',
+        run: async () => {
+          executedSteps.push('membership');
+        },
+      },
+    ];
+
+    await t.rejects(
+      runner.runWorkflow({
+        nodeId: 'join-node-a',
+        sessionId: 'session-a',
+        sessionStore: store,
+        steps,
+      }),
+      /infrastructure_retry/,
+      'workflow should surface the retryable step failure',
+    );
+
+    const failedSession = await store.loadSession({
+      nodeId: 'join-node-a',
+      sessionId: 'session-a',
+    });
+    t.equal(
+      failedSession?.checkpoint,
+      JOIN_CHECKPOINT.SEED_CONTACTED,
+      'failure should preserve the highest completed checkpoint',
+    );
+    t.equal(
+      failedSession?.status,
+      STARTUP_WORKFLOW_STATUS.FAILED_RETRYABLE,
+      'retryable failures should persist the retryable workflow status',
+    );
+
+    failInfrastructure = false;
+    const resumed = await runner.runWorkflow({
+      nodeId: 'join-node-a',
+      allowResumeLatest: true,
+      sessionStore: store,
+      steps,
+    });
+
+    t.equal(
+      resumed.sessionId,
+      'session-a',
+      'workflow kernel should resume the persisted session identity',
+    );
+    t.same(
+      executedSteps,
+      ['seed', 'infrastructure', 'infrastructure', 'membership'],
+      'resume should skip the completed checkpoint and rerun the failed step',
+    );
+    t.equal(
+      resumed.session?.checkpoint,
+      JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+      'resume should continue the durable workflow to the next completed step',
+    );
+  },
+);

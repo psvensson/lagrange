@@ -451,6 +451,11 @@ function createBootstrapApiRuntimeMethods(options = {}) {
         .buildBootstrapTopologySnapshotEnvelope(options);
     },
 
+    buildBootstrapResponseTopologySnapshotEnvelope(options = {}) {
+      return this.bootstrapTopologySnapshotOwner
+        .buildBootstrapResponseTopologySnapshotEnvelope(options);
+    },
+
     resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows = []) {
       return this.bootstrapTopologySnapshotOwner
         .resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows);

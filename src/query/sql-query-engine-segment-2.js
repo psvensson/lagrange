@@ -1,144 +1,40 @@
-import { SQL_QUERY_ENGINE_SHARED } from "./sql-query-engine-shared.js";
-import { SQLQueryEngineSegment1 } from "./sql-query-engine-segment-1.js";
+import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {SQLQueryEngineSegment1} from './sql-query-engine-segment-1.js';
 
 const {
-  ACTIVE_PARTITION_STATE,
   ADAPTER_ERROR_MSG,
-  ADAPTER_LOG_MSG,
-  AddressManager,
-  AuthoritativeControlPlaneView,
-  BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
-  BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
-  BOOTSTRAP_ROUTING_OVERLAY_PARTITION_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_REASON,
-  BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
-  BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
   BudgetEnforcer,
-  CALLBACK_RUNTIME_KIND,
-  CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-  CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
-  COLUMN,
-  CONNECTION_STATE_CONNECTED,
-  CONNECTION_STATE_READY,
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CallbackExecutionHost,
   CancellationToken,
-  ConfigurationManager,
   DEFAULT_CODE_VERSION,
-  DEFAULT_PARTITION_VERSION,
   DEFAULT_SNAPSHOT_MODE,
-  DUAL_WRITE_ACTIVE_STATUSES,
-  DistributedQueryPlanner,
-  DistributedTransactionCoordinator,
-  DistributedWriteCoordinator,
-  ENTITY_TYPE,
   EXECUTION_MODE,
   EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
   ExecutionContext,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
   LineageTracker,
-  LoggingService,
   METRICS_LOG_TAG,
-  MIGRATION_STATUS,
-  MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  ManagedSplitTopologyAdapter,
-  ManagedSplitWorkflow,
-  MigrationCoordinator,
-  MigrationPipeline,
-  NATIVE_CALLBACK_EXPORTS_ARG,
-  NATIVE_CALLBACK_MODULE_ARG,
-  NATIVE_CALLBACK_RETURN_LINE,
-  NUM,
-  OPERATION_METADATA_KEY,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  OperationType,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PROVISIONING_REJECTION_DETAIL_LIMIT,
-  PROVISIONING_REJECTION_REASON_UNKNOWN,
-  PROVISIONING_REJECTION_SUMMARY_NONE,
-  PartitionCallbackDispatcher,
-  PartitionResolver,
   PressureGovernor,
   QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   QUERY_SESSION,
-  QUERY_SUBSYSTEM,
-  QueryExecutor,
-  RETRYABLE_CONTROL_PLANE_MUTATION_DEFER_STATE,
-  RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  ReplicaOperationField,
-  SERVICE_TYPE,
   SQLParser,
-  SQL_PARSE_CACHE,
-  STATE,
-  STATUS_ACTIVE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  SYSTEM_TABLE_NAME,
-  SqlParseCache,
-  TABLES,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TableCreationService,
-  TimeoutPolicy,
   WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
-  WRITE_OPERATION_STATUS,
-  WRITE_TRACKING_EXCLUDED_TABLES,
-  ZERO_SHA256_DIGEST,
-  buildBootstrapRoutingOverlayEntry,
-  buildBootstrapRoutingOverlayEntryState,
-  buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
   buildPressureAdmissionFailure,
-  buildSystemTableMutationRoutingGapFailure,
-  createCallbackDriverRegistry,
-  createControlPlaneRuntimeBundle,
-  createEmptyTransactionRecoveryReplaySummary,
-  createHash,
-  createTimeoutBudgetError,
   executePlan,
   executeStage,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
-  getSchemaByTableName,
-  getSystemTableMutationRoutingGapBlocker,
-  hasActiveAddressedPartitionService,
-  isNodeRecordReady,
-  isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isRetryableManagedSplitTransition,
-  isSqlRequest,
-  normalizeControlPlaneMutationWorkClass,
   parseCallbackModuleArtifact,
   reorderParams,
-  resolveBootstrapLeaderSelection,
-  resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
 class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
   async ensureWasmCallbackModuleLoaded(sqlRequest, wasmExecutor) {
     const callbackModuleRef = sqlRequest.callbackModuleRef;
     const moduleMirror = wasmExecutor.moduleMirror || null;
-    if (!moduleMirror || typeof moduleMirror.getModule !== "function") {
+    if (!moduleMirror || typeof moduleMirror.getModule !== 'function') {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_MODULE_MIRROR_REQUIRED);
     }
 
@@ -159,12 +55,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       );
     }
     const codeBlob = codeRow.code_blob;
-    if (typeof codeBlob !== "string" || !codeBlob.trim()) {
+    if (typeof codeBlob !== 'string' || !codeBlob.trim()) {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
     }
 
     const parsedArtifact = parseCallbackModuleArtifact(codeBlob);
-    if (!parsedArtifact.source || typeof parsedArtifact.source !== "string") {
+    if (!parsedArtifact.source || typeof parsedArtifact.source !== 'string') {
       throw new Error(ADAPTER_ERROR_MSG.WASM_CALLBACK_SOURCE_INVALID);
     }
 
@@ -186,10 +82,10 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       runExport,
       callbackModuleRef,
     );
-    const rawHandler = compiledExports
-      ? compiledExports[manifest.runExport]
-      : null;
-    if (typeof rawHandler !== "function") {
+    const rawHandler = compiledExports ?
+      compiledExports[manifest.runExport] :
+      null;
+    if (typeof rawHandler !== 'function') {
       throw new Error(
         `${ADAPTER_ERROR_MSG.WASM_CALLBACK_EXPORT_NOT_FOUND}: ` +
           manifest.runExport,
@@ -203,13 +99,13 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       exports: compiledExports,
     };
 
-    if (typeof moduleMirror.setModule === "function") {
+    if (typeof moduleMirror.setModule === 'function') {
       await moduleMirror.setModule(callbackModuleRef, moduleEntry);
       return;
     }
     if (
       moduleMirror.localCache &&
-      typeof moduleMirror.localCache.set === "function"
+      typeof moduleMirror.localCache.set === 'function'
     ) {
       moduleMirror.localCache.set(callbackModuleRef, {
         ...moduleEntry,
@@ -244,12 +140,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
 
     return new ExecutionContext({
       session: sessionId,
-      snapshot: sqlRequest.snapshot || { mode: DEFAULT_SNAPSHOT_MODE },
+      snapshot: sqlRequest.snapshot || {mode: DEFAULT_SNAPSHOT_MODE},
       budgetEnforcer,
       cancellationToken,
       lineageTracker,
       queryExecutor: async (query, params) =>
-        this.executeQuery(query, params, { sessionId }),
+        this.executeQuery(query, params, {sessionId}),
       resultStream: sqlRequest.resultStream,
       exchangeManager: sqlRequest.exchangeManager,
       dedupeRegistry: sqlRequest.dedupeRegistry,
@@ -265,7 +161,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    * @private
    */
   async executeStageRequest(sqlRequest) {
-    if (typeof sqlRequest.handler !== "function") {
+    if (typeof sqlRequest.handler !== 'function') {
       throw new Error(ADAPTER_ERROR_MSG.STAGE_HANDLER_REQUIRED);
     }
 
@@ -302,7 +198,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    */
   async executePlanRequest(sqlRequest) {
     const plan = sqlRequest.plan || sqlRequest.hints?.plan || null;
-    if (!plan || typeof plan !== "object") {
+    if (!plan || typeof plan !== 'object') {
       throw new Error(ADAPTER_ERROR_MSG.PLAN_OBJECT_REQUIRED);
     }
 
@@ -348,7 +244,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     const manager = this.partitionSplitMergeManager;
     if (
       !manager ||
-      typeof manager.requestEvaluation !== "function" ||
+      typeof manager.requestEvaluation !== 'function' ||
       !tableName ||
       this.isSystemTable(tableName) ||
       writeResult?.success !== true
@@ -360,9 +256,9 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     const lastEvaluationState =
       this.lastWriteSplitEvaluationByTable.get(tableName) || null;
     const lastRequestedAtMs =
-      typeof lastEvaluationState === "number"
-        ? lastEvaluationState
-        : Number(lastEvaluationState?.requestedAtMs || 0);
+      typeof lastEvaluationState === 'number' ?
+        lastEvaluationState :
+        Number(lastEvaluationState?.requestedAtMs || 0);
     if (
       nowMs - lastRequestedAtMs <
       WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS
@@ -371,9 +267,9 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     }
 
     const partitionIds =
-      writePlan?.partitionStatements instanceof Map
-        ? Array.from(writePlan.partitionStatements.keys())
-        : [];
+      writePlan?.partitionStatements instanceof Map ?
+        Array.from(writePlan.partitionStatements.keys()) :
+        [];
     const localLeaderPartitionIds =
       this.resolveLocalManagedSplitEvaluationPartitionIds(partitionIds);
     this.lastWriteSplitEvaluationByTable.set(tableName, {
@@ -387,7 +283,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     }
 
     manager.requestEvaluation({
-      reasonCode: "write_activity",
+      reasonCode: 'write_activity',
       tableName,
       partitionIds: localLeaderPartitionIds,
     });
@@ -403,7 +299,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
   resolveLocalManagedSplitEvaluationPartitionIds(partitionIds = []) {
     const requestedPartitionIdSet = new Set(
       partitionIds
-        .map((partitionId) => String(partitionId || ""))
+        .map((partitionId) => String(partitionId || ''))
         .filter(Boolean),
     );
     if (requestedPartitionIdSet.size === 0) {
@@ -456,7 +352,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       const dialect = options.dialect;
       ast = this.parseCache.get(sql, dialect);
       if (!ast) {
-        const parser = new SQLParser(sql, { dialect });
+        const parser = new SQLParser(sql, {dialect});
         ast = parser.parse();
         this.parseCache.set(sql, dialect, ast);
         ast = this.parseCache.cloneAst(ast);
@@ -491,9 +387,9 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
           ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT)
       ) {
         this.logger.warn(
-          ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER
-            ? QUERY_LOG_MSG.QUERY_ADMISSION_DEFERRED
-            : QUERY_LOG_MSG.QUERY_ADMISSION_REJECTED,
+          ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+            QUERY_LOG_MSG.QUERY_ADMISSION_DEFERRED :
+            QUERY_LOG_MSG.QUERY_ADMISSION_REJECTED,
           {
             statementType: ast.type,
             pressureAction: ingressPressureDecision.action,
@@ -504,9 +400,9 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
         );
         return buildPressureAdmissionFailure(ingressPressureDecision, {
           error:
-            ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER
-              ? "query_admission_deferred"
-              : "query_admission_rejected",
+            ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+              'query_admission_deferred' :
+              'query_admission_rejected',
           errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
         });
       }
@@ -514,49 +410,49 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
       // Route based on statement type
       let result;
       switch (ast.type) {
-        case QUERY_AST_TYPE.SELECT:
-          result = await this.executeSelect(
-            ast,
-            params,
-            sessionId,
-            options,
-            sql,
-          );
-          break;
+      case QUERY_AST_TYPE.SELECT:
+        result = await this.executeSelect(
+          ast,
+          params,
+          sessionId,
+          options,
+          sql,
+        );
+        break;
 
-        case QUERY_AST_TYPE.INSERT:
-          result = await this.executeInsert(ast, params, sessionId, options);
-          break;
+      case QUERY_AST_TYPE.INSERT:
+        result = await this.executeInsert(ast, params, sessionId, options);
+        break;
 
-        case QUERY_AST_TYPE.UPDATE:
-          result = await this.executeUpdate(ast, params, sessionId, options);
-          break;
+      case QUERY_AST_TYPE.UPDATE:
+        result = await this.executeUpdate(ast, params, sessionId, options);
+        break;
 
-        case QUERY_AST_TYPE.DELETE:
-          result = await this.executeDelete(ast, params, sessionId, options);
-          break;
+      case QUERY_AST_TYPE.DELETE:
+        result = await this.executeDelete(ast, params, sessionId, options);
+        break;
 
-        case QUERY_AST_TYPE.CREATE_TABLE:
-          result = await this.executeCreateTable(ast, sessionId, options);
-          break;
+      case QUERY_AST_TYPE.CREATE_TABLE:
+        result = await this.executeCreateTable(ast, sessionId, options);
+        break;
 
-        case QUERY_AST_TYPE.ALTER_TABLE:
-          result = await this.executeAlterTable(ast, sessionId);
-          break;
+      case QUERY_AST_TYPE.ALTER_TABLE:
+        result = await this.executeAlterTable(ast, sessionId);
+        break;
 
-        case QUERY_AST_TYPE.BEGIN_TRANSACTION:
-          return this.handleBeginTransaction(sessionId);
+      case QUERY_AST_TYPE.BEGIN_TRANSACTION:
+        return this.handleBeginTransaction(sessionId);
 
-        case QUERY_AST_TYPE.COMMIT:
-          return this.handleCommit(sessionId);
+      case QUERY_AST_TYPE.COMMIT:
+        return this.handleCommit(sessionId);
 
-        case QUERY_AST_TYPE.ROLLBACK:
-          return this.handleRollback(sessionId);
+      case QUERY_AST_TYPE.ROLLBACK:
+        return this.handleRollback(sessionId);
 
-        default:
-          throw new Error(
-            `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
-          );
+      default:
+        throw new Error(
+          `${QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX}${ast.type}`,
+        );
       }
 
       const queryEndMs = Date.now();
@@ -599,15 +495,15 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
         sql: sql.substring(0, 100),
         error: failureResult.error,
         errorCode: failureResult.errorCode || null,
-        retryAfterMs: Number.isFinite(failureResult.retryAfterMs)
-          ? failureResult.retryAfterMs
-          : null,
+        retryAfterMs: Number.isFinite(failureResult.retryAfterMs) ?
+          failureResult.retryAfterMs :
+          null,
         deferRetry: failureResult.deferRetry === true,
-        stack: String(failureResult.error || "").includes(
-          "Maximum call stack size exceeded",
-        )
-          ? error?.stack || null
-          : null,
+        stack: String(failureResult.error || '').includes(
+          'Maximum call stack size exceeded',
+        ) ?
+          error?.stack || null :
+          null,
       });
       return failureResult;
     }
@@ -624,12 +520,12 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     return this.getPressureGovernor().evaluate({
       workClass:
         options?.workClass ||
-        (writeStatement
-          ? PRESSURE_WORK_CLASS.INTERACTIVE
-          : PRESSURE_WORK_CLASS.INTERACTIVE),
+        (writeStatement ?
+          PRESSURE_WORK_CLASS.INTERACTIVE :
+          PRESSURE_WORK_CLASS.INTERACTIVE),
       resourceKeys: [
-        writeStatement ? "query-plane:write" : "query-plane:read",
-        `query-plane:statement:${String(astType || "unknown").toLowerCase()}`,
+        writeStatement ? 'query-plane:write' : 'query-plane:read',
+        `query-plane:statement:${String(astType || 'unknown').toLowerCase()}`,
       ],
       allowDegrade: false,
       allowDefer: options?.allowPressureDefer !== false,
@@ -664,7 +560,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    * @private
    */
   async executeExplainDistributed(sql, params = [], options = {}) {
-    const statement = sql.replace(EXPLAIN_DISTRIBUTED_PREFIX_REGEX, "");
+    const statement = sql.replace(EXPLAIN_DISTRIBUTED_PREFIX_REGEX, '');
     if (!statement.trim()) {
       return {
         success: false,
@@ -676,7 +572,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
     let ast;
     let normalizedParams = params;
     try {
-      const parser = new SQLParser(statement, { dialect: options.dialect });
+      const parser = new SQLParser(statement, {dialect: options.dialect});
       ast = parser.parse();
       if (ast._paramMapping && ast._paramMapping.length > 0) {
         normalizedParams = reorderParams(params, ast._paramMapping);
@@ -748,7 +644,7 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
   async executeAlterTable(ast, sessionId) {
     if (
       !this.migrationPipeline ||
-      typeof this.migrationPipeline.handleAlterTable !== "function"
+      typeof this.migrationPipeline.handleAlterTable !== 'function'
     ) {
       throw new Error(QUERY_ERROR_MSG.MIGRATION_PIPELINE_UNAVAILABLE);
     }
@@ -776,4 +672,4 @@ class SQLQueryEngineSegment2 extends SQLQueryEngineSegment1 {
    */
 }
 
-export { SQLQueryEngineSegment2 };
+export {SQLQueryEngineSegment2};

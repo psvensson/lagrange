@@ -46,7 +46,13 @@ const LATENCY_TOPOLOGY_MESSAGE_TYPE = Object.freeze({
   CDC_PROPAGATION_BATCH: 'latency.cdc.propagation.batch',
 });
 
+const LATENCY_TOPOLOGY_DELIVERY_SOURCE = Object.freeze({
+  CRITICAL_VISIBILITY: 'latency.cdc.propagation.visibility',
+  BACKGROUND_CHURN: 'latency.cdc.propagation.background',
+});
+
 export {
+  LATENCY_TOPOLOGY_DELIVERY_SOURCE,
   LATENCY_ASSIGNMENT_STATE,
   LATENCY_GROUP_STATE,
   LATENCY_PROPAGATION_MODE,

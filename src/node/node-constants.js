@@ -238,6 +238,7 @@ const NODE_REINTEGRATION_EVENT = Object.freeze({
 });
 
 const NODE_REINTEGRATION_REASON = Object.freeze({
+  ADMISSION_BLOCKED: 'admission_blocked',
   HEALTH_CHECK_FAILED: 'health_check_failed',
   NODE_REINTEGRATION: 'node_reintegration',
 });
@@ -252,6 +253,8 @@ const NODE_REINTEGRATION_LOG_MSG = Object.freeze({
   HEALTH_CHECK_PASSED: 'Node health check passed',
   HEALTH_CHECK_FAILED: 'Node health check failed',
   COMPLETING_REINTEGRATION: 'Completing node reintegration',
+  REINTEGRATION_ADMISSION_BLOCKED:
+    'Deferred node reintegration because startup authority blocked admission',
   MARK_NODE_ACTIVE_FAILED: 'Failed to mark node as active',
   REINTEGRATION_COMPLETED: 'Node reintegration completed',
   REINTEGRATION_FAILED: 'Node reintegration failed',

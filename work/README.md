@@ -91,6 +91,15 @@ Every work package should answer:
    - tail consumers
    - diagnostics, admin, or report surfaces
    - superseded paths or vocabulary to delete
+11. If the package is driven by a failing scenario:
+   - what the current dominant blocker is
+   - what probe or scenario will confirm the next-order blocker after each fix
+   - where blocker migration will be recorded if the failure moves
+12. If the package touches lifecycle, readiness, admission, recovery, or
+    convergence behavior:
+   - what the shared progress grammar is
+   - what blocked, deferred, retryable, terminal, and ready mean
+   - which surfaces are allowed to expose that grammar directly
 
 Package closure also requires one final deep dive across the affected area:
 
@@ -98,6 +107,8 @@ Package closure also requires one final deep dive across the affected area:
 2. look for mistakes, irregularities, and doctrine/system-guideline violations
 3. fix any discovered issue that falls inside the affected area before renaming
    the package to `done-...`
+4. if the package was driven by a failing scenario, rerun the reference
+   scenario or blocker probe and record any blocker migration before closure
 
 If the work package cannot answer those clearly, it is still an idea, not a
 package.

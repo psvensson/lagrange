@@ -26,6 +26,29 @@ import {
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {createTestCoordinator} from './test-helpers.js';
 
+const DEFERRED_PRIORITY_ENTITY_OBSERVATION = Object.freeze({
+  state: INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+  operationCount: 0,
+  operations: [],
+  deferredOutcome: Object.freeze({
+    completionState: 'deferred',
+    source: 'test-deferred-priority-entity-observation',
+  }),
+  retryAfterMs: null,
+});
+const TEST_PRIORITY_RECENT_INTENT_PARTITION_ID = 'sql_transactions-p1';
+const TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE = 'partition';
+const TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_A = 'node-2';
+const TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_B = 'node-3';
+const TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID = 'seed-node';
+const TEST_PRIORITY_RECENT_INTENT_SOURCE_REPLICA_ID =
+  `${TEST_PRIORITY_RECENT_INTENT_PARTITION_ID}-r1`;
+const TEST_PRIORITY_RECENT_INTENT_TARGET_REPLICA_ID =
+  `${TEST_PRIORITY_RECENT_INTENT_PARTITION_ID}-r4`;
+const TEST_PRIORITY_RECENT_INTENT_OPERATION_ID = 'priority-source-removal-op';
+const TEST_PRIORITY_RECENT_INTENT_REPLACEMENT_OPERATION_ID =
+  'replacement-op';
+
 test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   t.beforeEach(async () => {
     ConfigurationManager.resetInstance();
@@ -206,6 +229,61 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
     },
   );
 
+  t.test(
+    'REPLACE allocation stays monotonic when stale topology omits lower replica ids',
+    async (t) => {
+      const PARTITION_ID = 'sql_transactions-p1';
+      const SOURCE_REPLICA_ID = `${PARTITION_ID}-r4`;
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        cacheData: {
+          services: [
+            {
+              service_id: `${PARTITION_ID}-r2`,
+              service_type: 'partition',
+              partition_id: PARTITION_ID,
+              node_id: 'seed-node',
+            },
+            {
+              service_id: `${PARTITION_ID}-r3`,
+              service_type: 'partition',
+              partition_id: PARTITION_ID,
+              node_id: 'node-2',
+            },
+          ],
+        },
+      });
+      const originalGetAuthoritativeEntityServiceRows =
+        coordinator.getAuthoritativeEntityServiceRows;
+      const originalGetEntityInFlightReplicaIds =
+        coordinator.getEntityInFlightReplicaIds;
+
+      coordinator.getAuthoritativeEntityServiceRows = async () => [];
+      coordinator.getEntityInFlightReplicaIds = async () => new Set();
+
+      try {
+        const replicaId = await coordinator.allocateCanonicalReplicaId({
+          partitionId: PARTITION_ID,
+          entityType: 'partition',
+          entityId: PARTITION_ID,
+          excludeReplicaIds: [SOURCE_REPLICA_ID],
+        });
+        t.equal(
+          replicaId,
+          `${PARTITION_ID}-r5`,
+          'allocator should extend past the highest observed/excluded replica id instead of recycling a lower gap',
+        );
+      } finally {
+        coordinator.getAuthoritativeEntityServiceRows =
+          originalGetAuthoritativeEntityServiceRows;
+        coordinator.getEntityInFlightReplicaIds =
+          originalGetEntityInFlightReplicaIds;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
   t.test('REMOVE operations are deduplicated by replica intent, not only node',
     async (t) => {
       const coordinator = createTestCoordinator({
@@ -370,6 +448,97 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   );
 
   t.test(
+    'priority REPLACE source-removal recent intent survives deferred ' +
+      'entity visibility past remove timeout',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        entityType: TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+        entityId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        nodeId: TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_B,
+        sourceNodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+        replicaId: TEST_PRIORITY_RECENT_INTENT_SOURCE_REPLICA_ID,
+        enforceConcurrentOperationBudget: true,
+      };
+      const criticalAddLikeIntentKey =
+        coordinator.buildCriticalAddLikeIntentKey(
+          move,
+          OperationType.REPLACE,
+          TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+          TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+          TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        );
+      const staleTimestamp = Date.now() -
+        (coordinator.config.removingTimeoutMs + 1_000);
+      const cachedOperation = {
+        operationId: TEST_PRIORITY_RECENT_INTENT_OPERATION_ID,
+        type: OperationType.REPLACE,
+        partitionId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        entityType: TEST_PRIORITY_RECENT_INTENT_ENTITY_TYPE,
+        entityId: TEST_PRIORITY_RECENT_INTENT_PARTITION_ID,
+        sourceNodeId: TEST_PRIORITY_RECENT_INTENT_SOURCE_NODE_ID,
+        targetNodeId: TEST_PRIORITY_RECENT_INTENT_TARGET_NODE_A,
+        sourceReplicaId: TEST_PRIORITY_RECENT_INTENT_SOURCE_REPLICA_ID,
+        replicaId: TEST_PRIORITY_RECENT_INTENT_TARGET_REPLICA_ID,
+        status: ReplicaStatus.REMOVING,
+        workflowStep: WORKFLOW_STEP.STOPPING,
+        createdAt: staleTimestamp,
+        updatedAt: staleTimestamp,
+      };
+      coordinator.recentOperationIntents.set(criticalAddLikeIntentKey, {
+        operation: cachedOperation,
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalGetOperationsByEntityAuthoritativeObservation =
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: TEST_PRIORITY_RECENT_INTENT_REPLACEMENT_OPERATION_ID,
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+
+        t.equal(
+          result.operationId,
+          TEST_PRIORITY_RECENT_INTENT_OPERATION_ID,
+          'priority source-removal phase should keep reusing the in-flight replace while entity visibility stays deferred',
+        );
+        t.equal(
+          createdOperationCount,
+          0,
+          'deferred authoritative visibility must not mint a second add-like recovery operation during source removal',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          originalGetOperationsByEntityAuthoritativeObservation;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
     'terminal recent intent cache entry does not suppress create-operation recovery',
     async (t) => {
       const coordinator = createTestCoordinator({
@@ -458,7 +627,7 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
   );
 
   t.test(
-    'priority recent intent survives authoritative dedupe misses',
+    'priority recent intent survives deferred entity visibility after authoritative dedupe misses',
     async (t) => {
       const coordinator = createTestCoordinator({
         nodeId: 'seed-node',
@@ -499,6 +668,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
 
       const originalQueryAuthoritativeOperationById =
         coordinator.repository.queryAuthoritativeOperationById;
+      const originalGetOperationsByEntityAuthoritativeObservation =
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation;
       const originalCreateOperationInternal = coordinator.createOperationInternal;
       const originalArmCoordinatorCreatedOperationProgress =
         coordinator.armCoordinatorCreatedOperationProgress;
@@ -506,6 +677,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       const rearmedOperationIds = [];
 
       coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => DEFERRED_PRIORITY_ENTITY_OBSERVATION;
       coordinator.createOperationInternal = async () => {
         createdOperationCount++;
         return {
@@ -544,6 +717,8 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       } finally {
         coordinator.repository.queryAuthoritativeOperationById =
           originalQueryAuthoritativeOperationById;
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          originalGetOperationsByEntityAuthoritativeObservation;
         coordinator.createOperationInternal = originalCreateOperationInternal;
         coordinator.armCoordinatorCreatedOperationProgress =
           originalArmCoordinatorCreatedOperationProgress;
@@ -781,6 +956,100 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
           coordinator.recentOperationIntents.has(dedupeKey),
           false,
           'terminal entity visibility should prune the stale recent-intent entry',
+        );
+      } finally {
+        coordinator.repository.queryAuthoritativeOperationById =
+          originalQueryAuthoritativeOperationById;
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+          originalGetOperationsByEntityAuthoritativeObservation;
+        coordinator.createOperationInternal = originalCreateOperationInternal;
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  t.test(
+    'priority recent intent is pruned when authoritative entity visibility is explicitly empty',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      const move = {
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        nodeId: 'node-2',
+        sourceNodeId: 'seed-node',
+        replicaId: 'replica_operations-p1-r1',
+      };
+      const dedupeKey = coordinator.buildOperationIntentKey(
+        move,
+        'partition',
+        'replica_operations-p1',
+      );
+      const cachedOperation = {
+        operationId: 'stale-priority-op',
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        entityType: 'partition',
+        entityId: 'replica_operations-p1',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'node-2',
+        replicaId: 'replica_operations-p1-r4',
+        status: ReplicaStatus.PENDING,
+        workflowStep: WORKFLOW_STEP.PENDING,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      coordinator.recentOperationIntents.set(dedupeKey, {
+        operation: cachedOperation,
+        expiresAt: Date.now() + 60_000,
+      });
+
+      const originalQueryAuthoritativeOperationById =
+        coordinator.repository.queryAuthoritativeOperationById;
+      const originalGetOperationsByEntityAuthoritativeObservation =
+        coordinator.repository.getOperationsByEntityAuthoritativeObservation;
+      const originalCreateOperationInternal = coordinator.createOperationInternal;
+      let createdOperationCount = 0;
+
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.getOperationsByEntityAuthoritativeObservation =
+        async () => ({
+          state: INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY,
+          operationCount: 0,
+          operations: [],
+          deferredOutcome: null,
+          retryAfterMs: null,
+        });
+      coordinator.createOperationInternal = async () => {
+        createdOperationCount++;
+        return {
+          operationId: 'replacement-op',
+        };
+      };
+
+      try {
+        const result = await coordinator.createOperation(move);
+
+        t.equal(
+          result.operationId,
+          'replacement-op',
+          'explicit empty authoritative entity visibility should allow a fresh recovery create',
+        );
+        t.equal(
+          createdOperationCount,
+          1,
+          'fresh recovery creation should proceed once the stale recent intent is pruned',
+        );
+        t.equal(
+          coordinator.recentOperationIntents.has(dedupeKey),
+          false,
+          'explicit empty authoritative entity visibility should prune the stale recent-intent entry',
         );
       } finally {
         coordinator.repository.queryAuthoritativeOperationById =

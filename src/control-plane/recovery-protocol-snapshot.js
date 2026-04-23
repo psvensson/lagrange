@@ -7,8 +7,10 @@ import {
 } from './control-plane-publication-merge.js';
 import {
   MEMBERSHIP_MEMBER_STATE,
+  NODE_PARTICIPATION_ADMISSION_STATE,
   NODE_PARTICIPATION_STATE,
   RECOVERY_PROTOCOL_STATE,
+  normalizeNodeParticipationAdmissionState,
 } from './membership-lifecycle-constants.js';
 import {
   hasPriorityRecoverySpreadGap,
@@ -31,6 +33,7 @@ const PARTICIPATION_REASON = Object.freeze({
   READINESS_EXCLUDED: 'readiness_excluded',
   CLUSTER_MEMBER_UNHEALTHY: 'cluster_member_unhealthy',
   MEMBERSHIP_FREEZE_RETAINED: 'membership_freeze_retained',
+  NODE_ADMISSION_BLOCKED: 'node_admission_blocked',
 });
 
 function normalizeOptionalString(value) {
@@ -74,6 +77,16 @@ function freezeRecord(record) {
   return record && typeof record === TYPEOF.OBJECT ?
     Object.freeze({...record}) :
     null;
+}
+
+function normalizeClusterIncarnationFence(value) {
+  if (!value || typeof value !== TYPEOF.OBJECT) {
+    return null;
+  }
+  return Object.freeze({
+    ...value,
+    reasonCodes: Object.freeze(normalizeStringList(value.reasonCodes)),
+  });
 }
 
 function buildContext(options = {}) {
@@ -181,6 +194,29 @@ function buildContext(options = {}) {
         typeof options.membershipFreeze === TYPEOF.OBJECT ?
         options.membershipFreeze :
         null;
+  const participationByNodeId =
+    membershipLifecycleSummary?.participationByNodeId &&
+      typeof membershipLifecycleSummary.participationByNodeId === TYPEOF.OBJECT ?
+      membershipLifecycleSummary.participationByNodeId :
+      options.participationByNodeId &&
+        typeof options.participationByNodeId === TYPEOF.OBJECT ?
+        options.participationByNodeId :
+        {};
+  const targetNodeId = normalizeOptionalString(options.targetNodeId);
+  const targetParticipation =
+    targetNodeId && participationByNodeId[targetNodeId] &&
+      typeof participationByNodeId[targetNodeId] === TYPEOF.OBJECT ?
+      participationByNodeId[targetNodeId] :
+      null;
+  const admissionState = normalizeNodeParticipationAdmissionState(
+    options.admissionState ?? targetParticipation?.admissionState,
+  );
+  const admissionReasonCodes = normalizeStringList(
+    options.admissionReasonCodes ?? targetParticipation?.admissionReasonCodes,
+  );
+  const clusterIncarnationFence = normalizeClusterIncarnationFence(
+    options.clusterIncarnationFence ?? targetParticipation?.clusterIncarnationFence,
+  );
   return {
     publicationEpoch: Number.isFinite(options.publicationEpoch) ?
       Math.trunc(options.publicationEpoch) :
@@ -216,7 +252,11 @@ function buildContext(options = {}) {
     memberStatesByNodeId,
     recoveryEpochByNodeId,
     membershipFreeze,
-    targetNodeId: normalizeOptionalString(options.targetNodeId),
+    participationByNodeId,
+    targetNodeId,
+    admissionState,
+    admissionReasonCodes,
+    clusterIncarnationFence,
   };
 }
 
@@ -275,7 +315,37 @@ function resolveRecoveryProtocolState(context) {
   return RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
 }
 
-function buildParticipationReasons(context, nodeId, flags) {
+function buildParticipationAdmission(context, nodeId) {
+  const existingParticipation =
+    context.participationByNodeId?.[nodeId] &&
+      typeof context.participationByNodeId[nodeId] === TYPEOF.OBJECT ?
+      context.participationByNodeId[nodeId] :
+      null;
+  const explicitAdmissionBlocked =
+    context.targetNodeId === nodeId &&
+    context.admissionState === NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED;
+  const admissionState = explicitAdmissionBlocked ?
+    NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED :
+    normalizeNodeParticipationAdmissionState(existingParticipation?.admissionState);
+  const reasonCodes = explicitAdmissionBlocked ?
+    context.admissionReasonCodes :
+    normalizeStringList(existingParticipation?.admissionReasonCodes);
+  const clusterIncarnationFence = explicitAdmissionBlocked ?
+    context.clusterIncarnationFence :
+    normalizeClusterIncarnationFence(existingParticipation?.clusterIncarnationFence);
+  return Object.freeze({
+    state: admissionState,
+    admitted: admissionState === NODE_PARTICIPATION_ADMISSION_STATE.ADMITTED,
+    reasonCodes: Object.freeze(reasonCodes),
+    ...(clusterIncarnationFence ?
+      {
+        clusterIncarnationFence,
+      } :
+      {}),
+  });
+}
+
+function buildParticipationReasons(context, nodeId, flags, admission) {
   const reasons = [];
   if (flags.publishedActive) {
     reasons.push(PARTICIPATION_REASON.PUBLISHED_MEMBERSHIP);
@@ -310,6 +380,10 @@ function buildParticipationReasons(context, nodeId, flags) {
   if (context.membershipFreeze?.active === true &&
       context.membershipFreeze?.retainedPublishedNodeIds?.includes(nodeId)) {
     reasons.push(PARTICIPATION_REASON.MEMBERSHIP_FREEZE_RETAINED);
+  }
+  if (admission.state === NODE_PARTICIPATION_ADMISSION_STATE.BLOCKED) {
+    reasons.push(PARTICIPATION_REASON.NODE_ADMISSION_BLOCKED);
+    reasons.push(...admission.reasonCodes);
   }
   return Object.freeze(normalizeStringList(reasons));
 }
@@ -355,6 +429,7 @@ function buildParticipationByNodeId(context) {
     ...context.suspectedOrTransitioningNodeIds,
     ...Object.keys(context.memberStatesByNodeId || {}),
     ...Object.keys(context.recoveryEpochByNodeId || {}),
+    ...Object.keys(context.participationByNodeId || {}),
     ...(Array.isArray(context.membershipFreeze?.retainedPublishedNodeIds) ?
       context.membershipFreeze.retainedPublishedNodeIds :
       []),
@@ -374,6 +449,7 @@ function buildParticipationByNodeId(context) {
         context.suspectedOrTransitioningNodeIds.includes(nodeId),
     };
     const state = resolveParticipationState(memberState, flags);
+    const admission = buildParticipationAdmission(context, nodeId);
     const recoverySource = !flags.recoveryActive ?
       null :
       context.recoveryEligibleIncludedNodeIds.includes(nodeId) ?
@@ -393,7 +469,15 @@ function buildParticipationByNodeId(context) {
       suspectedOrTransitioning: flags.suspectedOrTransitioning,
       recoverySource,
       recoveryEpoch: context.recoveryEpochByNodeId?.[nodeId] || null,
-      reasons: buildParticipationReasons(context, nodeId, flags),
+      admissionState: admission.state,
+      admitted: admission.admitted,
+      admissionReasonCodes: Object.freeze([...admission.reasonCodes]),
+      ...(admission.clusterIncarnationFence ?
+        {
+          clusterIncarnationFence: admission.clusterIncarnationFence,
+        } :
+        {}),
+      reasons: buildParticipationReasons(context, nodeId, flags, admission),
     });
   }
 

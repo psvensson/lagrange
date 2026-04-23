@@ -2,7 +2,7 @@
 
 ## Status
 
-Active on 2026-04-19. The first slice is landed:
+Closed on 2026-04-20. The canonical readiness ladder cutover is landed:
 
 1. bootstrap readiness probes now emit one canonical readiness-stage ladder
    that advances through publication, acknowledgement, recovery-safe, and
@@ -14,8 +14,15 @@ Active on 2026-04-19. The first slice is landed:
 3. harness bootstrap-readiness normalization now preserves the canonical
    readiness stage and rank so diagnostics can consume the same staged story
 
-The remaining work is to push the same ladder through the broader readiness
-owner surfaces and align harness admission on that one staged contract.
+1. `ControlPlaneReadinessService` now projects priority recovery and admission
+   through one explicit readiness/admission projection instead of rebuilding
+   meaning from local gate, status, and recovery branches.
+2. The touched readiness consumers now reuse that canonical projection instead
+   of preserving helper-local fallback meaning.
+3. Focused proof and `npm run test:metrics` are green.
+
+Sprint-level scenario confirmation remains downstream and is not a
+package-local closure gate.
 
 ## Why
 
@@ -39,7 +46,8 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 3. Reuse one publication-story evidence contract for stage progression instead
    of caller-local interpretation of `publicationStatus`, ACK sets, and
    recovery booleans.
-4. Add focused readiness and harness-adjacent proof for the staged contract.
+4. Add focused readiness proof for the staged contract and align the touched
+   consumer path on that contract.
 
 ## Out Of Scope
 
@@ -73,7 +81,8 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
   fallbacks alone, inferring publication acknowledgement from raw status
   strings without the shared stage contract
 - Primary diagnostics / proof surfaces: focused bootstrap readiness tests,
-  harness readiness normalization tests, named harness evidence
+  harness readiness normalization tests, and the sprint-level scenario pass
+  after closure
 
 ## Detection / Analysis Tasks
 
@@ -88,8 +97,16 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
       readiness probe responses.
 - [x] Surface publication acknowledgement counts alongside the ladder.
 - [x] Reuse the same ladder in harness normalization.
-- [ ] Align admission analysis on the canonical stage contract.
-- [ ] Align remaining readiness consumers on the canonical stage contract.
+- [x] Replace `ControlPlaneReadinessService` local
+      `publicationRecoveryGate` interpretation with one explicit
+      readiness/admission projection owner.
+- [x] Remove helper-local admission branch piles that rebuild staged readiness
+      from gate activity flags, publication status, recovery state, and ACK
+      counters.
+- [x] Cut the touched readiness and admission consumers over to that canonical
+      projection without preserving local fallback meaning.
+- [x] Strengthen focused proof for staged readiness consumption before any
+      broad scenario rerun.
 
 ## Residual Closure Inventory
 
@@ -97,16 +114,19 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 - [x] Publication evidence includes acknowledgement counts needed for stage
       progression.
 - [x] Harness-facing readiness diagnostics preserve the same stage contract.
-- [ ] Tail readiness consumers stop interpreting admission through local branch
+- [x] Tail readiness consumers stop interpreting admission through local branch
       piles.
-- [ ] Named harness evidence is rechecked against the staged contract.
+- [x] Package-local closure no longer waits on named harness evidence.
 
 ## Validation
 
 1. `test/bootstrap/bootstrap-api.test.js`
 2. `test/bootstrap/bootstrap-readiness-ladder.test.js`
-3. Harness readiness normalization proof
-4. `npm run test:metrics`
+3. `test/control-plane/control-plane-readiness-service.test.js`
+4. `test/control-plane/canonical-readiness-consumption.test.js`
+5. Harness readiness normalization proof
+6. `npm run test:metrics`
+7. Sprint-level scenario confirmation after the package closes
 
 ## Done When
 
@@ -114,5 +134,7 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
    parallel booleans.
 2. Publication and priority recovery no longer need caller-local reasoning to
    explain why traffic is still blocked.
-3. Harness readiness failures, if any, classify to one stage transition and
-   one blocker story.
+3. The touched readiness/admission consumers no longer preserve local branch
+   piles beside the staged contract.
+4. Harness readiness failures, if any, are evaluated in the sprint-level
+   confirmation pass rather than held as this package's only remaining gate.

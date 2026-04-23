@@ -1,5 +1,14 @@
 # Partition and Query Routing Predictability
 
+## Status
+
+Closed on 2026-04-20 as a planning umbrella.
+
+The execution split that originally fed this package is archived done, and the
+remaining structural closure is now owned by narrower routing/query/rebalancer
+packages rather than this broad umbrella. This package no longer owns
+package-local harness reruns.
+
 ## Why
 
 The remaining partition and query hotspots sit on boundaries that decide where
@@ -50,23 +59,20 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 
 ## Execution Split
 
-1. [Canonical leader routing reuse cutover](active-20260419-canonical-leader-routing-reuse-cutover.md)
-2. [Partition CDC owner cutover](active-20260419-partition-cdc-owner-cutover.md)
-3. [Query executor boundary decompression and formatting](todo-20260418-query-executor-boundary-decompression-and-formatting.md)
-4. [Partition service boundary decompression and formatting](todo-20260418-partition-service-boundary-decompression-and-formatting.md)
-5. [Query executor routing and delivery owner split](todo-20260418-query-executor-routing-and-delivery-owner-split.md)
-6. [Partition split-routing extraction from partition service](todo-20260418-partition-split-routing-extraction-from-partition-service.md)
+1. [Canonical leader routing reuse cutover](archived/done-20260419-canonical-leader-routing-reuse-cutover.md)
+2. [Partition CDC owner cutover](archived/done-20260419-partition-cdc-owner-cutover.md)
+3. [Query executor boundary decompression and formatting](archived/done-20260418-query-executor-boundary-decompression-and-formatting.md)
+4. [Partition service boundary decompression and formatting](archived/done-20260418-partition-service-boundary-decompression-and-formatting.md)
+5. [Query executor routing and delivery owner split](archived/done-20260418-query-executor-routing-and-delivery-owner-split.md)
+6. [Partition split-routing extraction from partition service](archived/done-20260418-partition-split-routing-extraction-from-partition-service.md)
 
 ## Residual Closure Inventory
 
-- [ ] `src/query/query-executor.js` is decompressed and readable enough for
-      bounded owner extraction.
-- [ ] `src/partition/partition-service.js` is decompressed and readable enough
-      for bounded owner extraction.
-- [ ] Routing/candidate selection and delivery-budget behavior are split into
-      clearer owners.
-- [ ] Split-routing SQL extraction is no longer owned by `PartitionService`.
-- [ ] Diagnostics and scenario evidence reflect the simplified contracts.
+- [x] The original execution-split packages are archived done.
+- [x] Remaining routing/query closure is tracked in narrower packages rather
+      than this umbrella.
+- [x] This umbrella is closed and no longer waits on package-local harness
+      evidence.
 
 ## Validation
 

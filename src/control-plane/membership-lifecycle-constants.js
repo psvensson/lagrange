@@ -30,6 +30,12 @@ const NODE_PARTICIPATION_STATE = Object.freeze({
   RETIRED: 'retired',
 });
 
+const NODE_PARTICIPATION_ADMISSION_STATE = Object.freeze({
+  ADMITTED: 'admitted',
+  BLOCKED: 'blocked',
+  UNAVAILABLE: 'unavailable',
+});
+
 const RECOVERY_PROTOCOL_STATE = Object.freeze({
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
   PUBLICATION_PENDING: 'publication_pending',
@@ -105,6 +111,13 @@ function normalizeNodeParticipationState(value) {
     null;
 }
 
+function normalizeNodeParticipationAdmissionState(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return Object.values(NODE_PARTICIPATION_ADMISSION_STATE).includes(normalized) ?
+    normalized :
+    NODE_PARTICIPATION_ADMISSION_STATE.UNAVAILABLE;
+}
+
 function normalizeRecoveryProtocolState(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return Object.values(RECOVERY_PROTOCOL_STATE).includes(normalized) ?
@@ -157,6 +170,22 @@ function normalizeParticipationByNodeId(values = {}) {
         participation?.memberState,
       );
       const reasons = normalizeStringList(participation?.reasons);
+      const admissionState = normalizeNodeParticipationAdmissionState(
+        participation?.admissionState,
+      );
+      const admissionReasonCodes = normalizeStringList(
+        participation?.admissionReasonCodes,
+      );
+      const clusterIncarnationFence =
+        participation?.clusterIncarnationFence &&
+          typeof participation.clusterIncarnationFence === 'object' ?
+          Object.freeze({
+            ...participation.clusterIncarnationFence,
+            reasonCodes: Object.freeze(normalizeStringList(
+              participation.clusterIncarnationFence.reasonCodes,
+            )),
+          }) :
+          null;
       accumulator[nodeId] = Object.freeze({
         nodeId,
         state,
@@ -178,6 +207,14 @@ function normalizeParticipationByNodeId(values = {}) {
             participation.recoveryEpoch.trim().length > 0 ?
             participation.recoveryEpoch.trim() :
             null,
+        admissionState,
+        admitted: admissionState === NODE_PARTICIPATION_ADMISSION_STATE.ADMITTED,
+        admissionReasonCodes: Object.freeze(admissionReasonCodes),
+        ...(clusterIncarnationFence ?
+          {
+            clusterIncarnationFence,
+          } :
+          {}),
         reasons: Object.freeze(reasons),
       });
       return accumulator;
@@ -389,6 +426,7 @@ export {
   MEMBERSHIP_MEMBER_STATE,
   MEMBERSHIP_LIFECYCLE_STATE,
   MEMBERSHIP_LIFECYCLE_VALID_TRANSITIONS,
+  NODE_PARTICIPATION_ADMISSION_STATE,
   NODE_PARTICIPATION_STATE,
   RECOVERY_PROTOCOL_STATE,
   buildMembershipLifecycleSummary,
@@ -396,6 +434,7 @@ export {
   normalizeMembershipLifecycleEpochBoundary,
   normalizeMembershipMemberState,
   normalizeMembershipLifecycleState,
+  normalizeNodeParticipationAdmissionState,
   normalizeNodeParticipationState,
   normalizeRecoveryProtocolState,
 };

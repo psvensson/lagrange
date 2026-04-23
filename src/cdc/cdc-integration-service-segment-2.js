@@ -1,4 +1,10 @@
 import { CDC_INTEGRATION_SERVICE_SHARED } from "./cdc-integration-service-shared.js";
+import {
+  resolveControlPlaneSystemTableDeliverySource,
+} from "../control-plane/control-plane-system-table-gateway-shared.js";
+import {
+  buildControlPlaneWorkloadProfile,
+} from "../control-plane/control-plane-workload-profile.js";
 import { CDCIntegrationServiceSegment1 } from "./cdc-integration-service-segment-1.js";
 
 const {
@@ -125,6 +131,10 @@ const {
   stableSerializeMutationKey,
   uuidv4,
 } = CDC_INTEGRATION_SERVICE_SHARED;
+
+const CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY = "control-plane:write";
+const CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX = "control-plane:table:";
+const CDC_UNKNOWN_TABLE_RESOURCE_KEY = "unknown";
 
 class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
   async tryExecuteLocalSystemTableWrite(sql, params = []) {
@@ -518,17 +528,27 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       CDC_INTEGRATION_SERVICE_LITERAL.TABLE_NAME_EXTRACTION_STATE_FOUND
         ? tableNameResult.tableName
         : null;
+    const tableResourceKey =
+      CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX +
+      (tableName || CDC_UNKNOWN_TABLE_RESOURCE_KEY);
+    const workloadProfile =
+      this.resolveRoutedSystemTableMutationWorkloadProfile(tableName, options);
     const pressureDecision = PressureGovernor.getShared({
       nodeId: this.nodeId,
       messageRouter: this.messageRouter,
     }).evaluate({
-      workClass: options?.workClass || PRESSURE_WORK_CLASS.CRITICAL,
-      resourceKeys: [
-        "control-plane:write",
-        `control-plane:table:${tableName || "unknown"}`,
+      workClass:
+        workloadProfile?.workClass ||
+        options?.workClass ||
+        PRESSURE_WORK_CLASS.CRITICAL,
+      resourceKeys: workloadProfile?.resourceKeys || [
+        CDC_CONTROL_PLANE_WRITE_RESOURCE_KEY,
+        tableResourceKey,
       ],
       allowDegrade: false,
-      allowDefer: options?.allowPressureDefer === true,
+      allowDefer: workloadProfile ?
+        workloadProfile.allowPressureDefer === true :
+        options?.allowPressureDefer === true,
       retryAfterMs: options?.pressureRetryAfterMs,
     });
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
@@ -579,6 +599,12 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       });
     }
     const sessionId = this.resolveSystemWriteSessionId(options);
+    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
+      deliverySource: options?.deliverySource || null,
+      tableName,
+      sql,
+      operationKind: CDC_OPERATION.WRITE,
+    });
     const baseQueryOptions = {
       recoveryCandidateSelectionKey:
         this.resolveSystemWriteRecoveryCandidateSelectionKey(
@@ -587,13 +613,18 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
           params,
           options,
         ),
-      workClass: options?.workClass,
-      allowPressureDefer: options?.allowPressureDefer,
+      workloadClass:
+        workloadProfile?.workloadClass || options?.workloadClass || null,
+      workClass: workloadProfile?.workClass || options?.workClass,
+      allowPressureDefer: workloadProfile ?
+        workloadProfile.allowPressureDefer :
+        options?.allowPressureDefer,
       pressureRetryAfterMs: options?.pressureRetryAfterMs,
       deliveryPriority: normalizeDeliveryPriority(
         options?.deliveryPriority,
         resolveSystemTableMutationDeliveryPriority({ tableName }),
       ),
+      deliverySource,
       routingReadinessDimension:
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
@@ -843,6 +874,34 @@ class CDCIntegrationServiceSegment2 extends CDCIntegrationServiceSegment1 {
       return retryAfterMs;
     }
     return this.computeRetryDelayMs(baseDelayMs, attempt);
+  }
+
+  /**
+   * Resolve one canonical routed-write workload profile when a mutation owner
+   * provides a shared workload class.
+   * @param {string|null} tableName
+   * @param {Object} [options={}]
+   * @return {Object|null}
+   * @private
+   */
+  resolveRoutedSystemTableMutationWorkloadProfile(
+    tableName,
+    options = {},
+  ) {
+    if (
+      typeof options?.workloadClass !== TYPEOF.STRING ||
+      options.workloadClass.length === NUM.ZERO
+    ) {
+      return null;
+    }
+    const tableResourceKey =
+      CDC_CONTROL_PLANE_TABLE_RESOURCE_KEY_PREFIX +
+      (tableName || CDC_UNKNOWN_TABLE_RESOURCE_KEY);
+    return buildControlPlaneWorkloadProfile(options.workloadClass, {
+      workClass: options?.workClass,
+      allowPressureDefer: options?.allowPressureDefer,
+      additionalResourceKeys: [tableResourceKey],
+    });
   }
 
   /**

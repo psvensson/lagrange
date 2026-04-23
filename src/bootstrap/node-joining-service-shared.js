@@ -56,7 +56,19 @@ import {
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } from "../transport/transport-semantic-outcome.js";
-import { NodeStatePublicationOwner } from "./shared/node-state-publication-owner.js";
+import {
+  NodeStatePublicationOwner,
+  NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
+  NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
+  NODE_STATE_UPDATE_PUBLICATION_PATH,
+  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
+  buildNodeStateUpdateDeliveryError,
+  buildNodeStateUpdatePublicationDiagnostics,
+  buildNodeStateUpdatePublicationFailureAction,
+  buildNodeStateUpdatePublicationFailureError,
+  buildNodeStateUpdatePublicationOutcome,
+  createNodeStateUpdateDeferredPublicationState,
+} from "./shared/node-state-publication-owner.js";
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -188,156 +200,6 @@ import { ReplicaStatus } from "../rebalancer/replica-status.js";
 import { NODE_STATE_UPDATE_RETRY_CLASS } from "../control-plane/replica-dispatch-service-constants.js";
 import { QUERY_ERROR_CODE, QUERY_ERROR_MSG } from "../query/query-constants.js";
 
-const NODE_STATE_UPDATE_PUBLICATION_PATH = "node_state_reporter";
-const NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE = Object.freeze({
-  NONE: "none",
-  PENDING: "pending",
-});
-const NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON = Object.freeze({
-  NONE: "none",
-  PUBLICATION_PRESSURE: "publication_pressure",
-});
-
-function createNodeStateUpdateDeferredPublicationState(overrides = {}) {
-  return {
-    state: NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE.NONE,
-    reason: NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON.NONE,
-    retryAfterMs: NUM.ZERO,
-    nextAttemptAtMs: NUM.ZERO,
-    message: null,
-    publicationMode: null,
-    publicationDiagnostics: null,
-    ...overrides,
-  };
-}
-
-function buildNodeStateUpdatePublicationOutcome(overrides = {}) {
-  const publicationOutcome = {
-    contractState: OWNER_CONTRACT_STATE.READY,
-    nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-    reasonCodes: Object.freeze([]),
-    retryAfterMs: NUM.ZERO,
-    nextAttemptAtMs: NUM.ZERO,
-    publicationMode: null,
-    publicationDiagnostics: null,
-    ...overrides,
-  };
-  const contractOutcome = buildOwnerContractOutcome({
-    contractState: publicationOutcome.contractState,
-    nextAction: publicationOutcome.nextAction,
-  });
-  const reasonCodes = Array.isArray(publicationOutcome.reasonCodes)
-    ? Object.freeze([...publicationOutcome.reasonCodes])
-    : Object.freeze([]);
-  return Object.freeze({
-    ...publicationOutcome,
-    contractState: contractOutcome.contractState,
-    nextAction: contractOutcome.nextAction,
-    reasonCodes,
-  });
-}
-
-const NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET = Object.freeze({
-  NONE: "none",
-  SAME_TARGET: "same_target",
-  ALTERNATE_TARGET: "alternate_target",
-  DEFERRED_SLOT: "deferred_slot",
-});
-
-function buildNodeStateUpdatePublicationDiagnostics(
-  targetAddress,
-  publicationMode,
-) {
-  const targetAddressParts = String(targetAddress || "").split("/");
-  return {
-    publicationPath: NODE_STATE_UPDATE_PUBLICATION_PATH,
-    targetAddress,
-    targetNodeId: targetAddressParts[0] || null,
-    targetServiceType: targetAddressParts[1] || null,
-    targetServiceId: targetAddressParts.slice(2).join("/") || null,
-    nodeStatePublicationMode: publicationMode,
-  };
-}
-
-function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
-  const deliveryOutcome = classifyTransportDeliveryOutcome(deliveryResult);
-  const defaultErrorMessage =
-    deliveryOutcome.noHandler === true
-      ? `No handler registered for address ${targetAddress}`
-      : NODE_JOINING_SERVICE_LITERAL.CONTROL_PLANE_MESSAGE_WAS_NOT_ACKNOWLEDGED;
-  const deliveryError = new Error(
-    deliveryOutcome?.error || defaultErrorMessage,
-  );
-  if (typeof deliveryOutcome?.errorCode === TYPEOF.STRING) {
-    deliveryError.code = deliveryOutcome.errorCode;
-  }
-  if (deliveryOutcome?.deferRetry === true) {
-    deliveryError.deferRetry = true;
-  }
-  if (Number.isFinite(deliveryOutcome?.retryAfterMs)) {
-    deliveryError.retryAfterMs = Math.max(
-      NUM.ZERO,
-      Math.floor(deliveryOutcome.retryAfterMs),
-    );
-  }
-  return deliveryError;
-}
-
-function buildNodeStateUpdatePublicationFailureAction(overrides = {}) {
-  const failureAction = {
-    retryTarget: NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET.NONE,
-    retryAfterMs: NUM.ZERO,
-    reasonCodes: Object.freeze([]),
-    ...overrides,
-  };
-  const contractOutcome = buildOwnerContractOutcome({
-    contractState: failureAction.contractState,
-    nextAction: failureAction.nextAction,
-  });
-  const reasonCodes = Array.isArray(failureAction.reasonCodes)
-    ? Object.freeze([...failureAction.reasonCodes])
-    : Object.freeze([]);
-  return Object.freeze({
-    ...failureAction,
-    contractState: contractOutcome.contractState,
-    nextAction: contractOutcome.nextAction,
-    reasonCodes,
-  });
-}
-
-function buildNodeStateUpdatePublicationFailureError(
-  error,
-  publicationDiagnostics,
-  failureAction,
-) {
-  const wrappedError = new Error(
-    JOINING_ERROR_MSG.controlPlaneMessageFailed(error.message),
-  );
-  wrappedError.cause = error;
-  wrappedError.publicationDiagnostics = publicationDiagnostics;
-  wrappedError.contractState = failureAction.contractState;
-  wrappedError.nextAction = failureAction.nextAction;
-  wrappedError.reasonCodes = failureAction.reasonCodes;
-  if (typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO) {
-    wrappedError.code = error.code;
-  }
-  if (error?.deferRetry === true) {
-    wrappedError.deferRetry = true;
-  }
-  if (Number.isFinite(error?.retryAfterMs)) {
-    wrappedError.retryAfterMs = Math.max(
-      NUM.ZERO,
-      Math.floor(error.retryAfterMs),
-    );
-  } else if (
-    Number.isFinite(failureAction?.retryAfterMs) &&
-    failureAction.retryAfterMs > NUM.ZERO
-  ) {
-    wrappedError.retryAfterMs = Math.floor(failureAction.retryAfterMs);
-  }
-  return wrappedError;
-}
-
 const NODE_JOINING_SERVICE_LITERAL = Object.freeze({
   NODEJOININGSERVICE: "NodeJoiningService",
   CREATERUNTIMESTARTUPWIRING: "createRuntimeStartupWiring",
@@ -400,7 +262,7 @@ import { canonicalizeSystemTableRow } from "../control-plane/system-row-normaliz
  * NodeJoiningService handles the process of a new node joining an existing cluster.
  */
 
-export const NODE_JOINING_SERVICE_SHARED = {
+const NODE_JOINING_SERVICE_BOOTSTRAP_SHARED = Object.freeze({
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
   BootstrapMessageGroupSelectionOwner,
@@ -419,6 +281,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   CONTROL_PLANE_NODE_STATE_REPLAY_CONTEXT,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_ROLLOUT_REQUIRED,
+});
+const NODE_JOINING_SERVICE_CONTROL_PLANE_SHARED = Object.freeze({
   CONTROL_PLANE_WORKLOAD_CLASS,
   ConnectWebSocketPhase,
   ContactSeedPhase,
@@ -437,6 +301,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   JOINING_LOG_MSG,
   JOINING_PHASE,
   JOINING_PHASE_TO_SUB_PHASE,
+});
+const NODE_JOINING_SERVICE_OWNER_LIFECYCLE_SHARED = Object.freeze({
   JOINING_UNIFIED_RECONCILE,
   JOIN_BACKFILL_QUERY,
   JOIN_CHECKPOINT,
@@ -455,6 +321,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   LEASE_STATE,
   LatencyTopologySetup,
   LoggingService,
+});
+const NODE_JOINING_SERVICE_PUBLICATION_STATE_SHARED = Object.freeze({
   MembershipLifecycleController,
   MessageGroupServiceHandlerSetup,
   NODE_JOINING_SERVICE_LITERAL,
@@ -473,6 +341,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   OWNER_CONTRACT_STATE,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
+});
+const NODE_JOINING_SERVICE_RUNTIME_SERVICE_SHARED = Object.freeze({
   PartitionService,
   PgWireStartupSafetyGate,
   PressureGovernor,
@@ -491,6 +361,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   SQLQueryEngine,
   STARTUP_JOIN_MODE,
   STATE,
+});
+const NODE_JOINING_SERVICE_STARTUP_RUNTIME_SHARED = Object.freeze({
   STORAGE_DEFAULT,
   STRING,
   StartupPipelineRunner,
@@ -509,6 +381,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   _formatLeaderMetadataDetails,
   _parseBootstrapError,
   _resolveSeedContactRetryAfterMs,
+});
+const NODE_JOINING_SERVICE_JOIN_HELPER_SHARED = Object.freeze({
   activateMessageGroupServiceRows,
   activatePartitionServiceRows,
   activateSteadyStateRuntimeHandoff,
@@ -527,6 +401,8 @@ export const NODE_JOINING_SERVICE_SHARED = {
   canonicalizeSystemTableRow,
   classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
+});
+const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   createJoinStartupPlan,
   createJoiningPhaseOwners,
   createNodeStateUpdateDeferredPublicationState,
@@ -545,10 +421,24 @@ export const NODE_JOINING_SERVICE_SHARED = {
   resolveCanonicalLeaderIdentitySnapshot,
   resolveControlPlaneNodeStatePublicationMode,
   resolveMembershipJoinIntentType,
+});
+const NODE_JOINING_SERVICE_UTILITY_SHARED = Object.freeze({
   resolveReplayControlPlaneNodeStatePublicationMode,
   shouldAttachPartitionCdcPropagation,
   uuidv4,
   waitForLocalQueryTransportReadiness,
   waitForMetadataPublicationReadiness,
   wireMigrationWorkflowOwners,
-};
+});
+
+export const NODE_JOINING_SERVICE_SHARED = Object.freeze({
+  ...NODE_JOINING_SERVICE_BOOTSTRAP_SHARED,
+  ...NODE_JOINING_SERVICE_CONTROL_PLANE_SHARED,
+  ...NODE_JOINING_SERVICE_OWNER_LIFECYCLE_SHARED,
+  ...NODE_JOINING_SERVICE_PUBLICATION_STATE_SHARED,
+  ...NODE_JOINING_SERVICE_RUNTIME_SERVICE_SHARED,
+  ...NODE_JOINING_SERVICE_STARTUP_RUNTIME_SHARED,
+  ...NODE_JOINING_SERVICE_JOIN_HELPER_SHARED,
+  ...NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED,
+  ...NODE_JOINING_SERVICE_UTILITY_SHARED,
+});

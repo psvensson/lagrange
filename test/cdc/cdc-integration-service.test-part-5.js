@@ -448,6 +448,48 @@ test('CDCIntegrationService retries retryable control-plane write admission ' +
   );
 });
 
+test('CDCIntegrationService preserves explicit delivery source through one ' +
+  'routed system-table write', async (t) => {
+  const WRITE_DELIVERY_SOURCE = 'control-plane:write:nodes';
+  const mockSqlEngine = createMockSqlQueryEngine();
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+  service.waitForCacheUpdate = async () => {};
+
+  const result = await service.insertSystemTableRow(
+    SYSTEM_TABLE_NAME.NODES,
+    {
+      node_id: 'node-delivery-source',
+      node_address: 'localhost:8080',
+      cpu_cores: 4,
+      memory_mb: 8192,
+      disk_gb: 100,
+      status: 'active',
+      last_heartbeat: Date.now(),
+      created_at: Date.now(),
+    },
+    {
+      skipCacheWait: true,
+      deliverySource: WRITE_DELIVERY_SOURCE,
+    },
+  );
+
+  t.equal(result.success, true, 'routed write should still succeed');
+  t.equal(
+    mockSqlEngine.executedQueries.length,
+    1,
+    'routed write should execute exactly once',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.deliverySource,
+    WRITE_DELIVERY_SOURCE,
+    'routed write should preserve the owner-supplied delivery source',
+  );
+});
+
 
 test('CDCIntegrationService preserves canonical transaction-control routing ' +
   'gap defers instead of retrying them away', async (t) => {

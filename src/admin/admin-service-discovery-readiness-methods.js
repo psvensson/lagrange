@@ -12,6 +12,7 @@ function assignAdminServiceDiscoveryReadinessMethods(AdminServiceDiscovery, opti
     buildControlPlaneWorkloadProfile,
     CANONICAL_LEADER_ROUTING_GAP_STATE,
     COLUMN,
+    CONTROL_PLANE_DELIVERY_PRIORITY,
     CONTROL_PLANE_WORKLOAD_CLASS,
     CONTROL_PLANE_READINESS_DIMENSION,
     CONTROL_PLANE_READ_STRATEGY,
@@ -370,25 +371,47 @@ function assignAdminServiceDiscoveryReadinessMethods(AdminServiceDiscovery, opti
      */
     buildAuthoritativeDiscoveryReadOptions(tableName, options, now) {
       const reason = String(options.reason || EMPTY_STRING);
-      const controlSnapshotRepairRead = reason === AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT;
+      const controlSnapshotRepairRead =
+        reason === AUTHORITATIVE_DISCOVERY_REPAIR_REASON_CONTROL_SNAPSHOT;
       const tableScopedDiscoveryRepair =
-        reason === AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT &&
-        (typeof options.tableName === TYPEOF.STRING || typeof options.tableId === TYPEOF.STRING);
+        reason ===
+          AUTHORITATIVE_DISCOVERY_REPAIR_REASON_SERVICE_DISCOVERY_SNAPSHOT &&
+        (typeof options.tableName === TYPEOF.STRING ||
+          typeof options.tableId === TYPEOF.STRING);
+      const transportProfile = this.resolveAuthoritativeDiscoveryReadTransportProfile(
+        controlSnapshotRepairRead,
+      );
       const routingReadinessDimension = CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-      const workloadProfile = controlSnapshotRepairRead
-        ? buildControlPlaneWorkloadProfile(CONTROL_PLANE_WORKLOAD_CLASS.CONTROL_SNAPSHOT_REPAIR)
-        : buildControlPlaneWorkloadProfile(CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ);
       return {
         readProfile: 'repair_required',
         queryTimeoutMs: AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
         sessionId: `${reason || 'repair'}:${tableName}:${now}`,
         allowSqlFallback: tableScopedDiscoveryRepair === true,
-        allowPressureDegrade: controlSnapshotRepairRead ? workloadProfile.allowPressureDegrade : undefined,
-        workloadClass: workloadProfile.workloadClass,
-        workClass: workloadProfile.workClass,
-        deliveryPriority: controlSnapshotRepairRead ? 'critical' : undefined,
+        allowPressureDegrade: transportProfile.allowPressureDegrade,
+        allowPressureDefer: transportProfile.allowPressureDefer,
+        workloadClass: transportProfile.workloadClass,
+        workClass: transportProfile.workClass,
+        deliveryPriority: transportProfile.deliveryPriority,
         routingReadinessDimension,
       };
+    }
+
+    resolveAuthoritativeDiscoveryReadTransportProfile(
+      controlSnapshotRepairRead = false,
+    ) {
+      const workloadProfile = buildControlPlaneWorkloadProfile(
+        CONTROL_PLANE_WORKLOAD_CLASS.ADMIN_DIAGNOSTIC_READ,
+        {
+          allowPressureDegrade: controlSnapshotRepairRead ? false : undefined,
+        },
+      );
+      return Object.freeze({
+        workloadClass: workloadProfile.workloadClass,
+        workClass: workloadProfile.workClass,
+        allowPressureDegrade: workloadProfile.allowPressureDegrade === true,
+        allowPressureDefer: workloadProfile.allowPressureDefer === true,
+        deliveryPriority: CONTROL_PLANE_DELIVERY_PRIORITY.BACKGROUND,
+      });
     }
 
     /**

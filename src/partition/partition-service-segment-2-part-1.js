@@ -1,143 +1,29 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment1 } from "./partition-service-segment-1.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment1} from './partition-service-segment-1.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
-  COLUMN,
-  CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
   DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
-  ENTITY_TYPE,
   ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
-  LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
-  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
   PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
-  PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
-  PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
   QUERY_PAYLOAD_FIELD_MIGRATION_ID,
   QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SQL,
-  SQLiteLogAdapter,
-  STRING,
   SYSTEM_TABLE_NAME,
-  TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
-  assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
-  fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
   isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
   resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
@@ -161,7 +47,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       );
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TRANSACTION_EPOCH,
-        { tableName: this.tableName, partitionId: this.partitionId },
+        {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
     if (!hasTimeoutDeadline) {
@@ -171,7 +57,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       );
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.ADDED_SQL_TRANSACTIONS_TIMEOUT_DEADLINE,
-        { tableName: this.tableName, partitionId: this.partitionId },
+        {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
   }
@@ -215,14 +101,14 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
               .catch((err) => {
                 this.logger.error(
                   PARTITION_SERVICE_LOG_MSG.FAILED_RAFT_RESPONSE,
-                  { error: err.message, destination: senderAddress },
+                  {error: err.message, destination: senderAddress},
                 );
               });
           }
         };
         this.raft.emit(PARTITION_SERVICE_EVENT.DATA, payload, write);
       }
-      return { acknowledged: true };
+      return {acknowledged: true};
     }
     return this.handleApplicationMessage(envelope);
   }
@@ -243,31 +129,31 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       };
     }
     switch (payload.type) {
-      case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
-        if (payload.operation) {
-          return this.applyWrite(payload.operation);
-        }
-        return {
-          acknowledged: false,
-          error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE,
-        };
-      case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
-        return this.handleSystemTableWrite(payload);
-      case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
-        return this.handleRemoteQuery(payload);
-      case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
-        return this.handleTransactionMessage(payload);
-      case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
-        return this.handleStartSplitReplication(payload);
-      default:
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
-          type: payload.type,
-          partitionId: this.partitionId,
-        });
-        return {
-          acknowledged: false,
-          error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
-        };
+    case PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE:
+      if (payload.operation) {
+        return this.applyWrite(payload.operation);
+      }
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE,
+      };
+    case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
+      return this.handleSystemTableWrite(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.QUERY:
+      return this.handleRemoteQuery(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
+      return this.handleTransactionMessage(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
+      return this.handleStartSplitReplication(payload);
+    default:
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
+        type: payload.type,
+        partitionId: this.partitionId,
+      });
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
+      };
     }
   }
   /**
@@ -279,32 +165,32 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
   async handleTransactionMessage(payload) {
     const operation = payload?.operation;
     const sessionId = payload?.sessionId || null;
-    const transactionEpoch = Number.isFinite(payload?.transactionEpoch)
-      ? Math.floor(payload.transactionEpoch)
-      : null;
+    const transactionEpoch = Number.isFinite(payload?.transactionEpoch) ?
+      Math.floor(payload.transactionEpoch) :
+      null;
     try {
       let result;
       switch (operation) {
-        case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
-        case PARTITION_SERVICE_LITERAL.BEGIN:
-          result = await this.beginTransaction(sessionId, transactionEpoch);
-          break;
-        case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
-        case PARTITION_SERVICE_LITERAL.PREPARE:
-          result = await this.prepareTransaction(sessionId);
-          break;
-        case PARTITION_SERVICE_OPERATION.COMMIT:
-          result = await this.commitTransaction(sessionId);
-          break;
-        case PARTITION_SERVICE_OPERATION.ROLLBACK:
-          result = await this.rollbackTransaction(sessionId);
-          break;
-        default:
-          return {
-            acknowledged: false,
-            success: false,
-            error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
-          };
+      case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
+      case PARTITION_SERVICE_LITERAL.BEGIN:
+        result = await this.beginTransaction(sessionId, transactionEpoch);
+        break;
+      case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
+      case PARTITION_SERVICE_LITERAL.PREPARE:
+        result = await this.prepareTransaction(sessionId);
+        break;
+      case PARTITION_SERVICE_OPERATION.COMMIT:
+        result = await this.commitTransaction(sessionId);
+        break;
+      case PARTITION_SERVICE_OPERATION.ROLLBACK:
+        result = await this.rollbackTransaction(sessionId);
+        break;
+      default:
+        return {
+          acknowledged: false,
+          success: false,
+          error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
+        };
       }
       return {
         acknowledged: true,
@@ -312,7 +198,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
         ...result,
       };
     } catch (error) {
-      return { acknowledged: true, success: false, error: error.message };
+      return {acknowledged: true, success: false, error: error.message};
     }
   }
   /**
@@ -348,7 +234,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
    * @private
    */
   async handleSystemTableWrite(payload) {
-    const { operation, tableName, data, whereClause } = payload;
+    const {operation, tableName, data, whereClause} = payload;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.HANDLING_SYSTEM_TABLE_WRITE, {
       operation,
       tableName,
@@ -358,23 +244,23 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
     try {
       let result;
       switch (operation) {
-        case PARTITION_SERVICE_OPERATION.INSERT:
-          result = await this.insertData(tableName, data);
-          break;
-        case PARTITION_SERVICE_OPERATION.UPDATE:
-          result = await this.updateData(tableName, whereClause, data);
-          break;
-        case PARTITION_SERVICE_OPERATION.DELETE:
-          result = await this.deleteData(tableName, whereClause);
-          break;
-        case PARTITION_SERVICE_OPERATION.UPSERT:
-          result = await this.upsertData(tableName, data);
-          break;
-        default:
-          return {
-            acknowledged: false,
-            error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
-          };
+      case PARTITION_SERVICE_OPERATION.INSERT:
+        result = await this.insertData(tableName, data);
+        break;
+      case PARTITION_SERVICE_OPERATION.UPDATE:
+        result = await this.updateData(tableName, whereClause, data);
+        break;
+      case PARTITION_SERVICE_OPERATION.DELETE:
+        result = await this.deleteData(tableName, whereClause);
+        break;
+      case PARTITION_SERVICE_OPERATION.UPSERT:
+        result = await this.upsertData(tableName, data);
+        break;
+      default:
+        return {
+          acknowledged: false,
+          error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
+        };
       }
       return {
         acknowledged: true,
@@ -533,7 +419,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       this.splitReplication &&
       this.isSameSplitReplication(this.splitReplication.metadata, metadata)
     ) {
-      return { acknowledged: true, success: true };
+      return {acknowledged: true, success: true};
     }
     if (this.splitReplication) {
       return {
@@ -561,7 +447,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
         });
       },
     );
-    return { acknowledged: true, success: true };
+    return {acknowledged: true, success: true};
   }
   /**
    * Execute one migration ALTER TABLE request through the Raft write path.
@@ -595,7 +481,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
     if (!parsed || !parsed.columnName || !parsed.hasDefault) {
       return;
     }
-    const tableKey = String(this.tableName || this.tableId || "");
+    const tableKey = String(this.tableName || this.tableId || '');
     if (!tableKey) {
       return;
     }
@@ -618,18 +504,18 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
    * @private
    */
   parseAddColumnDefaultFromAlterSql(sql) {
-    const normalizedSql = String(sql || "");
+    const normalizedSql = String(sql || '');
     const addColumnMatch = normalizedSql.match(
       /^\s*ALTER\s+TABLE\s+.+?\s+ADD\s+COLUMN\s+([^\s]+)\s+([\s\S]+)$/i,
     );
     if (!addColumnMatch) {
       return null;
     }
-    const columnName = String(addColumnMatch[1] || "").replace(
+    const columnName = String(addColumnMatch[1] || '').replace(
       /^["'`]|["'`]$/g,
-      "",
+      '',
     );
-    const definitionTail = String(addColumnMatch[2] || "");
+    const definitionTail = String(addColumnMatch[2] || '');
     const defaultMatch = definitionTail.match(
       /\bDEFAULT\s+((?:'[^']*'|"[^"]*"|`[^`]*`|[^\s,]+))/i,
     );
@@ -721,7 +607,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
                 }
                 this.logger.error(
                   PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                  { partitionId: this.partitionId, error: err.message },
+                  {partitionId: this.partitionId, error: err.message},
                 );
               }),
             );
@@ -756,12 +642,12 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
             {
               partitionId: this.partitionId,
               error: error.message,
-              sql: command.sql
-                ? command.sql.substring(
-                    NUM.ZERO,
-                    PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT,
-                  )
-                : null,
+              sql: command.sql ?
+                command.sql.substring(
+                  NUM.ZERO,
+                  PARTITION_SERVICE_VALUE.CDC_REDACTION_LIMIT,
+                ) :
+                null,
               params: command.params || [],
             },
           );
@@ -792,9 +678,9 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
    * @private
    */
   normalizeTransactionSessionId(sessionId) {
-    return typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO
-      ? sessionId
-      : DEFAULT_TRANSACTION_SESSION_ID;
+    return typeof sessionId === TYPEOF.STRING && sessionId.length > NUM.ZERO ?
+      sessionId :
+      DEFAULT_TRANSACTION_SESSION_ID;
   }
   /**
    * Resolve one active session ID for transaction operations.
@@ -823,16 +709,16 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
       DEFAULT_TRANSACTION_SESSION_ID,
     );
     const fallbackState =
-      this.activeTransactions.size === NUM.ONE
-        ? this.activeTransactions.values().next().value
-        : null;
+      this.activeTransactions.size === NUM.ONE ?
+        this.activeTransactions.values().next().value :
+        null;
     const defaultPreparedState = this.preparedTransactions.get(
       DEFAULT_TRANSACTION_SESSION_ID,
     );
     const fallbackPreparedState =
-      this.preparedTransactions.size === NUM.ONE
-        ? this.preparedTransactions.values().next().value
-        : null;
+      this.preparedTransactions.size === NUM.ONE ?
+        this.preparedTransactions.values().next().value :
+        null;
     const activeState =
       defaultState ||
       fallbackState ||
@@ -857,7 +743,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
     if (!state) {
       return null;
     }
-    return { sessionId: resolvedSessionId, state };
+    return {sessionId: resolvedSessionId, state};
   }
   /**
    * Resolve one prepared session ID for transaction operations.
@@ -893,7 +779,7 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
     if (!state) {
       return null;
     }
-    return { sessionId: resolvedSessionId, state };
+    return {sessionId: resolvedSessionId, state};
   }
   /**
    * Resolve one open transaction state by session across active and prepared
@@ -925,4 +811,4 @@ class PartitionServiceSegment2Part1 extends PartitionServiceSegment1 {
     };
   }
 }
-export { PartitionServiceSegment2Part1 };
+export {PartitionServiceSegment2Part1};

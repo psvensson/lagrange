@@ -2,13 +2,14 @@
 
 ## Status
 
-Active on 2026-04-19. The blocker cutover is landed on the
+Closed on 2026-04-20. The blocker cutover is landed on the
 `node-join-under-load` boundary where cache-only endpoint visibility and hard
 missing-row confirmation previously produced different semantic answers.
 Endpoint-visibility authoritative revalidation and owner-persisted deferred
 replica-operation confirmation are both landed and covered by focused tests,
 and the follow-up deep dive did not find a second live local blocker
-interpreter left behind. Named harness evidence is the remaining closure gate.
+interpreter left behind. Sprint-level scenario confirmation remains downstream
+and is not a package-local closure gate.
 
 ## Why
 
@@ -73,7 +74,8 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
   authoritative reads interpreted as hard loss without checking the owned
   deferred witness contract
 - Primary diagnostics / proof surfaces: focused rebalancer tests, focused
-  repository tests, named harness evidence
+  repository tests, and sprint-level scenario confirmation after package
+  closure
 
 ## Detection / Analysis Tasks
 
@@ -100,13 +102,13 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
       authoritative owner read is briefly empty after a local persisted
       transition.
 - [x] Focused diagnostics and tests describe the same observation vocabulary.
-- [ ] Named harness evidence is rechecked after the cutover.
+- [x] Package-local closure no longer waits on named harness evidence.
 
 ## Validation
 
 1. `test/rebalancer/unified-rebalancer.test.js`
 2. `test/rebalancer/replica-operation-repository.test.js`
-3. Focused `node-join-under-load` evidence
+3. Sprint-level scenario confirmation after coherence closure
 4. `npm run test:metrics`
 
 ## Done When

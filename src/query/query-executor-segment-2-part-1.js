@@ -96,6 +96,13 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       ) {
         routerOptions.deliveryPriority = executionOptions.deliveryPriority;
       }
+      if (
+        typeof executionOptions?.deliverySource ===
+          QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+        executionOptions.deliverySource.length > NUM.ZERO
+      ) {
+        routerOptions.deliverySource = executionOptions.deliverySource;
+      }
       const remainingBudgetMs = getRemainingExecutionBudgetMs();
       if (remainingBudgetMs !== null) {
         if (remainingBudgetMs <= NUM.ZERO) {
@@ -399,8 +406,11 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
       let retryCurrentAddressOnNextAttempt = false;
       let deferPartitionRetryOnNextAttempt = false;
       let leaderRecoveryQueued = false;
-      const queueLeaderRecoveryCandidates = () => {
-        if (forRead || leaderRecoveryQueued) {
+      const queueLeaderRecoveryCandidates = (
+        currentCandidateIndex = null,
+        participantNodeId = null,
+      ) => {
+        if (leaderRecoveryQueued) {
           return;
         }
         const recoveryCandidates = this.getLeaderRecoveryCandidates(
@@ -412,7 +422,34 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
           return;
         }
         leaderRecoveryQueued = true;
-        candidateQueue.push(...recoveryCandidates);
+        const recoveryRoutingContract =
+          this.resolveCanonicalLeaderGapRecoveryRoutingContract(
+            partitionId,
+            routingSnapshot,
+            routingReadinessDimension,
+            allowReadinessAuthoritativeRefresh,
+          );
+        const shouldDeprioritizeSameNodeCandidates =
+          recoveryRoutingContract.preferDifferentNodeAfterRuntimeWitness ===
+            true &&
+          typeof participantNodeId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+          participantNodeId.length > NUM.ZERO &&
+          Number.isInteger(currentCandidateIndex) &&
+          currentCandidateIndex >= NUM.ZERO;
+        if (!shouldDeprioritizeSameNodeCandidates) {
+          candidateQueue.push(...recoveryCandidates);
+          return;
+        }
+        const nextCandidateIndex = currentCandidateIndex + NUM.ONE;
+        const retainedTailCandidates = candidateQueue
+          .slice(nextCandidateIndex)
+          .filter((candidate) => candidate?.nodeId !== participantNodeId);
+        candidateQueue.splice(
+          nextCandidateIndex,
+          candidateQueue.length - nextCandidateIndex,
+          ...recoveryCandidates,
+          ...retainedTailCandidates,
+        );
       };
       const buildCandidateFailureDetails = (
         failure,
@@ -601,7 +638,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.WIDEN_TO_RECOVERY_CANDIDATE
             ) {
-              queueLeaderRecoveryCandidates();
+              queueLeaderRecoveryCandidates(
+                candidateIndex,
+                serviceInfo?.nodeId || null,
+              );
             }
             continue;
           }
@@ -673,11 +713,14 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               serviceInfo?.nodeId,
               address,
             );
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             if (
               !forRead &&
               this.isLeaderUnavailable(errorMessage, response?.errorCode)
             ) {
-              queueLeaderRecoveryCandidates();
               continue;
             }
             continue;
@@ -719,7 +762,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               requestDeferredPartitionRetry();
               break;
             }
-            queueLeaderRecoveryCandidates();
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             continue;
           }
           if (
@@ -743,7 +789,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 partitionId,
               );
             }
-            queueLeaderRecoveryCandidates();
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             continue;
           }
 
@@ -844,6 +893,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               serviceInfo?.nodeId,
               address,
             );
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             if (!forRead) {
               if (
                 this.getSessionPartitionAddress(
@@ -856,7 +909,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                   partitionId,
                 );
               }
-              queueLeaderRecoveryCandidates();
+              queueLeaderRecoveryCandidates(
+                candidateIndex,
+                serviceInfo?.nodeId || null,
+              );
             }
             continue;
           }
@@ -898,7 +954,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 requestDeferredPartitionRetry();
                 break;
               }
-              queueLeaderRecoveryCandidates();
+              queueLeaderRecoveryCandidates(
+                candidateIndex,
+                serviceInfo?.nodeId || null,
+              );
               continue;
             }
             recordCandidateFailure(
@@ -918,7 +977,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
                 partitionId,
               );
             }
-            queueLeaderRecoveryCandidates();
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             continue;
           }
           const controlPlaneWriteRetryDecision =
@@ -952,7 +1014,10 @@ class QueryExecutorSegment2Part1 extends QueryExecutorSegment1 {
               requestDeferredPartitionRetry();
               break;
             }
-            queueLeaderRecoveryCandidates();
+            queueLeaderRecoveryCandidates(
+              candidateIndex,
+              serviceInfo?.nodeId || null,
+            );
             continue;
           }
 

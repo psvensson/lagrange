@@ -2,7 +2,13 @@
 
 ## Status
 
-Active on 2026-04-19. The first near-threshold runtime cuts are landed and
+Deferred from the active critical path on 2026-04-20.
+
+This remains valid repo hygiene work, but it no longer owns current
+startup/readiness/rebalancer coherence closure and does not block the successor
+middle-layer sprint.
+
+The first near-threshold runtime cuts are already landed and
 verified for:
 
 1. `src/bootstrap/system-table-schemas-constants.js`

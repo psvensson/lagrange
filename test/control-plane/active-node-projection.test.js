@@ -14,6 +14,16 @@ import {
   RUNTIME_AUTHORITY_STATE,
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+
+const ACTIVE_NODE_ADMISSION_STATE_BLOCKED = 'blocked';
+const ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY =
+  'cluster_incarnation_identity_mismatch';
+const ACTIVE_NODE_BLOCKED_FENCE = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze([ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY]),
+});
+
 test('active-node projection requires readiness health and canonical websocket endpoints when available',
   async (t) => {
     const activeNodeIds = resolveCanonicalActiveNodeIds({
@@ -1426,6 +1436,61 @@ test('active-node projection builds a canonical membership publication snapshot 
       'canonical publication snapshots should preserve projection diagnostics once at the owner boundary',
     );
   });
+
+test('active-node projection excludes an admission-blocked target from the concrete recovery cohort',
+  async (t) => {
+    const snapshot = buildMembershipPublicationActiveSnapshot({
+      publication_epoch: 23,
+      status: 'PUBLISHED',
+      target_node_id: 'node-c',
+      admission_state: ACTIVE_NODE_ADMISSION_STATE_BLOCKED,
+      admission_reason_codes: [
+        ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY,
+      ],
+      cluster_incarnation_fence: ACTIVE_NODE_BLOCKED_FENCE,
+      published_active_node_ids: ['node-a', 'node-b', 'node-c'],
+      membership_lifecycle_summary: {
+        publishedActiveNodeIds: ['node-a', 'node-b', 'node-c'],
+        projectedServingNodeIds: ['node-a', 'node-b', 'node-c'],
+        locallyEligibleNodeIds: ['node-a', 'node-b', 'node-c'],
+        participationByNodeId: {
+          'node-c': {
+            nodeId: 'node-c',
+            state: 'recovery_pending_publish',
+            admissionState: ACTIVE_NODE_ADMISSION_STATE_BLOCKED,
+            admissionReasonCodes: [
+              ACTIVE_NODE_ADMISSION_REASON_CLUSTER_INTEGRITY,
+            ],
+            clusterIncarnationFence: ACTIVE_NODE_BLOCKED_FENCE,
+          },
+        },
+      },
+      recovery_active_node_ids: ['node-a', 'node-b', 'node-c'],
+      recovery_active_node_source: 'recovery_eligible_projection',
+    });
+
+    t.same(
+      snapshot?.publishedActiveNodeIds,
+      ['node-a', 'node-b', 'node-c'],
+      'the durable publication snapshot should remain observable while admission is blocked',
+    );
+    t.same(
+      snapshot?.concreteEligibleNodeIds,
+      ['node-a', 'node-b'],
+      'the concrete recovery cohort should exclude the blocked target node',
+    );
+    t.same(
+      snapshot?.recoveryActiveNodeIds,
+      ['node-a', 'node-b'],
+      'the recovery-active cohort should follow the admitted participation set',
+    );
+    t.same(
+      snapshot?.missingPublishedRecoveryActiveNodeIds,
+      [],
+      'removing the blocked target from the admitted cohort should not fabricate a missing-publication gap',
+    );
+  });
+
 test('active-node projection preserves explicit published-membership presence even when the node array is absent',
   async (t) => {
     const snapshot = buildMembershipPublicationActiveSnapshot({

@@ -9,6 +9,42 @@ import {
 import {
   MessageRouterSetup,
 } from '../../src/bootstrap/shared/message-router-setup.js';
+import {
+  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+  TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE,
+  TRANSPORT_SEMANTIC_OUTCOME_STATE,
+} from '../../src/transport/transport-semantic-outcome.js';
+
+const QUERY_TRANSPORT_NOT_READY_REASON =
+  'operational message-group ingress not ready';
+const QUERY_TRANSPORT_RETRY_AFTER_MS = 25;
+
+function buildDeferredQueryTransportSelectionExpectation() {
+  return {
+    state: TRANSPORT_SEMANTIC_OUTCOME_STATE.DEFERRED,
+    ready: false,
+    deferRetry: true,
+    service: null,
+    reason: QUERY_TRANSPORT_NOT_READY_REASON,
+    reasonCode:
+      TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.QUERY_TRANSPORT_NOT_READY,
+    errorCode: ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+    retryAfterMs: QUERY_TRANSPORT_RETRY_AFTER_MS,
+  };
+}
+
+function buildReadyQueryTransportSelectionExpectation(service) {
+  return {
+    state: TRANSPORT_SEMANTIC_OUTCOME_STATE.READY,
+    ready: true,
+    deferRetry: false,
+    reason: null,
+    reasonCode: null,
+    errorCode: null,
+    retryAfterMs: null,
+    service,
+  };
+}
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -40,8 +76,8 @@ test(
     let currentSelection = {
       service: leaderService,
       ready: false,
-      reason: 'operational message-group ingress not ready',
-      retryAfterMs: 25,
+      reason: QUERY_TRANSPORT_NOT_READY_REASON,
+      retryAfterMs: QUERY_TRANSPORT_RETRY_AFTER_MS,
       route: 'leader',
     };
 
@@ -111,11 +147,7 @@ test(
       );
       assert.deepEqual(
         installedResolver(),
-        {
-          service: null,
-          reason: 'operational message-group ingress not ready',
-          retryAfterMs: 25,
-        },
+        buildDeferredQueryTransportSelectionExpectation(),
         'deferred query transport selection should stay deferred while the service is uninitialized',
       );
 
@@ -129,7 +161,7 @@ test(
 
       assert.deepEqual(
         installedResolver(),
-        currentSelection,
+        buildReadyQueryTransportSelectionExpectation(leaderService),
         'initialized message-group service should become the query transport selection',
       );
       assert.strictEqual(
@@ -154,8 +186,8 @@ test(
     let currentSelection = {
       service: null,
       ready: false,
-      reason: 'operational message-group ingress not ready',
-      retryAfterMs: 25,
+      reason: QUERY_TRANSPORT_NOT_READY_REASON,
+      retryAfterMs: QUERY_TRANSPORT_RETRY_AFTER_MS,
       route: null,
     };
     const relayService = {
@@ -224,11 +256,7 @@ test(
       );
       assert.deepEqual(
         installedResolver(),
-        {
-          service: null,
-          reason: 'operational message-group ingress not ready',
-          retryAfterMs: 25,
-        },
+        buildDeferredQueryTransportSelectionExpectation(),
         'deferred query transport selection should preserve structured retry context',
       );
 
@@ -246,10 +274,10 @@ test(
         relayService,
         'initialized relay should become the bound query transport service',
       );
-      assert.equal(
-        resolvedSelection.route,
-        'relay',
-        'resolver should preserve the dedicated route classification',
+      assert.deepEqual(
+        resolvedSelection,
+        buildReadyQueryTransportSelectionExpectation(relayService),
+        'resolver should return the canonical ready transport outcome once the relay is initialized',
       );
     } finally {
       MessageRouterSetup.create = originalCreate;

@@ -491,6 +491,226 @@ export async function registerReplicaHandlerTailMoreTests({
     handler.shutdown();
   });
 
+  t.test('handleRemoveReplica removes failed replicas without forcing an invalid removing transition',
+    async (t) => {
+      const TEST_FAILED_REMOVE_OPERATION_ID = 'op-failed-remove-1';
+      const TEST_FAILED_REMOVE_PARTITION_ID = 'partition-failed-remove-1';
+      const TEST_FAILED_REMOVE_REPLICA_ID = 'replica-failed-remove-1';
+      const TEST_FAILED_REMOVE_ADDRESS =
+        `test-node/partition/${TEST_FAILED_REMOVE_REPLICA_ID}`;
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, TEST_FAILED_REMOVE_OPERATION_ID, {
+        type: 'REMOVE',
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_FAILED_REMOVE_REPLICA_ID,
+        service_type: 'partition',
+        partition_id: TEST_FAILED_REMOVE_PARTITION_ID,
+        node_id: 'test-node',
+        replica_id: TEST_FAILED_REMOVE_REPLICA_ID,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.FAILED,
+        address: TEST_FAILED_REMOVE_ADDRESS,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      let shutdownCalls = 0;
+      const trackedService = {
+        async shutdown() {
+          shutdownCalls += 1;
+        },
+      };
+      handler.localReplicas.set(TEST_FAILED_REMOVE_REPLICA_ID, {
+        replicaId: TEST_FAILED_REMOVE_REPLICA_ID,
+        partitionId: TEST_FAILED_REMOVE_PARTITION_ID,
+        status: ReplicaStatus.FAILED,
+        service: trackedService,
+      });
+      handler.localServices.set(TEST_FAILED_REMOVE_REPLICA_ID, trackedService);
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_FAILED_REMOVE_OPERATION_ID,
+        partitionId: TEST_FAILED_REMOVE_PARTITION_ID,
+        replicaId: TEST_FAILED_REMOVE_REPLICA_ID,
+        reason: 'rebalancing',
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'failed source removal should still enter the canonical async remove path',
+      );
+      await removed;
+
+      t.notOk(
+        mockCDC.operations.some((op) =>
+          op.type === 'update' &&
+          op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          op.whereClause?.service_id === TEST_FAILED_REMOVE_REPLICA_ID &&
+          op.data.status === ReplicaStatus.REMOVING
+        ),
+        'failed source removal should skip the invalid failed-to-removing status write',
+      );
+      t.notOk(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_FAILED_REMOVE_REPLICA_ID),
+        'failed source removal should still delete the authoritative service row',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_FAILED_REMOVE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVED,
+        'failed source removal should still converge the local replica to removed',
+      );
+      t.notOk(
+        handler.localServices.has(TEST_FAILED_REMOVE_REPLICA_ID),
+        'failed source removal should clear the tracked local runtime',
+      );
+      t.equal(
+        shutdownCalls,
+        1,
+        'failed source removal should still shut down the lingering local runtime once',
+      );
+
+      handler.shutdown();
+    });
+
+  t.test('handleRemoveReplica tolerates one late failed-state race before durable cleanup',
+    async (t) => {
+      const TEST_LATE_FAILED_REMOVE_OPERATION_ID = 'op-late-failed-remove-1';
+      const TEST_LATE_FAILED_REMOVE_PARTITION_ID =
+        'partition-late-failed-remove-1';
+      const TEST_LATE_FAILED_REMOVE_REPLICA_ID =
+        'replica-late-failed-remove-1';
+      const TEST_LATE_FAILED_REMOVE_ADDRESS =
+        `test-node/partition/${TEST_LATE_FAILED_REMOVE_REPLICA_ID}`;
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, TEST_LATE_FAILED_REMOVE_OPERATION_ID, {
+        type: 'REMOVE',
+      });
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+        service_id: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        service_type: 'partition',
+        partition_id: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
+        node_id: 'test-node',
+        replica_id: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: ReplicaStatus.ACTIVE,
+        address: TEST_LATE_FAILED_REMOVE_ADDRESS,
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+      let replicaState = ReplicaStatus.ACTIVE;
+      let durableRemovalCompleted = false;
+      const raceReplicaStateMachine = {
+        getState() {
+          return replicaState;
+        },
+        transition(_replicaId, newState) {
+          if (newState === ReplicaStatus.REMOVING) {
+            replicaState = ReplicaStatus.FAILED;
+            return false;
+          }
+          replicaState = newState;
+          return true;
+        },
+        completeDurableRemoval() {
+          replicaState = ReplicaStatus.REMOVED;
+          durableRemovalCompleted = true;
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        replicaStateMachine: raceReplicaStateMachine,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      let shutdownCalls = 0;
+      const trackedService = {
+        async shutdown() {
+          shutdownCalls += 1;
+        },
+      };
+      handler.localReplicas.set(TEST_LATE_FAILED_REMOVE_REPLICA_ID, {
+        replicaId: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        partitionId: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
+        status: ReplicaStatus.ACTIVE,
+        service: trackedService,
+      });
+      handler.localServices.set(
+        TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        trackedService,
+      );
+
+      const removed = waitForReplicaEvent(
+        handler,
+        'replicaRemoved',
+        'replicaRemovalFailed',
+      );
+
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_LATE_FAILED_REMOVE_OPERATION_ID,
+        partitionId: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
+        replicaId: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        reason: 'rebalancing',
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'the canonical async remove path should stay active through the failed-state race',
+      );
+      await removed;
+
+      t.notOk(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_LATE_FAILED_REMOVE_REPLICA_ID),
+        'late failed-state removal should still delete the authoritative service row',
+      );
+      t.equal(
+        handler.getLocalReplica(TEST_LATE_FAILED_REMOVE_REPLICA_ID)?.status,
+        ReplicaStatus.REMOVED,
+        'late failed-state removal should still converge the local replica to removed',
+      );
+      t.equal(
+        replicaState,
+        ReplicaStatus.REMOVED,
+        'late failed-state removal should finish with one canonical removed lifecycle state',
+      );
+      t.equal(
+        durableRemovalCompleted,
+        true,
+        'late failed-state removal should still complete durable removal bookkeeping',
+      );
+      t.equal(
+        shutdownCalls,
+        1,
+        'late failed-state removal should still shut down the local runtime once',
+      );
+
+      handler.shutdown();
+    });
+
   t.test('registerWithRouter registers handler at correct address', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1');

@@ -340,6 +340,90 @@ test('BootstrapAPI - durable rejoin ignores non-traffic leader gaps during boots
       'durable rejoin should ignore non-traffic leader gaps');
   });
 
+test('BootstrapAPI - durable rejoin only requires node and endpoint leaders during bootstrap admission',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const partitionRows = [
+      {partition_id: 'nodes-p1', table_id: TABLES.NODES, table_name: TABLES.NODES},
+      {
+        partition_id: 'node-endpoints-p1',
+        table_id: TABLES.NODE_ENDPOINTS,
+        table_name: TABLES.NODE_ENDPOINTS,
+      },
+      {partition_id: 'tables-p1', table_id: TABLES.TABLES, table_name: TABLES.TABLES},
+      {
+        partition_id: 'partitions-p1',
+        table_id: TABLES.PARTITIONS,
+        table_name: TABLES.PARTITIONS,
+      },
+      {
+        partition_id: 'services-p1',
+        table_id: TABLES.SERVICES,
+        table_name: TABLES.SERVICES,
+      },
+    ];
+    const cache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return partitionRows;
+        }
+        return [];
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: cache,
+    });
+
+    api.getMissingServiceLeaders = () => {
+      return {
+        missingPartitionLeaders: [
+          'tables-p1',
+          'partitions-p1',
+          'services-p1',
+        ],
+        missingPartitionLeaderNodes: [
+          'tables-p1',
+          'partitions-p1',
+          'services-p1',
+        ],
+        missingPartitionLeaderAddresses: [
+          'tables-p1',
+          'partitions-p1',
+          'services-p1',
+        ],
+        missingMessageGroupLeaders: ['mg-1'],
+        missingMessageGroupLeaderNodes: ['mg-1'],
+        missingMessageGroupLeaderAddresses: ['mg-1'],
+      };
+    };
+
+    const defaultStatus = await api.waitForServiceLeaders();
+    t.equal(defaultStatus.ready, false,
+      'default bootstrap admission should still block on traffic leader gaps');
+
+    const durableRejoinStatus = await api.waitForServiceLeaders({
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+    });
+    t.equal(durableRejoinStatus.ready, true,
+      'durable rejoin should proceed when node and endpoint leaders are available');
+  });
+
 test('BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED', async (t) => {
   initializeTestEnvironment();
 

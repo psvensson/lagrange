@@ -1,101 +1,21 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment2 } from "./partition-service-segment-2.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment2} from './partition-service-segment-2.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
-  COLUMN,
-  CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
-  ENTITY_TYPE,
   ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
   LifeRaft,
-  LiferaftProvider,
-  LoggingService,
   METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
-  PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
-  PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
   PARTITION_WRITE_COMMIT_MODE,
-  PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   SQL,
-  SQLiteLogAdapter,
-  STRING,
-  SYSTEM_TABLE_NAME,
-  TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
-  TYPEOF,
-  UnifiedRebalancer,
   WRITE_PHASE_FIELD_APPLY_WRITE_MS,
   WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
   WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
@@ -103,41 +23,12 @@ const {
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
-  assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
   executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
-  fs,
   getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
   resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
@@ -161,9 +52,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
         const transaction = this.resolveActiveTransactionState(
           options.sessionId || null,
         );
-        const visibleRows = transaction
-          ? this.applySnapshotReadFilter(rows, transaction.state)
-          : rows;
+        const visibleRows = transaction ?
+          this.applySnapshotReadFilter(rows, transaction.state) :
+          rows;
         const durationMs = Date.now() - sqliteStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
@@ -172,7 +63,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
             durationMs,
             rowCount: visibleRows.length,
           });
-        } catch (_metricsErr) {}
+        } catch (_metricsErr) {
+          // Ignore metrics emission failures on the read path.
+        }
         return {
           success: true,
           rows: visibleRows,
@@ -276,7 +169,7 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
     }
-    const { sessionId: transactionSessionId, state: transactionState } =
+    const {sessionId: transactionSessionId, state: transactionState} =
       transaction;
     const timestamp = this.hlcClock.now();
     const entry = buildPartitionWriteEntry(
@@ -293,7 +186,7 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     try {
       const stmt = this.db.prepare(entry.sql);
       const info = stmt.run(...(entry.params || []));
-      const trackedEntry = { ...entry, changes: info.changes };
+      const trackedEntry = {...entry, changes: info.changes};
       transactionState.operations.push(trackedEntry);
       this.trackTransactionWriteSetKey(transactionState, trackedEntry);
       this.syncLegacyTransactionAliases();
@@ -325,10 +218,15 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     }
     const columns = Object.keys(data);
     const values = Object.values(data);
+    const joinedColumns = columns.join(
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
+    );
     const placeholders = columns
       .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
       .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql = `${SQL.INSERT_INTO} ${tableName} (${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ${SQL.VALUES} (${placeholders})`;
+    const sql =
+      `${SQL.INSERT_INTO} ${tableName} (${joinedColumns}) ` +
+      `${SQL.VALUES} (${placeholders})`;
     return this.proposeWrite(
       {
         type: PARTITION_SERVICE_OPERATION.INSERT,
@@ -409,10 +307,15 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     }
     const columns = Object.keys(data);
     const values = Object.values(data);
+    const joinedColumns = columns.join(
+      PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
+    );
     const placeholders = columns
       .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
       .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ${SQL.VALUES} (${placeholders})`;
+    const sql =
+      `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${joinedColumns}) ` +
+      `${SQL.VALUES} (${placeholders})`;
     return this.proposeWrite(
       {
         type: PARTITION_SERVICE_OPERATION.UPSERT,
@@ -444,9 +347,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
       requestId ||
       correlationId ||
       this.partitionId +
-        ":" +
+        ':' +
         this.replicaId +
-        ":" +
+        ':' +
         String(entry?.proposedAt || Date.now());
     return {
       operationId,
@@ -544,7 +447,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
             entryBuildMs,
           ),
         });
-      } catch (_metricsErr) {}
+      } catch (_metricsErr) {
+        // Ignore metrics emission failures on the leader-local path.
+      }
       this._attachCdcConfirmation(result, operation, options);
       return result;
     }
@@ -586,7 +491,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
               entryBuildMs,
             ),
           });
-        } catch (_metricsErr) {}
+        } catch (_metricsErr) {
+          // Ignore metrics emission failures on the forwarded path.
+        }
         this._attachCdcConfirmation(result, operation, options);
         return result;
       } catch (error) {
@@ -613,7 +520,9 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
               entryBuildMs,
             ),
           });
-        } catch (_metricsErr) {}
+        } catch (_metricsErr) {
+          // Ignore metrics emission failures on the error path.
+        }
         throw new Error(
           PARTITION_SERVICE_ERROR_MSG.forwardWriteFailed(error.message),
         );
@@ -860,4 +769,4 @@ class PartitionServiceSegment3Part1 extends PartitionServiceSegment2 {
     }
   }
 }
-export { PartitionServiceSegment3Part1 };
+export {PartitionServiceSegment3Part1};

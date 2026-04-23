@@ -1,8 +1,13 @@
+import {mkdtemp, rm} from 'node:fs/promises';
+import {join as joinPath} from 'node:path';
+import {tmpdir} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   JOIN_CHECKPOINT,
   JoinSessionStore,
 } from '../../src/bootstrap/join-session-store.js';
+
+const JOIN_SESSION_STORE_TEMP_PREFIX = 'join-session-store-';
 
 test('JoinSessionStore - persists and reloads join session state',
   async (t) => {
@@ -76,4 +81,65 @@ test('JoinSessionStore - rejects checkpoint regression and duplicate side-effect
     });
     t.equal(duplicate.checkpoint, JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
       'duplicate create/load should keep latest checkpoint state');
+  });
+
+test('JoinSessionStore - persists retryable resume state across store instances',
+  async (t) => {
+    const dataDir = await mkdtemp(
+      joinPath(tmpdir(), JOIN_SESSION_STORE_TEMP_PREFIX),
+    );
+    t.teardown(async () => {
+      await rm(dataDir, {recursive: true, force: true});
+    });
+
+    const storeA = new JoinSessionStore({
+      dataDir,
+      now: () => 1000,
+    });
+    await storeA.createOrLoadSession({
+      nodeId: 'node-c',
+      sessionId: 'session-3',
+    });
+    await storeA.advanceCheckpoint({
+      nodeId: 'node-c',
+      sessionId: 'session-3',
+      checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+      phase: 'membership',
+    });
+    await storeA.recordFailure({
+      nodeId: 'node-c',
+      sessionId: 'session-3',
+      phase: 'membership',
+      errorCode: 'membership_retry',
+      retryAfterMs: 250,
+      retryable: true,
+    });
+
+    const storeB = new JoinSessionStore({
+      dataDir,
+      now: () => 2000,
+    });
+    const reloaded = await storeB.loadSession({
+      nodeId: 'node-c',
+      sessionId: 'session-3',
+    });
+
+    t.equal(
+      reloaded?.checkpoint,
+      JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+      'file-backed store should preserve the highest completed checkpoint',
+    );
+    t.equal(
+      reloaded?.lastErrorCode,
+      'membership_retry',
+      'file-backed store should preserve the canonical failure code',
+    );
+    t.equal(
+      await storeB.resolveSessionId({
+        nodeId: 'node-c',
+        allowResumeLatest: true,
+      }),
+      'session-3',
+      'retryable join failures should resume the persisted session identity',
+    );
   });

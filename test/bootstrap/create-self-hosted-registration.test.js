@@ -10,6 +10,9 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {TABLES} from '../../src/constants/index.js';
 
+const CREATE_SELF_HOSTED_JOIN_METADATA_REGISTRATION_SHORTCUT_OPTION =
+  'preferControlPlaneUpsert';
+
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -102,6 +105,16 @@ test(
       registerCalls.map((call) => call.options?.status),
       ['stopped', 'stopped', 'stopped'],
       'initial self-hosted replica rows should register as stopped until activation',
+    );
+    t.same(
+      registerCalls.map(
+        (call) =>
+          call.options?.[
+            CREATE_SELF_HOSTED_JOIN_METADATA_REGISTRATION_SHORTCUT_OPTION
+          ],
+      ),
+      [true, true, true],
+      'query-state self-hosted service registration should prefer the join-time control-plane upsert path',
     );
   },
 );

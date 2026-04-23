@@ -1,142 +1,48 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
   AddressManager,
   AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
   CDCEventBuffer,
-  CDCOperation,
   CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
   COLUMN,
   CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
   ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
   ENTITY_TYPE,
-  ERRORS,
-  EntityType,
   EventEmitter,
   HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
   LeaderActivationGate,
   LeaderActivationScheduler,
-  LifeRaft,
   LiferaftProvider,
   LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
-  PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
-  PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
-  PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
   PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
   PRESSURE_WORK_CLASS,
   PartitionCDCDelivery,
   PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
   PartitionState,
   PendingRequestTracker,
   ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
-  ReplicaStatus,
   SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
   SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SQL,
-  SQLiteLogAdapter,
-  STRING,
   SYSTEM_TABLE_NAME,
   TABLES,
-  TERMINAL_STATUSES,
   TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
-  assertCritical,
   assertRaftProviderContract,
   attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
   createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
-  fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
   normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment1Part1 extends EventEmitter {
@@ -155,9 +61,9 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
     this.externalCdcAllowed =
-      typeof options.externalCdcAllowed === PARTITION_SERVICE_LITERAL.BOOLEAN
-        ? options.externalCdcAllowed
-        : null;
+      typeof options.externalCdcAllowed === PARTITION_SERVICE_LITERAL.BOOLEAN ?
+        options.externalCdcAllowed :
+        null;
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
@@ -172,9 +78,9 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     this.dbPath = options.dbPath || PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH;
     this.leaderAddressHint =
       typeof options.leaderAddress === TYPEOF.STRING &&
-      options.leaderAddress.length > NUM.ZERO
-        ? options.leaderAddress
-        : null;
+      options.leaderAddress.length > NUM.ZERO ?
+        options.leaderAddress :
+        null;
     const addressManager = AddressManager.getInstance();
     this.unifiedAddress = addressManager.format(
       this.nodeId,
@@ -193,15 +99,15 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
       PARTITION_SERVICE_DEFAULT.SIZE_UPDATE_INTERVAL_MS;
     this.leaderActivationStabilizationMs =
       Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= NUM.ZERO
-        ? Math.floor(options.leaderActivationStabilizationMs)
-        : (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
+      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationStabilizationMs) :
+        (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
           PARTITION_SERVICE_LITERAL.VALUE_250);
     this.leaderActivationNodeSpacingMs =
       Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= NUM.ZERO
-        ? Math.floor(options.leaderActivationNodeSpacingMs)
-        : (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
+      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationNodeSpacingMs) :
+        (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           PARTITION_SERVICE_LITERAL.VALUE_25);
     this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
@@ -228,7 +134,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     this.cdcSubscriberStates = /* @__PURE__ */ new Map();
     this.cdcSubscriptionEpoch = NUM.ZERO;
     this.cdcEventSequenceNumber = NUM.ZERO;
-    this.cdcEventBuffer = new CDCEventBuffer({ logger: this.logger });
+    this.cdcEventBuffer = new CDCEventBuffer({logger: this.logger});
     this.cdcBufferReplayTimer = null;
     this.cdcBufferReplayInFlight = false;
     this.cdcBufferReplayDelayMs =
@@ -254,26 +160,26 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     this.rowCommitEpoch = /* @__PURE__ */ new Map();
     this.maxCommittedWriteLogEntries =
       Number.isFinite(options.maxCommittedWriteLogEntries) &&
-      options.maxCommittedWriteLogEntries > NUM.ZERO
-        ? Math.floor(options.maxCommittedWriteLogEntries)
-        : PARTITION_SERVICE_DEFAULT.MAX_COMMITTED_WRITE_LOG_ENTRIES;
+      options.maxCommittedWriteLogEntries > NUM.ZERO ?
+        Math.floor(options.maxCommittedWriteLogEntries) :
+        PARTITION_SERVICE_DEFAULT.MAX_COMMITTED_WRITE_LOG_ENTRIES;
     this.preparedStateHoldTimeoutMs =
       Number.isFinite(options.preparedStateHoldTimeoutMs) &&
-      options.preparedStateHoldTimeoutMs > NUM.ZERO
-        ? Math.floor(options.preparedStateHoldTimeoutMs)
-        : TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
+      options.preparedStateHoldTimeoutMs > NUM.ZERO ?
+        Math.floor(options.preparedStateHoldTimeoutMs) :
+        TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
     this.preparedStateHoldSweepIntervalMs =
       Number.isFinite(options.preparedStateHoldSweepIntervalMs) &&
-      options.preparedStateHoldSweepIntervalMs > NUM.ZERO
-        ? Math.floor(options.preparedStateHoldSweepIntervalMs)
-        : PARTITION_SERVICE_DEFAULT.PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS;
+      options.preparedStateHoldSweepIntervalMs > NUM.ZERO ?
+        Math.floor(options.preparedStateHoldSweepIntervalMs) :
+        PARTITION_SERVICE_DEFAULT.PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS;
     this.preparedStateHoldTimer = null;
     this.activeTransaction = null;
     this.transactionOperations = [];
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized()
-      ? loggingService.forSubsystem(PARTITION_SUBSYSTEM.PARTITION)
-      : console;
+    this.logger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(PARTITION_SUBSYSTEM.PARTITION) :
+      console;
     this.cdcGenerator = new PartitionCDCGenerator({
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -283,9 +189,9 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     });
     this.suppressLifecycleLogs = Boolean(options.suppressLifecycleLogs);
     this.onInitializationStage =
-      typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION
-        ? options.onInitializationStage
-        : null;
+      typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION ?
+        options.onInitializationStage :
+        null;
     this.initialized = false;
     this.isShutdown = false;
     this.isLeader = false;
@@ -498,7 +404,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
   isBackgroundWorkReady() {
     return isBackgroundWorkLifecycleReady(
       this.metadataPublicationReadinessState,
-      { partitionId: this.partitionId },
+      {partitionId: this.partitionId},
     );
   }
   handleMetadataPublicationReadinessTransition() {
@@ -537,7 +443,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     }
   }
   cancelLeaderOwnedActivation() {
-    this.leaderActivationGate.cancel({ clearActivatedTerm: true });
+    this.leaderActivationGate.cancel({clearActivatedTerm: true});
   }
   scheduleLeaderOwnedActivation(term) {
     this.leaderActivationGate.schedule(
@@ -584,7 +490,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     return new AuthoritativeRowMutationHelper({
       tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_role, context = {}) => {
-        const whereClause = { service_id: this.replicaId };
+        const whereClause = {service_id: this.replicaId};
         const cachedRow = context.cachedRow;
         if (
           typeof cachedRow?.raft_role === TYPEOF.STRING &&
@@ -608,7 +514,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
         routingReadinessDimension:
           this.getMetadataPublicationReadinessDimension(),
       }),
-      buildExpectedCacheFields: (role) => ({ raft_role: role }),
+      buildExpectedCacheFields: (role) => ({raft_role: role}),
       prepareFlush: () => ({
         skip: false,
         clearPending: false,
@@ -637,7 +543,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     return new AuthoritativeRowMutationHelper({
       tableName: SYSTEM_TABLE_NAME.PARTITIONS,
       buildWhereClause: (_leaderNodeId, context = {}) => {
-        const whereClause = { [COLUMN.PARTITION_ID]: this.partitionId };
+        const whereClause = {[COLUMN.PARTITION_ID]: this.partitionId};
         const cachedRow = context.cachedRow;
         if (
           typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === TYPEOF.STRING &&
@@ -676,9 +582,9 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
       prepareFlush: () => ({
         skip: !this.isLeader,
         clearPending: !this.isLeader,
-        reason: !this.isLeader
-          ? PARTITION_SERVICE_LITERAL.NOT_OWNER
-          : PARTITION_SERVICE_LITERAL.READY,
+        reason: !this.isLeader ?
+          PARTITION_SERVICE_LITERAL.NOT_OWNER :
+          PARTITION_SERVICE_LITERAL.READY,
       }),
       isWriteReady: () => this.isPartitionsLeaderAvailable(),
       systemTableCache: this.systemTableCache,
@@ -731,6 +637,10 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
       throw new Error(`Peer address must be unified: ${peerId}`);
     }
     if (this.peerAddresses && this.peerAddresses.length > NUM.ZERO) {
+      const separator = PARTITION_SERVICE_ADDRESS.SEPARATOR;
+      const partitionPeerSuffix =
+        `${separator}${ENTITY_TYPE.PARTITION}${separator}${peerId}`;
+      const peerSuffix = `${separator}${peerId}`;
       for (const addr of this.peerAddresses) {
         const validation = addressManager.validate(addr);
         if (!validation.valid) {
@@ -745,12 +655,7 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
           );
           throw new Error(`Peer address must be unified: ${addr}`);
         }
-        if (
-          addr.endsWith(
-            `${PARTITION_SERVICE_ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}${PARTITION_SERVICE_ADDRESS.SEPARATOR}${peerId}`,
-          ) ||
-          addr.endsWith(`${PARTITION_SERVICE_ADDRESS.SEPARATOR}${peerId}`)
-        ) {
+        if (addr.endsWith(partitionPeerSuffix) || addr.endsWith(peerSuffix)) {
           if (cacheAddress) {
             return cacheAddress;
           }
@@ -804,7 +709,9 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
       ) {
         return parsed.serviceId;
       }
-    } catch (_error) {}
+    } catch (_error) {
+      // Ignore parse failures and keep the original candidate.
+    }
     return candidate;
   }
   /**
@@ -873,4 +780,4 @@ class PartitionServiceSegment1Part1 extends EventEmitter {
     });
   }
 }
-export { PartitionServiceSegment1Part1 };
+export {PartitionServiceSegment1Part1};

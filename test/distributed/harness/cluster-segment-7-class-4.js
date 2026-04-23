@@ -1,4 +1,5 @@
 import { CLUSTER_SEGMENT_7_CLASS_SHARED } from './cluster-segment-7-class-shared.js';
+import { buildPriorityRecoveryObservationSnapshot } from '../../../src/control-plane/priority-recovery-observation-snapshot.js';
 
 const {
   ACTIVE_PROBE_ACTIVITY_SOURCE_BOOTSTRAP_READINESS,
@@ -884,6 +885,16 @@ class Cluster4 extends Cluster3 {
       typeof snapshotPayload.controlPlaneDiagnostics === "object"
         ? snapshotPayload.controlPlaneDiagnostics
         : null;
+    const publicationConvergenceGateRaw =
+      controlPlaneDiagnostics?.publicationConvergenceGate &&
+      typeof controlPlaneDiagnostics.publicationConvergenceGate === "object"
+        ? controlPlaneDiagnostics.publicationConvergenceGate
+        : controlPlaneDiagnostics?.publicationConvergence?.publicationRecoveryGate &&
+            typeof controlPlaneDiagnostics.publicationConvergence
+              .publicationRecoveryGate === "object"
+          ? controlPlaneDiagnostics.publicationConvergence
+              .publicationRecoveryGate
+          : null;
     const readinessByNodeId =
       controlPlaneDiagnostics?.readinessByNodeId &&
       typeof controlPlaneDiagnostics.readinessByNodeId === "object"
@@ -896,6 +907,15 @@ class Cluster4 extends Cluster3 {
         ? JSON.parse(
             JSON.stringify(
               controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+            ),
+          )
+        : null;
+    const priorityRecoveryInvariants =
+      controlPlaneDiagnostics?.priorityRecoveryInvariants &&
+      typeof controlPlaneDiagnostics.priorityRecoveryInvariants === "object"
+        ? JSON.parse(
+            JSON.stringify(
+              controlPlaneDiagnostics.priorityRecoveryInvariants,
             ),
           )
         : null;
@@ -966,14 +986,38 @@ class Cluster4 extends Cluster3 {
       .map(([nodeId]) => String(nodeId))
       .filter((nodeId) => nodeId.length > ZERO)
       .sort();
+    const publicationConvergence = this._summarizeControlSnapshotPublication(
+      controlPlaneDiagnostics?.publicationConvergence || null,
+    );
+    const publicationConvergenceGate = publicationConvergenceGateRaw ?
+      buildPublicationRecoveryGateSnapshot({
+        ...publicationConvergenceGateRaw,
+      }) :
+      null;
+    const priorityRecoveryObservation =
+      controlPlaneDiagnostics?.priorityRecoveryObservation &&
+      typeof controlPlaneDiagnostics.priorityRecoveryObservation === "object"
+        ? JSON.parse(
+            JSON.stringify(
+              controlPlaneDiagnostics.priorityRecoveryObservation,
+            ),
+          )
+        : controlPlaneDiagnostics ?
+          buildPriorityRecoveryObservationSnapshot({
+            publicationConvergence,
+            publicationConvergenceGate,
+            priorityRecoveryDecisionSnapshots,
+            priorityRecoveryInvariants,
+          }) :
+          null;
     return {
       controlPlaneDiagnosticsAvailable: Boolean(controlPlaneDiagnostics),
-      publicationConvergence: this._summarizeControlSnapshotPublication(
-        controlPlaneDiagnostics?.publicationConvergence || null,
-      ),
+      publicationConvergence,
+      publicationConvergenceGate,
       publishedMembershipObservation: this._summarizeControlSnapshotPublication(
         controlPlaneDiagnostics?.publishedMembershipObservation || null,
       ),
+      priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots,
       controlPlaneOwnerQueueDepth,
       cdcReplayLag,

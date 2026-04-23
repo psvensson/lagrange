@@ -1,93 +1,49 @@
-import { CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED } from "./control-plane-system-table-gateway-shared.js";
-import { ControlPlaneSystemTableGatewaySegment1 } from "./control-plane-system-table-gateway-segment-1.js";
-
-const {
-  CANONICAL_LEADER_ROUTING_GAP_STATE,
-  CDC_OPERATION,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
-  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
+import {
   CONTROL_PLANE_DEFERRED_MUTATION_FAILURE_SENTINEL,
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
-  CONTROL_PLANE_GATEWAY_LIMIT,
-  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_MUTATION_QUEUE_STATE,
-  CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
-  CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_OUTCOME,
-  CONTROL_PLANE_READ_PROFILE,
-  CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-  CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD,
   CONTROL_PLANE_SQL_OPERATION,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  ControlPlaneDiagnosticsLedger,
   GATEWAY_ERROR_MSG,
   GATEWAY_LOG_MSG,
-  INITIAL_PARTITION_IDS,
   METRICS_LOG_TAG,
   NUM,
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PressureGovernor,
   SQL,
-  SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_NAMES,
   TYPEOF,
-  applyProfileDefault,
-  applyReadWorkloadProfileDefaults,
-  areCanonicalSystemTableRowsEqual,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildLocalControlPlaneMutationReadinessFailure,
+  buildAuthoritativeControlPlaneReadIntent,
+  buildProjectionControlPlaneReadIntent,
   buildOwnerContractOutcome,
   buildPressureAdmissionFailure,
-  canonicalizeSystemTableRow,
-  copyOption,
   createDeferredPromise,
   extractSqlOperationKind,
   extractSystemTableNameFromSql,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  hasUsablePrimaryKeyValue,
-  normalizeAuthoritativeReadMode,
   normalizeCoalescingToken,
-  normalizeControlPlaneSystemTableVisibilityState,
   normalizeDistinctStringArray,
   normalizeMutationMergePolicy,
   normalizeMutationOperation,
   normalizePhaseScope,
   normalizePositiveInteger,
-  normalizeReadProfile,
-  normalizeReadStrategy,
   normalizeSqlOperationKind,
   normalizeSystemTableName,
-  requiresStableLocalControlPlaneMutationReadiness,
-  resolveAuthoritativeReadModeContract,
-  resolveCanonicalLeaderIdentitySnapshot,
-  resolveCanonicalLeaderRoutingGapState,
-  resolveControlPlaneCacheReconcileDeletePolicy,
-  resolveControlPlaneCacheReconcileIntent,
   resolveLegacyAuthoritativeReadMode,
-  resolveMutationCompletionState,
-  resolveReadProfileOptions,
-  resolveReadStrategyForProfile,
-  sortObjectKeys,
   stableSerialize,
-} = CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED;
+} from './control-plane-system-table-gateway-shared.js';
+import {
+  ControlPlaneSystemTableGatewaySegment1,
+} from './control-plane-system-table-gateway-segment-1.js';
 
 class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGatewaySegment1 {
   incrementGatewayOutcomeMetric(bucketName, outcome) {
@@ -96,12 +52,12 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       return;
     }
     const normalizedOutcome =
-      typeof outcome === TYPEOF.STRING && outcome.length > NUM.ZERO
-        ? outcome
-        : "unknown";
-    bucket[normalizedOutcome] = Number.isFinite(bucket[normalizedOutcome])
-      ? bucket[normalizedOutcome] + NUM.ONE
-      : NUM.ONE;
+      typeof outcome === TYPEOF.STRING && outcome.length > NUM.ZERO ?
+        outcome :
+        'unknown';
+    bucket[normalizedOutcome] = Number.isFinite(bucket[normalizedOutcome]) ?
+      bucket[normalizedOutcome] + NUM.ONE :
+      NUM.ONE;
   }
 
   /**
@@ -170,9 +126,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
    */
   resolveTransportPressureSummary() {
     const messageRouter =
-      typeof this.resolveMessageRouter === TYPEOF.FUNCTION
-        ? this.resolveMessageRouter()
-        : this.messageRouter;
+      typeof this.resolveMessageRouter === TYPEOF.FUNCTION ?
+        this.resolveMessageRouter() :
+        this.messageRouter;
     if (
       !messageRouter ||
       typeof messageRouter.getOutboundPressureSummary !== TYPEOF.FUNCTION
@@ -195,9 +151,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
   recordReadTelemetry(context = {}, result = {}) {
     const latencyMs = this.resolveLatencyMs(context.startedAtMs);
     const outcome =
-      typeof result?.outcome === TYPEOF.STRING
-        ? result.outcome
-        : CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
+      typeof result?.outcome === TYPEOF.STRING ?
+        result.outcome :
+        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
     this.incrementGatewayOutcomeMetric(
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READOUTCOMECOUNTS,
       outcome,
@@ -218,20 +174,20 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       coalescingKey: context.coalescingKey || null,
       latencyMs,
       success: result?.success === true,
-      rowCount: Number.isFinite(result?.rowCount)
-        ? result.rowCount
-        : Array.isArray(result?.rows)
-          ? result.rows.length
-          : NUM.ZERO,
+      rowCount: Number.isFinite(result?.rowCount) ?
+        result.rowCount :
+        Array.isArray(result?.rows) ?
+          result.rows.length :
+          NUM.ZERO,
     });
     if (
       outcome === CONTROL_PLANE_READ_OUTCOME.DEFERRED ||
       outcome === CONTROL_PLANE_READ_OUTCOME.REJECTED
     ) {
       this.emitGatewayWarning(
-        outcome === CONTROL_PLANE_READ_OUTCOME.DEFERRED
-          ? GATEWAY_LOG_MSG.READ_DEFERRED
-          : GATEWAY_LOG_MSG.READ_REJECTED,
+        outcome === CONTROL_PLANE_READ_OUTCOME.DEFERRED ?
+          GATEWAY_LOG_MSG.READ_DEFERRED :
+          GATEWAY_LOG_MSG.READ_REJECTED,
         {
           nodeId: this.nodeId,
           owner: context.owner || null,
@@ -242,9 +198,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
           coalescingKey: context.coalescingKey || null,
           pressureAction: result?.pressureAction || null,
           pressureReason: result?.pressureReason || null,
-          retryAfterMs: Number.isFinite(result?.retryAfterMs)
-            ? result.retryAfterMs
-            : null,
+          retryAfterMs: Number.isFinite(result?.retryAfterMs) ?
+            result.retryAfterMs :
+            null,
           error: result?.error || null,
         },
       );
@@ -259,35 +215,35 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
   recordMutationTelemetry(context = {}, result = {}) {
     const latencyMs = this.resolveLatencyMs(context.startedAtMs);
     const outcome =
-      typeof result?.outcome === TYPEOF.STRING
-        ? result.outcome
-        : CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
+      typeof result?.outcome === TYPEOF.STRING ?
+        result.outcome :
+        CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
     const retainedRequests = this.buildRetainedRequestsSnapshot();
     const failureSummary = getControlPlaneFailureSummary(result);
     const retryAfterMs = getControlPlaneRetryAfterMs(result);
     const errorCode = getControlPlaneErrorCode(result) || null;
     const transportPressureSummary = this.resolveTransportPressureSummary();
-    const queueWaitMs = Number.isFinite(result?.queueWaitMs)
-      ? Math.max(NUM.ZERO, Math.floor(result.queueWaitMs))
-      : NUM.ZERO;
+    const queueWaitMs = Number.isFinite(result?.queueWaitMs) ?
+      Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)) :
+      NUM.ZERO;
     const transportPendingNodeConnectionCount = Number.isFinite(
       transportPressureSummary?.pendingNodeConnectionCount,
-    )
-      ? Math.max(
-          NUM.ZERO,
-          Math.floor(transportPressureSummary.pendingNodeConnectionCount),
-        )
-      : NUM.ZERO;
+    ) ?
+      Math.max(
+        NUM.ZERO,
+        Math.floor(transportPressureSummary.pendingNodeConnectionCount),
+      ) :
+      NUM.ZERO;
     const transportReconnectBeforeDeliveryFailureCount = Number.isFinite(
       transportPressureSummary?.reconnectBeforeDeliveryFailureCount,
-    )
-      ? Math.max(
-          NUM.ZERO,
-          Math.floor(
-            transportPressureSummary.reconnectBeforeDeliveryFailureCount,
-          ),
-        )
-      : NUM.ZERO;
+    ) ?
+      Math.max(
+        NUM.ZERO,
+        Math.floor(
+          transportPressureSummary.reconnectBeforeDeliveryFailureCount,
+        ),
+      ) :
+      NUM.ZERO;
     this.incrementGatewayOutcomeMetric(
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATIONOUTCOMECOUNTS,
       outcome,
@@ -296,26 +252,26 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MAXOBSERVEDMUTATIONLATENCYMS,
       latencyMs,
     );
-    this.recordGatewayLatency("maxObservedMutationQueueWaitMs", queueWaitMs);
+    this.recordGatewayLatency('maxObservedMutationQueueWaitMs', queueWaitMs);
     this.recordGatewayLatency(
-      "maxObservedTransportPendingNodeConnectionCount",
+      'maxObservedTransportPendingNodeConnectionCount',
       transportPendingNodeConnectionCount,
     );
     if (result?.success === false) {
       this.incrementGatewayOutcomeMetric(
-        "mutationFailureReasonCounts",
+        'mutationFailureReasonCounts',
         failureSummary.primaryReason,
       );
       this.addGatewayMetric(
-        "authoritativeRowSourceUnavailableCount",
+        'authoritativeRowSourceUnavailableCount',
         failureSummary.authoritativeRowSourceUnavailableCount,
       );
       this.addGatewayMetric(
-        "distributedParticipantFailureCount",
+        'distributedParticipantFailureCount',
         failureSummary.distributedParticipantFailureCount,
       );
       this.addGatewayMetric(
-        "reconnectDeliveryFailureCount",
+        'reconnectDeliveryFailureCount',
         failureSummary.reconnectDeliveryFailureCount,
       );
     }
@@ -330,9 +286,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       mergePolicy: context.mergePolicy || null,
       latencyMs,
       queueState:
-        typeof result?.queueState === TYPEOF.STRING
-          ? result.queueState
-          : CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
+        typeof result?.queueState === TYPEOF.STRING ?
+          result.queueState :
+          CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
       queueWaitMs,
       inFlightMutationCount: retainedRequests.inFlightMutations,
       pendingReplaceMutationCount: retainedRequests.pendingReplaceMutations,
@@ -356,9 +312,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED
     ) {
       this.emitGatewayWarning(
-        outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED
-          ? GATEWAY_LOG_MSG.MUTATION_DEFERRED
-          : GATEWAY_LOG_MSG.MUTATION_REJECTED,
+        outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ?
+          GATEWAY_LOG_MSG.MUTATION_DEFERRED :
+          GATEWAY_LOG_MSG.MUTATION_REJECTED,
         {
           nodeId: this.nodeId,
           owner: context.owner || null,
@@ -458,9 +414,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       normalizeMutationMergePolicy(
         options?.mergePolicy || mutation?.mergePolicy,
       ) ||
-      (allowCoalescing
-        ? CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT
-        : CONTROL_PLANE_MUTATION_MERGE_POLICY.NONE);
+      (allowCoalescing ?
+        CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT :
+        CONTROL_PLANE_MUTATION_MERGE_POLICY.NONE);
     const explicitKey = normalizeCoalescingToken(
       options?.coalescingKey || mutation?.coalescingKey,
     );
@@ -519,7 +475,10 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     }
     return {
       requestKey:
-        `control-plane:mutation:${mutation?.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:` +
+        `control-plane:mutation:${
+          mutation?.tableName ||
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+        }:` +
         `${explicitKey}`,
       mergePolicy,
     };
@@ -532,9 +491,10 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     if (explicitSelectionKey) {
       return explicitSelectionKey;
     }
-    return typeof requestKey === TYPEOF.STRING && requestKey.length > NUM.ZERO
-      ? requestKey
-      : null;
+    return typeof requestKey === TYPEOF.STRING &&
+      requestKey.length > NUM.ZERO ?
+      requestKey :
+      null;
   }
 
   /**
@@ -586,29 +546,29 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     const queueMetadata = {
       queueState:
         deferred?.queueState || CONTROL_PLANE_MUTATION_QUEUE_STATE.DIRECT,
-      queueWaitMs: Number.isFinite(deferred?.enqueuedAtMs)
-        ? Math.max(NUM.ZERO, Math.floor(this.now() - deferred.enqueuedAtMs))
-        : NUM.ZERO,
+      queueWaitMs: Number.isFinite(deferred?.enqueuedAtMs) ?
+        Math.max(NUM.ZERO, Math.floor(this.now() - deferred.enqueuedAtMs)) :
+        NUM.ZERO,
       pendingReplaceQueueDepth: Number.isFinite(
         deferred?.pendingReplaceQueueDepth,
-      )
-        ? Math.max(NUM.ZERO, Math.floor(deferred.pendingReplaceQueueDepth))
-        : NUM.ZERO,
+      ) ?
+        Math.max(NUM.ZERO, Math.floor(deferred.pendingReplaceQueueDepth)) :
+        NUM.ZERO,
     };
     executionPromise = Promise.resolve()
       .then(() => executionFactory())
       .then(
         (result) => {
           const enrichedResult =
-            result && typeof result === TYPEOF.OBJECT
-              ? {
-                  ...result,
-                  queueState: queueMetadata.queueState,
-                  queueWaitMs: queueMetadata.queueWaitMs,
-                  pendingReplaceQueueDepth:
+            result && typeof result === TYPEOF.OBJECT ?
+              {
+                ...result,
+                queueState: queueMetadata.queueState,
+                queueWaitMs: queueMetadata.queueWaitMs,
+                pendingReplaceQueueDepth:
                     queueMetadata.pendingReplaceQueueDepth,
-                }
-              : result;
+              } :
+              result;
           if (deferred) {
             deferred.resolve(enrichedResult);
           }
@@ -720,7 +680,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       resourceKeys: normalizeDistinctStringArray([
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.CONTROL_DASH_PLANE_COLON_READ,
-        `control-plane:table:${tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}`,
+        `control-plane:table:${
+          tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+        }`,
         ...(Array.isArray(options?.resourceKeys) ? options.resourceKeys : []),
       ]),
       allowDegrade: options?.allowPressureDegrade !== false,
@@ -740,7 +702,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
   buildReadRequestKey(tableName, sql, params = [], options = {}) {
     const explicitKey = normalizeCoalescingToken(options?.coalescingKey);
     if (explicitKey) {
-      return `control-plane:read:${tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:${explicitKey}`;
+      return `control-plane:read:${
+        tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+      }:${explicitKey}`;
     }
     if (options?.allowCoalescing === false) {
       return null;
@@ -756,9 +720,9 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
       allowPressureDegrade: options?.allowPressureDegrade !== false,
       allowPressureDefer: options?.allowPressureDefer === true,
-      resourceKeys: Array.isArray(options?.resourceKeys)
-        ? normalizeDistinctStringArray(options.resourceKeys)
-        : [],
+      resourceKeys: Array.isArray(options?.resourceKeys) ?
+        normalizeDistinctStringArray(options.resourceKeys) :
+        [],
       phaseScope: normalizePhaseScope(options?.phaseScope),
       authoritativeReadMode: resolveLegacyAuthoritativeReadMode(options),
       localReadConsistency: options?.localReadConsistency || null,
@@ -807,7 +771,10 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     const explicitKey = normalizeCoalescingToken(options?.coalescingKey);
     if (explicitKey) {
       return (
-        `control-plane:query:${descriptor.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}:` +
+        `control-plane:query:${
+          descriptor.tableName ||
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+        }:` +
         `${descriptor.operationKind}:${explicitKey}`
       );
     }
@@ -855,12 +822,19 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     return this.getPressureGovernor().evaluate({
       workClass:
         options?.workClass ||
-        (isWrite
-          ? PRESSURE_WORK_CLASS.CRITICAL
-          : PRESSURE_WORK_CLASS.INTERACTIVE),
+        (isWrite ?
+          PRESSURE_WORK_CLASS.CRITICAL :
+          PRESSURE_WORK_CLASS.INTERACTIVE),
       resourceKeys: [
-        `control-plane:${isWrite ? CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WRITE : CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ}`,
-        `control-plane:table:${descriptor.tableName || CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN}`,
+        `control-plane:${
+          isWrite ?
+            CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WRITE :
+            CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.READ
+        }`,
+        `control-plane:table:${
+          descriptor.tableName ||
+          CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.UNKNOWN
+        }`,
       ],
       allowDegrade: isWrite ? false : options?.allowPressureDegrade === true,
       allowDefer: options?.allowPressureDefer === true,
@@ -941,13 +915,13 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
       if (rowEntries.length === NUM.ZERO) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
       }
-      const columns = rowEntries.map(([key]) => key).join(", ");
-      const placeholders = rowEntries.map(() => "?").join(", ");
+      const columns = rowEntries.map(([key]) => key).join(', ');
+      const placeholders = rowEntries.map(() => '?').join(', ');
       return {
         sql: `${
-          operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT
-            ? SQL.INSERT_OR_REPLACE_INTO
-            : SQL.INSERT_INTO
+          operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT ?
+            SQL.INSERT_OR_REPLACE_INTO :
+            SQL.INSERT_INTO
         } ${tableName} (${columns}) ${SQL.VALUES} (${placeholders})`,
         params: rowEntries.map(([_key, value]) => value),
       };
@@ -967,7 +941,7 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     if (whereEntries.length === NUM.ZERO) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
     }
-    const whereClause = whereEntries.map(([key]) => `${key} = ?`).join(" AND ");
+    const whereClause = whereEntries.map(([key]) => `${key} = ?`).join(' AND ');
 
     if (operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE) {
       return {
@@ -987,7 +961,7 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
     if (updateEntries.length === NUM.ZERO) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
     }
-    const setClause = updateEntries.map(([key]) => `${key} = ?`).join(", ");
+    const setClause = updateEntries.map(([key]) => `${key} = ?`).join(', ');
     return {
       sql: `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ${SQL.WHERE} ${whereClause}`,
       params: [
@@ -1008,7 +982,7 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
    */
   async executeSqlMutationFallback(mutation = {}, writeOptions = {}) {
     const sqlQueryEngine = this.assertSqlQueryEngine();
-    const { sql, params } = this.buildSqlMutationPlan(mutation);
+    const {sql, params} = this.buildSqlMutationPlan(mutation);
     return this.normalizeMutationResult(
       await sqlQueryEngine.executeQuery(sql, params, writeOptions),
     );
@@ -1050,12 +1024,16 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
         return sqlQueryEngine.executeQuery(
           sql,
           params,
-          this.buildQueryOptions(options),
+          this.buildQueryOptions(options, {
+            tableName: descriptor.tableName || null,
+            sql,
+            operationKind: descriptor.sqlOperation || null,
+          }),
         );
       },
       {
-        joinMetricName: "querySingleFlightJoinCount",
-        bypassMetricName: "queryTrackingBypassCount",
+        joinMetricName: 'querySingleFlightJoinCount',
+        bypassMetricName: 'queryTrackingBypassCount',
         maxTrackedRequests: this.gatewayLimits.maxTrackedQueryRequests,
       },
     );
@@ -1068,11 +1046,11 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       success: result?.success !== false,
-      rowCount: Number.isFinite(result?.rowCount)
-        ? result.rowCount
-        : Array.isArray(result?.rows)
-          ? result.rows.length
-          : NUM.ZERO,
+      rowCount: Number.isFinite(result?.rowCount) ?
+        result.rowCount :
+        Array.isArray(result?.rows) ?
+          result.rows.length :
+          NUM.ZERO,
       error: result?.success === false ? result?.error || null : null,
       ...this.buildOperationLedgerDiagnostics(
         descriptor.tableName || null,
@@ -1100,17 +1078,8 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
    * @return {Promise<Object>}
    */
   async readAuthoritativeRows(tableName, sql, params = [], options = {}) {
-    const strategy =
-      options?.requireAuthoritative === true
-        ? CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-        : CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE;
     return this.executeRead(
-      {
-        tableName,
-        sql,
-        params,
-        strategy,
-      },
+      buildAuthoritativeControlPlaneReadIntent(tableName, sql, params, options),
       options,
     );
   }
@@ -1126,12 +1095,7 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
    */
   async readProjectionRows(tableName, options = {}) {
     return this.executeRead(
-      {
-        tableName,
-        strategy: CONTROL_PLANE_READ_STRATEGY.CACHE,
-        cachePredicate: options?.cachePredicate,
-        readFromCache: options?.readFromCache,
-      },
+      buildProjectionControlPlaneReadIntent(tableName, options),
       options,
     );
   }
@@ -1145,4 +1109,4 @@ class ControlPlaneSystemTableGatewaySegment2 extends ControlPlaneSystemTableGate
    */
 }
 
-export { ControlPlaneSystemTableGatewaySegment2 };
+export {ControlPlaneSystemTableGatewaySegment2};

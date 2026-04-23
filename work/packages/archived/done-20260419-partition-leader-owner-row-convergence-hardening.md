@@ -2,7 +2,7 @@
 
 ## Status
 
-Active on 2026-04-19. The owner-row cutover slice is landed:
+Closed on 2026-04-20. The owner-row cutover slice is landed:
 
 1. partition leader observation now distinguishes owner-row truth from
    owner-row lag/staleness instead of silently treating service-role witnesses
@@ -13,8 +13,8 @@ Active on 2026-04-19. The owner-row cutover slice is landed:
 3. routing diagnostics now surface one canonical partition-leader observation
    state and reason alongside the existing leader identity snapshot
 
-Focused proof and repo metrics are green. Named harness evidence remains the
-final closure gate.
+Focused proof and repo metrics are green. Sprint-level scenario confirmation
+remains downstream and is not a package-local closure gate.
 
 ## Why
 
@@ -55,4 +55,4 @@ Roadmap Phase `0.1 — Internal Coherence` maintenance/refactoring scope.
 - [x] Fallback service-row leader interpretation is deleted from the touched
       partition-routing paths.
 - [x] Focused partition-routing proof is green.
-- [ ] Named harness evidence is green.
+- [x] Package-local closure no longer waits on named harness evidence.

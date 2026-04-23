@@ -227,6 +227,7 @@ class SeedCacheHydrationPhase {
       defaultRoutingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
       migrationAutoWire: false,
+      autoStartDistributedTransactionRecovery: false,
       unrefRetryDelayTimers: true,
     });
     wireMigrationWorkflowOwners({

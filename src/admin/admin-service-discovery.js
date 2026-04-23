@@ -32,6 +32,7 @@ import {
   resolveCanonicalLeaderRoutingGapState,
 } from "../query/canonical-leader-routing.js";
 import { CONTROL_PLANE_READINESS_DIMENSION } from "../control-plane/control-plane-readiness-constants.js";
+import { CONTROL_PLANE_DELIVERY_PRIORITY } from "../control-plane/control-plane-constants.js";
 import {
   buildControlPlaneWorkloadProfile,
   CONTROL_PLANE_WORKLOAD_CLASS,
@@ -868,6 +869,7 @@ assignAdminServiceDiscoveryReadinessMethods(AdminServiceDiscovery, {
   CANONICAL_LEADER_ROUTING_GAP_STATE,
   COLUMN,
   CONTROL_PLANE_WORKLOAD_CLASS,
+  CONTROL_PLANE_DELIVERY_PRIORITY,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_STRATEGY,
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,

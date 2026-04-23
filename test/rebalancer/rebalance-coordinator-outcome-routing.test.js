@@ -282,6 +282,87 @@ test('Executor outcome routing through owner-key reconcile path',
     );
 
     await t.test(
+      'REPLICA_CREATE_ACTIVE resumes source removal for REPLACE ' +
+      'instead of completing terminally',
+      async (t) => {
+        const deliveries = [];
+        const operation = buildTestOperation({
+          type: 'REPLACE',
+          partitionId: 'users-p1',
+          entityId: 'users-p1',
+          replicaId: 'users-p1-r2',
+          sourceReplicaId: 'users-p1-r1',
+          workflowStep: WORKFLOW_STEP.SYNCING,
+          status: 'syncing',
+          stepsHistory: [
+            {
+              step: WORKFLOW_STEP.PENDING,
+              timestamp: Date.now(),
+              sourceReplicaId: 'users-p1-r1',
+            },
+            {
+              step: WORKFLOW_STEP.SYNCING,
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const {coordinator, emitter, ownerKeys} =
+          createTestCoordinator({operation});
+        coordinator.messageRouter = {
+          async deliver(target, payload, options) {
+            deliveries.push({target, payload, options});
+            return {acknowledged: true, status: 'initiated'};
+          },
+        };
+        coordinator.workflowOwner.messageRouter = coordinator.messageRouter;
+
+        try {
+          emitter.emitOutcome(
+            EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+            TEST_OPERATION_ID,
+            WORKFLOW_STEP.ACTIVE,
+            {replicaId: 'nodes-p1-r2'},
+          );
+
+          await new Promise((resolve) => setImmediate(resolve));
+          await new Promise((resolve) => setImmediate(resolve));
+
+          t.ok(
+            ownerKeys.length > 0,
+            'outcome must still route through runExclusive',
+          );
+          t.equal(
+            deliveries.length,
+            1,
+            'REPLACE active outcome should continue into source removal',
+          );
+          t.equal(
+            deliveries[0]?.payload?.type,
+            'REMOVE_REPLICA',
+            'the resumed phase should dispatch source removal',
+          );
+          t.equal(
+            deliveries[0]?.payload?.replicaId,
+            'users-p1-r1',
+            'source removal should target the retained source replica',
+          );
+          t.equal(
+            operation.workflowStep,
+            WORKFLOW_STEP.STOPPING,
+            'REPLACE should move into STOPPING instead of terminal completion',
+          );
+          t.equal(
+            operation.completedAt,
+            null,
+            'REPLACE create-active should not mark the operation complete',
+          );
+        } finally {
+          await coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
       'REPLICA_CREATE_FAILED routes through runExclusive and ' +
       'calls failOperation',
       async (t) => {

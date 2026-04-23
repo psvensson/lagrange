@@ -3,6 +3,16 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 
+const STARTUP_AUTHORITY_ADMISSION_STATE_BLOCKED = 'blocked';
+const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze(['cluster_incarnation_identity_mismatch']),
+  localIdentityState: 'mismatched',
+  durableMembershipState: 'present',
+  peerProofState: 'recovered',
+});
+
 function createCache() {
   return {
     get() {
@@ -93,6 +103,58 @@ test('ControlPlaneReadinessService marks startup authority unavailable when plan
   t.end();
 });
 
+test('ControlPlaneReadinessService keeps startup authority available when an active recovery gate exists but publication details are still converging', async (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+
+  const snapshot = service.buildStartupAuthoritySnapshotFromPlanningAnswer({
+    publicationEpoch: 7,
+    recoveryProtocolState: 'publication_pending',
+    priorityRecoveryReasonCodes: ['publication_epoch_pending'],
+    targetParticipation: {
+      nodeId: 'seed-node',
+      state: 'recovery_pending_publish',
+      reasons: ['publication_epoch_pending'],
+    },
+    recoveryActiveNodeIds: ['seed-node', 'node-2'],
+    recoveryActiveNodeSource: 'locally_eligible_projection',
+  });
+
+  t.equal(snapshot.state, 'recovery_pending');
+  t.equal(snapshot.authorityAvailable, true);
+  t.equal(snapshot.ready, false);
+  t.same(snapshot.failure, {
+    state: 'none',
+  });
+  t.equal(snapshot.publication.observationState, 'establishing');
+  t.equal(snapshot.publication.epoch.state, 'known');
+  t.equal(snapshot.publication.epoch.value, 7);
+  t.equal(snapshot.publication.status.state, 'unavailable');
+  t.equal(snapshot.recoveryProtocol.state, 'known');
+  t.equal(snapshot.recoveryProtocol.value, 'publication_pending');
+  t.match(snapshot.targetParticipation, {
+    nodeId: 'seed-node',
+    state: 'recovery_pending_publish',
+  });
+  t.same(
+    snapshot.priorityRecoveryReasonCodes,
+    ['publication_epoch_pending'],
+    'active recovery-gate reasons should remain the authority vocabulary',
+  );
+  t.same(
+    snapshot.canonicalStartupNodeIds,
+    ['node-2', 'seed-node'],
+    'transitional recovery authority should preserve the startup cohort',
+  );
+  t.match(snapshot.publicationRecoveryGate, {
+    state: 'publication_pending',
+    active: true,
+  });
+  t.end();
+});
+
 test('ControlPlaneReadinessService treats unpublished observation as explicit startup state', async (t) => {
   const service = new ControlPlaneReadinessService({
     nodeId: 'seed-node',
@@ -129,6 +191,48 @@ test('ControlPlaneReadinessService treats unpublished observation as explicit st
   t.same(
     snapshot.canonicalStartupNodeIds,
     ['node-2', 'node-3', 'seed-node'],
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService marks startup authority blocked when explicit admission evidence blocks the target node', async (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+
+  const snapshot = service.buildStartupAuthoritySnapshotFromPlanningAnswer({
+    publicationEpoch: 7,
+    publicationStatus: 'ACK_PENDING',
+    priorityPartitionSummary: {
+      satisfied: false,
+    },
+    recoveryProtocolState: 'priority_spread_pending',
+    recoveryActiveNodeIds: ['seed-node', 'node-2'],
+    recoveryActiveNodeSource: 'locally_eligible_projection',
+    targetParticipation: {
+      nodeId: 'node-4',
+      state: 'recovery_pending_publish',
+      reasons: ['node_admission_blocked'],
+    },
+    admissionState: STARTUP_AUTHORITY_ADMISSION_STATE_BLOCKED,
+    admissionReasonCodes: ['cluster_incarnation_identity_mismatch'],
+    clusterIncarnationFence: TEST_CLUSTER_INCARNATION_FENCE_BLOCKED,
+  });
+
+  t.equal(snapshot.state, 'blocked');
+  t.equal(snapshot.authorityAvailable, true);
+  t.equal(snapshot.ready, false);
+  t.match(snapshot.admission, {
+    state: STARTUP_AUTHORITY_ADMISSION_STATE_BLOCKED,
+    admitted: false,
+    reasonCodes: ['cluster_incarnation_identity_mismatch'],
+    clusterIncarnationFence: TEST_CLUSTER_INCARNATION_FENCE_BLOCKED,
+  });
+  t.same(
+    snapshot.canonicalStartupNodeIds,
+    ['node-2', 'seed-node'],
+    'explicit admission block should not erase the observed startup cohort while failing closed',
   );
   t.end();
 });

@@ -1,138 +1,34 @@
-import { SQL_QUERY_ENGINE_SHARED } from "./sql-query-engine-shared.js";
-import { SQLQueryEngineSegment6 } from "./sql-query-engine-segment-6.js";
+import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
+import {SQLQueryEngineSegment6} from './sql-query-engine-segment-6.js';
+import {
+  buildControlPlaneWorkloadProfile,
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../control-plane/control-plane-workload-profile.js';
 
 const {
-  ACTIVE_PARTITION_STATE,
-  ADAPTER_ERROR_MSG,
-  ADAPTER_LOG_MSG,
-  AddressManager,
-  AuthoritativeControlPlaneView,
   BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES,
-  BOOTSTRAP_ROUTING_OVERLAY_ENTRY_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_INSTALL_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_NO_EXPIRY_MS,
-  BOOTSTRAP_ROUTING_OVERLAY_PARTITION_STATE,
-  BOOTSTRAP_ROUTING_OVERLAY_REASON,
-  BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
-  BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
-  BudgetEnforcer,
-  CALLBACK_RUNTIME_KIND,
-  CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-  CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
-  COLUMN,
-  CONNECTION_STATE_CONNECTED,
-  CONNECTION_STATE_READY,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CallbackExecutionHost,
-  CancellationToken,
-  ConfigurationManager,
-  DEFAULT_CODE_VERSION,
-  DEFAULT_PARTITION_VERSION,
-  DEFAULT_SNAPSHOT_MODE,
-  DUAL_WRITE_ACTIVE_STATUSES,
-  DistributedQueryPlanner,
-  DistributedTransactionCoordinator,
-  DistributedWriteCoordinator,
-  ENTITY_TYPE,
-  EXECUTION_MODE,
-  EXPLAIN_DISTRIBUTED_PREFIX_REGEX,
-  ExecutionContext,
-  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
-  LineageTracker,
-  LoggingService,
-  METRICS_LOG_TAG,
-  MIGRATION_STATUS,
-  MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
-  ManagedSplitTopologyAdapter,
-  ManagedSplitWorkflow,
-  MigrationCoordinator,
-  MigrationPipeline,
-  NATIVE_CALLBACK_EXPORTS_ARG,
-  NATIVE_CALLBACK_MODULE_ARG,
-  NATIVE_CALLBACK_RETURN_LINE,
-  NUM,
-  OPERATION_METADATA_KEY,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  OperationType,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PROVISIONING_REJECTION_DETAIL_LIMIT,
-  PROVISIONING_REJECTION_REASON_UNKNOWN,
-  PROVISIONING_REJECTION_SUMMARY_NONE,
-  PartitionCallbackDispatcher,
-  PartitionResolver,
-  PressureGovernor,
   QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
-  QUERY_SESSION,
-  QUERY_SUBSYSTEM,
-  QueryExecutor,
   RETRYABLE_CONTROL_PLANE_MUTATION_DEFER_STATE,
-  RETRYABLE_CONTROL_PLANE_TIMEOUT_CLASSIFICATIONS,
-  ReplicaOperationField,
-  SERVICE_TYPE,
-  SQLParser,
-  SQL_PARSE_CACHE,
-  STATE,
-  STATUS_ACTIVE,
-  STORAGE_CAPACITY_CONFIG_KEY,
-  STORAGE_CAPACITY_DEFAULT,
-  SYSTEM_TABLE_NAME,
-  SqlParseCache,
   TABLES,
-  TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS,
-  TABLE_PARTITION_TARGET_NODE_CONVERGENCE_REASON,
-  TABLE_PARTITION_TARGET_NODE_WAIT,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TableCreationService,
-  TimeoutPolicy,
-  WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
-  WRITE_OPERATION_STATUS,
   WRITE_TRACKING_EXCLUDED_TABLES,
-  ZERO_SHA256_DIGEST,
-  buildBootstrapRoutingOverlayEntry,
-  buildBootstrapRoutingOverlayEntryState,
   buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
-  buildPressureAdmissionFailure,
   buildSystemTableMutationRoutingGapFailure,
-  createCallbackDriverRegistry,
-  createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
-  createHash,
-  createTimeoutBudgetError,
-  executePlan,
-  executeStage,
   getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
-  getSchemaByTableName,
   getSystemTableMutationRoutingGapBlocker,
-  hasActiveAddressedPartitionService,
-  isNodeRecordReady,
-  isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isRetryableManagedSplitTransition,
-  isSqlRequest,
-  normalizeControlPlaneMutationWorkClass,
-  parseCallbackModuleArtifact,
-  reorderParams,
-  resolveBootstrapLeaderSelection,
   resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
+
+const TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES = new Set([
+  TABLES.SQL_TRANSACTIONS,
+  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+]);
 
 class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   buildRetryableControlPlaneLifecycleMutationFailure(
@@ -151,11 +47,15 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     ) {
       return null;
     }
+    const dependencyTables =
+      this.resolveTransactionControlDependencyTables(error);
     const routingGapBlocker = getSystemTableMutationRoutingGapBlocker({
+      dependencyTables,
       queryExecutor: this.queryExecutor,
-      routingReadinessDimension:
-        queryOptions?.routingReadinessDimension ||
-        this.defaultRoutingReadinessDimension,
+      routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+        tableName,
+        queryOptions?.routingReadinessDimension,
+      ),
     });
     if (routingGapBlocker) {
       return buildSystemTableMutationRoutingGapFailure({
@@ -195,7 +95,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   buildTimedOutSqlRequestFailure(sqlRequest, error) {
     if (
       !this.isRetryableControlPlaneMutationFailure(error) ||
-      typeof sqlRequest?.statement !== "string" ||
+      typeof sqlRequest?.statement !== 'string' ||
       sqlRequest.statement.length === 0
     ) {
       return null;
@@ -207,15 +107,16 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     } catch (_error) {
       return null;
     }
-    if (!ast || typeof ast !== "object") {
+    if (!ast || typeof ast !== 'object') {
       return null;
     }
 
     const queryOptions = {
       workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
-      routingReadinessDimension:
-        sqlRequest?.routingReadinessDimension ||
-        this.defaultRoutingReadinessDimension,
+      routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+        ast?.table || null,
+        sqlRequest?.routingReadinessDimension,
+      ),
     };
     if (
       (ast.type === QUERY_AST_TYPE.UPDATE ||
@@ -234,7 +135,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       ast.type === QUERY_AST_TYPE.ALTER_TABLE
     ) {
       return this.buildRetryableControlPlaneLifecycleMutationFailure(
-        typeof ast.tableName === "string" ? ast.tableName : null,
+        typeof ast.tableName === 'string' ? ast.tableName : null,
         error,
         queryOptions,
       );
@@ -270,7 +171,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     ) {
       return null;
     }
+    const dependencyTables =
+      this.resolveTransactionControlDependencyTables(error);
     const routingGapBlocker = getSystemTableMutationRoutingGapBlocker({
+      dependencyTables,
       queryExecutor: this.queryExecutor,
       routingReadinessDimension:
         queryOptions?.routingReadinessDimension ||
@@ -301,6 +205,30 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       tableName,
       workClass,
     });
+  }
+
+  resolveTransactionControlDependencyTables(errorLike = null) {
+    const dependencyTables = new Set();
+    const addDependencyTable = (tableName) => {
+      if (
+        typeof tableName !== 'string' ||
+        tableName.length === 0 ||
+        !BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES.has(tableName)
+      ) {
+        return;
+      }
+      dependencyTables.add(tableName);
+    };
+
+    addDependencyTable(errorLike?.failedTable);
+    addDependencyTable(errorLike?.firstFailedParticipant?.failedTable);
+    for (const participantFailure of Array.isArray(errorLike?.participantFailures) ?
+      errorLike.participantFailures :
+      []) {
+      addDependencyTable(participantFailure?.failedTable);
+    }
+
+    return dependencyTables.size > 0 ? [...dependencyTables] : null;
   }
 
   /**
@@ -340,75 +268,16 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
    * @private
    */
   async recordWriteExecutionFailure(context = {}) {
+    const failureResult = context?.failureResult || null;
     const trackedFailure = {
       success: false,
       error:
-        context?.failureResult?.error ||
+        failureResult?.error ||
         context?.error?.message ||
         QUERY_ERROR_MSG.QUERY_EXECUTION_FAILED,
       retryCount: 0,
     };
-    if (
-      typeof context?.failureResult?.errorCode === "string" &&
-      context.failureResult.errorCode.length > 0
-    ) {
-      trackedFailure.errorCode = context.failureResult.errorCode;
-    }
-    if (context?.failureResult?.deferRetry === true) {
-      trackedFailure.deferRetry = true;
-    }
-    if (
-      Number.isFinite(context?.failureResult?.retryAfterMs) &&
-      context.failureResult.retryAfterMs > 0
-    ) {
-      trackedFailure.retryAfterMs = Math.floor(
-        context.failureResult.retryAfterMs,
-      );
-    }
-    if (
-      typeof context?.failureResult?.outcome === "string" &&
-      context.failureResult.outcome.length > 0
-    ) {
-      trackedFailure.outcome = context.failureResult.outcome;
-    }
-    if (
-      typeof context?.failureResult?.contractState === "string" &&
-      context.failureResult.contractState.length > 0
-    ) {
-      trackedFailure.contractState = context.failureResult.contractState;
-    }
-    if (
-      typeof context?.failureResult?.nextAction === "string" &&
-      context.failureResult.nextAction.length > 0
-    ) {
-      trackedFailure.nextAction = context.failureResult.nextAction;
-    }
-    if (
-      typeof context?.failureResult?.reasonCode === "string" &&
-      context.failureResult.reasonCode.length > 0
-    ) {
-      trackedFailure.reasonCode = context.failureResult.reasonCode;
-    }
-    if (Array.isArray(context?.failureResult?.reasonCodes)) {
-      trackedFailure.reasonCodes = [...context.failureResult.reasonCodes];
-    }
-    if (Array.isArray(context?.failureResult?.failedDimensions)) {
-      trackedFailure.failedDimensions = [
-        ...context.failureResult.failedDimensions,
-      ];
-    }
-    if (
-      context?.failureResult?.runtimeAuthority &&
-      typeof context.failureResult.runtimeAuthority === "object"
-    ) {
-      trackedFailure.runtimeAuthority = context.failureResult.runtimeAuthority;
-    }
-    if (
-      context?.failureResult?.details &&
-      typeof context.failureResult.details === "object"
-    ) {
-      trackedFailure.details = { ...context.failureResult.details };
-    }
+    this.applyTrackedWriteFailureMetadata(trackedFailure, failureResult);
     if (context?.txState) {
       await this.transactionCoordinator.markWriteOperationResult(
         context.sessionId,
@@ -421,6 +290,71 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         context.statementType,
         trackedFailure,
       );
+    }
+  }
+
+  applyTrackedWriteFailureMetadata(trackedFailure, failureResult = null) {
+    if (!failureResult || typeof failureResult !== 'object') {
+      return;
+    }
+    this.copyTrackedWriteFailureStringField(
+      trackedFailure,
+      'errorCode',
+      failureResult.errorCode,
+    );
+    if (failureResult.deferRetry === true) {
+      trackedFailure.deferRetry = true;
+    }
+    if (
+      Number.isFinite(failureResult.retryAfterMs) &&
+      failureResult.retryAfterMs > 0
+    ) {
+      trackedFailure.retryAfterMs = Math.floor(failureResult.retryAfterMs);
+    }
+    this.copyTrackedWriteFailureStringField(
+      trackedFailure,
+      'outcome',
+      failureResult.outcome,
+    );
+    this.copyTrackedWriteFailureStringField(
+      trackedFailure,
+      'contractState',
+      failureResult.contractState,
+    );
+    this.copyTrackedWriteFailureStringField(
+      trackedFailure,
+      'nextAction',
+      failureResult.nextAction,
+    );
+    this.copyTrackedWriteFailureStringField(
+      trackedFailure,
+      'reasonCode',
+      failureResult.reasonCode,
+    );
+    if (Array.isArray(failureResult.reasonCodes)) {
+      trackedFailure.reasonCodes = [...failureResult.reasonCodes];
+    }
+    if (Array.isArray(failureResult.failedDimensions)) {
+      trackedFailure.failedDimensions = [...failureResult.failedDimensions];
+    }
+    if (
+      failureResult.runtimeAuthority &&
+      typeof failureResult.runtimeAuthority === 'object'
+    ) {
+      trackedFailure.runtimeAuthority = failureResult.runtimeAuthority;
+    }
+    if (failureResult.details && typeof failureResult.details === 'object') {
+      trackedFailure.details = {...failureResult.details};
+    }
+  }
+
+  copyTrackedWriteFailureStringField(
+    trackedFailure,
+    fieldName,
+    fieldValue,
+  ) {
+    if (typeof fieldValue === 'string' && fieldValue.length > 0) {
+      trackedFailure[fieldName] = fieldValue;
     }
   }
 
@@ -441,7 +375,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const distributedPlan = this.distributedQueryPlanner.planInsert(
       ast,
       params,
-      { sessionId },
+      {sessionId},
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
     const tablePlan = distributedPlan.tablePlans.get(tableName) || null;
@@ -455,7 +389,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const writePlan = this.distributedWriteCoordinator.createWritePlan(
       ast,
       params,
-      { sessionId },
+      {sessionId},
     );
     this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
@@ -515,9 +449,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension:
-          queryOptions.routingReadinessDimension ||
-          this.defaultRoutingReadinessDimension,
+        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+          tableName,
+          queryOptions.routingReadinessDimension,
+        ),
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -620,7 +555,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const distributedPlan = this.distributedQueryPlanner.planUpdate(
       ast,
       params,
-      { sessionId },
+      {sessionId},
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
@@ -701,9 +636,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension:
-          queryOptions.routingReadinessDimension ||
-          this.defaultRoutingReadinessDimension,
+        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+          tableName,
+          queryOptions.routingReadinessDimension,
+        ),
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -805,7 +741,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     const distributedPlan = this.distributedQueryPlanner.planDelete(
       ast,
       params,
-      { sessionId },
+      {sessionId},
     );
     const planningDurationMs = Date.now() - planningStartTimeMs;
 
@@ -886,9 +822,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
         deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension:
-          queryOptions.routingReadinessDimension ||
-          this.defaultRoutingReadinessDimension,
+        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+          tableName,
+          queryOptions.routingReadinessDimension,
+        ),
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -982,7 +919,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
       return;
     }
     if (
-      typeof this.transactionCoordinator.recoverFromSystemTables !== "function"
+      typeof this.transactionCoordinator.recoverFromSystemTables !== 'function'
     ) {
       this.transactionStateRecovered = true;
       return;
@@ -1016,7 +953,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
   resumeRecoveredDistributedTransactions() {
     if (
       typeof this.transactionCoordinator.resumeRecoveredTransactions !==
-      "function"
+      'function'
     ) {
       const summary = createEmptyTransactionRecoveryReplaySummary();
       this.lastTransactionRecoveryReplayResult = summary;
@@ -1076,10 +1013,10 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
     if (!this.systemCache) {
       return [];
     }
-    if (typeof this.systemCache.getAll === "function") {
+    if (typeof this.systemCache.getAll === 'function') {
       return this.systemCache.getAll(tableName) || [];
     }
-    if (typeof this.systemCache.filter === "function") {
+    if (typeof this.systemCache.filter === 'function') {
       return this.systemCache.filter(tableName, () => true) || [];
     }
     return [];
@@ -1109,7 +1046,7 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
    */
   canPersistDistributedTransactionState() {
     const gateway = this.getControlPlaneSystemTableGateway();
-    if (typeof gateway?.supportsMutationSubmission === "function") {
+    if (typeof gateway?.supportsMutationSubmission === 'function') {
       return gateway.supportsMutationSubmission();
     }
     return Boolean(this.cdcIntegrationService);
@@ -1128,18 +1065,40 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
    * @private
    */
   buildDistributedTransactionMutationOptions(tableName, options = {}) {
-    const workClass = options?.workClass || PRESSURE_WORK_CLASS.CRITICAL;
+    const requestedWorkClass =
+      options?.workClass || PRESSURE_WORK_CLASS.CRITICAL;
+    const workloadClass =
+      typeof options?.workloadClass === 'string' &&
+      options.workloadClass.length > 0 ?
+        options.workloadClass :
+      TRANSACTION_CONTROL_MUTATION_WORKLOAD_TABLES.has(tableName) ?
+        CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION :
+        null;
+    const workloadProfile = workloadClass ?
+      buildControlPlaneWorkloadProfile(workloadClass, {
+        workClass: requestedWorkClass,
+        allowPressureDefer: options?.allowPressureDefer,
+      }) :
+      null;
+    const workClass = workloadProfile?.workClass || requestedWorkClass;
     const mutationOptions = {
       workClass,
       deliveryPriority:
-        workClass === PRESSURE_WORK_CLASS.CRITICAL
-          ? "critical"
-          : this.resolveRoutedDeliveryPriority(tableName),
+        workClass === PRESSURE_WORK_CLASS.CRITICAL ?
+          'critical' :
+          this.resolveRoutedDeliveryPriority(tableName),
       skipCacheWait: true,
       mergePolicy: CONTROL_PLANE_MUTATION_MERGE_POLICY.REPLACE_PENDING,
     };
+    if (workloadProfile) {
+      mutationOptions.workloadClass = workloadProfile.workloadClass;
+      mutationOptions.allowPressureDefer =
+        workloadProfile.allowPressureDefer;
+    } else if (typeof options?.allowPressureDefer === 'boolean') {
+      mutationOptions.allowPressureDefer = options.allowPressureDefer;
+    }
     const coalescingKey =
-      typeof options?.coalescingKey === "string" ? options.coalescingKey : "";
+      typeof options?.coalescingKey === 'string' ? options.coalescingKey : '';
     if (coalescingKey.length > 0) {
       mutationOptions.coalescingKey = coalescingKey;
     }
@@ -1154,4 +1113,4 @@ class SQLQueryEngineSegment7 extends SQLQueryEngineSegment6 {
    */
 }
 
-export { SQLQueryEngineSegment7 };
+export {SQLQueryEngineSegment7};

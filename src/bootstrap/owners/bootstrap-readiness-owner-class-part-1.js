@@ -23,6 +23,7 @@ import {
 } from "../shared/local-query-transport-readiness.js";
 import { buildBootstrapReadinessStage } from "../bootstrap-readiness-ladder.js";
 import { buildPublicationRecoveryProtocolSnapshot } from "../../control-plane/recovery-protocol-snapshot.js";
+import { hasTransitionalStartupAuthorityEvidence } from "../../control-plane/startup-authority-snapshot-owner.js";
 import { CONTROL_PLANE_WRITE_HEALTH_STATE } from "../control-plane-write-health-owner.js";
 import { canBypassBootstrapInitPriorityReasons } from "../startup-recovery-coordinator.js";
 const BOOTSTRAP_READINESS_OWNER_LITERAL = Object.freeze({
@@ -134,11 +135,18 @@ function hasBootstrapJoinAuthority(priorityRecoveryHealth) {
   if (priorityRecoveryHealth.healthy === true) {
     return true;
   }
+  const details =
+    priorityRecoveryHealth.details &&
+    typeof priorityRecoveryHealth.details === TYPEOF.OBJECT
+      ? priorityRecoveryHealth.details
+      : null;
+  if (details && hasTransitionalStartupAuthorityEvidence(details)) {
+    return true;
+  }
   return (
-    !priorityRecoveryHealth.details ||
-    typeof priorityRecoveryHealth.details !== TYPEOF.OBJECT ||
-    typeof priorityRecoveryHealth.details.failureReason !== TYPEOF.STRING ||
-    priorityRecoveryHealth.details.failureReason.length === NUM.ZERO
+    !details ||
+    typeof details.failureReason !== TYPEOF.STRING ||
+    details.failureReason.length === NUM.ZERO
   );
 }
 const PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE = Object.freeze({
@@ -495,26 +503,39 @@ class BootstrapReadinessOwnerPart1 {
       typeof priorityRecoveryHealth.details === TYPEOF.OBJECT
         ? priorityRecoveryHealth.details
         : null;
-    const coordinator = this.getStartupRecoveryCoordinator();
-    if (!coordinator || typeof coordinator.evaluate !== TYPEOF.FUNCTION) {
-      this.appendPriorityRecoveryProtocolFields(
-        response,
-        priorityRecoveryDetails,
-      );
-      return response;
-    }
-    const startupRecovery = coordinator.evaluate({
+    const startupRecovery = this.evaluateStartupRecovery({
       snapshot,
       priorityRecoveryHealth,
       startupAuthority,
     });
-    if (!startupRecovery || typeof startupRecovery !== TYPEOF.OBJECT) {
+    if (!startupRecovery) {
       this.appendPriorityRecoveryProtocolFields(
         response,
         priorityRecoveryDetails,
       );
       return response;
     }
+    this.appendStartupRecoverySnapshotFields(response, startupRecovery);
+    this.appendPriorityRecoveryProtocolFields(
+      response,
+      this.resolvePriorityRecoveryProtocolDetails(
+        startupRecovery,
+        priorityRecoveryDetails,
+      ),
+    );
+    return response;
+  }
+  evaluateStartupRecovery(options) {
+    const coordinator = this.getStartupRecoveryCoordinator();
+    if (!coordinator || typeof coordinator.evaluate !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const startupRecovery = coordinator.evaluate(options);
+    return startupRecovery && typeof startupRecovery === TYPEOF.OBJECT ?
+      startupRecovery :
+      null;
+  }
+  appendStartupRecoverySnapshotFields(response, startupRecovery) {
     if (
       typeof startupRecovery.recoveryStage === TYPEOF.STRING &&
       startupRecovery.recoveryStage.length > NUM.ZERO
@@ -579,22 +600,25 @@ class BootstrapReadinessOwnerPart1 {
       response.startupAuthorityPublicationObservationState =
         startupRecovery.publicationObservationState;
     }
-    this.appendPriorityRecoveryProtocolFields(
-      response,
+  }
+  resolvePriorityRecoveryProtocolDetails(
+    startupRecovery,
+    priorityRecoveryDetails,
+  ) {
+    const hasPriorityRecoveryProtocolDetails =
       startupRecovery.targetParticipation ||
-        startupRecovery.recoveryProtocolState ||
-        (Array.isArray(startupRecovery.priorityRecoveryReasonCodes) &&
-          startupRecovery.priorityRecoveryReasonCodes.length > NUM.ZERO)
-        ? {
-            recoveryProtocolState:
-              startupRecovery.recoveryProtocolState || null,
-            priorityRecoveryReasonCodes:
-              startupRecovery.priorityRecoveryReasonCodes || [],
-            targetParticipation: startupRecovery.targetParticipation || null,
-          }
-        : priorityRecoveryDetails,
-    );
-    return response;
+      startupRecovery.recoveryProtocolState ||
+      (Array.isArray(startupRecovery.priorityRecoveryReasonCodes) &&
+        startupRecovery.priorityRecoveryReasonCodes.length > NUM.ZERO);
+    if (!hasPriorityRecoveryProtocolDetails) {
+      return priorityRecoveryDetails;
+    }
+    return {
+      recoveryProtocolState: startupRecovery.recoveryProtocolState || null,
+      priorityRecoveryReasonCodes:
+        startupRecovery.priorityRecoveryReasonCodes || [],
+      targetParticipation: startupRecovery.targetParticipation || null,
+    };
   }
   getStartupAuthoritySnapshot(observedAt = Date.now()) {
     const service = this.getControlPlaneReadinessService();
@@ -693,23 +717,33 @@ class BootstrapReadinessOwnerPart1 {
         ? membershipPublication.publicationRecoveryGate
         : null;
     if (publicationRecoveryGate) {
-      if (
-        typeof publicationRecoveryGate.state === TYPEOF.STRING &&
-        publicationRecoveryGate.state.length > NUM.ZERO
-      ) {
-        response.publishedControlPlaneGateState = publicationRecoveryGate.state;
-      }
-      if (typeof publicationRecoveryGate.ready === TYPEOF.BOOLEAN) {
-        response.publishedControlPlaneGateReady = publicationRecoveryGate.ready;
-      }
-      if (Number.isFinite(publicationRecoveryGate.pendingAckCount)) {
-        response.publishedControlPlanePendingAckCount = Math.max(
-          NUM.ZERO,
-          Math.floor(publicationRecoveryGate.pendingAckCount),
-        );
-      }
+      this.appendPublicationRecoveryGateFields(
+        response,
+        publicationRecoveryGate,
+      );
       return response;
     }
+    this.appendPublicationAckFields(response, membershipPublication);
+    return response;
+  }
+  appendPublicationRecoveryGateFields(response, publicationRecoveryGate) {
+    if (
+      typeof publicationRecoveryGate.state === TYPEOF.STRING &&
+      publicationRecoveryGate.state.length > NUM.ZERO
+    ) {
+      response.publishedControlPlaneGateState = publicationRecoveryGate.state;
+    }
+    if (typeof publicationRecoveryGate.ready === TYPEOF.BOOLEAN) {
+      response.publishedControlPlaneGateReady = publicationRecoveryGate.ready;
+    }
+    if (Number.isFinite(publicationRecoveryGate.pendingAckCount)) {
+      response.publishedControlPlanePendingAckCount = Math.max(
+        NUM.ZERO,
+        Math.floor(publicationRecoveryGate.pendingAckCount),
+      );
+    }
+  }
+  appendPublicationAckFields(response, membershipPublication) {
     if (Array.isArray(membershipPublication.requiredAckNodeIds)) {
       response.publishedControlPlaneRequiredAckCount = Math.max(
         NUM.ZERO,
@@ -732,7 +766,6 @@ class BootstrapReadinessOwnerPart1 {
           response.publishedControlPlaneAcknowledgedCount,
       );
     }
-    return response;
   }
   appendReadinessStageFields(response) {
     if (!response || typeof response !== TYPEOF.OBJECT) {

@@ -21,6 +21,8 @@ const FIXTURE_NODE_ID = 'node-a';
 const FIXTURE_LOCAL_NODE_ID = 'node-local';
 const FIXTURE_NOW_MS = 2000;
 const FIXTURE_LAST_HEARTBEAT_MS = 1700;
+const AUTHORITATIVE_PUBLICATION_READ_DELIVERY_SOURCE =
+  'control-plane:read:control_plane_publications';
 
 test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
   'through the authoritative owner path', async (t) => {
@@ -303,6 +305,47 @@ test('AuthoritativeControlPlaneView preserves the owner-lane priority hint ' +
     calls[0]?.options?.queryOptions?.workloadClass,
     CONTROL_PLANE_WORKLOAD_CLASS.READINESS_CRITICAL_READ,
     'authoritative reads should still emit the shared workload taxonomy',
+  );
+});
+
+test('AuthoritativeControlPlaneView stamps one canonical delivery source for ' +
+  'priority publication reads', async (t) => {
+  const calls = [];
+  const view = new AuthoritativeControlPlaneView({
+    nodeId: FIXTURE_LOCAL_NODE_ID,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{
+            publication_id: 'pub-1',
+            publication_kind: 'cluster_membership',
+            publication_epoch: 1,
+            status: 'PUBLISHED',
+          }],
+          source: 'owner_rpc_lane',
+        };
+      },
+    },
+  });
+
+  await view.readRows(
+    TABLES.CONTROL_PLANE_PUBLICATIONS,
+    `SELECT * FROM ${TABLES.CONTROL_PLANE_PUBLICATIONS}`,
+    [],
+  );
+
+  t.equal(calls.length, 1, 'authoritative read should execute once');
+  t.equal(
+    calls[0]?.options?.queryOptions?.deliverySource,
+    AUTHORITATIVE_PUBLICATION_READ_DELIVERY_SOURCE,
+    'authoritative priority publication reads should carry one canonical delivery source',
   );
 });
 

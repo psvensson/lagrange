@@ -1,4 +1,7 @@
 import { CDC_INTEGRATION_SERVICE_SHARED } from "./cdc-integration-service-shared.js";
+import {
+  resolveControlPlaneSystemTableDeliverySource,
+} from "../control-plane/control-plane-system-table-gateway-shared.js";
 
 const {
   ADDRESS,
@@ -1130,6 +1133,11 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
     const routingReadinessDimension =
       options?.queryOptions?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
+      deliverySource: options?.queryOptions?.deliverySource || null,
+      tableName,
+      sql: statement,
+    });
     const executionOptions = {
       ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT
         ? options.queryOptions
@@ -1141,6 +1149,7 @@ class CDCIntegrationServiceSegment1 extends EventEmitter {
         options?.queryOptions?.deliveryPriority ||
         options?.deliveryPriority ||
         undefined,
+      deliverySource,
       allowReadinessAuthoritativeRefresh:
         options?.queryOptions?.allowReadinessAuthoritativeRefresh !== false,
     };

@@ -66,6 +66,20 @@ function resolvePostgresEndpointPort(postgresPort) {
     POSTGRES_WIRE_DEFAULT_PORT;
 }
 
+function resolvePositiveIntegerPort(portValue) {
+  const parsedPort = Number(portValue);
+  return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
+}
+
+function resolveBracketedEndpointPort(address) {
+  const bracketClose = address.indexOf(']');
+  const colonAfterBracket = address.lastIndexOf(':');
+  if (bracketClose <= 1 || colonAfterBracket <= bracketClose) {
+    return 0;
+  }
+  return resolvePositiveIntegerPort(address.substring(colonAfterBracket + 1));
+}
+
 function buildBuiltInMetaEndpoints(options = {}) {
   const {wasmMetaEndpoint, adminMetaEndpoint} = buildMetaServiceEndpoints(
     options.nodeId,
@@ -213,29 +227,21 @@ function resolveEndpointPort(wsPort, nodeAddress) {
   if (trimmed.includes('://')) {
     try {
       const parsed = new URL(trimmed);
-      const parsedPort = Number(parsed.port);
-      return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
+      return resolvePositiveIntegerPort(parsed.port);
     } catch (_error) {
       // Non-URL node addresses are parsed below.
     }
   }
 
   if (trimmed.startsWith('[')) {
-    const bracketClose = trimmed.indexOf(']');
-    const colonAfterBracket = trimmed.lastIndexOf(':');
-    if (bracketClose > 1 && colonAfterBracket > bracketClose) {
-      const bracketPort = Number(trimmed.substring(colonAfterBracket + 1));
-      return Number.isInteger(bracketPort) && bracketPort > 0 ? bracketPort : 0;
-    }
-    return 0;
+    return resolveBracketedEndpointPort(trimmed);
   }
 
   const lastColon = trimmed.lastIndexOf(':');
   if (lastColon <= 0 || trimmed.indexOf(':') !== lastColon) {
     return 0;
   }
-  const parsedPort = Number(trimmed.substring(lastColon + 1));
-  return Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : 0;
+  return resolvePositiveIntegerPort(trimmed.substring(lastColon + 1));
 }
 
 export {

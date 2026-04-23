@@ -14,6 +14,9 @@ import {
   LATENCY_TOPOLOGY_MESSAGE_TYPE,
 } from '../../src/topology/latency-topology-constants.js';
 import {
+  buildCriticalVisibilityCdcPropagationDeliverySource,
+} from '../../src/cache/cdc-propagation-delivery-profile.js';
+import {
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_STRATEGY,
@@ -381,6 +384,16 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
     assert.equal(router.calls[1].payload.targetGroupId, 'g-2');
     assert.equal(router.calls[0].options.targetNodeId, 'node-c');
     assert.equal(router.calls[1].options.targetNodeId, 'node-b');
+    assert.equal(router.calls[0].options.deliveryPriority, 'critical');
+    assert.equal(router.calls[1].options.deliveryPriority, 'critical');
+    assert.equal(
+      router.calls[0].options.deliverySource,
+      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.NODES),
+    );
+    assert.equal(
+      router.calls[1].options.deliverySource,
+      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.NODES),
+    );
     assert.equal(service.getStats().groupedCount, 1);
 
     service.stop();
@@ -1119,9 +1132,12 @@ test('CDCGroupPropagationService defers immediate propagation while the local ro
     service.start();
 
     const result = await service.propagateCDCEvent({
-      tableName: TABLES.NODES,
+      tableName: TABLES.MESSAGE_GROUPS,
       operation: 'UPSERT',
-      data: {[COLUMN.NODE_ID]: 'node-pressure-deferred'},
+      data: {
+        [COLUMN.GROUP_ID]: 'mg-pressure-deferred',
+        group_name: 'mg-pressure-deferred',
+      },
       sourceMessageGroupService: source,
     });
 
@@ -1388,9 +1404,12 @@ test('CDCGroupPropagationService defers background retries while local router pr
     service.start();
 
     service.scheduleBackgroundRetry({
-      tableName: TABLES.NODES,
+      tableName: TABLES.MESSAGE_GROUPS,
       operation: 'UPSERT',
-      data: {[COLUMN.NODE_ID]: 'node-deferred'},
+      data: {
+        [COLUMN.GROUP_ID]: 'mg-deferred',
+        group_name: 'mg-deferred',
+      },
       sourceGroupId: 'g-1',
       targets: [
         {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
@@ -1491,6 +1510,11 @@ test('CDCGroupPropagationService keeps partition visibility propagation on the c
       router.calls[0].options?.deliveryPriority,
       'critical',
       'partition visibility propagation should claim the critical router lane',
+    );
+    assert.equal(
+      router.calls[0].options?.deliverySource,
+      buildCriticalVisibilityCdcPropagationDeliverySource(TABLES.PARTITIONS),
+      'partition visibility propagation should use the visibility delivery source',
     );
 
     service.stop();

@@ -7,6 +7,8 @@ import {randomUUID} from 'node:crypto';
 import {ReportWriter} from '../report-writer.js';
 import {writeFailureBundlesForReport} from '../failure-bundle.js';
 import {registerFailureBundlePlaybackTests} from './failure-bundle-playback-test-cases.js';
+import {selectDominantPriorityRecoveryPartitionWitness} from
+  '../priority-recovery-summary-normalization.js';
 
 const UTF8_ENCODING = 'utf8';
 
@@ -1258,7 +1260,7 @@ describe('failure-bundle', () => {
       );
       assert.deepEqual(
         scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
-        ['publication_epoch_pending', 'priority_partitions_not_spread'],
+        ['priority_partitions_not_spread', 'publication_epoch_pending'],
       );
       assert.equal(
         scenarioBundle.summary.failureClassification.failureClass,
@@ -1352,6 +1354,912 @@ describe('failure-bundle', () => {
         likelyWaitingTimeSource: 'dispatch_queue',
       });
     });
+
+  it('derives blocked-partition counts from retained priority-partition summaries',
+    async () => {
+      const priorityRecoveryReportPath = join(
+        tempDir,
+        'priority-recovery-report.json',
+      );
+      const writer = new ReportWriter(priorityRecoveryReportPath);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 14,
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 1,
+                  totalPriorityPartitionCount: 5,
+                  blockedPartitions: [{
+                    partitionId: 'control_plane_publications-p1',
+                    spreadGap: 1,
+                  }, {
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 2,
+                  }],
+                  missingPartitionIds: [
+                    'control_plane_publications-p1',
+                    'replica_operations-p1',
+                  ],
+                },
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(
+        await readFile(priorityRecoveryReportPath, UTF8_ENCODING),
+      );
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: priorityRecoveryReportPath,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      const bundlePath = resolve(tempDir, scenarioBundles[0].links.jsonPath);
+      const scenarioBundle = JSON.parse(
+        await readFile(bundlePath, UTF8_ENCODING),
+      );
+
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityPartitionSummary
+          .blockedPartitionCount,
+        2,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityPartitionSummary
+          .largestSpreadGap,
+        2,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityPartitionSummary
+          .totalSpreadGap,
+        3,
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        ['control_plane_publications-p1', 'replica_operations-p1'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryUnresolvedPartitionCount,
+        0,
+      );
+    });
+
+  it(
+    'distinguishes convergence-blocked partitions from unresolved decision partitions',
+    async () => {
+      const priorityRecoveryReportPath = join(
+        tempDir,
+        'priority-recovery-report-with-decision-mismatch.json',
+      );
+      const writer = new ReportWriter(priorityRecoveryReportPath);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 15,
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 5,
+                  blockedPartitions: [{
+                    partitionId: 'control_plane_publications-p1',
+                    spreadGap: 2,
+                  }, {
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+              },
+              priorityRecoveryDecisionSnapshots: {
+                schemaVersion: 1,
+                publicationEpoch: 15,
+                snapshots: [{
+                  partitionId: 'control_plane_publications-p1',
+                  semanticState: 'spread_satisfied_in_flight',
+                  planner: {
+                    ready: false,
+                    spreadGap: 2,
+                  },
+                }, {
+                  partitionId: 'replica_operations-p1',
+                  semanticState: 'recovering_in_flight',
+                  planner: {
+                    ready: false,
+                    spreadGap: 1,
+                  },
+                  coordinator: {
+                    operationCount: 1,
+                    operationIds: ['op-1'],
+                  },
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(
+        await readFile(priorityRecoveryReportPath, UTF8_ENCODING),
+      );
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: priorityRecoveryReportPath,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      const bundlePath = resolve(tempDir, scenarioBundles[0].links.jsonPath);
+      const scenarioBundle = JSON.parse(
+        await readFile(bundlePath, UTF8_ENCODING),
+      );
+
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        ['control_plane_publications-p1', 'replica_operations-p1'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryBlockedPartitionCount,
+        2,
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryUnresolvedPartitionIds,
+        ['replica_operations-p1'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryUnresolvedPartitionCount,
+        1,
+      );
+    });
+
+  it(
+    'prefers canonical priority-recovery observation over conflicting raw diagnostics',
+    async () => {
+      const priorityRecoveryReportPath = join(
+        tempDir,
+        'priority-recovery-report-with-canonical-observation.json',
+      );
+      const writer = new ReportWriter(priorityRecoveryReportPath);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              priorityRecoveryObservation: {
+                publicationEpoch: 22,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                pendingAckNodeIds: [],
+                pendingAckCount: 0,
+                publicationConvergenceGateReasons: [
+                  'priority_control_plane_spread_pending',
+                ],
+                closureRecordId: 'CL-OBS-022',
+                closureWitnessClass:
+                  'publication_converged_priority_spread_pending',
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 1,
+                  blockedPartitionCount: 1,
+                  largestSpreadGap: 1,
+                  totalSpreadGap: 1,
+                  missingPartitionIds: ['replica_operations-p1'],
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+                priorityRecoveryBlockedPartitionIds: [
+                  'replica_operations-p1',
+                ],
+                priorityRecoveryBlockedPartitionCount: 1,
+                priorityRecoveryUnresolvedPartitionIds: [],
+                priorityRecoveryUnresolvedPartitionCount: 0,
+                priorityRecoveryProgressClassIds: [
+                  'operation_created_but_no_step_transitions',
+                ],
+                priorityRecoveryProgressClassCount: 1,
+                priorityRecoverySemanticStateIds: ['operation_stalled'],
+                priorityRecoverySemanticStateCount: 1,
+                projectionDiagnostics: {
+                  readinessDecisionMode: 'explicit_dimensions',
+                  readinessDecisionDimensions: ['control_plane_writable'],
+                  recoveryEligibleProjectionEnabled: true,
+                  recoveryEligibleIncludedNodeIds: ['joiner-1'],
+                  readinessExcludedNodeIds: [],
+                  clusterMemberUnhealthyExcludedNodeIds: [],
+                },
+              },
+              publicationConvergence: {
+                publicationEpoch: 22,
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 2,
+                  blockedPartitions: [{
+                    partitionId: 'control_plane_publications-p1',
+                    spreadGap: 2,
+                  }, {
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+              },
+              publicationConvergenceGate: {
+                publicationEpoch: 22,
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                reasonCodes: ['priority_partitions_not_spread'],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'control_plane_publications-p1',
+                    spreadGap: 2,
+                  }, {
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+              },
+              priorityRecoveryDecisionSnapshots: {
+                schemaVersion: 1,
+                publicationEpoch: 22,
+                snapshots: [{
+                  partitionId: 'control_plane_publications-p1',
+                  semanticState: 'operation_stalled',
+                  blockerReasons: [
+                    'operation_created_but_no_step_transitions',
+                  ],
+                  planner: {
+                    ready: false,
+                    spreadGap: 2,
+                  },
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(
+        await readFile(priorityRecoveryReportPath, UTF8_ENCODING),
+      );
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: priorityRecoveryReportPath,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        ['replica_operations-p1'],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryBlockedPartitionCount,
+        1,
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryUnresolvedPartitionIds,
+        [],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence
+          .priorityRecoveryUnresolvedPartitionCount,
+        0,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-OBS-022',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'publication_converged_priority_spread_pending',
+      );
+      assert.equal(
+        triageSummary.publicationConvergence.priorityPartitionSummary
+          .blockedPartitionCount,
+        1,
+      );
+      assert.deepEqual(
+        triageSummary.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+        ['replica_operations-p1'],
+      );
+    },
+  );
+
+  it(
+    'preserves publication gate reasons and projection diagnostics across failure-bundle and triage outputs',
+    async () => {
+      const priorityRecoveryReportPath = join(
+        tempDir,
+        'priority-recovery-report-with-gate-reason-codes.json',
+      );
+      const writer = new ReportWriter(priorityRecoveryReportPath);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 21,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 1,
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+                projectionDiagnostics: {
+                  readinessDecisionMode: 'explicit_dimensions',
+                  readinessDecisionDimensions: ['control_plane_writable'],
+                  recoveryEligibleProjectionEnabled: true,
+                  recoveryEligibleIncludedNodeIds: ['joiner-1'],
+                  readinessExcludedNodeIds: [],
+                  clusterMemberUnhealthyExcludedNodeIds: ['seed-2'],
+                },
+              },
+              publicationConvergenceGate: {
+                publicationEpoch: 21,
+                publicationStatus: 'PUBLISHED',
+                pendingAckNodeIds: [],
+                reasonCodes: ['priority_partitions_not_spread'],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    spreadGap: 1,
+                  }],
+                },
+              },
+              activeGateBestProgress: {
+                closureRecordId: 'CL-PR-021',
+                closureWitnessClass:
+                  'publication_converged_priority_spread_pending',
+              },
+              priorityRecoveryDecisionSnapshots: {
+                schemaVersion: 1,
+                publicationEpoch: 21,
+                snapshots: [{
+                  partitionId: 'replica_operations-p1',
+                  semanticState: 'operation_stalled',
+                  blockerReasons: [
+                    'operation_created_but_no_step_transitions',
+                  ],
+                  planner: {
+                    ready: false,
+                    spreadGap: 1,
+                  },
+                  admission: {
+                    decisionDimension: 'controlPlaneRecoveryEligible',
+                  },
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(
+        await readFile(priorityRecoveryReportPath, UTF8_ENCODING),
+      );
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: priorityRecoveryReportPath,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const scenarioMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.markdownPath),
+        UTF8_ENCODING,
+      );
+      const triageMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.triageMarkdownPath),
+        UTF8_ENCODING,
+      );
+
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.publicationConvergenceGateReasons,
+        ['priority_partitions_not_spread'],
+      );
+      assert.deepEqual(
+        scenarioBundle.publicationConvergence.pendingAckNodeIds,
+        [],
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureRecordId,
+        'CL-PR-021',
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.closureWitnessClass,
+        'publication_converged_priority_spread_pending',
+      );
+      assert.equal(
+        triageSummary.publicationConvergence.projectionDiagnostics
+          .readinessDecisionMode,
+        'explicit_dimensions',
+      );
+      assert.deepEqual(
+        triageSummary.publicationConvergence.publicationConvergenceGateReasons,
+        ['priority_partitions_not_spread'],
+      );
+      assert.match(
+        scenarioMarkdown,
+        /Pending Ack Nodes: none/,
+      );
+      assert.match(
+        scenarioMarkdown,
+        /Publication Gate Reasons: priority_partitions_not_spread/,
+      );
+      assert.match(
+        scenarioMarkdown,
+        /Closure Witness Class: publication_converged_priority_spread_pending/,
+      );
+      assert.match(
+        scenarioMarkdown,
+        /Projection Diagnostics: mode=explicit_dimensions, dimensions=control_plane_writable, recoveryEligibleProjectionEnabled=true, recoveryEligibleIncluded=joiner-1, readinessExcluded=none, clusterMemberUnhealthyExcluded=seed-2/,
+      );
+      assert.match(
+        triageMarkdown,
+        /## Publication Convergence/,
+      );
+      assert.match(
+        triageMarkdown,
+        /Publication Gate Reasons: priority_partitions_not_spread/,
+      );
+      assert.match(
+        triageMarkdown,
+        /Blocked Partitions: replica_operations-p1/,
+      );
+      assert.match(
+        triageMarkdown,
+        /Closure Record Id: CL-PR-021/,
+      );
+    },
+  );
+
+  it(
+    'prefers canonical priority-recovery progress reasons over generic node-admission wait summaries',
+    async () => {
+      const PRIORITY_RECOVERY_PROGRESS_REPORT_PATH = join(
+        tempDir,
+        'priority-recovery-progress-handoff-report.json',
+      );
+      const PRIORITY_RECOVERY_PARTITION_ID = 'sql_write_operations-p1';
+      const PRIORITY_RECOVERY_DOMINANT_REASON =
+        'priority_recovery_rebalancer_handoff_stalled';
+      const PRIORITY_RECOVERY_CURRENT_OWNER = 'rebalancer_leader';
+      const PRIORITY_RECOVERY_BLOCKING_BOUNDARY = 'rebalancer_handoff';
+      const PRIORITY_RECOVERY_WAIT_MODE = 'stalled';
+      const PRIORITY_RECOVERY_NEXT_ACTION = 'schedule_followup_rebalance';
+      const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE = 'target_creation';
+      const PRIORITY_RECOVERY_STEP_AGE_MS = 62050;
+      const PRIORITY_RECOVERY_STEP_TIMEOUT_MS = 60000;
+      const LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
+      const writer = new ReportWriter(PRIORITY_RECOVERY_PROGRESS_REPORT_PATH);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        loadMetrics: {
+          total: 100,
+          success: 85,
+          failed: 0,
+          errors: 0,
+          waitReasons: {
+            [LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED]: 55,
+          },
+        },
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              priorityRecoveryObservation: {
+                publicationEpoch: 23,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityRecoveryBlockedPartitionIds: [
+                  'control_plane_publications-p1',
+                  'sql_transaction_participants-p1',
+                  PRIORITY_RECOVERY_PARTITION_ID,
+                ],
+                priorityRecoveryBlockedPartitionCount: 3,
+                priorityRecoveryUnresolvedPartitionIds: [
+                  PRIORITY_RECOVERY_PARTITION_ID,
+                ],
+                priorityRecoveryUnresolvedPartitionCount: 1,
+                priorityRecoveryPartitionWitnesses: [{
+                  partitionId: PRIORITY_RECOVERY_PARTITION_ID,
+                  semanticStateId: 'operation_stalled',
+                  progressContractState: 'blocked',
+                  currentOwner: PRIORITY_RECOVERY_CURRENT_OWNER,
+                  nextRequiredAction: PRIORITY_RECOVERY_NEXT_ACTION,
+                  blockingBoundary: PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+                  waitMode: PRIORITY_RECOVERY_WAIT_MODE,
+                  workflowProgressPhaseId:
+                    PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+                  stepAgeMs: PRIORITY_RECOVERY_STEP_AGE_MS,
+                  stepTimeoutMs: PRIORITY_RECOVERY_STEP_TIMEOUT_MS,
+                  retryAfterMs: 5000,
+                  lastProgressAtMs: 1234,
+                  progressEvidenceSourceIds: ['op-55', 'handoff-1'],
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(
+        await readFile(PRIORITY_RECOVERY_PROGRESS_REPORT_PATH, UTF8_ENCODING),
+      );
+
+      assert.equal(
+        report.scenarios[0].priorityRecoveryProgressSummary.dominantWitness
+          .blockingBoundary,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+      );
+      assert.equal(
+        report.scenarios[0].priorityRecoveryProgressSummary.dominantWitness
+          .waitMode,
+        PRIORITY_RECOVERY_WAIT_MODE,
+      );
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: PRIORITY_RECOVERY_PROGRESS_REPORT_PATH,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageMarkdown = await readFile(
+        resolve(tempDir, scenarioBundles[0].links.triageMarkdownPath),
+        UTF8_ENCODING,
+      );
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        PRIORITY_RECOVERY_DOMINANT_REASON,
+      );
+      assert.equal(
+        triageSummary.summary.dominantReason,
+        PRIORITY_RECOVERY_DOMINANT_REASON,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.currentOwner,
+        PRIORITY_RECOVERY_CURRENT_OWNER,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.blockingBoundary,
+        PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.nextRequiredAction,
+        PRIORITY_RECOVERY_NEXT_ACTION,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.workflowProgressPhaseId,
+        PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.stepAgeMs,
+        PRIORITY_RECOVERY_STEP_AGE_MS,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.stepTimeoutMs,
+        PRIORITY_RECOVERY_STEP_TIMEOUT_MS,
+      );
+      assert.match(
+        triageMarkdown,
+        /Progress Summary: partitionCount=1, partition=sql_write_operations-p1, owner=rebalancer_leader, boundary=rebalancer_handoff, waitMode=stalled, nextAction=schedule_followup_rebalance, contractState=blocked, retryAfterMs=5000, lastProgressAtMs=1234/,
+      );
+    },
+  );
+
+  it(
+    'emits pressure-shaped dominant reasons when the shared actuation contract says scheduling is blocked by pressure',
+    async () => {
+      const PRESSURE_REPORT_PATH = join(
+        tempDir,
+        'priority-recovery-pressure-report.json',
+      );
+      const PRESSURE_DOMINANT_REASON =
+        'priority_recovery_operation_scheduling_persist_blocked_by_pressure';
+      const writer = new ReportWriter(PRESSURE_REPORT_PATH);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              priorityRecoveryObservation: {
+                publicationEpoch: 23,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityRecoveryPartitionWitnesses: [{
+                  partitionId: 'sql_write_operations-p1',
+                  progressContractState: 'pending',
+                  currentOwner: 'rebalancer_leader',
+                  actuationState: 'persist_blocked_by_pressure',
+                  nextRequiredAction: 'create_recovery_operation',
+                  blockingBoundary: 'operation_scheduling',
+                  waitMode: 'stalled',
+                  pressureState: 'write_backlog',
+                  pendingWrites: 36,
+                  pendingWriteGrowthCount: 1626,
+                  lastProgressAtMs: 1234,
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(PRESSURE_REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: PRESSURE_REPORT_PATH,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        PRESSURE_DOMINANT_REASON,
+      );
+      assert.equal(
+        triageSummary.summary.dominantReason,
+        PRESSURE_DOMINANT_REASON,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.actuationState,
+        'persist_blocked_by_pressure',
+      );
+    },
+  );
+
+  it(
+    'emits retry-shaped dominant reasons when the shared actuation contract says scheduling is waiting on retry',
+    async () => {
+      const RETRY_REPORT_PATH = join(
+        tempDir,
+        'priority-recovery-retry-report.json',
+      );
+      const RETRY_DOMINANT_REASON =
+        'priority_recovery_operation_scheduling_persist_failed_retryable';
+      const writer = new ReportWriter(RETRY_REPORT_PATH);
+      writer.addResult('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        error: 'convergence timeout',
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              priorityRecoveryObservation: {
+                publicationEpoch: 23,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+                priorityRecoveryPartitionWitnesses: [{
+                  partitionId: 'sql_write_operations-p1',
+                  progressContractState: 'pending',
+                  currentOwner: 'rebalancer_leader',
+                  actuationState: 'persist_failed_retryable',
+                  nextRequiredAction: 'create_recovery_operation',
+                  blockingBoundary: 'operation_scheduling',
+                  waitMode: 'retry_scheduled',
+                  retryAfterMs: 2500,
+                  lastProgressAtMs: 1234,
+                }],
+              },
+            },
+          },
+        },
+      });
+      await writer.write();
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: JSON.parse(
+          await readFile(RETRY_REPORT_PATH, UTF8_ENCODING),
+        ).scenarios,
+        reportOutputPath: RETRY_REPORT_PATH,
+        outputDir: tempDir,
+        workspaceRoot: tempDir,
+      });
+      const scenarioBundle = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.jsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+      const triageSummary = JSON.parse(
+        await readFile(
+          resolve(tempDir, scenarioBundles[0].links.triageJsonPath),
+          UTF8_ENCODING,
+        ),
+      );
+
+      assert.equal(
+        scenarioBundle.summary.dominantReason,
+        RETRY_DOMINANT_REASON,
+      );
+      assert.equal(
+        triageSummary.summary.dominantReason,
+        RETRY_DOMINANT_REASON,
+      );
+      assert.equal(
+        scenarioBundle.publicationConvergence.priorityRecoveryProgressSummary
+          .dominantWitness.actuationState,
+        'persist_failed_retryable',
+      );
+    },
+  );
+
+  it(
+    'breaks same-rank dominant witness ties with actuation specificity before falling back to timestamps',
+    async () => {
+      const selectedWitness = selectDominantPriorityRecoveryPartitionWitness([
+        {
+          partitionId: 'plain-scheduling',
+          progressContractState: 'blocked',
+          actuationState: 'action_required',
+          blockingBoundary: 'operation_scheduling',
+          waitMode: 'stalled',
+          lastProgressAtMs: 1234,
+        },
+        {
+          partitionId: 'pressure-shaped-scheduling',
+          progressContractState: 'blocked',
+          actuationState: 'persist_blocked_by_pressure',
+          blockingBoundary: 'operation_scheduling',
+          waitMode: 'stalled',
+          lastProgressAtMs: 1234,
+        },
+      ]);
+
+      assert.equal(
+        selectedWitness?.partitionId,
+        'pressure-shaped-scheduling',
+      );
+    },
+  );
 
   registerFailureBundlePlaybackTests({
     it,

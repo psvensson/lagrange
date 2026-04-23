@@ -377,65 +377,73 @@ function hasObservedActiveTargetReplica(record, options = {}) {
   const serviceRows = Array.isArray(options.serviceRows) ?
     options.serviceRows :
     [];
-  for (const serviceRow of serviceRows) {
-    const serviceType = String(firstStringField(
+  return serviceRows.some((serviceRow) =>
+    doesObservedActiveTargetReplicaServiceRowMatch(
       serviceRow,
-      'service_type',
-      'serviceType',
-      'type',
-    ) || '').toLowerCase();
-    if (serviceType && serviceType !== entityType) {
-      continue;
-    }
-    if (String(firstStringField(
-      serviceRow,
-      'status',
-    ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
-      continue;
-    }
-    if (String(firstStringField(
-      serviceRow,
-      'node_id',
-      'nodeId',
-    ) || '') !== targetNodeId) {
-      continue;
-    }
-    const serviceReplicaId = firstStringField(
-      serviceRow,
-      'replica_id',
-      'replicaId',
-      'service_id',
-      'serviceId',
-      'id',
-    );
-    if (serviceReplicaId === replicaId) {
-      if (entityType === SERVICE_TYPE_PARTITION) {
-        if (String(firstStringField(
-          serviceRow,
-          'partition_id',
-          'partitionId',
-          'id',
-        ) || '') === entityId) {
-          return true;
-        }
-        continue;
-      }
-      if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
-        if (String(firstStringField(
-          serviceRow,
-          'group_id',
-          'groupId',
-          'id',
-        ) || '') === entityId) {
-          return true;
-        }
-        continue;
-      }
-      return true;
-    }
+      entityType,
+      entityId,
+      targetNodeId,
+      replicaId,
+    ),
+  );
+}
+function doesObservedActiveTargetReplicaServiceRowMatch(
+  serviceRow,
+  entityType,
+  entityId,
+  targetNodeId,
+  replicaId,
+) {
+  const serviceType = String(firstStringField(
+    serviceRow,
+    'service_type',
+    'serviceType',
+    'type',
+  ) || '').toLowerCase();
+  if (serviceType && serviceType !== entityType) {
+    return false;
   }
-
-  return false;
+  if (String(firstStringField(
+    serviceRow,
+    'status',
+  ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+    return false;
+  }
+  if (String(firstStringField(
+    serviceRow,
+    'node_id',
+    'nodeId',
+  ) || '') !== targetNodeId) {
+    return false;
+  }
+  const serviceReplicaId = firstStringField(
+    serviceRow,
+    'replica_id',
+    'replicaId',
+    'service_id',
+    'serviceId',
+    'id',
+  );
+  if (serviceReplicaId !== replicaId) {
+    return false;
+  }
+  if (entityType === SERVICE_TYPE_PARTITION) {
+    return String(firstStringField(
+      serviceRow,
+      'partition_id',
+      'partitionId',
+      'id',
+    ) || '') === entityId;
+  }
+  if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
+    return String(firstStringField(
+      serviceRow,
+      'group_id',
+      'groupId',
+      'id',
+    ) || '') === entityId;
+  }
+  return true;
 }
 
 function hasObservedActiveTargetServiceOwnership(record, options = {}) {

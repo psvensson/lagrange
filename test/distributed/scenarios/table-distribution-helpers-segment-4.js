@@ -1,3 +1,10 @@
+import assert from "node:assert/strict";
+import {
+  resolvePartitionGrowthAndSpreadScenarioConfig,
+  resolveTableDistributionQueryConfig,
+} from "../harness/scenario-config.js";
+import { TIMEOUTS } from "../harness/constants.js";
+import { evaluatePartitionReplicaTopology } from "../../../src/admin/admin-shared-metadata-consistency.js";
 import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_3 } from "./table-distribution-helpers-segment-3.js";
 const {
   TABLE_NAME_LOGS,

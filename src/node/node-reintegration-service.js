@@ -9,13 +9,16 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM} from '../constants/index.js';
+import {NUM, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  STARTUP_AUTHORITY_STATE,
+} from '../control-plane/startup-authority-snapshot-owner.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   NODE_REINTEGRATION_DEFAULT,
@@ -78,6 +81,8 @@ class NodeReintegrationService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway || null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService || null;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -123,6 +128,9 @@ class NodeReintegrationService extends EventEmitter {
     }
     if (options.controlPlaneSystemTableGateway) {
       this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    }
+    if (options.controlPlaneReadinessService) {
+      this.controlPlaneReadinessService = options.controlPlaneReadinessService;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -385,6 +393,22 @@ class NodeReintegrationService extends EventEmitter {
   async completeReintegration(node) {
     const nodeId = node.node_id;
     const now = Date.now();
+    const admissionBlock = this.resolveStartupAuthorityAdmissionBlock(nodeId);
+
+    if (admissionBlock) {
+      const pending = this.pendingReintegrations.get(nodeId);
+      if (pending) {
+        pending.status = ReintegrationStatus.PENDING;
+        pending.blockedReasonCode = admissionBlock.reasonCode;
+        pending.blockedAt = now;
+      }
+      this.logger.info(NODE_REINTEGRATION_LOG_MSG.REINTEGRATION_ADMISSION_BLOCKED, {
+        nodeId,
+        startupAuthorityState: admissionBlock.startupAuthorityState,
+        reasonCode: admissionBlock.reasonCode,
+      });
+      return;
+    }
 
     this.logger.info(NODE_REINTEGRATION_LOG_MSG.COMPLETING_REINTEGRATION, {
       nodeId,
@@ -620,6 +644,43 @@ class NodeReintegrationService extends EventEmitter {
       getMessageRouter: () => this.cdcIntegrationService?.messageRouter || null,
     }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
+  }
+
+  resolveStartupAuthorityAdmissionBlock(nodeId) {
+    const readinessService = this.controlPlaneReadinessService;
+    if (!readinessService ||
+        typeof readinessService.getStartupAuthoritySnapshotSync !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    try {
+      const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
+        nodeId,
+      );
+      const admission =
+        startupAuthority?.admission &&
+          typeof startupAuthority.admission === TYPEOF.OBJECT ?
+          startupAuthority.admission :
+          null;
+      const blocked =
+        startupAuthority?.state === STARTUP_AUTHORITY_STATE.BLOCKED ||
+        admission?.admitted === false;
+      if (blocked !== true) {
+        return null;
+      }
+      const reasonCode =
+        Array.isArray(admission?.reasonCodes) &&
+          admission.reasonCodes.length > NUM.ZERO ?
+          admission.reasonCodes[NUM.ZERO] :
+          NODE_REINTEGRATION_REASON.ADMISSION_BLOCKED;
+      return {
+        reasonCode,
+        startupAuthorityState: startupAuthority?.state || null,
+      };
+    } catch (_error) {
+      return null;
+    }
   }
 
   /**

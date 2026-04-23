@@ -54,6 +54,17 @@ const CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY = Object.freeze({
 });
 
 const MESSAGE_GROUP_REPLICA_ID_INFIX = '-r';
+const REGISTER_MESSAGE_GROUP_SERVICE_OPTION = Object.freeze({
+  PREFER_CONTROL_PLANE_UPSERT: 'preferControlPlaneUpsert',
+});
+const MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET = Object.freeze({
+  LOCAL_SEED_SHORTCUT:
+    'create-self-hosted local seed service registration',
+  JOIN_METADATA_SHORTCUT:
+    'create-self-hosted join metadata service registration',
+});
+const MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED =
+  'Message group service registration shortcut returned non-success';
 
 /**
  * Handles the create-self-hosted-message-group phase and
@@ -509,17 +520,47 @@ class CreateMessageGroupPhase {
       typeof seedNodeId === 'string' &&
       seedNodeId.length > NUM.ZERO &&
       seedNodeId === this.nodeId &&
-      typeof this.delegates.upsertSystemTableRowWithRetry === 'function';
+      typeof this.delegates.upsertJoinServiceRowWithRetry ===
+        'function';
+    const useJoinMetadataRegistrationShortcut =
+      !assignmentId &&
+      options[
+        REGISTER_MESSAGE_GROUP_SERVICE_OPTION.PREFER_CONTROL_PLANE_UPSERT
+      ] === true &&
+      typeof this.delegates.upsertJoinServiceRowWithRetry ===
+        'function';
 
-    if (useLocalSeedRegistrationShortcut) {
-      await this.delegates.upsertSystemTableRowWithRetry(
-        TABLES.SERVICES,
+    if (
+      useLocalSeedRegistrationShortcut ||
+      useJoinMetadataRegistrationShortcut
+    ) {
+      const admissionTarget =
+        useLocalSeedRegistrationShortcut ?
+          MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET
+            .LOCAL_SEED_SHORTCUT :
+          MESSAGE_GROUP_SERVICE_REGISTRATION_ADMISSION_TARGET
+            .JOIN_METADATA_SHORTCUT;
+      const shortcutResult =
+        await this.delegates.upsertJoinServiceRowWithRetry(
         serviceData,
         {
-          admissionTarget:
-            'create-self-hosted local seed service registration',
+          admissionTarget,
         },
       );
+      if (shortcutResult?.success === false) {
+        logger.error(
+          JOINING_LOG_MSG
+            .MESSAGE_GROUP_REGISTER_NON_SUCCESS,
+          {
+            nodeId: this.nodeId,
+            replicaId,
+            error: shortcutResult.error,
+          },
+        );
+        throw new Error(
+          MESSAGE_GROUP_REGISTER_SHORTCUT_FAILED,
+        );
+      }
 
       if (typeof this.delegates.seedJoinTimeCacheRow === 'function') {
         this.delegates.seedJoinTimeCacheRow(
@@ -535,7 +576,8 @@ class CreateMessageGroupPhase {
           replicaId,
           groupId,
           attempt: NUM.ONE,
-          localSeedShortcut: true,
+          localSeedShortcut:
+            useLocalSeedRegistrationShortcut === true,
         },
       );
       return;
@@ -745,7 +787,12 @@ class CreateMessageGroupPhase {
         groupId,
         replicaId,
         svc,
-        {status: SERVICE_STATUS.STOPPED},
+        {
+          status: SERVICE_STATUS.STOPPED,
+          [REGISTER_MESSAGE_GROUP_SERVICE_OPTION
+            .PREFER_CONTROL_PLANE_UPSERT]:
+            true,
+        },
       );
     }
 

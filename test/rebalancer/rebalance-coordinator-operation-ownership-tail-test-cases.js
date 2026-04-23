@@ -17,6 +17,8 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
   createCoordinator,
   disablePersistenceConfirmation,
 }) {
+const REBALANCE_OPERATION_BUDGET_MS = 300000;
+
 test('RebalanceCoordinator bypasses empty-cache admission backoff for critical partition create',
   async (t) => {
     let sqlQueryCalls = 0;
@@ -175,6 +177,101 @@ test(
         'priority control-plane add/replace should use its dedicated add budget lane',
       );
     } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'RebalanceCoordinator lets repeated critical dispatch retry grace consume the enclosing operation budget',
+  async (t) => {
+    const TRANSITION_GRACE_OPERATION_ID = 'op-priority-sending-grace-budget';
+    const PRIORITY_PARTITION_ID = 'replica_operations-p1';
+    const BASE_CREATED_AT_MS = 1_000_000;
+    const BASE_UPDATED_AT_MS = BASE_CREATED_AT_MS + 10_000;
+    const FIRST_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 10_000;
+    const SECOND_GRACE_RECORDED_AT_MS = BASE_UPDATED_AT_MS + 55_000;
+    const RETRY_DELAY_MS = 5_000;
+    const originalDateNow = Date.now;
+    let nowMs = FIRST_GRACE_RECORDED_AT_MS;
+    Date.now = () => nowMs;
+
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    try {
+      coordinator.workflowOwner.recordTransitionRetryGrace(
+        TRANSITION_GRACE_OPERATION_ID,
+        {
+          workflowStep: WORKFLOW_STEP.SENDING,
+          partitionId: PRIORITY_PARTITION_ID,
+          updatedAt: BASE_UPDATED_AT_MS,
+          createdAt: BASE_CREATED_AT_MS,
+        },
+        RETRY_DELAY_MS,
+      );
+
+      nowMs = SECOND_GRACE_RECORDED_AT_MS;
+      coordinator.workflowOwner.recordTransitionRetryGrace(
+        TRANSITION_GRACE_OPERATION_ID,
+        {
+          workflowStep: WORKFLOW_STEP.SENDING,
+          partitionId: PRIORITY_PARTITION_ID,
+          updatedAt: BASE_UPDATED_AT_MS,
+          createdAt: BASE_CREATED_AT_MS,
+        },
+        RETRY_DELAY_MS,
+      );
+
+      const sendingTimeoutMs = coordinator.getTimeoutForStep(
+        WORKFLOW_STEP.SENDING,
+        {partitionId: PRIORITY_PARTITION_ID},
+      );
+
+      t.equal(
+        coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          BASE_UPDATED_AT_MS + sendingTimeoutMs + 1,
+        ),
+        true,
+      );
+      t.equal(
+        coordinator.workflowOwner.hasActiveTransitionRetryGrace(
+          TRANSITION_GRACE_OPERATION_ID,
+          BASE_CREATED_AT_MS + REBALANCE_OPERATION_BUDGET_MS + 1,
+        ),
+        false,
+      );
+    } finally {
+      Date.now = originalDateNow;
       await coordinator.shutdown();
     }
   },
@@ -1038,6 +1135,114 @@ test(
         canStartPriorityOperation,
         true,
         'priority add budget should stay open once combined REPLACE targets already satisfy spread for one partition',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'RebalanceCoordinator reuses the workflow-owner priority decision snapshot ' +
+    'before falling back to planning snapshots for grouped priority add budget',
+  async (t) => {
+    const spreadSatisfiedInFlightState = 'spread_satisfied_in_flight';
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.config.maxConcurrentAdds = 1;
+
+    const activePriorityReplaceOperation = {
+      operationId: 'op-priority-runtime-snapshot',
+      type: 'REPLACE',
+      partitionId: 'sql_transaction_participants-p1',
+      sourceNodeId: 'node-local',
+      targetNodeId: 'node-remote-a',
+      replicaId: 'sql_transaction_participants-p1-r4',
+      status: 'active',
+      workflowStep: 'ACTIVE',
+      createdAt: 100,
+      updatedAt: 101,
+      completedAt: null,
+      errorMessage: null,
+      stepsHistory: [{
+        step: 'ACTIVE',
+        timestamp: 101,
+      }],
+    };
+    let planningSnapshotCalls = 0;
+
+    coordinator.queryCachedIncompleteOperations = async () => (
+      [activePriorityReplaceOperation]
+    );
+    coordinator.queryIncompleteOperations = async () => (
+      [activePriorityReplaceOperation]
+    );
+    coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
+      async () => ({
+        partitionId: 'sql_transaction_participants-p1',
+        semanticState: spreadSatisfiedInFlightState,
+        completion: {
+          state: spreadSatisfiedInFlightState,
+          blocked: false,
+        },
+        spreadCompletion: {
+          satisfied: true,
+        },
+        coordinator: {
+          operationCount: 1,
+          operationIds: ['op-priority-runtime-snapshot'],
+          operation: null,
+        },
+      });
+    coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshotForOperation =
+      async () => {
+        planningSnapshotCalls += 1;
+        return null;
+      };
+
+    try {
+      const canStartPriorityOperation =
+        await coordinator.canStartPriorityAddOperation({
+          partitionId: 'control_plane_publications-p1',
+        });
+
+      t.equal(
+        canStartPriorityOperation,
+        true,
+        'priority add budget should consume the runtime decision snapshot directly when grouped in-flight work is already spread-satisfied',
+      );
+      t.equal(
+        planningSnapshotCalls,
+        0,
+        'the grouped priority add-budget path should not fall back to planning snapshots when the workflow owner already exposes the canonical decision snapshot',
       );
     } finally {
       await coordinator.shutdown();

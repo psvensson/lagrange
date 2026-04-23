@@ -1051,91 +1051,71 @@ class JoinReadinessEvaluator {
   getCanonicalJoinActiveNodeIds(systemTableCache) {
     const readinessService =
       this.delegates.getControlPlaneReadinessService?.() || null;
-    if (!systemTableCache ||
+    const startupAuthorityNodeIds =
+      this.getStartupAuthorityActiveNodeIds(readinessService);
+    if (!readinessService ||
+        !systemTableCache ||
         typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      if (readinessService &&
-          typeof readinessService.getStartupAuthoritySnapshotSync ===
-            TYPEOF.FUNCTION) {
-        const startupAuthority =
-          readinessService.getStartupAuthoritySnapshotSync(
-            this.nodeId,
-            this.now(),
-          );
-        if (Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
-          return [...new Set(
-            startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
-              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-            ),
-          )];
-        }
-      }
-      return [];
+      return startupAuthorityNodeIds;
     }
 
-    const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
-    const activeNodeIds = [];
-    if (readinessService &&
-        typeof readinessService.getNodeReadinessSync === TYPEOF.FUNCTION) {
-      for (const row of nodeRows) {
-        const normalizedRow = normalizeNodeRow(row);
-        const {nodeId} = normalizedRow;
-        if (nodeId.length === NUM.ZERO) {
-          continue;
-        }
-        const readiness = readinessService.getNodeReadinessSync(
-          nodeId,
-          {
-            decisionDimension:
-              CONTROL_PLANE_READINESS_DIMENSION
-                .CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          },
-        );
-        if (readiness?.dimensions?.[
-          CONTROL_PLANE_READINESS_DIMENSION
-            .CONTROL_PLANE_RECOVERY_ELIGIBLE
-        ] === true) {
-          activeNodeIds.push(nodeId);
-        }
-      }
-      if (activeNodeIds.length > NUM.ZERO) {
-        return activeNodeIds;
-      }
-      if (typeof readinessService.getStartupAuthoritySnapshotSync ===
-          TYPEOF.FUNCTION) {
-        const startupAuthority =
-          readinessService.getStartupAuthoritySnapshotSync(
-            this.nodeId,
-            this.now(),
-          );
-        if (Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
-          return [...new Set(
-            startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
-              typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
-            ),
-          )];
-        }
-      }
+    const readinessActiveNodeIds =
+      this.getReadinessActiveNodeIds(
+        readinessService,
+        systemTableCache.getAll(TABLES.NODES) || [],
+      );
+    if (readinessActiveNodeIds.length > NUM.ZERO) {
+      return readinessActiveNodeIds;
     }
+    return startupAuthorityNodeIds;
+  }
+
+  getReadinessActiveNodeIds(readinessService, nodeRows) {
+    if (typeof readinessService?.getNodeReadinessSync !== TYPEOF.FUNCTION) {
+      return [];
+    }
+    const activeNodeIds = [];
     for (const row of nodeRows) {
       const normalizedRow = normalizeNodeRow(row);
-      const {nodeId, status} = normalizedRow;
+      const {nodeId} = normalizedRow;
       if (nodeId.length === NUM.ZERO) {
         continue;
       }
-      if (status !== String(NODE_STATE.ACTIVE).toLowerCase()) {
-        continue;
+      const readiness = readinessService.getNodeReadinessSync(
+        nodeId,
+        {
+          decisionDimension:
+            CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE,
+        },
+      );
+      if (readiness?.dimensions?.[
+        CONTROL_PLANE_READINESS_DIMENSION
+          .CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ] === true) {
+        activeNodeIds.push(nodeId);
       }
-      activeNodeIds.push(nodeId);
     }
-    if (activeNodeIds.length > NUM.ZERO) {
-      return activeNodeIds;
+    return activeNodeIds;
+  }
+
+  getStartupAuthorityActiveNodeIds(readinessService) {
+    if (typeof readinessService?.getStartupAuthoritySnapshotSync !==
+        TYPEOF.FUNCTION) {
+      return [];
     }
-    const bootstrapActiveNodeIds =
-      this.resolveBootstrapTopologySnapshotActiveNodeIds();
-    if (bootstrapActiveNodeIds.length > NUM.ZERO) {
-      return bootstrapActiveNodeIds;
+    const startupAuthority = readinessService.getStartupAuthoritySnapshotSync(
+      this.nodeId,
+      this.now(),
+    );
+    if (!Array.isArray(startupAuthority?.canonicalStartupNodeIds)) {
+      return [];
     }
-    return [];
+    return [...new Set(
+      startupAuthority.canonicalStartupNodeIds.filter((nodeId) =>
+        typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+      ),
+    )];
   }
 }
 

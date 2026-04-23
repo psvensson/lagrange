@@ -61,6 +61,176 @@ test('AdminControlSnapshot routes publication convergence through the shared rec
     );
   });
 
+test('AdminControlSnapshot exports publication convergence gate from live priority recovery readiness',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+            membershipPublication: {
+              publicationEpoch: 12,
+              status: 'PUBLISHED',
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+              acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+              priorityPartitionSummary: {
+                satisfied: false,
+                missingPartitionIds: ['replica_operations-p1'],
+                blockedPartitions: [{
+                  partitionId: 'replica_operations-p1',
+                  requiredDistinctNodeCount: 3,
+                  readyDistinctNodeCount: 2,
+                  spreadGap: 1,
+                }],
+              },
+            },
+            priorityControlPlaneRecovery: {
+              active: false,
+              reasonCodes: [],
+              publicationRecoveryGate: {
+                state: 'ready',
+                ready: true,
+                active: false,
+                publicationEpoch: 12,
+                publicationStatus: 'PUBLISHED',
+                reasonCodes: [],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 3,
+                  totalPriorityPartitionCount: 5,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+                pendingAckNodeIds: [],
+                missingPublishedNodeIds: [],
+                prioritySpreadPending: false,
+                publicationPending: false,
+                ackPending: false,
+              },
+            },
+          }];
+        },
+        membershipPublicationService: {
+          getLatestClusterPublicationSync() {
+            return {
+              publication_id: 'publication-12',
+              publication_kind: 'cluster_membership',
+              publication_epoch: 12,
+              status: 'PUBLISHED',
+              published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+              required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+              acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+            };
+          },
+          getLatestPublishedClusterPublicationSync() {
+            return {
+              publication_id: 'publication-12',
+              publication_kind: 'cluster_membership',
+              publication_epoch: 12,
+              status: 'PUBLISHED',
+              published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+              required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+              acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+            };
+          },
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergenceGate,
+      {
+        ready: true,
+        prioritySpreadPending: false,
+        priorityPartitionSummary: {
+          satisfied: true,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+      },
+      'control snapshot should export the live readiness-owned convergence gate',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.priorityRecoveryObservation,
+      {
+        publicationEpoch: 12,
+        publicationStatus: 'PUBLISHED',
+        recoveryProtocolState: 'priority_spread_pending',
+        priorityRecoveryReasonCodes: [
+          'priority_partitions_not_spread',
+        ],
+        priorityRecoveryBlockedPartitionIds: ['replica_operations-p1'],
+        priorityRecoveryBlockedPartitionCount: 1,
+      },
+      'control snapshot should export the shared priority-recovery observation snapshot',
+    );
+    const priorityRecoveryWitnesses = Array.isArray(
+      result.controlPlaneDiagnostics.priorityRecoveryObservation
+        ?.priorityRecoveryPartitionWitnesses,
+    )
+      ? result.controlPlaneDiagnostics.priorityRecoveryObservation
+          .priorityRecoveryPartitionWitnesses
+      : [];
+    t.ok(
+      priorityRecoveryWitnesses.length > 0,
+      'control snapshot should export priority-recovery partition witnesses',
+    );
+    t.equal(
+      priorityRecoveryWitnesses[0]?.partitionId,
+      'replica_operations-p1',
+      'control snapshot should preserve the blocked partition witness id',
+    );
+    t.ok(
+      typeof priorityRecoveryWitnesses[0]?.progressContractState === 'string' &&
+        priorityRecoveryWitnesses[0].progressContractState.length > 0,
+      'control snapshot should expose witness progress contract state',
+    );
+    t.ok(
+      typeof priorityRecoveryWitnesses[0]?.currentOwner === 'string' &&
+        priorityRecoveryWitnesses[0].currentOwner.length > 0,
+      'control snapshot should expose witness current owner',
+    );
+    t.ok(
+      typeof priorityRecoveryWitnesses[0]?.actuationState === 'string' &&
+        priorityRecoveryWitnesses[0].actuationState.length > 0,
+      'control snapshot should expose witness actuation state',
+    );
+    t.ok(
+      typeof priorityRecoveryWitnesses[0]?.nextRequiredAction === 'string' &&
+        priorityRecoveryWitnesses[0].nextRequiredAction.length > 0,
+      'control snapshot should expose witness next required action',
+    );
+    t.ok(
+      typeof priorityRecoveryWitnesses[0]?.workflowProgressPhaseId === 'string' &&
+        priorityRecoveryWitnesses[0].workflowProgressPhaseId.length > 0,
+      'control snapshot should expose witness workflow progress phase',
+    );
+    t.equal(
+      priorityRecoveryWitnesses[0]?.stepAgeMs,
+      1000,
+      'control snapshot should expose witness workflow step age',
+    );
+    t.ok(
+      typeof result.controlPlaneDiagnostics.priorityRecoveryObservation
+        ?.pressureConditions?.pressureState === 'string',
+      'control snapshot should expose top-level priority-recovery pressure conditions',
+    );
+  });
+
 test('AdminControlSnapshot resolves active nodes from published membership only', async (t) => {
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',

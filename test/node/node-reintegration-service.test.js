@@ -13,6 +13,10 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
+const TEST_REINTEGRATION_ADMISSION_STATE_BLOCKED = 'blocked';
+const TEST_REINTEGRATION_BLOCK_REASON =
+  'cluster_incarnation_identity_mismatch';
+
 // Initialize configuration and logging for tests
 beforeEach(() => {
   const config = ConfigurationManager.getInstance();
@@ -474,6 +478,66 @@ test('NodeReintegrationService - skips stale reintegration completion overwrite'
 
     service.shutdown();
     t.end();
+  });
+
+test('NodeReintegrationService - defers reintegration when startup authority blocks admission',
+  async (t) => {
+    const now = Date.now();
+    const mockCache = createMockCache();
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      controlPlaneSystemTableGateway: mockGateway,
+      controlPlaneReadinessService: {
+        getStartupAuthoritySnapshotSync() {
+          return {
+            state: 'blocked',
+            authorityAvailable: true,
+            admission: {
+              state: TEST_REINTEGRATION_ADMISSION_STATE_BLOCKED,
+              admitted: false,
+              reasonCodes: [TEST_REINTEGRATION_BLOCK_REASON],
+              clusterIncarnationFence: {
+                state: 'identity_mismatch',
+                allowed: false,
+              },
+            },
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    service.pendingReintegrations.set('node-1', {
+      status: ReintegrationStatus.IN_PROGRESS,
+      startedAt: now - 1000,
+    });
+
+    await service.completeReintegration({
+      node_id: 'node-1',
+      status: NodeStatus.RECOVERING,
+      last_heartbeat: now - 1000,
+      recovered_at: now - 5000,
+    });
+
+    t.equal(
+      mockGateway.operations.length,
+      0,
+      'blocked startup authority must suppress reintegration activation writes',
+    );
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.status,
+      ReintegrationStatus.PENDING,
+      'blocked startup authority should leave reintegration retryable',
+    );
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.blockedReasonCode,
+      TEST_REINTEGRATION_BLOCK_REASON,
+      'blocked startup authority should retain the canonical block reason',
+    );
+
+    service.shutdown();
   });
 
 test('NodeReintegrationService - getStats', async (t) => {

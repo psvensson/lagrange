@@ -566,8 +566,8 @@ export function registerFailureBundlePlaybackTests({
       scenarioBundle.publicationConvergence.priorityRecoveryProgressClassIds,
       [
         "eligible_but_no_operation_created",
-        "learner_active_but_never_promotable",
         "operation_created_but_no_step_transitions",
+        "learner_active_but_never_promotable",
       ],
     );
     assert.deepEqual(
@@ -575,40 +575,85 @@ export function registerFailureBundlePlaybackTests({
       ["control_plane_publications-p1", "replica_operations-p1"],
     );
     assert.deepEqual(
-      scenarioBundle.publicationConvergence.priorityRecoveryPartitionWitnesses,
+      scenarioBundle.publicationConvergence
+        .priorityRecoveryUnresolvedPartitionIds,
+      ["control_plane_publications-p1", "replica_operations-p1"],
+    );
+    assert.deepEqual(
+      scenarioBundle.publicationConvergence.priorityRecoveryPartitionWitnesses.map(
+        (witness) => {
+          return {
+            partitionId: witness.partitionId,
+            semanticStateId: witness.semanticStateId,
+            progressClassIds: witness.progressClassIds,
+            blockerReasonCodes: witness.blockerReasonCodes,
+            spreadGap: witness.spreadGap,
+            decisionDimension: witness.decisionDimension,
+            eligibleNodeIds: witness.eligibleNodeIds,
+            recoveryEligibleExcludedNodeIds:
+              witness.recoveryEligibleExcludedNodeIds,
+            activeLearnerNodeIds: witness.activeLearnerNodeIds,
+            promotableLearnerNodeIds: witness.promotableLearnerNodeIds,
+            operationIds: witness.operationIds,
+            completionState: witness.completionState,
+            workflowState: witness.workflowState,
+            visibilityState: witness.visibilityState,
+            convergenceState: witness.convergenceState,
+            workflowSource: witness.workflowSource,
+            snapshotCapturedAt: witness.snapshotCapturedAt,
+            latestOperationWorkflowStep: witness.latestOperationWorkflowStep,
+            latestOperationStatus: witness.latestOperationStatus,
+          };
+        },
+      ),
       [
         {
           partitionId: "control_plane_publications-p1",
-          semanticState: "blocked_unclassified",
-          blockerReasons: ["eligible_but_no_operation_created"],
+          semanticStateId: "blocked_unclassified",
+          progressClassIds: ["eligible_but_no_operation_created"],
+          blockerReasonCodes: ["eligible_but_no_operation_created"],
           spreadGap: 1,
           decisionDimension: "repairEligible",
-          eligibleNodeCount: 2,
+          eligibleNodeIds: ["joiner-1", "joiner-2"],
           recoveryEligibleExcludedNodeIds: [],
           activeLearnerNodeIds: [],
           promotableLearnerNodeIds: [],
           operationIds: [],
+          completionState: null,
+          workflowState: null,
+          visibilityState: null,
+          convergenceState: null,
+          workflowSource: null,
+          snapshotCapturedAt: 5000,
           latestOperationWorkflowStep: null,
           latestOperationStatus: null,
-          latestOperationTimelineStep: null,
         },
         {
           partitionId: "replica_operations-p1",
-          semanticState: "recovering_in_flight",
-          blockerReasons: [
-            "operation_created_but_no_step_transitions",
+          semanticStateId: "recovering_in_flight",
+          progressClassIds: [
             "learner_active_but_never_promotable",
+            "operation_created_but_no_step_transitions",
+          ],
+          blockerReasonCodes: [
+            "learner_active_but_never_promotable",
+            "operation_created_but_no_step_transitions",
           ],
           spreadGap: 1,
           decisionDimension: "controlPlaneRecoveryEligible",
-          eligibleNodeCount: 3,
+          eligibleNodeIds: ["joiner-1", "joiner-2", "joiner-3"],
           recoveryEligibleExcludedNodeIds: [],
           activeLearnerNodeIds: ["joiner-1"],
           promotableLearnerNodeIds: [],
           operationIds: ["op-1"],
+          completionState: null,
+          workflowState: null,
+          visibilityState: null,
+          convergenceState: null,
+          workflowSource: null,
+          snapshotCapturedAt: 5000,
           latestOperationWorkflowStep: "DISPATCHED",
           latestOperationStatus: "open",
-          latestOperationTimelineStep: "CREATE_REPLICA",
         },
       ],
     );
@@ -710,24 +755,21 @@ export function registerFailureBundlePlaybackTests({
       resolve(state.tempDir, scenarioBundles[0].links.markdownPath),
       UTF8_ENCODING,
     );
-    const priorityRecoveryWitnessPattern = new RegExp(
+    const controlPlanePublicationWitnessPattern = new RegExp(
       [
         "Priority Recovery Partition Witnesses: ",
         "control_plane_publications-p1#state=blocked_unclassified",
         "#gap=1#blockers=eligible_but_no_operation_created",
-        "#decision=repairEligible#eligible=2, ",
-        "replica_operations-p1#state=recovering_in_flight",
-        "#gap=1#blockers=",
-        "operation_created_but_no_step_transitions",
-        "\\|learner_active_but_never_promotable",
-        "#decision=controlPlaneRecoveryEligible#eligible=3",
-        "#ops=op-1#step=CREATE_REPLICA#status=open",
-        "#learners=joiner-1",
+        "#decision=repairEligible#eligible=2",
       ].join(""),
     );
     assert.match(
       scenarioMarkdown,
-      priorityRecoveryWitnessPattern,
+      controlPlanePublicationWitnessPattern,
+    );
+    assert.match(
+      scenarioMarkdown,
+      /replica_operations-p1#state=recovering_in_flight#gap=1#blockers=(learner_active_but_never_promotable\|operation_created_but_no_step_transitions|operation_created_but_no_step_transitions\|learner_active_but_never_promotable)#decision=controlPlaneRecoveryEligible#eligible=3#ops=op-1#status=open#learners=joiner-1/,
     );
   });
 

@@ -134,6 +134,22 @@ const {
   resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
+const AUTHORITATIVE_ROUTING_OVERLAY_STATE = Object.freeze({
+  AVAILABLE: "available",
+  AUTHORITATIVE_MISSING: "authoritative_missing",
+  MISSING: "missing",
+});
+
+const AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE = Object.freeze({
+  AVAILABLE: "available",
+  UNAVAILABLE: "unavailable",
+});
+
+const AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE = Object.freeze({
+  ELIGIBLE: "eligible",
+  MASKED: "masked",
+});
+
 class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   listManagedSplitPartitions() {
     if (!this.systemCache || typeof this.systemCache.getAll !== "function") {
@@ -896,6 +912,20 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
           : null;
       },
       getServicesForPartition: (partitionId) => mergeServices(partitionId),
+      shouldMaskCacheServicesForPartition: (partitionId) => {
+        for (const overlay of [primaryOverlay, secondaryOverlay]) {
+          if (
+            !overlay ||
+            typeof overlay.shouldMaskCacheServicesForPartition !== "function"
+          ) {
+            continue;
+          }
+          if (overlay.shouldMaskCacheServicesForPartition(partitionId) === true) {
+            return true;
+          }
+        }
+        return false;
+      },
       refreshPartitionRouting: async (partitionId, options = {}) => {
         for (const overlay of [primaryOverlay, secondaryOverlay]) {
           if (
@@ -942,6 +972,21 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
   }
 
   /**
+   * Resolve whether authoritative overlay state should suppress cached service
+   * rows for one partition.
+   * @param {string} partitionId
+   * @return {boolean}
+   * @private
+   */
+  shouldAuthoritativeRoutingOverlayMaskCacheServices(partitionId) {
+    return (
+      this.getAuthoritativeRoutingOverlayEntryState(partitionId)
+        .cacheServiceState ===
+      AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED
+    );
+  }
+
+  /**
    * Resolve one explicit authoritative overlay entry state.
    * @param {string} partitionId
    * @return {Object}
@@ -951,25 +996,44 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const entry = this.authoritativeRoutingOverlayEntries.get(partitionId);
     if (!entry || typeof entry !== "object") {
       return Object.freeze({
-        state: "missing",
-        partitionState: "unavailable",
+        state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.MISSING,
+        partitionState:
+          AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+        cacheServiceState:
+          AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.ELIGIBLE,
         services: Object.freeze([]),
       });
     }
     const services = Object.freeze(
       Array.isArray(entry.services) ? entry.services : [],
     );
+    if (entry.state === AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING) {
+      return Object.freeze({
+        state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING,
+        partitionState:
+          AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+        cacheServiceState:
+          AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED,
+        services,
+      });
+    }
     if (entry.partition && typeof entry.partition === "object") {
       return Object.freeze({
-        state: "available",
-        partitionState: "available",
+        state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
+        partitionState:
+          AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.AVAILABLE,
         partition: entry.partition,
+        cacheServiceState:
+          AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED,
         services,
       });
     }
     return Object.freeze({
-      state: "available",
-      partitionState: "unavailable",
+      state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
+      partitionState:
+        AUTHORITATIVE_ROUTING_OVERLAY_PARTITION_STATE.UNAVAILABLE,
+      cacheServiceState:
+        AUTHORITATIVE_ROUTING_OVERLAY_CACHE_SERVICE_STATE.MASKED,
       services,
     });
   }
@@ -1006,6 +1070,8 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         [partitionId],
         {
           allowSqlFallback: false,
+          replicaFallbackConsistency:
+            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
           queryTimeoutMs,
         },
       ),
@@ -1016,6 +1082,8 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
         [partitionId, SERVICE_TYPE.PARTITION],
         {
           allowSqlFallback: false,
+          replicaFallbackConsistency:
+            LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
           queryTimeoutMs,
         },
       ),
@@ -1024,21 +1092,33 @@ class SQLQueryEngineSegment4 extends SQLQueryEngineSegment3 {
     const partitionRows = Array.isArray(partitionResult?.rows)
       ? partitionResult.rows
       : [];
+    const partitionReadAvailable = partitionResult?.success !== false;
     const serviceRows = Array.isArray(serviceResult?.rows)
       ? serviceResult.rows.filter(
           (service) => service?.service_type === SERVICE_TYPE.PARTITION,
         )
       : [];
+    const serviceReadAvailable = serviceResult?.success !== false;
 
-    if (partitionRows.length === 0 && serviceRows.length === 0) {
-      this.authoritativeRoutingOverlayEntries.delete(partitionId);
+    if (!partitionReadAvailable || !serviceReadAvailable) {
       return false;
     }
 
-    this.authoritativeRoutingOverlayEntries.set(partitionId, {
-      partition: partitionRows[0] || null,
-      services: serviceRows,
-    });
+    const overlayEntry =
+      partitionRows.length === 0 && serviceRows.length === 0
+        ? {
+            state:
+              AUTHORITATIVE_ROUTING_OVERLAY_STATE.AUTHORITATIVE_MISSING,
+            partition: null,
+            services: Object.freeze([]),
+          }
+        : {
+            state: AUTHORITATIVE_ROUTING_OVERLAY_STATE.AVAILABLE,
+            partition: partitionRows[0] || null,
+            services: serviceRows,
+          };
+
+    this.authoritativeRoutingOverlayEntries.set(partitionId, overlayEntry);
 
     return true;
   }

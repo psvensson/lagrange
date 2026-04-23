@@ -11,6 +11,8 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {resolveRaftTransportDeliveryOptions} from
+  '../../src/raft/constants.js';
 import {registerMessageRouterTailTests} from './message-router-tail-test-cases.js';
 
 /**
@@ -422,6 +424,8 @@ t.test('MessageRouter unit tests', async (t) => {
 
   t.test('should forward router delivery options to query transport sends',
     async (t) => {
+      const QUERY_TRANSPORT_DELIVERY_SOURCE =
+        'control-plane:read:control_plane_publications';
       const router = new MessageRouter({nodeId: 'test-node'});
       await router.initialize();
 
@@ -444,6 +448,7 @@ t.test('MessageRouter unit tests', async (t) => {
       }, {
         timeoutMs: 1234,
         deliveryPriority: 'critical',
+        deliverySource: QUERY_TRANSPORT_DELIVERY_SOURCE,
       });
 
       t.equal(result.acknowledged, true,
@@ -452,7 +457,13 @@ t.test('MessageRouter unit tests', async (t) => {
         'query transport sends should inherit timeoutMs from router delivery');
       t.equal(capturedOptions?.transportDeliveryOptions?.deliveryPriority,
         'critical',
-      'query transport sends should inherit delivery priority from router delivery');
+        'query transport sends should inherit delivery priority from router ' +
+          'delivery');
+      t.equal(
+        capturedOptions?.transportDeliveryOptions?.deliverySource,
+        QUERY_TRANSPORT_DELIVERY_SOURCE,
+        'query transport sends should preserve explicit delivery-source ownership',
+      );
 
       await router.shutdown();
     });
@@ -1298,7 +1309,7 @@ t.test('MessageRouter unit tests', async (t) => {
     });
 
   t.test(
-    'should keep one delivery source from monopolizing the pending queue',
+    'should keep one background delivery source from monopolizing the pending queue',
     async (t) => {
       const router = new MessageRouter({
         nodeId: 'test-node',
@@ -1334,7 +1345,7 @@ t.test('MessageRouter unit tests', async (t) => {
             'remote-node',
             async () => ({acknowledged: true, hotIndex: index}),
             {
-              deliveryPriority: 'critical',
+              deliveryPriority: 'background',
               targetAddress: hotTargetAddress,
               message: {},
             },
@@ -1363,7 +1374,7 @@ t.test('MessageRouter unit tests', async (t) => {
           'remote-node',
           async () => ({acknowledged: true}),
           {
-            deliveryPriority: 'critical',
+            deliveryPriority: 'background',
             targetAddress: hotTargetAddress,
             message: {},
           },
@@ -1406,6 +1417,346 @@ t.test('MessageRouter unit tests', async (t) => {
       await firstDelivery;
       await Promise.all(hotSourceDeliveries);
       await unrelatedDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should keep one critical recovery source from monopolizing the pending queue',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'local-node',
+        nodeAddress: 'ws://local-node:7000',
+        startServer: false,
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 8,
+        outboundQueueCriticalReserve: 4,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const hotRecoveryTargetAddress =
+        'remote-node/partition/control_plane_publications-p1-r4';
+      const criticalSourceDeliveries = [];
+      for (let index = 0; index < 4; index++) {
+        criticalSourceDeliveries.push(
+          router.enqueueOutbound(
+            'remote-node',
+            async () => ({acknowledged: true, criticalIndex: index}),
+            {
+              deliveryPriority: 'critical',
+              targetAddress: hotRecoveryTargetAddress,
+              message: {},
+            },
+          ),
+        );
+        await Promise.resolve();
+      }
+
+      const unrelatedCriticalDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => ({acknowledged: true, unrelated: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/service/control-plane',
+          message: {
+            type: 'NODE_STATE_UPDATE',
+            node_id: 'remote-node',
+            heartbeat_only: true,
+          },
+        },
+      );
+      await Promise.resolve();
+
+      await t.rejects(
+        router.enqueueOutbound(
+          'remote-node',
+          async () => ({acknowledged: true, overflow: true}),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: hotRecoveryTargetAddress,
+            message: {},
+          },
+        ),
+        /queue/i,
+        'same-source critical recovery traffic should be rejected before it fills the node queue',
+      );
+
+      const saturationEntry = warnEntries.find((entry) =>
+        entry.message === 'Outbound queue saturated for node delivery' &&
+        entry.context?.backpressureScope === 'delivery_source');
+      t.ok(
+        saturationEntry,
+        'router should emit one delivery-source saturation warning for critical recovery traffic',
+      );
+      t.equal(
+        saturationEntry?.context?.attemptedDeliverySource,
+        `target:${hotRecoveryTargetAddress}`,
+        'warning should attribute the saturated critical recovery source',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingForSource,
+        4,
+        'warning should report the queued count for the saturated critical source',
+      );
+      t.equal(
+        saturationEntry?.context?.pendingSourceLimit,
+        4,
+        'warning should report the bounded queued limit for one critical source',
+      );
+      t.equal(
+        saturationEntry?.context?.sourceLimitApplied,
+        true,
+        'critical recovery traffic should participate in the delivery-source cap',
+      );
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending.length,
+        5,
+        'unrelated critical traffic should still keep one slot when a hot critical source reaches its cap',
+      );
+      t.equal(
+        queue.pending.filter((item) =>
+          item?.deliverySource === `target:${hotRecoveryTargetAddress}`).length,
+        4,
+        'hot critical recovery traffic should stop at the bounded source cap',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await Promise.all(criticalSourceDeliveries);
+      await unrelatedCriticalDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should classify wrapped query payloads by nested payload semantics',
+    async (t) => {
+      const WRAPPED_QUERY_TARGET_ADDRESS =
+        'remote-node/partition/control_plane_publications-p1-r4';
+      const WRAPPED_QUERY_DELIVERY_SOURCE =
+        'query:insert:control_plane_publications';
+      const WRAPPED_QUERY_MESSAGE = {
+        payload: {
+          type: 'QUERY',
+          sql:
+            'INSERT INTO control_plane_publications ' +
+            '(publication_id) VALUES (?)',
+          params: ['pub-1'],
+        },
+      };
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 4,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const wrappedQueryDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => ({acknowledged: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: WRAPPED_QUERY_TARGET_ADDRESS,
+          message: WRAPPED_QUERY_MESSAGE,
+        },
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending[0]?.deliverySource,
+        WRAPPED_QUERY_DELIVERY_SOURCE,
+        'wrapped query payloads should classify by the nested query payload ' +
+          'instead of the raw target address',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await wrappedQueryDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should classify typeless CDC payloads by table and operation semantics',
+    async (t) => {
+      const TYPELESS_CDC_TARGET_ADDRESS =
+        'remote-node/partition/sql_transactions-p1-r4';
+      const TYPELESS_CDC_DELIVERY_SOURCE = 'cdc:upsert:sql_transactions';
+      const TYPELESS_CDC_MESSAGE = {
+        tableName: 'sql_transactions',
+        operation: 'UPSERT',
+        data: {transaction_id: 'txn-1'},
+      };
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 4,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const typelessCdcDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => ({acknowledged: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: TYPELESS_CDC_TARGET_ADDRESS,
+          message: TYPELESS_CDC_MESSAGE,
+        },
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending[0]?.deliverySource,
+        TYPELESS_CDC_DELIVERY_SOURCE,
+        'typeless CDC payloads should classify by table and operation ' +
+          'instead of collapsing to the replica target address',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await typelessCdcDelivery;
+      await router.shutdown();
+    },
+  );
+
+  t.test(
+    'should preserve explicit heartbeat queue semantics from raft transport ' +
+      'options when the queued payload is typeless',
+    async (t) => {
+      const HEARTBEAT_TARGET_ADDRESS =
+        'remote-node/partition/sql_transactions-p1-r4';
+      const HEARTBEAT_TRANSPORT_OPTIONS = resolveRaftTransportDeliveryOptions({
+        type: 'append',
+        data: [],
+        targetAddress: HEARTBEAT_TARGET_ADDRESS,
+      });
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 4,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const deliveredHeartbeatIds = [];
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const secondDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => {
+          deliveredHeartbeatIds.push('second');
+          return {acknowledged: true, heartbeatId: 'second'};
+        },
+        {
+          ...HEARTBEAT_TRANSPORT_OPTIONS,
+          targetAddress: HEARTBEAT_TARGET_ADDRESS,
+          message: {},
+        },
+      );
+      const thirdDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => {
+          deliveredHeartbeatIds.push('third');
+          return {acknowledged: true, heartbeatId: 'third'};
+        },
+        {
+          ...HEARTBEAT_TRANSPORT_OPTIONS,
+          targetAddress: HEARTBEAT_TARGET_ADDRESS,
+          message: {},
+        },
+      );
+      await Promise.resolve();
+
+      const supersededResult = await secondDelivery;
+      t.equal(
+        supersededResult?.result?.acknowledged,
+        true,
+        'superseded heartbeat should still resolve successfully',
+      );
+      t.equal(
+        supersededResult?.result?.replacedPending,
+        true,
+        'explicit heartbeat replace keys should coalesce typeless queued work',
+      );
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending.length,
+        1,
+        'helper-owned heartbeat semantics should keep only one pending heartbeat',
+      );
+      t.equal(
+        queue.pending[0]?.deliverySource,
+        'raft:append:heartbeat',
+        'queued heartbeat should keep the canonical heartbeat delivery source',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      const finalHeartbeatResult = await thirdDelivery;
+
+      t.same(
+        deliveredHeartbeatIds,
+        ['third'],
+        'only the latest queued heartbeat should drain after coalescing',
+      );
+      t.equal(
+        finalHeartbeatResult?.result?.heartbeatId,
+        'third',
+        'the latest queued heartbeat should be the delivered result',
+      );
+
       await router.shutdown();
     },
   );

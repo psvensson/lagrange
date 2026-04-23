@@ -626,14 +626,16 @@ async (t) => {
   t.same(
     acknowledgementCalls,
     ['node-inflight-publication-gap'],
-    'in-flight publications should delegate acknowledgement ownership even when cache membership lags',
+    'in-flight publications should delegate acknowledgement ownership ' +
+      'even when cache membership lags',
   );
 
   service.stop();
 });
 
-test('ReplicaDispatchService defers heartbeat-recovery ' +
-  'NODE_STATE_UPDATE publication pressure', async (t) => {
+test('ReplicaDispatchService surfaces heartbeat-recovery ' +
+  'NODE_STATE_UPDATE publication pressure on the non-deferrable contract',
+async (t) => {
   initEnv();
 
   const now = Date.now();
@@ -669,25 +671,27 @@ test('ReplicaDispatchService defers heartbeat-recovery ' +
     clearTimeoutFn() {},
   });
 
-  await service.reconcileNodeStateUpdate('node-heartbeat-recovery', {
-    payload: {
-      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
-      [ControlPlaneField.NODE_ID]: 'node-heartbeat-recovery',
-      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8097',
-      [ControlPlaneField.STATE]: STATE.READY,
-      [ControlPlaneField.HEARTBEAT_ONLY]: true,
-      [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
-        CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
-      [ControlPlaneField.HEARTBEAT_AT]: now,
-    },
-  });
+  const error = await t.rejects(
+    service.reconcileNodeStateUpdate('node-heartbeat-recovery', {
+      payload: {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+        [ControlPlaneField.NODE_ID]: 'node-heartbeat-recovery',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8097',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_ONLY]: true,
+        [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]:
+          CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_RECOVERY,
+        [ControlPlaneField.HEARTBEAT_AT]: now,
+      },
+    }),
+  );
 
   t.equal(gatewayCalls.length, 1,
     'recovery heartbeat should attempt the canonical update once');
   t.equal(
     gatewayCalls[0].options?.allowPressureDefer,
-    true,
-    'recovery heartbeat writes should reuse pressure deferral',
+    false,
+    'recovery heartbeat writes should stay on the non-deferrable pressure contract',
   );
   t.equal(
     gatewayCalls[0].options?.deliveryPriority,
@@ -700,26 +704,19 @@ test('ReplicaDispatchService defers heartbeat-recovery ' +
     'recovery heartbeat writes must keep the critical work class',
   );
   t.equal(
-    scheduled.length,
-    1,
-    'recovery heartbeat failures should arm one deferred retry timer',
+    error?.code,
+    'DISTRIBUTED_PARTICIPANT_FAILURE',
+    'recovery heartbeat failures should surface the canonical pressure error',
   );
   t.equal(
-    scheduled[0].delayMs,
-    2000,
-    'recovery heartbeat retry should honor the publication-pressure retry-after',
+    scheduled.length,
+    0,
+    'recovery heartbeat failures should not arm a deferred retry timer',
   );
   t.equal(
     service.nodeStateUpdateDeferredRetries.size,
-    1,
-    'recovery heartbeat failures should park one deferred retry by node',
-  );
-  t.equal(
-    service.nodeStateUpdateDeferredRetries.get(
-      'node-heartbeat-recovery',
-    )?.payload?.[ControlPlaneField.NODE_STATE_PUBLICATION_MODE],
-    CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.HEARTBEAT_MAINTENANCE,
-    'deferred recovery heartbeat retries should replay through the maintenance publication mode',
+    0,
+    'recovery heartbeat failures should not park a deferred retry by node',
   );
 
   service.stop();
@@ -919,7 +916,8 @@ test('ReplicaDispatchService acknowledges required membership publication ' +
   t.equal(
     acknowledgements.length,
     1,
-    'ready node-state updates should delegate cluster publication acknowledgement to publication service',
+    'ready node-state updates should delegate cluster publication ' +
+      'acknowledgement to publication service',
   );
   t.equal(
     acknowledgements[0]?.nodeId,

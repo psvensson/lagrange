@@ -12,6 +12,7 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {
+  resolveAutoRejoinStartupDecision,
   persistBootstrapRejoinHints,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -86,6 +87,18 @@ export * from './storage/index.js';
  */
 export const VERSION = ENTRYPOINT_VERSION;
 
+async function resolveLocalClusterIncarnationFence(options = {}) {
+  const startupDecision = await resolveAutoRejoinStartupDecision({
+    dataDir: options.dataDir,
+    nodeId: options.nodeId,
+    nodeAddress: options.nodeAddress,
+  });
+  return startupDecision?.clusterIncarnationFence &&
+    typeof startupDecision.clusterIncarnationFence === 'object' ?
+    startupDecision.clusterIncarnationFence :
+    null;
+}
+
 /**
  * Compose and start one joining-node runtime path.
  * @param {Object} options
@@ -130,6 +143,11 @@ async function startJoinNode(options) {
       error: error.message,
     });
   }
+  const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: joiningNodeAddress,
+  });
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
     seedNodeAddress,
@@ -190,6 +208,7 @@ async function startJoinNode(options) {
     rolloutControls,
     readinessState: joinReadinessState,
     startupMode,
+    clusterIncarnationFence,
     membershipLifecycleController,
     onLocalAdminRuntimeReady: async (runtime) => {
       if (joinAdminRuntime) {
@@ -392,6 +411,11 @@ async function startSeedNode(options) {
   } = resolveRuntimeAddresses(config);
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
+  const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: seedNodeHttpAddress,
+  });
 
   const readinessState = createReadinessStateWithDiagnostics(
     mainLogger,
@@ -405,6 +429,7 @@ async function startSeedNode(options) {
     dataDirectoryManager,
     wsPort: wsPort,
     rolloutControls,
+    clusterIncarnationFence,
     readinessState,
     onLocalAdminRuntimeReady: async (runtime) => {
       if (seedAdminRuntime) {

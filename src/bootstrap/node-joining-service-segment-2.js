@@ -154,6 +154,8 @@ const {
   wireMigrationWorkflowOwners,
 } = NODE_JOINING_SERVICE_SHARED;
 
+const JOIN_WORKFLOW_PLAN_VERSION = 'join-startup-plan/v1';
+
 class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
   _buildJoinRuntimeWiringDelegates() {
     const self = this;
@@ -369,6 +371,7 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         checkpoint: JOIN_CHECKPOINT.FINALIZED,
         phase: JOIN_SESSION_PHASE.FINALIZED,
         segment: JOIN_PLAN_SEGMENT.READINESS,
+        terminal: true,
         shouldRerun: () => {
           return (
             this.phase !== JoiningPhase.COMPLETE ||
@@ -389,6 +392,17 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
    */
   async join() {
     this.startTime = this.now();
+    const allowResumeLatest =
+      this.joinSessionIdProvided !== true &&
+      this.config.autoResumeRetryableFailures === true;
+    const resumedSessionId = await this.joinSessionStore.resolveSessionId({
+      nodeId: this.nodeId,
+      allowResumeLatest,
+    });
+    if (typeof resumedSessionId === TYPEOF.STRING &&
+        resumedSessionId.length > NUM.ZERO) {
+      this.joinSessionId = resumedSessionId;
+    }
     const membershipLifecycleIntent =
       await this.membershipLifecycleController.submitJoinIntent({
         nodeId: this.nodeId,
@@ -426,6 +440,8 @@ class NodeJoiningServiceSegment2 extends NodeJoiningServiceSegment1 {
         await this.joinCoordinator.run({
           nodeId: this.nodeId,
           sessionId: this.joinSessionId,
+          allowResumeLatest,
+          planVersion: JOIN_WORKFLOW_PLAN_VERSION,
           steps: this.buildJoinCheckpointSteps(startupPipelineRunner, joinPlan),
         });
         return {

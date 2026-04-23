@@ -135,11 +135,14 @@ class Cluster5 extends Cluster4 {
           this._extractControlSnapshotCoverageDiagnostics(snapshotResult);
         const publicationConvergence =
           snapshotDiagnostics.publicationConvergence || null;
+        const publicationConvergenceGate =
+          snapshotDiagnostics.publicationConvergenceGate || null;
         const publishedActiveNodeIds = normalizeDistinctStringArray(
           publicationConvergence?.publishedActiveNodeIds,
         );
         const pendingAckNodeIds = normalizeDistinctStringArray(
-          publicationConvergence?.pendingAckNodeIds,
+          publicationConvergenceGate?.pendingAckNodeIds ??
+            publicationConvergence?.pendingAckNodeIds,
         );
         const missingPublishedNodeIds = [...expectedNodeSet]
           .filter((expectedNodeId) => {
@@ -184,8 +187,11 @@ class Cluster5 extends Cluster4 {
           controlPlaneDiagnosticsAvailable:
             snapshotDiagnostics.controlPlaneDiagnosticsAvailable,
           publicationConvergence,
+          publicationConvergenceGate,
           publishedMembershipObservation:
             snapshotDiagnostics.publishedMembershipObservation,
+          priorityRecoveryObservation:
+            snapshotDiagnostics.priorityRecoveryObservation,
           priorityRecoveryDecisionSnapshots:
             snapshotDiagnostics.priorityRecoveryDecisionSnapshots,
           controlPlaneOwnerQueueDepth:
@@ -226,7 +232,9 @@ class Cluster5 extends Cluster4 {
           observedNodeIds: [],
           controlPlaneDiagnosticsAvailable: false,
           publicationConvergence: null,
+          publicationConvergenceGate: null,
           publishedMembershipObservation: null,
+          priorityRecoveryObservation: null,
           priorityRecoveryDecisionSnapshots: null,
           controlPlaneOwnerQueueDepth: null,
           cdcReplayLag: null,
@@ -479,8 +487,12 @@ class Cluster5 extends Cluster4 {
         selectedResult?.controlPlaneDiagnosticsAvailable === true,
       selectedPublicationConvergence:
         selectedResult?.publicationConvergence || null,
+      selectedPublicationConvergenceGate:
+        selectedResult?.publicationConvergenceGate || null,
       selectedPublishedMembershipObservation:
         selectedResult?.publishedMembershipObservation || null,
+      selectedPriorityRecoveryObservation:
+        selectedResult?.priorityRecoveryObservation || null,
       selectedPriorityRecoveryDecisionSnapshots:
         selectedResult?.priorityRecoveryDecisionSnapshots || null,
       selectedControlPlaneOwnerQueueDepth:

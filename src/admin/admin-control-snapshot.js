@@ -43,6 +43,7 @@ import {
   isCanonicallyActiveNode,
 } from "../control-plane/active-node-projection.js";
 import { buildPublicationRecoveryProtocolSnapshot } from "../control-plane/recovery-protocol-snapshot.js";
+import { buildPublicationRecoveryGateSnapshot } from "../control-plane/publication-recovery-gate.js";
 import { normalizeControlPlanePublicationRow } from "../control-plane/system-row-normalizers.js";
 import { buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots } from "../control-plane/priority-recovery-snapshot.js";
 import {
@@ -1009,6 +1010,7 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   StartupRecoveryCoordinator,
   attachAuthoritativeRepairDiagnostics,
   buildMembershipPublicationReadOptions,
+  buildPublicationRecoveryGateSnapshot,
   buildPriorityRecoveryAdmissionByPartitionId,
   buildPriorityRecoveryLearnerPromotionByPartitionId,
   buildPriorityRecoveryPlannerByPartitionId,

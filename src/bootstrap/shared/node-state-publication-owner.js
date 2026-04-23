@@ -833,4 +833,14 @@ class NodeStatePublicationOwner {
 
 export {
   NodeStatePublicationOwner,
+  NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
+  NODE_STATE_UPDATE_PUBLICATION_DEFER_STATE,
+  NODE_STATE_UPDATE_PUBLICATION_PATH,
+  NODE_STATE_UPDATE_PUBLICATION_RETRY_TARGET,
+  buildNodeStateUpdateDeliveryError,
+  buildNodeStateUpdatePublicationDiagnostics,
+  buildNodeStateUpdatePublicationFailureAction,
+  buildNodeStateUpdatePublicationFailureError,
+  buildNodeStateUpdatePublicationOutcome,
+  createNodeStateUpdateDeferredPublicationState,
 };

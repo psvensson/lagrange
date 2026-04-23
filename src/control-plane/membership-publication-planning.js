@@ -697,11 +697,17 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   const recoveryActiveNodeCohort = resolvePriorityRecoveryActiveNodeCohort({
     publishedActiveNodeIds: publishedBaselineNodeIds,
+    targetNodeId: planningSnapshot.targetNodeId,
+    admissionState: planningSnapshot.admissionState,
+    admissionReasonCodes: planningSnapshot.admissionReasonCodes,
+    clusterIncarnationFence: planningSnapshot.clusterIncarnationFence,
     membershipLifecycleSummary: {
       publishedActiveNodeIds: publishedBaselineNodeIds,
       projectedServingNodeIds,
       locallyEligibleNodeIds,
       projectionDiagnostics,
+      participationByNodeId:
+        planningSnapshot.membershipLifecycleSummary?.participationByNodeId,
     },
   });
   const recoveryEpochByNodeId = helperFns.buildLatestRecoveryEpochByNodeId(
@@ -719,6 +725,10 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   );
   const priorityRecoveryPublicationContext = buildActiveMembershipSnapshot({
     publishedActiveNodeIds,
+    targetNodeId: planningSnapshot.targetNodeId,
+    admissionState: planningSnapshot.admissionState,
+    admissionReasonCodes: planningSnapshot.admissionReasonCodes,
+    clusterIncarnationFence: planningSnapshot.clusterIncarnationFence,
     membershipLifecycleSummary: {
       publishedActiveNodeIds,
       projectedServingNodeIds,
@@ -850,6 +860,10 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
   const recoveryProtocolSnapshot = buildRecoveryProtocolSnapshot({
     publicationEpoch: candidatePublicationEpoch,
     publicationStatus: candidatePublicationStatus,
+    targetNodeId: planningSnapshot.targetNodeId || planningSnapshot.publisherNodeId,
+    admissionState: planningSnapshot.admissionState,
+    admissionReasonCodes: planningSnapshot.admissionReasonCodes,
+    clusterIncarnationFence: planningSnapshot.clusterIncarnationFence,
     publishedActiveNodeIdsPresent: true,
     durablePublishedActiveNodeIds: publishedBaselineNodeIds,
     publishedActiveNodeIds,
@@ -895,6 +909,17 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     recoveryProtocolState: recoveryProtocolSnapshot.recoveryProtocolState,
     targetParticipation: recoveryProtocolSnapshot.targetParticipation,
     priorityRecoveryReasonCodes: recoveryProtocolSnapshot.priorityRecoveryReasonCodes,
+    targetNodeId:
+      planningSnapshot.targetNodeId || planningSnapshot.publisherNodeId || null,
+    admissionState: planningSnapshot.admissionState || null,
+    admissionReasonCodes: Array.isArray(planningSnapshot.admissionReasonCodes) ?
+      planningSnapshot.admissionReasonCodes :
+      [],
+    clusterIncarnationFence:
+      planningSnapshot.clusterIncarnationFence &&
+        typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
+        planningSnapshot.clusterIncarnationFence :
+        null,
     projectionDiagnostics,
     reasonCode,
     changed,

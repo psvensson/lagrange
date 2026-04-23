@@ -1,46 +1,16 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment1Part1 } from "./partition-service-segment-1-part-1.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment1Part1} from './partition-service-segment-1-part-1.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
   AddressManager,
-  AuthoritativeRowMutationHelper,
   CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
-  CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
-  CDC_PIPELINE_METRIC,
   COLUMN,
   CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
   ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
   Database,
   ENTITY_TYPE,
-  ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
   LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
-  PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
@@ -53,95 +23,30 @@ const {
   PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
-  PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
-  PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
   PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
   RaftRole,
   ReplicaStatus,
   SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
-  SQL,
   SQLiteLogAdapter,
-  STRING,
   SYSTEM_TABLE_NAME,
   TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
   applyRuntimeRaftTiming,
   assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
   computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
   fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
   path,
-  replayPartitionSplitEntry,
   resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
   resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
   wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
-
   /**
    * Join newly visible peers and replace moved peer addresses using the
    * authoritative services cache. Missing rows are ignored conservatively.
@@ -183,16 +88,16 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         continue;
       }
       const peerAddress =
-        typeof service.address === "string" && service.address.length > NUM.ZERO
-          ? service.address
-          : typeof service.node_id === "string" &&
-              service.node_id.length > NUM.ZERO
-            ? addressManager.format(
-                service.node_id,
-                ENTITY_TYPE.PARTITION,
-                replicaId,
-              )
-            : null;
+        typeof service.address === 'string' && service.address.length > NUM.ZERO ?
+          service.address :
+          typeof service.node_id === 'string' &&
+              service.node_id.length > NUM.ZERO ?
+            addressManager.format(
+              service.node_id,
+              ENTITY_TYPE.PARTITION,
+              replicaId,
+            ) :
+            null;
       if (!peerAddress) {
         continue;
       }
@@ -201,14 +106,14 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         this.replicaIds.push(replicaId);
       }
     }
-    const currentNodes = Array.isArray(this.raft.nodes)
-      ? [...this.raft.nodes]
-      : [];
+    const currentNodes = Array.isArray(this.raft.nodes) ?
+      [...this.raft.nodes] :
+      [];
     const currentAddresses = new Set(
       currentNodes
         .map((node) => node?.address)
         .filter(
-          (address) => typeof address === "string" && address.length > NUM.ZERO,
+          (address) => typeof address === 'string' && address.length > NUM.ZERO,
         ),
     );
     for (const [
@@ -219,7 +124,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         .map((node) => node?.address)
         .filter((address) => {
           if (
-            typeof address !== "string" ||
+            typeof address !== 'string' ||
             address.length === NUM.ZERO ||
             address === expectedAddress
           ) {
@@ -323,9 +228,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         leaderReplica?.[COLUMN.SERVICE_ID] ||
         null;
       return typeof leaderReplicaId === TYPEOF.STRING &&
-        leaderReplicaId.length > NUM.ZERO
-        ? leaderReplicaId
-        : null;
+        leaderReplicaId.length > NUM.ZERO ?
+        leaderReplicaId :
+        null;
     };
     const partitionRow = this.getCachedSystemTableRow(
       TABLES.PARTITIONS,
@@ -357,9 +262,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
     }
     try {
       const parsed = AddressManager.getInstance().parse(this.leaderAddressHint);
-      return parsed.serviceType === ENTITY_TYPE.PARTITION
-        ? parsed.serviceId
-        : null;
+      return parsed.serviceType === ENTITY_TYPE.PARTITION ?
+        parsed.serviceId :
+        null;
     } catch (_parseErr) {
       return null;
     }
@@ -421,7 +326,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
     if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
       const dbDir = path.dirname(this.dbPath);
       if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, { recursive: true });
+        fs.mkdirSync(dbDir, {recursive: true});
         this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
           path: dbDir,
         });
@@ -455,7 +360,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
       PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS;
     const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
-    const { electionMinMs, electionMaxMs } = computeReplicaElectionTimeouts({
+    const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
       replicaIds: this.replicaIds,
       baseElectionMinMs,
@@ -485,7 +390,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         if (deferElection) {
           self.logger.debug(
             PARTITION_SERVICE_LOG_MSG.DEFERRING_ELECTION_START,
-            { replicaId: self.replicaId, partitionId: self.partitionId },
+            {replicaId: self.replicaId, partitionId: self.partitionId},
           );
           if (callback) callback();
         } else {
@@ -523,7 +428,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       [PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT]: heartbeatMs,
       [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MIN]: electionMinMs,
       [PARTITION_SERVICE_LIFERAFT_TIMER.ELECTION_MAX]: electionMaxMs,
-      [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function () {
+      [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function() {
         return logAdapter;
       },
     });
@@ -538,9 +443,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       });
     }
     const isSingleReplica = () => {
-      const peerCount = Array.isArray(this.raft?.nodes)
-        ? this.raft.nodes.length
-        : NUM.ZERO;
+      const peerCount = Array.isArray(this.raft?.nodes) ?
+        this.raft.nodes.length :
+        NUM.ZERO;
       return this.replicaIds.length === NUM.ONE && peerCount === NUM.ZERO;
     };
     const shouldIgnoreDemotionEvent = (eventName) => {
@@ -591,16 +496,16 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       normalizeLeaderId: (candidate) =>
         this.normalizeLeaderReplicaId(candidate),
       shouldIgnoreDemotionEvent,
-      onLeader: ({ term }) => {
+      onLeader: ({term}) => {
         this.storage.currentTerm = term;
         this.scheduleLeaderOwnedActivation(term);
       },
-      onFollower: ({ term }) => {
+      onFollower: ({term}) => {
         this.storage.currentTerm = term;
         this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
       },
-      onCandidate: ({ term }) => {
+      onCandidate: ({term}) => {
         this.storage.currentTerm = term;
         this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
@@ -608,13 +513,13 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       onCommit: (command) => {
         this.applyCommittedEntry(command);
       },
-      onLeaderChange: ({ leaderId }) => {
+      onLeaderChange: ({leaderId}) => {
         this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEADER_CHANGED, {
           newLeader: leaderId,
           partitionId: this.partitionId,
         });
       },
-      onTermChange: ({ term }) => {
+      onTermChange: ({term}) => {
         this.storage.currentTerm = term;
       },
     });
@@ -635,9 +540,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
             partitionId: this.partitionId,
             addressFormat: peerAddress.includes(
               PARTITION_SERVICE_ADDRESS.SEPARATOR,
-            )
-              ? PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED
-              : PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
+            ) ?
+              PARTITION_SERVICE_ADDRESS.FORMAT_UNIFIED :
+              PARTITION_SERVICE_ADDRESS.FORMAT_SIMPLE,
           });
         }
         this.raftProvider.joinPeer(this.raft, peerAddress);
@@ -660,9 +565,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
         this.raft &&
           typeof this.raft.change === PARTITION_SERVICE_TYPE.FUNCTION,
         PARTITION_SERVICE_ERROR_MSG.SINGLE_REPLICA_RAFT_OWNER_REQUIRED,
-        { partitionId: this.partitionId, replicaId: this.replicaId },
+        {partitionId: this.partitionId, replicaId: this.replicaId},
       );
-      this.raft.change({ state: LifeRaft.LEADER });
+      this.raft.change({state: LifeRaft.LEADER});
       this.raft.leader = this.unifiedAddress;
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -733,7 +638,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       this.raftTimingConfig?.tickIntervalMs || null;
     const hasTickInterval = Object.prototype.hasOwnProperty.call(
       timingConfig,
-      "tickIntervalMs",
+      'tickIntervalMs',
     );
     const tickIntervalMs = timingConfig.tickIntervalMs;
     if (
@@ -746,7 +651,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
     ) {
       return false;
     }
-    const { electionMinMs, electionMaxMs, jitterMs } =
+    const {electionMinMs, electionMaxMs, jitterMs} =
       computeReplicaElectionTimeouts({
         replicaId: this.replicaId,
         replicaIds: this.replicaIds,
@@ -761,9 +666,9 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       baseElectionMaxMs,
       electionMinMs,
       electionMaxMs,
-      tickIntervalMs: hasTickInterval
-        ? tickIntervalMs
-        : this.raftTimingConfig?.tickIntervalMs || null,
+      tickIntervalMs: hasTickInterval ?
+        tickIntervalMs :
+        this.raftTimingConfig?.tickIntervalMs || null,
     };
     const shouldRearmTimer =
       this.replicaIds.length > NUM.ONE &&
@@ -906,7 +811,7 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
       );
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS,
-        { tableName: this.tableName, partitionId: this.partitionId },
+        {tableName: this.tableName, partitionId: this.partitionId},
       );
     }
     if (!hasCapabilities) {
@@ -931,4 +836,4 @@ class PartitionServiceSegment1Part2 extends PartitionServiceSegment1Part1 {
     }
   }
 }
-export { PartitionServiceSegment1Part2 };
+export {PartitionServiceSegment1Part2};

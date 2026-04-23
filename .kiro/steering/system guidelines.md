@@ -186,6 +186,51 @@ Mandatory rules:
    guardrail or split that guardrail work into a linked follow-on before
    closure.
 
+### 0.1.5 Failure Migration Recording And Next-Order Blocker Probe
+
+When a package is driven by a failing integration, distributed, load, or
+scenario-level blocker, the package must make blocker movement explicit rather
+than treating focused green tests as full analysis closure.
+
+Mandatory rules:
+
+1. The active package must name the current dominant blocker for the scenario
+   it is trying to close.
+2. After focused proof for the current fix is green, rerun the original
+   scenario or the narrowest representative blocker probe before treating the
+   analysis as closed.
+3. If the dominant failure class, reason, or owner seam changes materially,
+   update the active package or split a follow-on package in the same work
+   cycle.
+4. Package progress notes must distinguish clearly between:
+   - the blocker that was just reduced
+   - the blocker that now dominates
+   - the hypothesis for why the new blocker remained latent
+5. Do not close a scenario-driven package or sprint on “hot path fixed” while
+   the original scenario still fails and the new dominant blocker is unnamed.
+
+### 0.1.6 Progress Grammar Declaration For Lifecycle Boundaries
+
+When a package touches startup, join, rejoin, readiness, admission, recovery,
+convergence, rebalancing, or other lifecycle-style progression, the package
+must declare one small progress grammar for the affected boundary.
+
+Mandatory rules:
+
+1. The package or linked architecture record must name:
+   - the canonical state or outcome vocabulary
+   - the meaning of blocked, deferred, retryable, terminal, and ready states
+   - the canonical blocker or reason-code vocabulary
+   - the evidence precedence when storage, cache, transport, and runtime
+     witnesses disagree
+2. If the concern has several axes, the package must name the axes explicitly
+   instead of collapsing them into one local boolean bag.
+3. Diagnostics, admin, harness, and reporting surfaces that consume that
+   boundary must reuse the same grammar or declare a bounded view role.
+4. If readers still need to infer progress from object existence, local
+   booleans, or logs after the package lands, the package is not ready for
+   closure.
+
 ## 0.2 Critical Generation Contract: Scalars And Decision Boundaries
 
 These rules are hard stops for generated code and hand-written code alike.

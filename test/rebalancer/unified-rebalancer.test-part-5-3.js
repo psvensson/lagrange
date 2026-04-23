@@ -799,9 +799,8 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         typeof scheduledDelayMs,
         'number',
         'live-membership settling should schedule a delayed retry',
-  );
+      );
 
-});
       rebalancer.shutdown();
     });
 
@@ -1265,3 +1264,169 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
     });
 
+  await t.test(
+    'checkRebalance keeps control_plane_publications open when ' +
+      'postgres wire publication lags a control-plane-writable active peer',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'control_plane_publications should continue once canonical readiness already confirms SQL visibility on every active node',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'control_plane_publications should not keep a topology-settling retry scheduled after readiness recovers',
+      );
+    },
+  );
+
+  await t.test(
+    'checkRebalance still defers control_plane_publications when ' +
+      'an active peer is not control-plane-writable',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync(nodeId) {
+          const controlPlaneWritable = nodeId !== 'node-3';
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+                true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                controlPlaneWritable,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: controlPlaneWritable,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [],
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'control_plane_publications-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        partitions: [{
+          partition_id: 'control_plane_publications-p1',
+          table_id: 'control_plane_publications',
+        }],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'control_plane_publications should still wait when an active node lacks canonical SQL readiness',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'control_plane_publications should keep a delayed topology-settling retry while readiness remains incomplete',
+      );
+    },
+  );
+
+});

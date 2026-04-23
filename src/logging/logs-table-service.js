@@ -69,6 +69,30 @@ const LOG_PRESSURE_FAMILY = Object.freeze({
   PARTICIPANT_FAILURE: 'participant_failure',
   FORWARD_WRITE_FAILED: 'forward_write_failed',
 });
+const LOG_PRESSURE_MESSAGE_FRAGMENT = Object.freeze({
+  CONNECTION_CLOSED: 'Connection to node',
+  NO_CONNECTION: 'No connection to node',
+  MESSAGE_TIMEOUT: 'Message timeout',
+  QUERY_ROUTING_FAILED: 'Query routing failed',
+  PARALLEL_QUERY_EXECUTION_FAILED: 'Parallel query execution failed',
+  QUERY_EXECUTION_FAILED: 'Query execution failed',
+  PARTITION_ROUTING_CANDIDATES_FILTERED_BY_READINESS:
+    'Partition routing candidates filtered by readiness',
+  PARTICIPANT_FAILURE:
+    'Distributed operation failed due to participant failures',
+  TRANSIENT_CDC_SQL_ERROR: 'Transient CDC SQL error',
+  TRANSIENT_CDC_SQL_EXCEPTION: 'Transient CDC SQL exception',
+  FAILED_TO_UPDATE_SYSTEM_TABLE_ROW: 'Failed to update system table row',
+  FAILED_TO_QUERY_OPERATIONS_FROM_SYSTEM_TABLE:
+    'Failed to query operations from system table',
+  DEFERRED_RETRYABLE_REPLICA_OPERATION_TRANSITION_FAILURE:
+    'Deferred retryable replica operation transition failure',
+  FAILED_TO_RECONNECT_TARGET_NODE_BEFORE_DELIVERY:
+    'Failed to reconnect target node before delivery',
+  RECONNECTION_FAILED: 'Reconnection failed',
+  WEBSOCKET_ERROR: 'WebSocket error',
+  FORWARD_WRITE_FAILED: 'Failed to forward write to leader',
+});
 
 /**
  * LogsTableService manages writing log entries to the logs system table.
@@ -912,9 +936,10 @@ class LogsTableService extends EventEmitter {
       message,
       partitionId || tableName || '',
     );
+    const fingerprintNodeId = transientFamily ? '' : (entry?.nodeId || '');
     return [
       String(entry?.level || 'INFO').toUpperCase(),
-      entry?.nodeId || '',
+      fingerprintNodeId,
       subsystem,
       transientFamily || message,
     ].join('|');
@@ -936,23 +961,60 @@ class LogsTableService extends EventEmitter {
       resourceId.trim() :
       '';
     const suffix = normalizedResourceId || 'shared';
-    if (message.includes('Distributed operation failed due to participant failures')) {
+    if (
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.PARTICIPANT_FAILURE) ||
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.TRANSIENT_CDC_SQL_ERROR) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT.TRANSIENT_CDC_SQL_EXCEPTION,
+      ) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT.FAILED_TO_UPDATE_SYSTEM_TABLE_ROW,
+      ) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT
+          .DEFERRED_RETRYABLE_REPLICA_OPERATION_TRANSITION_FAILURE,
+      )
+    ) {
       return `${LOG_PRESSURE_FAMILY.PARTICIPANT_FAILURE}:${suffix}`;
     }
-    if (message.includes('Connection to node') &&
-        message.includes('closed')) {
+    if (
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.CONNECTION_CLOSED) &&
+      message.includes('closed')
+    ) {
       return `${LOG_PRESSURE_FAMILY.CONNECTION_CLOSED}:${suffix}`;
     }
-    if (message.includes('No connection to node')) {
+    if (
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.NO_CONNECTION) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT
+          .FAILED_TO_RECONNECT_TARGET_NODE_BEFORE_DELIVERY,
+      ) ||
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.RECONNECTION_FAILED) ||
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.WEBSOCKET_ERROR)
+    ) {
       return `${LOG_PRESSURE_FAMILY.NO_CONNECTION}:${suffix}`;
     }
-    if (message.includes('Message timeout')) {
+    if (message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.MESSAGE_TIMEOUT)) {
       return `${LOG_PRESSURE_FAMILY.MESSAGE_TIMEOUT}:${suffix}`;
     }
-    if (message.includes('Query routing failed')) {
+    if (
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.QUERY_ROUTING_FAILED) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT.PARALLEL_QUERY_EXECUTION_FAILED,
+      ) ||
+      message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.QUERY_EXECUTION_FAILED) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT
+          .PARTITION_ROUTING_CANDIDATES_FILTERED_BY_READINESS,
+      ) ||
+      message.includes(
+        LOG_PRESSURE_MESSAGE_FRAGMENT
+          .FAILED_TO_QUERY_OPERATIONS_FROM_SYSTEM_TABLE,
+      )
+    ) {
       return `${LOG_PRESSURE_FAMILY.QUERY_ROUTING_FAILED}:${suffix}`;
     }
-    if (message.includes('Failed to forward write to leader')) {
+    if (message.includes(LOG_PRESSURE_MESSAGE_FRAGMENT.FORWARD_WRITE_FAILED)) {
       return `${LOG_PRESSURE_FAMILY.FORWARD_WRITE_FAILED}:${suffix}`;
     }
     return null;

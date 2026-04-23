@@ -6,42 +6,46 @@
  * The coordinator facade delegates workflow progression to this owner.
  */
 
-import { ControlPlaneReadinessService } from "../control-plane/control-plane-readiness-service.js";
+import {ControlPlaneReadinessService} from '../control-plane/control-plane-readiness-service.js';
 import {
   ControlPlaneField,
   ControlPlaneMessageType,
-} from "../control-plane/control-plane-constants.js";
-import { CONTROL_PLANE_PUBLICATION_STATUS } from "../control-plane/control-plane-publication-merge.js";
+} from '../control-plane/control-plane-constants.js';
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../control-plane/control-plane-publication-merge.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
-} from "../control-plane/control-plane-readiness-constants.js";
+} from '../control-plane/control-plane-readiness-constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-} from "../control-plane/control-plane-error-classification.js";
+} from '../control-plane/control-plane-error-classification.js';
 import {
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
-} from "../transport/transport-semantic-outcome.js";
-import { resolvePriorityRecoveryActiveNodeCohort } from "../control-plane/active-node-projection.js";
+} from '../transport/transport-semantic-outcome.js';
+import {resolvePriorityRecoveryActiveNodeCohort} from '../control-plane/active-node-projection.js';
 import {
+  buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryBlockedPartitionIds,
   hasPriorityRecoverySpreadGap,
-} from "../control-plane/priority-recovery-snapshot.js";
+} from '../control-plane/priority-recovery-snapshot.js';
 import {
   PRIORITY_RECOVERY_COMPLETION_STATE,
   buildPriorityRecoveryCompletion,
-} from "../control-plane/priority-recovery-completion.js";
+} from '../control-plane/priority-recovery-completion.js';
 import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
-} from "../bootstrap/system-table-schemas-constants.js";
+} from '../bootstrap/system-table-schemas-constants.js';
 import {
   isPriorityControlPlanePartition,
   isSystemTablePartition,
-} from "../bootstrap/system-partition-classification.js";
+} from '../bootstrap/system-partition-classification.js';
 import {
   WORKFLOW_STEP,
   NUM,
@@ -49,8 +53,8 @@ import {
   METRICS_LOG_TAG,
   TYPEOF,
   UNIFIED_SERVICE_TYPE,
-} from "../constants/index.js";
-import { SERVICE_TYPE } from "../constants/service.js";
+} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/service.js';
 import {
   TIMEOUT_BUDGET_CLASSIFICATION,
   TIMEOUT_BUDGET_DEFAULT,
@@ -58,11 +62,11 @@ import {
   buildTimeoutClassification,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
-} from "../control-plane/timeout-budget.js";
+} from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   readAuthoritativeControlPlaneRows,
-} from "../control-plane/control-plane-system-table-gateway.js";
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {
   OPERATION_METADATA_KEY,
   ReplicaStatus,
@@ -70,17 +74,17 @@ import {
   OperationType,
   getWorkflowSteps,
   isCoordinatorOwnedOperationType,
-} from "./replica-status.js";
+} from './replica-status.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
-} from "./replica-operation-constants.js";
-import { RAFT_ROLE } from "../raft/constants.js";
+} from './replica-operation-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
   REPLICA_OPERATION_VISIBILITY_READ_MODE,
-} from "./replica-operation-repository.js";
+} from './replica-operation-repository.js';
 import {
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
@@ -88,118 +92,118 @@ import {
   REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCER_SKIP_REASON,
   OPERATION_TRANSITION_REASON,
-} from "./rebalancer-constants.js";
+} from './rebalancer-constants.js';
 import {
   EXECUTOR_OUTCOME_FIELD,
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
-} from "./executor-outcome-constants.js";
-import { TRANSACTION_STATUS } from "../query/distributed/distributed-transaction-coordinator.js";
-import { QUERY_ERROR_MSG } from "../query/query-constants.js";
-import { PARTITION_SERVICE_ERROR_MSG } from "../partition/partition-service-constants.js";
-import { SQL_RECONCILIATION_REASON } from "../control-plane/read-model-contract.js";
+} from './executor-outcome-constants.js';
+import {TRANSACTION_STATUS} from '../query/distributed/distributed-transaction-coordinator.js';
+import {QUERY_ERROR_MSG} from '../query/query-constants.js';
+import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
+import {SQL_RECONCILIATION_REASON} from '../control-plane/read-model-contract.js';
 const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
-  CLOSE_PAREN: ")",
-  COMMA_SPACE: ", ",
+  CLOSE_PAREN: ')',
+  COMMA_SPACE: ', ',
   COMMITTED_REPLICA_OPERATION_TRANSITION_NOT_YET_AUTHORITATIVELY_VISIBLE:
-    "Committed replica operation transition not yet authoritatively visible",
-  CANNOT_BE_REMOVED_WHILE: " cannot be removed while",
-  CONTROL_PLANE_PRESSURE_DEGRADED: "CONTROL_PLANE_PRESSURE_DEGRADED",
+    'Committed replica operation transition not yet authoritatively visible',
+  CANNOT_BE_REMOVED_WHILE: ' cannot be removed while',
+  CONTROL_PLANE_PRESSURE_DEGRADED: 'CONTROL_PLANE_PRESSURE_DEGRADED',
   CONTROL_PLANE_PRESSURE_DEGRADED_WHILE_CLAIMING_PRIORITY:
-    "control_plane_pressure_degraded while claiming priority ",
-  COORDINATOR_CREATED_OPERATION: "coordinator_created_operation",
-  COORDINATOR_CREATED_REMOTE_HANDOFF: "coordinator_created_remote_handoff",
-  CRITICAL: "critical",
-  CRITICAL_PARTITION: "Critical partition ",
-  DELETE: "DELETE",
+    'control_plane_pressure_degraded while claiming priority ',
+  COORDINATOR_CREATED_OPERATION: 'coordinator_created_operation',
+  COORDINATOR_CREATED_REMOTE_HANDOFF: 'coordinator_created_remote_handoff',
+  CRITICAL: 'critical',
+  CRITICAL_PARTITION: 'Critical partition ',
+  DELETE: 'DELETE',
   DOES_NOT_INCLUDE_PROJECTED_VOTER_DASH_READY_NODES:
-    " does not include projected voter-ready nodes ",
-  DISPATCH: "dispatch",
-  DISPATCH_RETRY: "dispatch_retry",
-  DISPATCH_TRANSITION: "dispatch transition",
-  EMPTY_JSON_ARRAY: "[]",
-  EMPTY_STRING: "",
-  EXECUTE: "execute",
-  EXECUTE_RECONCILE: "execute_reconcile",
-  EXECUTOR_OUTCOME: "executor_outcome",
+    ' does not include projected voter-ready nodes ',
+  DISPATCH: 'dispatch',
+  DISPATCH_RETRY: 'dispatch_retry',
+  DISPATCH_TRANSITION: 'dispatch transition',
+  EMPTY_JSON_ARRAY: '[]',
+  EMPTY_STRING: '',
+  EXECUTE: 'execute',
+  EXECUTE_RECONCILE: 'execute_reconcile',
+  EXECUTOR_OUTCOME: 'executor_outcome',
   FAILED_TO_READ_AUTHORITATIVE_TRANSITION_PARTICIPANT_STATE:
-    "Failed to read authoritative transition participant state",
+    'Failed to read authoritative transition participant state',
   FAILED_TO_READ_AUTHORITATIVE_TRANSITION_TRANSACTION_STATE:
-    "Failed to read authoritative transition transaction state",
+    'Failed to read authoritative transition transaction state',
   FAILED_TO_RECOVER_TRANSITION_TRANSACTION:
-    "Failed to recover transition transaction",
+    'Failed to recover transition transaction',
   FAILED_TO_RESOLVE_MINREPLICACOUNT_FOR_CRITICAL:
-    "Failed to resolve minReplicaCount for critical",
+    'Failed to resolve minReplicaCount for critical',
   FAILED_TO_ROLL_BACK_TRANSITION_TRANSACTION:
-    "Failed to roll back transition transaction",
-  FUNCTION: "function",
-  IN_PROGRESS: "in_progress",
+    'Failed to roll back transition transaction',
+  FUNCTION: 'function',
+  IN_PROGRESS: 'in_progress',
   IS_NO_LONGER_IN_THE_CURRENT_ELIGIBLE_COHORT_FOR:
-    " is no longer in the current eligible cohort for ",
-  IS_NOT_VOTER_DASH_READY: " is not voter-ready",
-  IS_UNAVAILABLE: " is unavailable",
+    ' is no longer in the current eligible cohort for ',
+  IS_NOT_VOTER_DASH_READY: ' is not voter-ready',
+  IS_UNAVAILABLE: ' is unavailable',
   NODE_RECOVERY_DASH_INCOMPLETE_OPERATION:
-    "Node recovery - incomplete operation",
+    'Node recovery - incomplete operation',
   NODE_RECOVERY_DASH_INCOMPLETE_REMOVAL_OPERATION:
-    "Node recovery - incomplete removal operation",
-  OBJECT: "object",
-  OBSERVED: "observed",
-  OBSERVED_PROGRESS: "observed_progress",
-  OPEN_PAREN: " (",
+    'Node recovery - incomplete removal operation',
+  OBJECT: 'object',
+  OBSERVED: 'observed',
+  OBSERVED_PROGRESS: 'observed_progress',
+  OPEN_PAREN: ' (',
   OPERATIONWORKFLOWOWNER_REQUIRES_GETACTUALREPLICASTATUS_OPEN_PAREN_CLOSE_PAREN:
-    "OperationWorkflowOwner requires getActualReplicaStatus()",
-  PARTITION_SAFETY_CHECK: " partition safety check",
-  PRIORITY_CLAIM_CAS: "priority_claim_cas",
-  PRIORITY_ACTIVE_REPLACE_RESUME: "priority_active_replace_resume",
-  PRIORITY_CONTROL_DASH_PLANE_PARTITION: "Priority control-plane partition ",
-  PRIORITY_RECOVERY_TARGET_NODE: "Priority recovery target node ",
-  PUBLICATION_STATUS_IS: " publication status is ",
-  HANDOFF_PENDING_BEFORE_SAFE_REMOVAL: " handoff pending before safe removal",
-  PRIORITY_SPREAD: "priority spread",
-  PRIORITY_SPREAD_HAS_NOT_CONVERGED: " priority spread has not converged",
-  PROGRESS: "progress",
-  PROJECTED_VOTER_DASH_READY_SPREAD: "projected voter-ready spread",
+    'OperationWorkflowOwner requires getActualReplicaStatus()',
+  PARTITION_SAFETY_CHECK: ' partition safety check',
+  PRIORITY_CLAIM_CAS: 'priority_claim_cas',
+  PRIORITY_ACTIVE_REPLACE_RESUME: 'priority_active_replace_resume',
+  PRIORITY_CONTROL_DASH_PLANE_PARTITION: 'Priority control-plane partition ',
+  PRIORITY_RECOVERY_TARGET_NODE: 'Priority recovery target node ',
+  PUBLICATION_STATUS_IS: ' publication status is ',
+  HANDOFF_PENDING_BEFORE_SAFE_REMOVAL: ' handoff pending before safe removal',
+  PRIORITY_SPREAD: 'priority spread',
+  PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
+  PROGRESS: 'progress',
+  PROJECTED_VOTER_DASH_READY_SPREAD: 'projected voter-ready spread',
   PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED:
-    " projected voter-ready spread would fall below the published ",
-  PUBLISHED_MEMBERSHIP: "published membership",
+    ' projected voter-ready spread would fall below the published ',
+  PUBLISHED_MEMBERSHIP: 'published membership',
   PUBLISHED_MEMBERSHIP_SAFETY_IS_UNAVAILABLE:
-    " published membership safety is unavailable",
-  RECOVERY_PROJECTION_MEMBERSHIP: "recovery projection membership",
-  QUESTION_MARK: "?",
-  RECOVERY: "recovery",
-  REPLACE_SOURCE_LEADER_HANDOFF: "replace_source_leader_handoff",
-  REPLACE_SOURCE_REMOVAL: "replace_source_removal",
-  REPLACEMENT_REPLICA: " replacement replica",
-  REPLACEMENT_REPLICA_2: " replacement replica ",
-  REPLACEMENT_REPLICA_3: "replacement replica",
+    ' published membership safety is unavailable',
+  RECOVERY_PROJECTION_MEMBERSHIP: 'recovery projection membership',
+  QUESTION_MARK: '?',
+  RECOVERY: 'recovery',
+  REPLACE_SOURCE_LEADER_HANDOFF: 'replace_source_leader_handoff',
+  REPLACE_SOURCE_REMOVAL: 'replace_source_removal',
+  REPLACEMENT_REPLICA: ' replacement replica',
+  REPLACEMENT_REPLICA_2: ' replacement replica ',
+  REPLACEMENT_REPLICA_3: 'replacement replica',
   REPLICA_FAILED_DURING_OPERATION_RECONCILIATION:
-    "Replica failed during operation reconciliation",
+    'Replica failed during operation reconciliation',
   REPLICA_FAILED_DURING_REMOVE_RECONCILIATION:
-    "Replica failed during remove reconciliation",
-  REPLICA_FAILED_DURING_SYNC: "Replica failed during sync",
+    'Replica failed during remove reconciliation',
+  REPLICA_FAILED_DURING_SYNC: 'Replica failed during sync',
   REPLICA_MISSING_DURING_STOPPING_RECONCILIATION:
-    "Replica missing during STOPPING reconciliation",
+    'Replica missing during STOPPING reconciliation',
   REPLICA_NOT_FOUND_DURING_RECOVERY_RECONCILIATION:
-    "Replica not found during recovery reconciliation",
-  REQUIREMENT: "requirement",
+    'Replica not found during recovery reconciliation',
+  REQUIREMENT: 'requirement',
   RETRYABLE_CONTROL_DASH_PLANE_TRANSITION_FAILURE:
-    "Retryable control-plane transition failure",
+    'Retryable control-plane transition failure',
   ROTATING_TRANSITION_EXECUTION_SESSION_AFTER_STALE_SESSION_COLLISION:
-    "Rotating transition execution session after stale session collision",
-  SAFETY_CHECK_UNAVAILABLE: " safety check unavailable",
-  SAFETY_CHECK_UNAVAILABLE_2: "safety check unavailable",
-  SAFE_REMOVAL_UNAVAILABLE_SUFFIX: " is unavailable for safe removal",
-  SOURCE_LEADER: " source leader ",
-  STRING: "string",
-  SYNTHETIC_UPSERT: "UPSERT",
-  TRANSACTION: "transaction",
-  TRANSITION_RETRY_RESUME: "transition_retry_resume",
+    'Rotating transition execution session after stale session collision',
+  SAFETY_CHECK_UNAVAILABLE: ' safety check unavailable',
+  SAFETY_CHECK_UNAVAILABLE_2: 'safety check unavailable',
+  SAFE_REMOVAL_UNAVAILABLE_SUFFIX: ' is unavailable for safe removal',
+  SOURCE_LEADER: ' source leader ',
+  STRING: 'string',
+  SYNTHETIC_UPSERT: 'UPSERT',
+  TRANSACTION: 'transaction',
+  TRANSITION_RETRY_RESUME: 'transition_retry_resume',
   TRANSITION_SESSION_RECOVERY_PROBE_FAILED:
-    "Transition session recovery probe failed",
+    'Transition session recovery probe failed',
   WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM:
-    " would drop voter-ready replicas below minimum",
+    ' would drop voter-ready replicas below minimum',
   WOULD_DROP_VOTER_DASH_READY_REPLICAS_BELOW_MINIMUM_2:
-    "would drop voter-ready replicas below minimum",
+    'would drop voter-ready replicas below minimum',
 });
 
 const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
@@ -215,50 +219,50 @@ const DIRECT_TRANSITION_PERSIST_PARTITION_IDS = new Set([
 ]);
 
 const FAILURE_LOG_LEVEL = Object.freeze({
-  ERROR: "error",
-  WARN: "warn",
+  ERROR: 'error',
+  WARN: 'warn',
 });
 
 const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
-  CREATE: "create",
-  CREATE_BUDGET: "create-budget",
-  OPERATION: "operation",
+  CREATE: 'create',
+  CREATE_BUDGET: 'create-budget',
+  OPERATION: 'operation',
 });
 
 const OPERATION_OWNER_ACTION = Object.freeze({
-  DISPATCH: "dispatch",
-  EXECUTE: "execute",
+  DISPATCH: 'dispatch',
+  EXECUTE: 'execute',
 });
 
 const OPERATION_LIFECYCLE_ACTION = Object.freeze({
-  FAIL_PRE_SYNC_RECOVERY: "fail_pre_sync_recovery",
-  FAIL_STOPPING_RECOVERY: "fail_stopping_recovery",
-  EXECUTE_ACTIVE_REPLACE: "execute_active_replace",
-  EXECUTE_REMOVE_DISPATCH: "execute_remove_dispatch",
-  RECONCILE_STOPPING: "reconcile_stopping",
-  RECONCILE_REPLICA_STATUS: "reconcile_replica_status",
-  NOOP: "noop",
+  FAIL_PRE_SYNC_RECOVERY: 'fail_pre_sync_recovery',
+  FAIL_STOPPING_RECOVERY: 'fail_stopping_recovery',
+  EXECUTE_ACTIVE_REPLACE: 'execute_active_replace',
+  EXECUTE_REMOVE_DISPATCH: 'execute_remove_dispatch',
+  RECONCILE_STOPPING: 'reconcile_stopping',
+  RECONCILE_REPLICA_STATUS: 'reconcile_replica_status',
+  NOOP: 'noop',
 });
 
 const REMOVE_SAFETY_EVALUATION_CLASSIFICATION = Object.freeze({
-  SAFE: "safe",
-  DEFER: "defer",
-  FAIL: "fail",
+  SAFE: 'safe',
+  DEFER: 'defer',
+  FAIL: 'fail',
 });
 
-const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ":";
+const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
 
 const OPERATION_WORKFLOW_OWNER_REASON = Object.freeze({
-  OPERATION_ID_REQUIRED: "operation_id_required",
-  OPERATION_NOT_DISPATCHABLE: "operation_not_dispatchable",
-  OPERATION_NOT_FOUND: "operation_not_found",
-  SHUTDOWN_IN_PROGRESS: "shutdown_in_progress",
+  OPERATION_ID_REQUIRED: 'operation_id_required',
+  OPERATION_NOT_DISPATCHABLE: 'operation_not_dispatchable',
+  OPERATION_NOT_FOUND: 'operation_not_found',
+  SHUTDOWN_IN_PROGRESS: 'shutdown_in_progress',
 });
 
 const OPERATION_HANDLER = Object.freeze({
-  [SERVICE_TYPE.PARTITION]: "replica-handler",
-  [SERVICE_TYPE.MESSAGE_GROUP]: "message-group-handler",
-  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: "runtime-service-handler",
+  [SERVICE_TYPE.PARTITION]: 'replica-handler',
+  [SERVICE_TYPE.MESSAGE_GROUP]: 'message-group-handler',
+  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: 'runtime-service-handler',
 });
 
 const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
@@ -288,7 +292,7 @@ const TRANSITION_STEP_OPTIONS = Object.freeze({
   }),
 });
 
-const OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX = "attempt";
+const OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX = 'attempt';
 const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE * NUM.TWO;
 const RECOVERABLE_TRANSITION_COMMIT_STATUS = Object.freeze(
   new Set([TRANSACTION_STATUS.PREPARED, TRANSACTION_STATUS.COMMITTING]),
@@ -308,8 +312,8 @@ const AUTHORITATIVE_TRANSITION_RECOVERY_STATUS = Object.freeze(
 );
 
 const PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE = Object.freeze({
-  PUBLISHED_MEMBERSHIP: "published membership",
-  RECOVERY_PROJECTION_MEMBERSHIP: "recovery projection membership",
+  PUBLISHED_MEMBERSHIP: 'published membership',
+  RECOVERY_PROJECTION_MEMBERSHIP: 'recovery projection membership',
 });
 const REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS = new Set([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS],
@@ -318,16 +322,16 @@ const REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS = new Set([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS],
 ]);
 const PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE = Object.freeze({
-  SAFE: "safe",
-  NOT_APPLICABLE: "not_applicable",
-  PUBLICATION_STATUS_UNAVAILABLE: "publication_status_unavailable",
-  WAIT_PUBLICATION_PUBLISHED: "wait_publication_published",
-  REQUEST_SOURCE_LEADER_HANDOFF: "request_source_leader_handoff",
+  SAFE: 'safe',
+  NOT_APPLICABLE: 'not_applicable',
+  PUBLICATION_STATUS_UNAVAILABLE: 'publication_status_unavailable',
+  WAIT_PUBLICATION_PUBLISHED: 'wait_publication_published',
+  REQUEST_SOURCE_LEADER_HANDOFF: 'request_source_leader_handoff',
 });
 const PRIORITY_PUBLICATION_SOURCE_ROLE_STATE = Object.freeze({
-  FOLLOWER: "follower",
-  LEADER: "leader",
-  UNKNOWN: "unknown",
+  FOLLOWER: 'follower',
+  LEADER: 'leader',
+  UNKNOWN: 'unknown',
 });
 const PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE = Object.freeze({
   STALE_AFTER_MS: 60_000,
@@ -341,7 +345,7 @@ const TRANSITION_RECOVERY_READ_OPTIONS = Object.freeze({
 });
 const TRANSITION_RECOVERY_SQL = Object.freeze({
   SELECT_TRANSACTIONS_BY_SESSION:
-    "SELECT * FROM sql_transactions WHERE session_id = ?",
+    'SELECT * FROM sql_transactions WHERE session_id = ?',
 });
 const REMOVE_SAFETY_READ_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
@@ -352,9 +356,9 @@ const REMOVE_SAFETY_READ_QUERY_OPTIONS = Object.freeze({
 });
 const REMOVE_SAFETY_SQL = Object.freeze({
   SELECT_PARTITION_REPLICA_ROWS:
-    "SELECT * FROM services WHERE service_type = ? AND partition_id = ?",
+    'SELECT * FROM services WHERE service_type = ? AND partition_id = ?',
   SELECT_PARTITION_ROW:
-    "SELECT * FROM partitions WHERE partition_id = ? LIMIT 1",
+    'SELECT * FROM partitions WHERE partition_id = ? LIMIT 1',
 });
 
 function normalizeNodeIdList(nodeIds) {
@@ -362,9 +366,9 @@ function normalizeNodeIdList(nodeIds) {
     ...new Set(
       (Array.isArray(nodeIds) ? nodeIds : [])
         .map((nodeId) =>
-          typeof nodeId === TYPEOF.STRING
-            ? nodeId.trim()
-            : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
+          typeof nodeId === TYPEOF.STRING ?
+            nodeId.trim() :
+            OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING,
         )
         .filter((nodeId) => nodeId.length > NUM.ZERO),
     ),
@@ -374,9 +378,9 @@ function normalizeNodeIdList(nodeIds) {
 function normalizeReplicaRowNodeIds(rows = []) {
   return normalizeNodeIdList(
     (Array.isArray(rows) ? rows : []).map((row) => {
-      return typeof row?.node_id === TYPEOF.STRING
-        ? row.node_id.trim()
-        : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+      return typeof row?.node_id === TYPEOF.STRING ?
+        row.node_id.trim() :
+        OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
     }),
   );
 }
@@ -476,7 +480,9 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   buildControlPlaneQueryOptions,
   buildPriorityRecoveryBlockedPartitionIds,
   buildPriorityRecoveryCompletion,
+  buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryOperationAssessment,
+  buildPriorityRecoveryOperationContextFromRecord,
   buildSelectRowsByTransactionIdsSql,
   buildTimeoutClassification,
   classifyTransportDeliveryOutcome,

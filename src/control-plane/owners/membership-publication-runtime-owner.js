@@ -23,9 +23,6 @@ function applyOwnerDependencies(owner, options = {}) {
       options.controlPlaneSystemTableGateway || null,
     );
   }
-  if (typeof owner.setSystemTableCache === 'function') {
-    owner.setSystemTableCache(options.systemTableCache || null);
-  }
 }
 
 class MembershipPublicationRuntimeOwner {

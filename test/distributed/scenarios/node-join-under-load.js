@@ -18,6 +18,13 @@ import {
   ensureBenchmarkPartitioningTable,
   resolvePartitioningLoadTableName,
 } from "./table-distribution-helpers.js";
+import {buildPriorityRecoveryObservationSnapshot} from
+  "../../../src/control-plane/priority-recovery-observation-snapshot.js";
+import {
+  normalizePriorityPartitionSummaryForDiagnostics,
+  normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
+} from
+  "../harness/priority-recovery-summary-normalization.js";
 
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = "60s";
@@ -55,6 +62,22 @@ const FAILURE_PHASE_CONSISTENCY = "verify_consistency";
 const LOAD_ROUTING_ADMISSION_ERROR_CODE = "routing_not_ready";
 const LOAD_ROUTING_ADMISSION_ERROR_MESSAGE_PREFIX = "routing admission blocked";
 const LOAD_ROUTING_ADMISSION_REASON_BENCHMARK_NOT_READY = "benchmark_not_ready";
+const RETAINED_CONTROL_PLANE_OBJECT_KEYS = Object.freeze([
+  "publicationMode",
+  "publicationConvergenceGate",
+  "startupRecovery",
+  "heartbeatPublication",
+  "readinessByNodeId",
+  "activeGateProgress",
+  "activeGateBestProgress",
+  "activeGateNoProgress",
+  "priorityRecoveryDecisionSnapshots",
+  "priorityRecoveryObservation",
+  "priorityRecoveryInvariants",
+  "logsTable",
+  "cdcReplay",
+  "cdcReplayByPartitionId",
+]);
 
 function normalizeNonNegativeMetricCount(value) {
   const numericValue = Number(value);
@@ -77,6 +100,171 @@ function resolveCanonicalFailedOperationCount(metrics) {
     return errorCount;
   }
   return ZERO_FAILURES;
+}
+
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function retainPublicationConvergenceDiagnostics(publicationConvergence) {
+  if (!isRecord(publicationConvergence)) {
+    return null;
+  }
+  const priorityPartitionSummary =
+    normalizePriorityPartitionSummaryForDiagnostics(
+      publicationConvergence.priorityPartitionSummary ??
+        publicationConvergence.priority_partition_summary,
+    );
+  return {
+    ...publicationConvergence,
+    ...(priorityPartitionSummary ? {priorityPartitionSummary} : {}),
+  };
+}
+
+function retainPublicationConvergenceGateDiagnostics(
+  publicationConvergenceGate,
+) {
+  if (!isRecord(publicationConvergenceGate)) {
+    return null;
+  }
+  const priorityPartitionSummary =
+    normalizePriorityPartitionSummaryForDiagnostics(
+      publicationConvergenceGate.priorityPartitionSummary ??
+        publicationConvergenceGate.priority_partition_summary,
+    );
+  return {
+    ...publicationConvergenceGate,
+    ...(priorityPartitionSummary ? {priorityPartitionSummary} : {}),
+  };
+}
+
+function retainPriorityRecoveryObservationDiagnostics(
+  priorityRecoveryObservation,
+) {
+  if (!isRecord(priorityRecoveryObservation)) {
+    return null;
+  }
+  const priorityRecoveryPartitionWitnesses =
+    normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+      priorityRecoveryObservation.priorityRecoveryPartitionWitnesses,
+    );
+  return {
+    ...priorityRecoveryObservation,
+    ...(priorityRecoveryPartitionWitnesses.length > ZERO_FAILURES
+      ? {priorityRecoveryPartitionWitnesses}
+      : {}),
+  };
+}
+
+function normalizeRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
+  if (!isRecord(controlPlaneDiagnostics)) {
+    return null;
+  }
+  const publicationConvergence = retainPublicationConvergenceDiagnostics(
+    controlPlaneDiagnostics.publicationConvergence,
+  );
+  const publicationConvergenceGate =
+    retainPublicationConvergenceGateDiagnostics(
+      controlPlaneDiagnostics.publicationConvergenceGate,
+    );
+  const priorityRecoveryObservation =
+    retainPriorityRecoveryObservationDiagnostics(
+      controlPlaneDiagnostics.priorityRecoveryObservation,
+    );
+  const retainedDiagnostics = {
+    ...(publicationConvergence ? {publicationConvergence} : {}),
+    ...(publicationConvergenceGate
+      ? {publicationConvergenceGate}
+      : {}),
+    ...(priorityRecoveryObservation ? {priorityRecoveryObservation} : {}),
+  };
+  for (const key of RETAINED_CONTROL_PLANE_OBJECT_KEYS) {
+    if (
+      (key === "publicationConvergence" ||
+        key === "publicationConvergenceGate" ||
+        key === "priorityRecoveryObservation") ||
+      !(key in controlPlaneDiagnostics)
+    ) {
+      continue;
+    }
+    const value = controlPlaneDiagnostics[key];
+    if (Array.isArray(value)) {
+      retainedDiagnostics[key] = value;
+      continue;
+    }
+    if (isRecord(value)) {
+      retainedDiagnostics[key] = value;
+    }
+  }
+  return Object.keys(retainedDiagnostics).length > ZERO_FAILURES
+    ? retainedDiagnostics
+    : null;
+}
+
+function mergeRetainedControlPlaneDiagnostics(primary, fallback) {
+  const normalizedPrimary =
+    normalizeRetainedControlPlaneDiagnostics(primary);
+  const normalizedFallback =
+    normalizeRetainedControlPlaneDiagnostics(fallback);
+  if (!normalizedPrimary) {
+    return normalizedFallback;
+  }
+  if (!normalizedFallback) {
+    return normalizedPrimary;
+  }
+  const mergedPublicationConvergence =
+    normalizedPrimary.publicationConvergence ||
+    normalizedFallback.publicationConvergence
+      ? {
+          ...(normalizedFallback.publicationConvergence || {}),
+          ...(normalizedPrimary.publicationConvergence || {}),
+        }
+      : null;
+  const mergedPublicationConvergenceGate =
+    normalizedPrimary.publicationConvergenceGate ||
+    normalizedFallback.publicationConvergenceGate
+      ? {
+          ...(normalizedFallback.publicationConvergenceGate || {}),
+          ...(normalizedPrimary.publicationConvergenceGate || {}),
+        }
+      : null;
+  return {
+    ...normalizedFallback,
+    ...normalizedPrimary,
+    ...(mergedPublicationConvergence
+      ? {publicationConvergence: mergedPublicationConvergence}
+      : {}),
+    ...(mergedPublicationConvergenceGate
+      ? {publicationConvergenceGate: mergedPublicationConvergenceGate}
+      : {}),
+    priorityRecoveryObservation:
+      normalizedPrimary.priorityRecoveryObservation ||
+      normalizedFallback.priorityRecoveryObservation ||
+      buildPriorityRecoveryObservationSnapshot({
+        publicationConvergence: mergedPublicationConvergence,
+        publicationConvergenceGate: mergedPublicationConvergenceGate,
+        priorityRecoveryDecisionSnapshots:
+          normalizedPrimary.priorityRecoveryDecisionSnapshots ||
+          normalizedFallback.priorityRecoveryDecisionSnapshots ||
+          null,
+        priorityRecoveryInvariants:
+          normalizedPrimary.priorityRecoveryInvariants ||
+          normalizedFallback.priorityRecoveryInvariants ||
+          null,
+        activeGateProgress:
+          normalizedPrimary.activeGateProgress ||
+          normalizedFallback.activeGateProgress ||
+          null,
+        activeGateBestProgress:
+          normalizedPrimary.activeGateBestProgress ||
+          normalizedFallback.activeGateBestProgress ||
+          null,
+        activeGateNoProgress:
+          normalizedPrimary.activeGateNoProgress ||
+          normalizedFallback.activeGateNoProgress ||
+          null,
+      }),
+  };
 }
 
 function resolveBenchmarkScaledLoadOpsPerSec(
@@ -317,88 +505,7 @@ function createBenchmarkLoadAdmissionController(cluster, options = {}) {
 }
 
 function extractRetainedControlPlaneDiagnostics(controlPlaneDiagnostics) {
-  if (
-    !controlPlaneDiagnostics ||
-    typeof controlPlaneDiagnostics !== "object" ||
-    Array.isArray(controlPlaneDiagnostics)
-  ) {
-    return null;
-  }
-  const publicationConvergence =
-    controlPlaneDiagnostics.publicationConvergence &&
-    typeof controlPlaneDiagnostics.publicationConvergence === "object"
-      ? controlPlaneDiagnostics.publicationConvergence
-      : null;
-  const logsTable =
-    controlPlaneDiagnostics.logsTable &&
-    typeof controlPlaneDiagnostics.logsTable === "object"
-      ? controlPlaneDiagnostics.logsTable
-      : null;
-  const cdcReplay =
-    controlPlaneDiagnostics.cdcReplay &&
-    typeof controlPlaneDiagnostics.cdcReplay === "object"
-      ? controlPlaneDiagnostics.cdcReplay
-      : null;
-  const cdcReplayByPartitionId =
-    controlPlaneDiagnostics.cdcReplayByPartitionId &&
-    typeof controlPlaneDiagnostics.cdcReplayByPartitionId === "object"
-      ? controlPlaneDiagnostics.cdcReplayByPartitionId
-      : null;
-  const retainedPublicationConvergence = publicationConvergence
-    ? {
-        publicationEpoch: Number.isFinite(
-          publicationConvergence.publicationEpoch,
-        )
-          ? publicationConvergence.publicationEpoch
-          : null,
-        publicationStatus:
-          typeof publicationConvergence.publicationStatus === "string"
-            ? publicationConvergence.publicationStatus
-            : typeof publicationConvergence.status === "string"
-              ? publicationConvergence.status
-              : null,
-        publishedActiveNodeIds: Array.isArray(
-          publicationConvergence.publishedActiveNodeIds,
-        )
-          ? publicationConvergence.publishedActiveNodeIds
-          : [],
-        pendingAckNodeIds: Array.isArray(
-          publicationConvergence.pendingAckNodeIds,
-        )
-          ? publicationConvergence.pendingAckNodeIds
-          : [],
-        recoveryProtocolState:
-          typeof publicationConvergence.recoveryProtocolState === "string"
-            ? publicationConvergence.recoveryProtocolState
-            : null,
-        priorityRecoveryReasonCodes: Array.isArray(
-          publicationConvergence.priorityRecoveryReasonCodes,
-        )
-          ? publicationConvergence.priorityRecoveryReasonCodes
-          : [],
-        priorityPartitionSummary:
-          publicationConvergence.priorityPartitionSummary &&
-          typeof publicationConvergence.priorityPartitionSummary === "object"
-            ? publicationConvergence.priorityPartitionSummary
-            : null,
-      }
-    : null;
-  if (
-    !logsTable &&
-    !cdcReplay &&
-    !cdcReplayByPartitionId &&
-    !retainedPublicationConvergence
-  ) {
-    return null;
-  }
-  return {
-    ...(retainedPublicationConvergence
-      ? { publicationConvergence: retainedPublicationConvergence }
-      : {}),
-    ...(logsTable ? { logsTable } : {}),
-    ...(cdcReplay ? { cdcReplay } : {}),
-    ...(cdcReplayByPartitionId ? { cdcReplayByPartitionId } : {}),
-  };
+  return normalizeRetainedControlPlaneDiagnostics(controlPlaneDiagnostics);
 }
 
 async function captureRetainedControlPlaneDiagnostics(cluster) {
@@ -425,12 +532,16 @@ async function captureRetainedControlPlaneDiagnostics(cluster) {
 async function buildFailureDetails(cluster, details) {
   const controlPlaneDiagnostics =
     await captureRetainedControlPlaneDiagnostics(cluster);
-  if (!controlPlaneDiagnostics) {
+  const mergedControlPlaneDiagnostics = mergeRetainedControlPlaneDiagnostics(
+    details.controlPlaneDiagnostics || null,
+    controlPlaneDiagnostics,
+  );
+  if (!mergedControlPlaneDiagnostics) {
     return details;
   }
   return {
     ...details,
-    controlPlaneDiagnostics,
+    controlPlaneDiagnostics: mergedControlPlaneDiagnostics,
   };
 }
 
@@ -855,6 +966,8 @@ async function run(cluster, options = {}) {
           newNodeId: newNode?.id || null,
           failurePhase: FAILURE_PHASE_CONVERGENCE,
           dominantAssertion: "convergence_timeout",
+          controlPlaneDiagnostics:
+            error?.diagnostics?.controlPlaneDiagnostics || null,
         }),
       );
     }
@@ -917,6 +1030,8 @@ async function run(cluster, options = {}) {
         newNodeId: newNode?.id || null,
         failurePhase: FAILURE_PHASE_CONSISTENCY,
         dominantAssertion: "consistency_convergence",
+        controlPlaneDiagnostics:
+          error?.diagnostics?.controlPlaneDiagnostics || null,
       }),
     );
   }

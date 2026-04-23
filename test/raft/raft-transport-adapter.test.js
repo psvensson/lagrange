@@ -89,8 +89,21 @@ test('RaftTransportAdapter keeps heartbeat traffic on the critical lane',
       });
     });
 
-    t.same(receivedOptions, RAFT_TRANSPORT_DELIVERY_OPTIONS,
-      'heartbeat append traffic should remain critical');
+    t.equal(
+      receivedOptions?.deliveryPriority,
+      RAFT_TRANSPORT_DELIVERY_OPTIONS.deliveryPriority,
+      'heartbeat append traffic should remain critical',
+    );
+    t.equal(
+      receivedOptions?.deliverySource,
+      'raft:append:heartbeat',
+      'heartbeat append traffic should stamp one canonical delivery source',
+    );
+    t.equal(
+      receivedOptions?.replacePendingKey,
+      'raft:append:heartbeat:node-2/partition/part-1-r2',
+      'heartbeat append traffic should stamp one canonical replacement key',
+    );
   });
 
 test('RaftTransportAdapter keeps control-plane publication append traffic critical',
@@ -345,38 +358,38 @@ test('RaftTransportAdapter keeps control-plane append-fail traffic critical',
 
 test('RaftTransportAdapter prefers the resolved target address when sender and ' +
   'target priorities differ', async (t) => {
-    let receivedOptions = null;
-    const messageRouter = {
-      async deliver(_address, _message, options) {
-        receivedOptions = options;
-        return {acknowledged: true};
-      },
-    };
-    const adapter = new RaftTransportAdapter({
-      messageRouter,
-      entityType: 'partition',
-      nodeId: 'node-1',
-    });
-    const packet = {
-      type: RAFT_PACKET_TYPE.APPEND_FAIL,
-      term: 7,
-      address: 'node-1/partition/control_plane_publications-p1-r1',
-      state: 'follower',
-      leader: 'control_plane_publications-p1-r1',
-      last: {index: 12, term: 7},
-      destination: 'node-2/partition/tbl-bench-p1-r2',
-    };
-
-    await new Promise((resolve, reject) => {
-      adapter.write(packet, (error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      });
-    });
-
-    t.same(receivedOptions, RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-      'non-critical target routing should win over a critical-looking sender');
+  let receivedOptions = null;
+  const messageRouter = {
+    async deliver(_address, _message, options) {
+      receivedOptions = options;
+      return {acknowledged: true};
+    },
+  };
+  const adapter = new RaftTransportAdapter({
+    messageRouter,
+    entityType: 'partition',
+    nodeId: 'node-1',
   });
+  const packet = {
+    type: RAFT_PACKET_TYPE.APPEND_FAIL,
+    term: 7,
+    address: 'node-1/partition/control_plane_publications-p1-r1',
+    state: 'follower',
+    leader: 'control_plane_publications-p1-r1',
+    last: {index: 12, term: 7},
+    destination: 'node-2/partition/tbl-bench-p1-r2',
+  };
+
+  await new Promise((resolve, reject) => {
+    adapter.write(packet, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  t.same(receivedOptions, RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
+    'non-critical target routing should win over a critical-looking sender');
+});

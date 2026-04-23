@@ -285,3 +285,39 @@ Prefer:
 Do not let diagnostics views, retained owner state, bootstrap-normalized
 ingress state, or cache-local observations drift into a second operational
 authority by convention.
+
+## 15. Lifecycle Boundaries Must Publish One Progress Grammar
+
+When a boundary owns progress through startup, join, rejoin, readiness,
+admission, recovery, convergence, or rebalancing, the design is not done until
+the progress vocabulary is explicit.
+
+Prefer:
+
+- one named grammar that states the lifecycle or progress states
+- one declared meaning for blocked, deferred, retryable, terminal, and ready
+- one declared evidence precedence when several witnesses disagree
+- one declared consumer set for that grammar across runtime, diagnostics,
+  admin, and harness surfaces
+
+Do not force readers to reconstruct progress from object existence, local
+booleans, timestamps, or log strings. If several surfaces need the same
+reasoning but use different words, the grammar is missing.
+
+## 16. Treat Failure Migration As Boundary Evidence
+
+When a focused fix changes the dominant failure without making the scenario
+green, treat that shift as new evidence about the boundary rather than as
+incidental noise.
+
+Prefer:
+
+- recording the previous dominant blocker and the new one in the active work
+  package
+- asking what boundary meaning allowed the new blocker to stay implicit
+- splitting the next concern explicitly when the blocker has moved to a new
+  owner seam
+
+Do not treat hot-path green tests as analysis closure while the original
+scenario now fails for a different named reason. Failure migration is often
+proof that the previous fix worked and exposed the next missing contract.

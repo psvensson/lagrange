@@ -441,6 +441,67 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   }
 
   /**
+   * @param {Map<string, Array<Object>>} priorityOperationsByPartitionId
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  addConcurrentPriorityBudgetOperation(
+    priorityOperationsByPartitionId,
+    operation,
+  ) {
+    const partitionId = String(
+      operation?.partitionId || operation?.entityId || "",
+    ).trim();
+    if (
+      partitionId.length === NUM.ZERO ||
+      !this.isPriorityControlPlanePartition(partitionId)
+    ) {
+      return false;
+    }
+    if (!priorityOperationsByPartitionId.has(partitionId)) {
+      priorityOperationsByPartitionId.set(partitionId, []);
+    }
+    priorityOperationsByPartitionId.get(partitionId).push(operation);
+    return true;
+  }
+
+  /**
+   * @param {Array<Object>} filteredOperations
+   * @param {string} partitionId
+   * @param {Array<Object>} partitionOperations
+   * @return {Promise<void>}
+   * @private
+   */
+  async appendConcurrentPriorityPartitionOperations(
+    filteredOperations,
+    partitionId,
+    partitionOperations,
+  ) {
+    const partitionAssessment =
+      await this.buildPriorityPartitionAddBudgetAssessment(
+        partitionId,
+        partitionOperations,
+      );
+    if (
+      partitionAssessment &&
+      !shouldPriorityRecoveryOperationBlockPlanning(partitionAssessment)
+    ) {
+      return;
+    }
+    if (partitionAssessment) {
+      filteredOperations.push(...partitionOperations);
+      return;
+    }
+    for (const operation of partitionOperations) {
+      if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
+        continue;
+      }
+      filteredOperations.push(operation);
+    }
+  }
+
+  /**
    * Keep add-budget accounting aligned with the shared priority-recovery
    * planning contract. Priority control-plane rows that already satisfy
    * spread, or no longer target the current eligible cohort, must stop
@@ -458,17 +519,12 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       if (!this.isConcurrentAddBudgetOperation(operation)) {
         continue;
       }
-      const partitionId = String(
-        operation.partitionId || operation.entityId || "",
-      ).trim();
       if (
-        partitionId.length > NUM.ZERO &&
-        this.isPriorityControlPlanePartition(partitionId)
+        this.addConcurrentPriorityBudgetOperation(
+          priorityOperationsByPartitionId,
+          operation,
+        )
       ) {
-        if (!priorityOperationsByPartitionId.has(partitionId)) {
-          priorityOperationsByPartitionId.set(partitionId, []);
-        }
-        priorityOperationsByPartitionId.get(partitionId).push(operation);
         continue;
       }
       if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
@@ -480,27 +536,11 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       partitionId,
       partitionOperations,
     ] of priorityOperationsByPartitionId.entries()) {
-      const partitionAssessment =
-        await this.buildPriorityPartitionAddBudgetAssessment(
-          partitionId,
-          partitionOperations,
-        );
-      if (
-        partitionAssessment &&
-        !shouldPriorityRecoveryOperationBlockPlanning(partitionAssessment)
-      ) {
-        continue;
-      }
-      if (partitionAssessment) {
-        filteredOperations.push(...partitionOperations);
-        continue;
-      }
-      for (const operation of partitionOperations) {
-        if (await this.shouldIgnoreCriticalAddBudgetOperation(operation)) {
-          continue;
-        }
-        filteredOperations.push(operation);
-      }
+      await this.appendConcurrentPriorityPartitionOperations(
+        filteredOperations,
+        partitionId,
+        partitionOperations,
+      );
     }
     return filteredOperations;
   }
@@ -522,12 +562,6 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     partitionId,
     operations = [],
   ) {
-    if (
-      typeof this.workflowOwner
-        ?.getPriorityRecoveryPlanningSnapshotForOperation !== "function"
-    ) {
-      return null;
-    }
     const normalizedPartitionId = String(partitionId || "").trim();
     if (normalizedPartitionId.length === NUM.ZERO) {
       return null;
@@ -545,6 +579,26 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     }
     const representativeOperation = partitionOperations.find(Boolean) || null;
     if (!representativeOperation) {
+      return null;
+    }
+    if (
+      typeof this.workflowOwner
+        ?.getPriorityRecoveryDecisionSnapshotForPartitionOperations ===
+      "function"
+    ) {
+      const decisionSnapshot =
+        await this.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(
+          normalizedPartitionId,
+          partitionOperations,
+        );
+      if (decisionSnapshot && typeof decisionSnapshot === "object") {
+        return decisionSnapshot;
+      }
+    }
+    if (
+      typeof this.workflowOwner
+        ?.getPriorityRecoveryPlanningSnapshotForOperation !== "function"
+    ) {
       return null;
     }
     const planningSnapshot =
@@ -707,7 +761,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       incompleteOperationObservation,
     );
     if (
-      this.shouldAllowEmergencyPriorityDeferredObservation(
+      this.shouldAllowPriorityRecoveryDeferredObservation(
         options.partitionId,
         incompleteOperationObservation,
       )
@@ -788,7 +842,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
         authoritativeObservation,
       );
       if (
-        this.shouldAllowEmergencyPriorityDeferredObservation(
+        this.shouldAllowPriorityRecoveryDeferredObservation(
           options.partitionId,
           authoritativeObservation,
         )
@@ -822,7 +876,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       incompleteOperationObservation,
     );
     if (
-      this.shouldAllowEmergencyPriorityDeferredObservation(
+      this.shouldAllowPriorityRecoveryDeferredObservation(
         options.partitionId,
         incompleteOperationObservation,
       )
@@ -907,7 +961,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
       incompleteOperationObservation,
     );
     if (
-      this.shouldAllowEmergencyPriorityDeferredObservation(
+      this.shouldAllowPriorityRecoveryDeferredObservation(
         options.partitionId,
         incompleteOperationObservation,
       )
@@ -1010,16 +1064,32 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   }
 
   /**
-   * Emergency transport-control partitions retain one reserved pressure lane.
-   * When that reserved lane is still available, bounded background pressure
-   * must not stop the next publication or replica-operations convergence step.
+   * Priority-recovery partitions that remain blocked in the canonical
+   * admission plan may keep moving when transport pressure is contained to the
+   * bounded backpressure state.
    *
    * @param {string|null} partitionId
    * @return {boolean}
    * @private
    */
-  hasContainedEmergencyPriorityPressure(partitionId = null) {
-    if (!this.isEmergencyPriorityControlPlanePartition(partitionId)) {
+  hasContainedPriorityRecoveryPressure(partitionId = null) {
+    const normalizedPartitionId = String(partitionId || "").trim();
+    if (normalizedPartitionId.length === NUM.ZERO) {
+      return false;
+    }
+    const emergencyPriorityPartition =
+      this.isEmergencyPriorityControlPlanePartition(normalizedPartitionId);
+    const priorityRecoveryAdmissionPlan =
+      this.getPriorityRecoveryAdmissionPlan();
+    if (
+      emergencyPriorityPartition !== true &&
+      (
+        priorityRecoveryAdmissionPlan?.recoveryActive !== true ||
+        priorityRecoveryAdmissionPlan.hasBlockedPartition(
+          normalizedPartitionId,
+        ) !== true
+      )
+    ) {
       return false;
     }
     const decision = this.getLocalRouterPressureDecision({ partitionId });
@@ -1030,17 +1100,16 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
   }
 
   /**
-   * Emergency publication/replica-operation partitions may continue when the
-   * owner read is deferred only because contained background pressure is being
-   * absorbed by the reserved critical lane and no visible conflicting work
-   * remains.
+   * Blocked priority-recovery partitions may continue when the owner read is
+   * deferred only because contained background pressure is being absorbed and
+   * no visible conflicting work remains.
    *
    * @param {string|null} partitionId
    * @param {Object|null} observation
    * @return {boolean}
    * @private
    */
-  shouldAllowEmergencyPriorityDeferredObservation(
+  shouldAllowPriorityRecoveryDeferredObservation(
     partitionId = null,
     observation = null,
   ) {
@@ -1057,7 +1126,7 @@ class RebalanceCoordinatorSegment5 extends RebalanceCoordinatorSegment4 {
     if (operationCount > NUM.ZERO || !observation?.deferredOutcome) {
       return false;
     }
-    return this.hasContainedEmergencyPriorityPressure(partitionId);
+    return this.hasContainedPriorityRecoveryPressure(partitionId);
   }
 
   /**

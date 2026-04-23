@@ -1,106 +1,31 @@
-import { OPERATION_WORKFLOW_OWNER_SHARED } from "./operation-workflow-owner-shared.js";
-import { OperationWorkflowOwnerSegment3 } from "./operation-workflow-owner-segment-3.js";
+import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {OperationWorkflowOwnerSegment3} from './operation-workflow-owner-segment-3.js';
 
 const {
-  AUTHORITATIVE_TRANSITION_RECOVERY_STATUS,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_PUBLICATION_STATUS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS,
-  ControlPlaneField,
-  ControlPlaneMessageType,
-  ControlPlaneReadinessService,
-  DEFAULT_MIN_REPLICA_COUNT,
-  DIRECT_TRANSITION_PERSIST_PARTITION_IDS,
   DISPATCH_RETRY_DELAY_MS,
-  EXECUTOR_OUTCOME_ACTION,
-  EXECUTOR_OUTCOME_ACTION_MAP,
-  EXECUTOR_OUTCOME_FIELD,
   FAILURE_LOG_LEVEL,
-  INCOMPLETE_OPERATION_OBSERVATION_STATE,
-  INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES,
-  OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS,
-  OBSERVED_PROGRESS_RETRY_DELAY_MS,
   OPERATION_HANDLER,
-  OPERATION_LIFECYCLE_ACTION,
-  OPERATION_METADATA_KEY,
   OPERATION_OWNER_ACTION,
-  OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
-  OPERATION_SINGLE_FLIGHT_SCOPE,
   OPERATION_TRANSITION_REASON,
-  OPERATION_TRANSITION_SESSION_ATTEMPT_PREFIX,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
-  PARTITION_SERVICE_ERROR_MSG,
-  PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
-  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
-  PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
-  PRIORITY_PUBLICATION_SOURCE_ROLE_STATE,
-  PRIORITY_RECOVERY_COMPLETION_STATE,
-  PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE,
-  QUERY_ERROR_MSG,
-  RAFT_ROLE,
   REBALANCER_SKIP_REASON,
-  REBALANCE_COORDINATOR_DEFER_REASON,
   REBALANCE_COORDINATOR_ERROR_MSG,
-  REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
-  RECOVERABLE_TRANSITION_COMMIT_STATUS,
-  RECOVERABLE_TRANSITION_ROLLBACK_STATUS,
   REMOVE_SAFETY_EVALUATION_CLASSIFICATION,
-  REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-  REMOVE_SAFETY_READINESS_DIMENSION,
-  REMOVE_SAFETY_READ_QUERY_OPTIONS,
-  REMOVE_SAFETY_SQL,
-  REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS,
-  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   ReplicaOperationField,
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
   ReplicaStatus,
-  SAFETY_DEFERRED_LOG_THROTTLE_MS,
-  SAFETY_DEFERRED_RETRY_DELAY_MS,
   SERVICE_TYPE,
-  SQL_RECONCILIATION_REASON,
   SYSTEM_TABLE_NAME,
-  TIMEOUT_BUDGET_CLASSIFICATION,
-  TIMEOUT_BUDGET_DEFAULT,
-  TIME_MS,
-  TRANSACTION_STATUS,
-  TRANSITION_RECOVERY_READ_OPTIONS,
-  TRANSITION_RECOVERY_SQL,
-  TRANSITION_RETRY_DELAY_MS,
-  TRANSITION_STEP_OPTIONS,
-  TYPEOF,
-  UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
-  WORKFLOW_STEP_TO_STATUS,
-  buildControlPlaneQueryOptions,
-  buildPriorityRecoveryBlockedPartitionIds,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationAssessment,
-  buildSelectRowsByTransactionIdsSql,
-  buildTimeoutClassification,
   classifyTransportDeliveryOutcome,
-  createChildTimeoutBudget,
-  createTopLevelOperationBudget,
-  getControlPlaneRetryAfterMs,
-  getWorkflowSteps,
-  hasPriorityRecoverySpreadGap,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isPriorityControlPlanePartition,
-  isRetryableControlPlaneError,
-  isSystemTablePartition,
-  normalizeNodeIdList,
-  normalizeReplicaRowNodeIds,
-  readAuthoritativeControlPlaneRows,
-  resolvePriorityRecoveryActiveNodeCohort,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
@@ -271,9 +196,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       operationInput.operation_id.length > NUM.ZERO
     ) {
       const operation = this.repository.rowToOperation(operationInput);
-      return isCoordinatorOwnedOperationType(operation?.type)
-        ? operation
-        : null;
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
     }
     return null;
   }
@@ -329,8 +254,10 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
             operation.operationId,
             {
               error:
-                OPERATION_WORKFLOW_OWNER_LITERAL.CONTROL_PLANE_PRESSURE_DEGRADED_WHILE_CLAIMING_PRIORITY +
-                OPERATION_WORKFLOW_OWNER_LITERAL.DISPATCH_TRANSITION,
+                OPERATION_WORKFLOW_OWNER_LITERAL
+                  .CONTROL_PLANE_PRESSURE_DEGRADED_WHILE_CLAIMING_PRIORITY +
+                OPERATION_WORKFLOW_OWNER_LITERAL
+                  .DISPATCH_TRANSITION,
             },
           );
         }
@@ -437,9 +364,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       this.isPriorityRecoverySupersededTargetFailureApplicable(
         operation,
         replaceRemoveDispatchPhase,
-      )
-        ? await this.getPriorityRecoverySupersededTargetError(operation)
-        : null;
+      ) ?
+        await this.getPriorityRecoverySupersededTargetError(operation) :
+        null;
     if (supersededPriorityRecoveryError) {
       await this.failOperation(operation, supersededPriorityRecoveryError, {
         logLevel: FAILURE_LOG_LEVEL.WARN,
@@ -529,9 +456,9 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
             partitionId: operation.partitionId,
             entityType,
             entityId,
-            excludeReplicaIds: replaceSourceReplicaId
-              ? [replaceSourceReplicaId]
-              : [],
+            excludeReplicaIds: replaceSourceReplicaId ?
+              [replaceSourceReplicaId] :
+              [],
           });
         }
         requestReplicaId = operation.replicaId;
@@ -544,7 +471,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
       !requestReplicaId
     ) {
       const replaceSourceMissing =
-        "Missing source replica for REPLACE operation " + operation.operationId;
+        'Missing source replica for REPLACE operation ' + operation.operationId;
       await this.failOperation(operation, replaceSourceMissing);
       return this.buildFailedOperationResult(
         operation.operationId,
@@ -614,7 +541,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
           // Replica operation dispatch is the control-plane progress signal that
           // advances split/rebalance workflows. It must preempt bulk metadata
           // replication from transaction bookkeeping.
-          deliveryPriority: "critical",
+          deliveryPriority: 'critical',
         }),
       );
     } catch (error) {
@@ -756,7 +683,7 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     }
 
     const errorLike = response?.error || response;
-    const errorMsg = this.normalizeErrorMessage(errorLike, "Unknown error");
+    const errorMsg = this.normalizeErrorMessage(errorLike, 'Unknown error');
     if (this.deferDispatchRetry(operation, errorLike)) {
       return this.buildSkippedOperationResult(
         REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
@@ -789,21 +716,21 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
     const replaceRemovePhase = this.repository.isReplaceRemovePhase(operation);
     const locallyOwned =
       Boolean(operation) && this.repository.isOperationLocallyOwned(operation);
-    const stoppingCommitted = operationId
-      ? this.operationWorkflowCoordinator.isTransitionIdempotent(
-          operationId,
-          WORKFLOW_STEP.STOPPING,
-        )
-      : false;
-    const safetyRetryArmed = operationId
-      ? this.safetyDeferredRetryTimerByOperationId.has(operationId)
-      : false;
-    const dispatchRetryArmed = operationId
-      ? this.dispatchRetryTimerByOperationId.has(operationId)
-      : false;
-    const activeReplaceRetryArmed = operationId
-      ? this.priorityActiveReplaceRetryTimerByOperationId.has(operationId)
-      : false;
+    const stoppingCommitted = operationId ?
+      this.operationWorkflowCoordinator.isTransitionIdempotent(
+        operationId,
+        WORKFLOW_STEP.STOPPING,
+      ) :
+      false;
+    const safetyRetryArmed = operationId ?
+      this.safetyDeferredRetryTimerByOperationId.has(operationId) :
+      false;
+    const dispatchRetryArmed = operationId ?
+      this.dispatchRetryTimerByOperationId.has(operationId) :
+      false;
+    const activeReplaceRetryArmed = operationId ?
+      this.priorityActiveReplaceRetryTimerByOperationId.has(operationId) :
+      false;
     const transitionRetryArmed =
       Boolean(operationId) &&
       (this.transitionRetryTimerByOperationId.has(operationId) ||
@@ -996,4 +923,4 @@ class OperationWorkflowOwnerSegment4 extends OperationWorkflowOwnerSegment3 {
    */
 }
 
-export { OperationWorkflowOwnerSegment4 };
+export {OperationWorkflowOwnerSegment4};

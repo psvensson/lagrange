@@ -111,6 +111,7 @@ const {
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
   buildPriorityRecoveryCompletion,
+  buildPriorityRecoveryLearnerPromotion,
   buildPriorityRecoveryOperationContextFromRecord,
   buildPriorityRecoveryPartitionAssessment,
   cloneSplitRoutingEntry,
@@ -738,8 +739,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
           .map((serviceRow) => String(serviceRow?.node_id || "").trim())
           .filter((nodeId) => nodeId.length > NUM.ZERO)
       : [];
-    const promotableLearnerNodeIds = [];
-    const learnerHoldByNodeId = {};
+    const readinessByNodeId = {};
     for (const nodeId of activeLearnerNodeIds) {
       const readiness =
         readinessService &&
@@ -747,22 +747,15 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
           PARTITION_SERVICE_TYPE.FUNCTION
           ? readinessService.getNodeReadinessSync(nodeId)
           : null;
-      const dimensions =
-        readiness?.dimensions && typeof readiness.dimensions === TYPEOF.OBJECT
-          ? readiness.dimensions
-          : {};
-      if (
-        dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] === true
-      ) {
-        promotableLearnerNodeIds.push(nodeId);
-        continue;
+      if (readiness && typeof readiness === PARTITION_SERVICE_TYPE.OBJECT) {
+        readinessByNodeId[nodeId] = readiness;
       }
-      learnerHoldByNodeId[nodeId] = {
-        reasonCodes: Array.isArray(readiness?.reasonCodes)
-          ? [...readiness.reasonCodes]
-          : [],
-      };
     }
+    const learnerPromotion = buildPriorityRecoveryLearnerPromotion({
+      activeLearnerNodeIds,
+      readinessByNodeId,
+      recoveryActiveNodeIds: effectiveEligibleNodeIds,
+    });
     const assessment = buildPriorityRecoveryPartitionAssessment({
       partitionId: this.partitionId,
       priorityPartitionSummary,
@@ -771,13 +764,7 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
         effectiveEligibleNodeCount: effectiveEligibleNodeIds.length,
         ineligibleNodes: [],
       },
-      learnerPromotion: {
-        activeLearnerNodeIds,
-        promotableLearnerNodeIds,
-        activeLearnerNodeCount: activeLearnerNodeIds.length,
-        promotableLearnerNodeCount: promotableLearnerNodeIds.length,
-        learnerHoldByNodeId,
-      },
+      learnerPromotion,
       operationContexts:
         this.getPriorityRecoveryOperationContextsForLearnerPromotion(),
     });
@@ -789,6 +776,359 @@ class PartitionServiceSegment4 extends PartitionServiceSegment4Part1 {
       priorityRecoveryActive:
         priorityRecoveryActive ||
         hasPriorityRecoverySpreadGap(priorityPartitionSummary),
+    });
+  }
+  becomeFollower() {
+    this.role = RaftRole.FOLLOWER;
+    this.isLeader = false;
+    this.isJoiningExistingGroup = false;
+    this.queueRoleUpdate(RaftRole.FOLLOWER);
+    this.startElection();
+  }
+  /**
+   * Check if learner can be promoted to follower.
+   * Promotion happens when:
+   * 1. Minimum delay has passed (already satisfied by timer)
+   * 2. A leader has been discovered for the group
+   * 3. Promoting would stay within the partition's configured replica count,
+   *    allowing at most one temporary replacement voter above target
+   * 4. Promoting would not result in an even number of voters (prevents split votes)
+   *    unless this is the single temporary replacement voter or all pending
+   *    learners together would reach an odd count within target
+   * @private
+   */
+  checkLearnerPromotion() {
+    this.learnerPromotionTimer = null;
+    if (this.role !== RaftRole.LEARNER) {
+      return;
+    }
+    if (!this.leaderId) {
+      this.leaderId =
+        this.resolveLeaderIdFromMetadata() ||
+        this.resolveLeaderIdFromHint() ||
+        null;
+    }
+    if (!this.leaderId) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        reason: PARTITION_SERVICE_LITERAL.LEADER_NOT_DISCOVERED,
+      });
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
+      return;
+    }
+    const activeVoterCount = this.countActiveVoters();
+    const learnerCount = this.countPendingLearners();
+    const inFlightAddLikeReplicaIds =
+      this.getInFlightAddLikeOperationReplicaIds();
+    const hasOwnedAddLikeOperation = Boolean(
+      inFlightAddLikeReplicaIds &&
+      inFlightAddLikeReplicaIds.size > NUM.ZERO &&
+      inFlightAddLikeReplicaIds.has(this.replicaId),
+    );
+    const targetReplicaCount = this.getTargetReplicaCountForPromotion();
+    const isCriticalSystemPartition = CRITICAL_SYSTEM_PARTITION_IDS.has(
+      this.partitionId,
+    );
+    const singleReplacementPromotionAllowed =
+      (this.isJoiningExistingGroup === true || hasOwnedAddLikeOperation) &&
+      learnerCount === NUM.ONE &&
+      activeVoterCount >= targetReplicaCount;
+    const priorityRecoveryCompletion = isCriticalSystemPartition
+      ? this.resolvePriorityRecoveryCompletionForLearnerPromotion({
+          targetReplicaCount,
+          activeVoterCount,
+          learnerCount,
+        })
+      : null;
+    const priorityRecoveryAdditionalVotersAllowed =
+      isCriticalSystemPartition &&
+      Number.isFinite(priorityRecoveryCompletion?.temporaryOverflowVoterBudget)
+        ? priorityRecoveryCompletion.temporaryOverflowVoterBudget
+        : NUM.ZERO;
+    const priorityRecoveryOverflowPromotionAllowed =
+      priorityRecoveryAdditionalVotersAllowed > NUM.ZERO;
+    const maxAllowedVotersAfterPromotion =
+      targetReplicaCount +
+      (singleReplacementPromotionAllowed ? NUM.ONE : NUM.ZERO) +
+      priorityRecoveryAdditionalVotersAllowed;
+    const votersAfterPromotion = activeVoterCount + NUM.ONE;
+    const wouldExceedTargetReplicaCount =
+      votersAfterPromotion > maxAllowedVotersAfterPromotion;
+    const wouldBeEven = votersAfterPromotion % NUM.TWO === NUM.ZERO;
+    const votersAfterAllLearners = activeVoterCount + learnerCount;
+    const allLearnersWouldBeOdd = votersAfterAllLearners % NUM.TWO === NUM.ONE;
+    const allLearnersWithinTarget =
+      votersAfterAllLearners <= targetReplicaCount;
+    if (
+      wouldExceedTargetReplicaCount ||
+      (wouldBeEven &&
+        !singleReplacementPromotionAllowed &&
+        !priorityRecoveryOverflowPromotionAllowed &&
+        !(allLearnersWouldBeOdd && allLearnersWithinTarget))
+    ) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        reason: wouldExceedTargetReplicaCount
+          ? PARTITION_SERVICE_LITERAL.REPLICA_COUNT_LIMIT
+          : PARTITION_SERVICE_LITERAL.ODD_VOTER_REQUIREMENT,
+        activeVoterCount,
+        learnerCount,
+        targetReplicaCount,
+        maxAllowedVotersAfterPromotion,
+      });
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
+      return;
+    }
+    this.becomeFollower();
+  }
+  getInFlightAddLikeOperationReplicaIds() {
+    const operationRows =
+      this.systemTableCache &&
+      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
+        ? this.systemTableCache.filter(
+            TABLES.REPLICA_OPERATIONS,
+            (operationRow) => {
+              return (
+                operationRow?.partition_id === this.partitionId &&
+                ADD_LIKE_REPLICA_OPERATION_TYPES.has(operationRow?.type) &&
+                !TERMINAL_STATUSES.includes(
+                  String(
+                    operationRow?.status ??
+                      operationRow?.operation_status ??
+                      operationRow?.operationStatus ??
+                      '',
+                  ).toLowerCase(),
+                )
+              );
+            },
+          )
+        : [];
+    const replicaIds = new Set();
+    for (const operationRow of operationRows) {
+      const replicaId = String(operationRow?.replica_id || '').trim();
+      if (replicaId.length > NUM.ZERO) {
+        replicaIds.add(replicaId);
+      }
+    }
+    return replicaIds;
+  }
+  countPendingLearners() {
+    const services =
+      this.systemTableCache &&
+      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
+        ? this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+            return (
+              service.partition_id === this.partitionId &&
+              service.service_type === SERVICE_TYPE.PARTITION
+            );
+          })
+        : [];
+    let learnerCount = NUM.ZERO;
+    for (const service of services) {
+      const status = service.status || ReplicaStatus.ACTIVE;
+      if (
+        status === ReplicaStatus.FAILED ||
+        status === ReplicaStatus.REMOVING ||
+        status === ReplicaStatus.REMOVED
+      ) {
+        continue;
+      }
+      if (service.raft_role === PARTITION_RAFT_ROLE.LEARNER) {
+        learnerCount++;
+      }
+    }
+    return learnerCount;
+  }
+  getTargetReplicaCountForPromotion() {
+    const configuredReplicaCount = Number(this.replicaCount);
+    if (
+      Number.isInteger(configuredReplicaCount) &&
+      configuredReplicaCount > NUM.ZERO
+    ) {
+      return configuredReplicaCount;
+    }
+    return PARTITION_SERVICE_DEFAULT.DEFAULT_REPLICA_COUNT;
+  }
+  countActiveVoters() {
+    const services =
+      this.systemTableCache &&
+      typeof this.systemTableCache.filter === PARTITION_SERVICE_TYPE.FUNCTION
+        ? this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+            return (
+              service.partition_id === this.partitionId &&
+              service.service_type === SERVICE_TYPE.PARTITION
+            );
+          })
+        : [];
+    let voterCount = NUM.ZERO;
+    for (const service of services) {
+      const status = service.status || ReplicaStatus.ACTIVE;
+      const raftRole = service.raft_role;
+      if (
+        status === ReplicaStatus.FAILED ||
+        status === ReplicaStatus.REMOVING ||
+        status === ReplicaStatus.REMOVED
+      ) {
+        continue;
+      }
+      if (raftRole === PARTITION_RAFT_ROLE.LEARNER) {
+        continue;
+      }
+      if (ACTIVE_VOTER_ROLES.has(raftRole)) {
+        voterCount++;
+      }
+    }
+    return voterCount;
+  }
+  /**
+   * Stop all rebalancing activity for this partition.
+   * @return {Promise<void>}
+   */
+  async quiesceRebalancing() {
+    if (this.rebalancer) {
+      if (
+        typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION
+      ) {
+        this.rebalancer.setLeader(false);
+      }
+      if (typeof this.rebalancer.shutdown === PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.rebalancer.shutdown();
+      }
+      this.rebalancer = null;
+    }
+    if (this.rebalanceCoordinator && this.ownsRebalanceCoordinator) {
+      try {
+        await this.rebalanceCoordinator.shutdown();
+      } catch (error) {
+        this.logger.warn(
+          PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
+          {
+            partitionId: this.partitionId,
+            replicaId: this.replicaId,
+            error: error.message,
+          },
+        );
+      }
+    }
+    this.rebalanceCoordinator = null;
+    this.ownsRebalanceCoordinator = false;
+  }
+  /**
+   * Get compact partition runtime statistics for diagnostics attribution.
+   * @return {Object}
+   */
+  getStats() {
+    const pendingRequestTrackerStats =
+      this.pendingRequestTracker &&
+      typeof this.pendingRequestTracker.getStats === PARTITION_SERVICE_TYPE.FUNCTION
+        ? this.pendingRequestTracker.getStats()
+        : null;
+    return {
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+      role: this.role,
+      isLeader: this.isLeader,
+      initialized: this.initialized,
+      cdcReplay: {
+        bufferedEvents: this.cdcEventBuffer.size(),
+        replayBufferGrowthCount: this.cdcReplayBufferGrowthCount,
+        replayRetryDepth: this.cdcReplayRetryDepth,
+        replayDelayMs: this.cdcBufferReplayDelayMs,
+        replayInFlight: this.cdcBufferReplayInFlight,
+        subscriberCount: this.cdcSubscribers.size,
+      },
+      pendingRequestCount: pendingRequestTrackerStats?.pendingCount || NUM.ZERO,
+      pendingRequestTracker: pendingRequestTrackerStats,
+    };
+  }
+  /**
+   * Shutdown the partition service.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    this.isShutdown = true;
+    this.leaderActivationGate.shutdown();
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
+    });
+    if (this.learnerPromotionTimer) {
+      clearTimeout(this.learnerPromotionTimer);
+      this.learnerPromotionTimer = null;
+    }
+    this.peerReconciliationScheduled = false;
+    if (
+      this.systemTableCache &&
+      typeof this.systemTableCache.offCacheChange ===
+        PARTITION_SERVICE_TYPE.FUNCTION &&
+      this.systemTableCacheChangeListener
+    ) {
+      this.systemTableCache.offCacheChange(this.systemTableCacheChangeListener);
+    }
+    if (this.logAdapter) {
+      this.logAdapter.close();
+    }
+    if (this.raft) {
+      this.raftProvider.shutdownNode(this.raft);
+      this.raft = null;
+    }
+    this.stopPeriodicSizeUpdates();
+    this.stopPreparedStateHoldTimeoutSweep();
+    if (
+      typeof this.releaseMetadataPublicationReadinessListener ===
+      PARTITION_SERVICE_TYPE.FUNCTION
+    ) {
+      this.releaseMetadataPublicationReadinessListener();
+    }
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
+    this.roleMutationHelper.shutdown();
+    this.leaderNodeMutationHelper.shutdown();
+    if (this.cdcBufferReplayTimer) {
+      clearTimeout(this.cdcBufferReplayTimer);
+      this.cdcBufferReplayTimer = null;
+    }
+    this.cdcBufferReplayInFlight = false;
+    if (this.pendingRequestTracker) {
+      this.pendingRequestTracker.clear();
+    }
+    this.clearPendingCommittedWrites(
+      PARTITION_SERVICE_LITERAL.PARTITION_SERVICE_SHUTDOWN,
+    );
+    await this.quiesceRebalancing();
+    if (this.pendingCDCEventDeliveries.size > NUM.ZERO) {
+      await Promise.allSettled([...this.pendingCDCEventDeliveries]);
+      this.pendingCDCEventDeliveries.clear();
+    }
+    if (this.transport) {
+      this.transport.unregister(this.unifiedAddress);
+    }
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+    this.initialized = false;
+    this.cdcSubscribers.clear();
+    this.cdcSubscriberWrappers.clear();
+    this.cdcSubscriberStates.clear();
+    this.cdcSubscriptionEpoch = NUM.ZERO;
+    this.cdcEventSequenceNumber = NUM.ZERO;
+    this.cdcBufferReplayDelayMs =
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    this.cdcReplayBufferGrowthCount = NUM.ZERO;
+    this.cdcReplayRetryDepth = NUM.ZERO;
+    this.recentlyAppliedEntryKeys.clear();
+    this.recentlyAppliedEntryOrder = [];
+    this.pendingCDCEventDeliveries.clear();
+    this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
+      partitionId: this.partitionId,
+      replicaId: this.replicaId,
     });
   }
 }

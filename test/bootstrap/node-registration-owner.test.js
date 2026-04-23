@@ -1,12 +1,17 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
+import {CONTROL_PLANE_PHASE_SCOPE} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   COLUMN,
   NUM,
   STATE,
   TIME_MS,
 } from '../../src/constants/index.js';
+import {
+  MEMBERSHIP_LIFECYCLE_INTENT,
+} from '../../src/control-plane/membership-lifecycle-controller.js';
 
 const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
@@ -18,6 +23,14 @@ const TEST_LOGGER = {
   error: () => {},
 };
 const TEST_NODE_CAPABILITIES = Object.freeze([]);
+const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze(['cluster_incarnation_identity_mismatch']),
+  localIdentityState: 'mismatched',
+  durableMembershipState: 'present',
+  peerProofState: 'recovered',
+});
 
 function buildBudgetResolution(nodeRow) {
   return {
@@ -114,6 +127,12 @@ test(
       ),
       'membership owner join writes should retain bounded query timeout policy',
     );
+    t.ok(
+      joinMutationOptions.every((options) =>
+        options?.phaseScope === CONTROL_PLANE_PHASE_SCOPE.JOIN,
+      ),
+      'membership owner join writes should declare join phase scope explicitly',
+    );
     t.equal(
       endpointCalls[0].row[COLUMN.NODE_ID],
       TEST_NODE_ID,
@@ -193,3 +212,76 @@ test(
       'should surface authoritative join progress as the resolution source',
     );
   });
+
+test(
+  'NodeRegistrationOwner falls back to fresh admission writes when the ' +
+  'cluster-incarnation fence blocks durable rejoin reuse',
+  async (t) => {
+    const publicationCalls = [];
+    const membershipPublicationRuntimeOwner = {
+      upsertJoinNode: async (row, options) => {
+        publicationCalls.push({kind: 'node', row, options});
+        return {success: true};
+      },
+      upsertJoinNodeEndpoint: async (row, options) => {
+        publicationCalls.push({kind: 'node_endpoint', row, options});
+        return {success: true};
+      },
+      upsertJoinServiceEndpoint: async (row, options) => {
+        publicationCalls.push({kind: 'service_endpoint', row, options});
+        return {success: true};
+      },
+    };
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getJoinLifecycleIntentType: () =>
+          MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_BLOCKED,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    owner.readAuthoritativeDurableRejoinNodeRow = async () => ({
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: TEST_NODE_ADDRESS,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.CREATED_AT]: TEST_NOW_MS,
+      [COLUMN.LAST_HEARTBEAT]: TEST_NOW_MS,
+    });
+    owner.readAuthoritativeNodeEndpointRow = async () => ({
+      endpoint_id: 'ep-reused',
+      node_id: TEST_NODE_ID,
+      transport_type: 'websocket',
+      address: 'ws://joiner-host:8082',
+      status: 'active',
+    });
+    owner.readAuthoritativeMetaEndpointRows = async () => ([{
+      endpoint_id: 'svc-reused',
+      service_id: 'sys-postgres-wire',
+      node_id: TEST_NODE_ID,
+    }]);
+
+    const result = await owner.registerNodeInCluster();
+
+    const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
+    t.equal(
+      nodeCalls.length,
+      NUM.ONE,
+      'blocked incarnation fence should force fresh join admission publication',
+    );
+    t.notOk(
+      result?.reusedExistingMembership,
+      'blocked incarnation fence must prevent durable membership reuse',
+    );
+    t.not(
+      result?.resolution?.source,
+      'durable_rejoin_existing_membership',
+      'blocked incarnation fence must not report durable rejoin membership reuse',
+    );
+  },
+);

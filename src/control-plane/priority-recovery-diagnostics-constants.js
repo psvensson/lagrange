@@ -13,6 +13,75 @@ const PRIORITY_RECOVERY_BLOCKER_REASON = Object.freeze({
     'publication_recovery_eligible_but_coordinator_excludes_node',
 });
 
+const PRIORITY_RECOVERY_PROGRESS_OWNER = Object.freeze({
+  NONE: 'none',
+  OPERATION_WORKFLOW_OWNER: 'operation_workflow_owner',
+  REBALANCER_LEADER: 'rebalancer_leader',
+  AUTHORITATIVE_VISIBILITY_OWNER: 'authoritative_visibility_owner',
+  ADMISSION_OWNER: 'admission_owner',
+});
+
+const PRIORITY_RECOVERY_ACTUATION_STATE = Object.freeze({
+  NO_ACTION_NEEDED: 'no_action_needed',
+  ACTION_REQUIRED: 'action_required',
+  PERSIST_IN_FLIGHT: 'persist_in_flight',
+  PERSIST_BLOCKED_BY_PRESSURE: 'persist_blocked_by_pressure',
+  PERSIST_FAILED_RETRYABLE: 'persist_failed_retryable',
+  DISPATCHED: 'dispatched',
+  AWAITING_OBSERVATION: 'awaiting_observation',
+  RECONCILE_DUE: 'reconcile_due',
+  COMPLETED: 'completed',
+  FAILED_TERMINAL: 'failed_terminal',
+});
+
+const PRIORITY_RECOVERY_PRESSURE_STATE = Object.freeze({
+  NONE: 'none',
+  WRITE_BACKLOG: 'write_backlog',
+  BACKPRESSURED: 'backpressured',
+});
+
+const PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION = Object.freeze({
+  NONE: 'none',
+  WAIT_FOR_OPERATION_PROGRESS: 'wait_for_operation_progress',
+  OBSERVE_AUTHORITATIVE_VISIBILITY: 'observe_authoritative_visibility',
+  CREATE_RECOVERY_OPERATION: 'create_recovery_operation',
+  ADVANCE_EXISTING_OPERATION: 'advance_existing_operation',
+  RECONCILE_STALE_OPERATION_PROGRESS: 'reconcile_stale_operation_progress',
+  RESTORE_PROMOTABLE_TARGET: 'restore_promotable_target',
+  RECONCILE_ELIGIBLE_COHORT: 'reconcile_eligible_cohort',
+  SCHEDULE_FOLLOWUP_REBALANCE: 'schedule_followup_rebalance',
+});
+
+const PRIORITY_RECOVERY_BLOCKING_BOUNDARY = Object.freeze({
+  NONE: 'none',
+  WORKFLOW_PROGRESS: 'workflow_progress',
+  WORKFLOW_TIMEOUT: 'workflow_timeout',
+  AUTHORITATIVE_VISIBILITY: 'authoritative_visibility',
+  OPERATION_SCHEDULING: 'operation_scheduling',
+  REBALANCER_HANDOFF: 'rebalancer_handoff',
+  LEARNER_PROMOTION: 'learner_promotion',
+  ELIGIBLE_COHORT: 'eligible_cohort',
+});
+
+const PRIORITY_RECOVERY_WAIT_MODE = Object.freeze({
+  NONE: 'none',
+  EVENT_DRIVEN: 'event_driven',
+  RETRY_SCHEDULED: 'retry_scheduled',
+  TIMEOUT_RECONCILE_DUE: 'timeout_reconcile_due',
+  DEFERRED_VISIBILITY: 'deferred_visibility',
+  STALLED: 'stalled',
+});
+
+const PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE = Object.freeze({
+  NONE: 'none',
+  DISPATCH_PENDING: 'dispatch_pending',
+  TARGET_CREATION: 'target_creation',
+  TARGET_SYNC: 'target_sync',
+  SOURCE_REMOVAL: 'source_removal',
+  TERMINAL: 'terminal',
+  UNKNOWN: 'unknown',
+});
+
 const PRIORITY_RECOVERY_PROGRESS_CLASS_IDS = Object.freeze([
   PRIORITY_RECOVERY_BLOCKER_REASON.ELIGIBLE_NO_OPERATION,
   PRIORITY_RECOVERY_BLOCKER_REASON.OPERATION_NO_TRANSITIONS,
@@ -24,6 +93,8 @@ const PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON = Object.freeze({
   PLANNER_READY: 'planner_ready',
   REPLACE_REMOVE_DISPATCH_PHASE_ON_ELIGIBLE_TARGET:
     'replace_remove_dispatch_phase_on_eligible_target',
+  OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE:
+    'operational_target_visible_on_eligible_node',
   ACTIVE_OPERATION_STILL_BLOCKS_SPREAD:
     'active_operation_still_blocks_spread',
   UNSATISFIED: 'unsatisfied',
@@ -84,15 +155,22 @@ const PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK =
   'unknown_priority_recovery_blocker';
 
 export {
+  PRIORITY_RECOVERY_ACTUATION_STATE,
+  PRIORITY_RECOVERY_BLOCKING_BOUNDARY,
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
   PRIORITY_RECOVERY_BLOCKER_TO_SEMANTIC_STATE,
   PRIORITY_RECOVERY_CORRELATION_KEY,
   PRIORITY_RECOVERY_INVARIANT_FALLBACK,
+  PRIORITY_RECOVERY_NEXT_REQUIRED_ACTION,
   PRIORITY_RECOVERY_PROGRESS_CLASS_IDS,
+  PRIORITY_RECOVERY_PROGRESS_OWNER,
+  PRIORITY_RECOVERY_PRESSURE_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE,
   PRIORITY_RECOVERY_SEMANTIC_STATE_IDS,
   PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON,
   PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS,
+  PRIORITY_RECOVERY_WAIT_MODE,
+  PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 };

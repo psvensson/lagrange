@@ -45,6 +45,14 @@ import {
   ENTRYPOINT_TEXT,
 } from './constants/entrypoint.js';
 
+const STARTUP_JOIN_DECISION_SOURCE = Object.freeze({
+  EXPLICIT: 'explicit',
+});
+
+const STARTUP_JOIN_DECISION_MODE = Object.freeze({
+  JOIN: 'join',
+});
+
 /**
  * Check for version flag.
  * @param {string} version
@@ -562,6 +570,18 @@ async function resolveStartupJoinDecision(options) {
     if (autoRejoinDecision.identityMismatch === true) {
       throw new Error(autoRejoinDecision.error);
     }
+    const preferRecoveredPeerAddress =
+      autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.JOIN &&
+      autoRejoinDecision.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN &&
+      typeof autoRejoinDecision.peerAddress === 'string' &&
+      autoRejoinDecision.peerAddress.length > 0;
+    if (preferRecoveredPeerAddress) {
+      return {
+        seedNodeAddress: autoRejoinDecision.peerAddress,
+        startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+        source: autoRejoinDecision.source,
+      };
+    }
     return {
       seedNodeAddress: explicitSeedNodeAddress,
       startupMode:
@@ -569,7 +589,7 @@ async function resolveStartupJoinDecision(options) {
           STARTUP_JOIN_MODE.DURABLE_REJOIN ?
           STARTUP_JOIN_MODE.DURABLE_REJOIN :
           STARTUP_JOIN_MODE.FRESH_JOIN,
-      source: 'explicit',
+      source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
     };
   }
   if (autoRejoinDecision.mode === 'fail') {

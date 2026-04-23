@@ -931,6 +931,54 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
   }
 
   /**
+   * Resolve the best available owner-path operation visibility for direct
+   * dispatch retries. Prefer the canonical repository visibility observation
+   * when available so deferred retries inherit the same fallback row and
+   * retry metadata the rebalancer owner already uses.
+   *
+   * @param {string} operationId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async getDispatchRetryOperationVisibilityObservation(operationId) {
+    const visibilityObservationQuery =
+      this.rebalanceCoordinator?.repository &&
+      typeof this.rebalanceCoordinator.repository
+        .getOperationByIdVisibilityObservation === TYPEOF.FUNCTION
+        ? this.rebalanceCoordinator.repository
+          .getOperationByIdVisibilityObservation.bind(
+            this.rebalanceCoordinator.repository,
+          )
+        : null;
+    if (visibilityObservationQuery) {
+      const observation = await visibilityObservationQuery(
+        operationId,
+        {
+          requireOwnerRpcRead: false,
+          allowPriorityRecoveryDeferredVisibility: true,
+        },
+      );
+      const operation =
+        observation?.operation &&
+        typeof observation.operation === TYPEOF.OBJECT ?
+          observation.operation :
+          null;
+      return Object.freeze({
+        row: operation ? this.buildOperationRowFromCoordinator(operation) : null,
+        deferredOutcome:
+          observation?.deferredOutcome &&
+          typeof observation.deferredOutcome === TYPEOF.OBJECT ?
+            {...observation.deferredOutcome} :
+            null,
+      });
+    }
+    return Object.freeze({
+      row: await this.getAuthoritativeReplicaOperationRow(operationId),
+      deferredOutcome: null,
+    });
+  }
+
+  /**
    * Get a replica operation row from cache, with authoritative fallback when
    * the persisted row is still invisible to the local cache.
    * @readModel DISPATCH_OPERATION_LOOKUP — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE

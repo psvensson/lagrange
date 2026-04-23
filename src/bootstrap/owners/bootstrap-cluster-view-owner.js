@@ -24,6 +24,25 @@ function canTreatSeedAsBootstrapReady(readiness) {
     readiness.ready === true;
 }
 
+function extractCandidateNodeId(row) {
+  return row?.node_id || row?.nodeId || null;
+}
+
+function addCandidateNodeIds(candidateNodeIds, rows) {
+  for (const row of rows) {
+    const nodeId = extractCandidateNodeId(row);
+    if (nodeId) {
+      candidateNodeIds.add(nodeId);
+    }
+  }
+}
+
+function filterReadyNodeIds(candidateNodeIds, nodeIds) {
+  return nodeIds.filter((nodeId) =>
+    candidateNodeIds.size === NUM.ZERO || candidateNodeIds.has(nodeId),
+  );
+}
+
 class BootstrapClusterViewOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
@@ -91,35 +110,14 @@ class BootstrapClusterViewOwner {
     const nodeEndpointRows =
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
     const readinessService = this.getControlPlaneReadinessService();
-    const readinessByNodeId = {};
     const candidateNodeIds = new Set();
-    if (readinessService &&
-        typeof readinessService.getNodeReadinessSync === TYPEOF.FUNCTION) {
-      for (const nodeRow of nodeRows) {
-        const nodeId = nodeRow?.node_id || nodeRow?.nodeId || null;
-        if (nodeId) {
-          candidateNodeIds.add(nodeId);
-        }
-      }
-      for (const serviceRow of serviceRows) {
-        const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
-        if (nodeId) {
-          candidateNodeIds.add(nodeId);
-        }
-      }
-      for (const endpointRow of nodeEndpointRows) {
-        const nodeId = endpointRow?.node_id || endpointRow?.nodeId || null;
-        if (nodeId) {
-          candidateNodeIds.add(nodeId);
-        }
-      }
-      for (const nodeId of candidateNodeIds) {
-        const readiness = readinessService.getNodeReadinessSync(nodeId);
-        if (readiness && typeof readiness === TYPEOF.OBJECT) {
-          readinessByNodeId[nodeId] = readiness;
-        }
-      }
-    }
+    addCandidateNodeIds(candidateNodeIds, nodeRows);
+    addCandidateNodeIds(candidateNodeIds, serviceRows);
+    addCandidateNodeIds(candidateNodeIds, nodeEndpointRows);
+    const readinessByNodeId = this.buildReadinessByNodeId(
+      readinessService,
+      candidateNodeIds,
+    );
     const readyNodes = resolveCanonicalActiveNodeIds({
       nodeRows,
       serviceRows,
@@ -135,8 +133,9 @@ class BootstrapClusterViewOwner {
         [] :
         this.getStartupAuthorityReadyNodeIds(seedNodeId);
     if (startupAuthorityReadyNodeIds.length > NUM.ZERO) {
-      const filteredReadyNodeIds = startupAuthorityReadyNodeIds.filter((nodeId) =>
-        candidateNodeIds.size === NUM.ZERO || candidateNodeIds.has(nodeId),
+      const filteredReadyNodeIds = filterReadyNodeIds(
+        candidateNodeIds,
+        startupAuthorityReadyNodeIds,
       );
       if (filteredReadyNodeIds.length > NUM.ZERO) {
         return filteredReadyNodeIds;
@@ -150,6 +149,21 @@ class BootstrapClusterViewOwner {
     }
 
     return readyNodes;
+  }
+
+  buildReadinessByNodeId(readinessService, candidateNodeIds) {
+    if (!readinessService ||
+        typeof readinessService.getNodeReadinessSync !== TYPEOF.FUNCTION) {
+      return {};
+    }
+    const readinessByNodeId = {};
+    for (const nodeId of candidateNodeIds) {
+      const readiness = readinessService.getNodeReadinessSync(nodeId);
+      if (readiness && typeof readiness === TYPEOF.OBJECT) {
+        readinessByNodeId[nodeId] = readiness;
+      }
+    }
+    return readinessByNodeId;
   }
 
   getTablePolicies() {

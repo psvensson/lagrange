@@ -23,6 +23,14 @@ const LOCAL_NODE_ADDRESS = 'seed-node:8080';
 const DRIFTED_LOCAL_NODE_ADDRESS = 'seed-node-restarted:8080';
 const PEER_NODE_ADDRESS_A = 'peer-a:8080';
 const PEER_NODE_ADDRESS_B = 'peer-b:8080';
+const CLUSTER_INCARNATION_FENCE_STATE_CURRENT = 'current';
+const CLUSTER_INCARNATION_FENCE_STATE_IDENTITY_MISMATCH =
+  'identity_mismatch';
+const CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED = 'matched';
+const CLUSTER_INCARNATION_LOCAL_IDENTITY_MISMATCHED = 'mismatched';
+const CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT = 'present';
+const CLUSTER_INCARNATION_PEER_PROOF_RECOVERED = 'recovered';
+const CLUSTER_INCARNATION_PEER_PROOF_NOT_REQUIRED = 'not_required';
 
 function createSystemTableCache(nodeRows = []) {
   return {
@@ -143,7 +151,7 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       probePeerAddress: async () => false,
     });
 
-    t.same(decision, {
+    t.match(decision, {
       state: 'join_recovered_peer',
       mode: 'join',
       peerAddressState: 'selected',
@@ -152,6 +160,13 @@ test('persistBootstrapRejoinHints seeds durable rejoin from the chosen peer',
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
       identityMismatch: false,
+      clusterIncarnationFence: {
+        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+        allowed: true,
+        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
+      },
     });
   });
 
@@ -269,7 +284,7 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
       probePeerAddress: async () => false,
     });
 
-    t.same(decision, {
+    t.match(decision, {
       state: 'join_recovered_peer',
       mode: 'join',
       peerAddressState: 'selected',
@@ -278,6 +293,13 @@ test('resolveAutoRejoinStartupDecision accepts address drift when node ID matche
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
       identityMismatch: false,
+      clusterIncarnationFence: {
+        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+        allowed: true,
+        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
+      },
     });
   });
 
@@ -313,7 +335,7 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
       probePeerAddress: async () => true,
     });
 
-    t.same(decision, {
+    t.match(decision, {
       state: 'durable_seed',
       mode: 'seed',
       peerAddressState: 'unavailable',
@@ -322,6 +344,13 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
       startupMode: STARTUP_JOIN_MODE.SEED,
       durableStateDetected: true,
       identityMismatch: false,
+      clusterIncarnationFence: {
+        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+        allowed: true,
+        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_NOT_REQUIRED,
+      },
     });
   });
 
@@ -352,7 +381,7 @@ test('resolveAutoRejoinStartupDecision recovers peers from durable local nodes m
       probePeerAddress: async (address) => address === PEER_NODE_ADDRESS_B,
     });
 
-    t.same(decision, {
+    t.match(decision, {
       state: 'join_probed_peer',
       mode: 'join',
       peerAddressState: 'selected',
@@ -361,6 +390,13 @@ test('resolveAutoRejoinStartupDecision recovers peers from durable local nodes m
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
       identityMismatch: false,
+      clusterIncarnationFence: {
+        state: CLUSTER_INCARNATION_FENCE_STATE_CURRENT,
+        allowed: true,
+        localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MATCHED,
+        durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+        peerProofState: CLUSTER_INCARNATION_PEER_PROOF_RECOVERED,
+      },
     });
   });
 
@@ -399,6 +435,12 @@ test('resolveAutoRejoinStartupDecision fails closed on mismatched durable node i
       true,
       'mismatched durable node identity should be explicit in startup diagnostics',
     );
+    t.match(decision.clusterIncarnationFence, {
+      state: CLUSTER_INCARNATION_FENCE_STATE_IDENTITY_MISMATCH,
+      allowed: false,
+      localIdentityState: CLUSTER_INCARNATION_LOCAL_IDENTITY_MISMATCHED,
+      durableMembershipState: CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT,
+    });
     t.match(
       decision.error,
       /different node identity/,

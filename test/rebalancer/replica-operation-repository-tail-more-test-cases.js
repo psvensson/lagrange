@@ -31,6 +31,7 @@ export function registerReplicaOperationRepositoryTailMoreTests({
   PRIORITY_RECOVERY_COMPLETION_REASON,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   OperationType,
+  ReplicaOperationRepository,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   TERMINAL_STATUSES,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,
@@ -42,6 +43,12 @@ export function registerReplicaOperationRepositoryTailMoreTests({
   PARTITION_SERVICE_ERROR_MSG,
   createTestCoordinator,
 }) {
+const TEST_REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS = 15000;
+const OWNER_PERSISTED_TRANSITION_VISIBILITY_RETRYABLE_FAILURE_SOURCE =
+  'owner_persisted_transition_authoritative_operation_visibility_retryable_failure';
+const TEST_RETRYABLE_CONFIRMATION_ERROR = 'Message timeout';
+const TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS = 250;
+
 test('persistOperationUpdate accepts retryable mutation failures when one authoritative proof confirms the updated row', async (t) => {
   let readCalls = 0;
   const participantFailure = {
@@ -238,6 +245,74 @@ test(
 );
 
 test(
+  'persistNewOperation retries deferred canonical mutation ingress ' +
+    'failures when the first authoritative proof is still empty',
+  async (t) => {
+    let insertCalls = 0;
+    let readCalls = 0;
+    let waitCalls = 0;
+    const participantFailure = {
+      error: 'query_admission_deferred',
+      errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+      retryAfterMs: 250,
+      deferRetry: true,
+      failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    };
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        cdcIntegrationService: {
+          async insertSystemTableRow() {
+            return {success: true};
+          },
+        },
+        insertSystemTableRow: async () => {
+          insertCalls += 1;
+          if (insertCalls === 1) {
+            return {
+              success: false,
+              error: 'query_admission_deferred',
+              errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+              firstFailedParticipant: participantFailure,
+              participantFailures: [participantFailure],
+            };
+          }
+          return {success: true, changes: 1};
+        },
+        readRows: async () => {
+          readCalls += 1;
+          if (readCalls === 1) {
+            return {success: true, rows: []};
+          }
+          return {
+            success: true,
+            rows: [makeRow()],
+          };
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async () => {
+      waitCalls += 1;
+    };
+
+    const op = repo.rowToOperation(makeRow());
+
+    await repo.persistNewOperation(op);
+
+    t.equal(
+      insertCalls,
+      2,
+      'canonical insert ingress should retry when the first deferred failure cannot yet be proven',
+    );
+    t.equal(
+      waitCalls,
+      1,
+      'the repository should wait once before retrying the deferred canonical insert',
+    );
+    t.equal(readCalls, 2, 'the repository should re-prove visibility after the retry succeeds');
+  },
+);
+
+test(
   'buildOperationPersistError marks retryable workflow participant lookup ' +
     'failures for deferred retry',
   async (t) => {
@@ -298,6 +373,71 @@ test(
       repo.persistOperationUpdate(op),
       /Authoritative replica operation not confirmed/,
       'step/status mismatches must fail persistence confirmation',
+    );
+  },
+);
+
+test(
+  'persistOperationUpdate preserves one canonical deferred confirmation ' +
+    'outcome when an owner-persisted transition hits a retryable authoritative confirmation failure',
+  async (t) => {
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        readRows: async () => ({
+          success: false,
+          error: TEST_RETRYABLE_CONFIRMATION_ERROR,
+          retryAfterMs: TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS,
+        }),
+        executeQuery: async () => ({success: true, changes: 1}),
+      },
+    });
+
+    const op = repo.rowToOperation(
+      makeRow({
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        updated_at: 200,
+      }),
+    );
+
+    const result = await repo.persistOperationUpdate(op);
+    const outcome = repo.getLastAuthoritativeOperationVisibilityOutcome();
+
+    t.equal(
+      result,
+      true,
+      'a recent owner-persisted transition should defer instead of failing hard on one retryable authoritative confirmation failure',
+    );
+    t.equal(
+      outcome?.confirmationState,
+      VISIBILITY_CONFIRMATION_STATE_DEFERRED,
+      'the repository should preserve the canonical deferred visibility state for retryable authoritative confirmation failures',
+    );
+    t.equal(
+      outcome?.completionState,
+      null,
+      'owner-persisted confirmation deferral should not depend on priority-recovery completion state',
+    );
+    t.equal(
+      outcome?.reasonCode,
+      OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON,
+      'the deferred outcome should keep the owner-persisted transition confirmation reason on retryable authoritative failures',
+    );
+    t.equal(
+      outcome?.retryAfterMs,
+      TEST_RETRYABLE_CONFIRMATION_RETRY_AFTER_MS,
+      'the deferred outcome should preserve bounded retry guidance from the retryable authoritative failure',
+    );
+    t.equal(
+      outcome?.operationId,
+      TEST_OPERATION_ID,
+      'the deferred retryable-failure outcome should stay scoped to the updated operation',
+    );
+    t.equal(
+      outcome?.source,
+      OWNER_PERSISTED_TRANSITION_VISIBILITY_RETRYABLE_FAILURE_SOURCE,
+      'the deferred outcome should distinguish retryable authoritative failures from empty or stale owner-persisted confirmation reads',
     );
   },
 );
@@ -775,6 +915,91 @@ test(
       observedSessions[0],
       observedSessions[1],
       'implicit owner-mutation retries should rotate the generated session after partition contention',
+    );
+  },
+);
+
+test(
+  'persistOperationUpdate rotates implicit sessions on route-shaped ' +
+    'canonical mutation retries and preserves the dedicated timeout',
+  async (t) => {
+    let updateCalls = 0;
+    let readCalls = 0;
+    const observedSessions = [];
+    const observedTimeouts = [];
+    const updatedAt = Date.now() + 1000;
+    const participantFailure = {
+      error: 'Message timeout',
+      errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+      retryAfterMs: 250,
+      deferRetry: true,
+      failedTable: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    };
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        cdcIntegrationService: {
+          async updateSystemTableRow() {
+            return {success: true};
+          },
+        },
+        updateSystemTableRow: async (_tableName, _whereClause, _data, options = {}) => {
+          updateCalls += 1;
+          observedSessions.push(options.sessionId || null);
+          observedTimeouts.push(options.timeoutMs || null);
+          if (updateCalls === 1) {
+            return {
+              success: false,
+              error: 'Distributed operation failed due to participant failures',
+              errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+              firstFailedParticipant: participantFailure,
+              participantFailures: [participantFailure],
+            };
+          }
+          return {success: true, changes: 1};
+        },
+        readRows: async () => {
+          readCalls += 1;
+          if (readCalls === 1) {
+            return {success: true, rows: []};
+          }
+          return {
+            success: true,
+            rows: [
+              makeRow({
+                status: 'active',
+                workflow_step: 'ACTIVE',
+                updated_at: updatedAt,
+              }),
+            ],
+          };
+        },
+      },
+    });
+    repo.waitForOperationPersistRetry = async () => {};
+
+    const op = repo.rowToOperation(
+      makeRow({
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        updated_at: updatedAt,
+      }),
+    );
+
+    await repo.persistOperationUpdate(op);
+
+    t.equal(updateCalls, 2, 'route-shaped canonical failures should retry once in this proof');
+    t.not(
+      observedSessions[0],
+      observedSessions[1],
+      'route-shaped retries should rotate implicit repository sessions',
+    );
+    t.same(
+      observedTimeouts,
+      [
+        TEST_REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+        TEST_REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
+      ],
+      'canonical mutation retries should preserve the dedicated replica_operations timeout',
     );
   },
 );

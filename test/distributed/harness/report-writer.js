@@ -8,6 +8,8 @@
 import {writeFile, mkdir} from 'node:fs/promises';
 import {dirname} from 'node:path';
 import {summarizeInvariantBreaches} from './invariant-breaches.js';
+import {buildPriorityRecoveryProgressSummary} from
+  './priority-recovery-summary-normalization.js';
 import {createReportWriterSummaryMethods} from './report-writer-summary-methods.js';
 
 /** Indentation for JSON output. */
@@ -140,6 +142,12 @@ const SCORE_LOW = 40;
  */
 function buildScenarioEntry(scenarioName, result) {
   const normalizedDetails = normalizeScenarioDetails(result.details);
+  const priorityRecoveryObservation =
+    result.priorityRecoveryObservation ||
+    result.details?.diagnostics?.controlPlaneDiagnostics
+      ?.priorityRecoveryObservation ||
+    result.details?.diagnostics?.priorityRecoveryObservation ||
+    null;
   const entry = {
     scenario: scenarioName,
     passed: Boolean(result.passed),
@@ -162,6 +170,9 @@ function buildScenarioEntry(scenarioName, result) {
     invariantBreaches: resolveScenarioInvariantBreaches(result, normalizedDetails),
     failureClassification: result.failureClassification || null,
     publicationConvergence: result.publicationConvergence || null,
+    priorityRecoveryObservation,
+    priorityRecoveryProgressSummary:
+      buildPriorityRecoveryProgressSummary(priorityRecoveryObservation),
     stabilityGates: result.stabilityGates || null,
     decisionArtifactsByNodeId: result.decisionArtifactsByNodeId || null,
   };

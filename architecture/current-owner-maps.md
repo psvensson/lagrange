@@ -20,6 +20,27 @@ Do not use this file for:
 For durable implementation rules, use
 [`.kiro/steering/system guidelines.md`](../.kiro/steering/system%20guidelines.md).
 
+## Runtime Grammar Hierarchy
+
+The current active target hierarchy for runtime coherence work is defined in
+[runtime-grammar-hierarchy.md](./runtime-grammar-hierarchy.md).
+
+The layer order is:
+
+1. `intent`
+2. `authority`
+3. `actuation`
+4. `conditions`
+5. `decision`
+6. `presentation`
+
+The important active rule is:
+
+- `decision` is the first layer allowed to answer canonical current meaning
+- `presentation` may summarize `decision`, but must not invent new runtime
+  meaning
+- the current pilot slice is priority recovery under load
+
 ## Core Ownership Assignments
 
 The current concrete ownership map is:
@@ -88,7 +109,67 @@ The current shared building blocks for control-plane work are:
    - owned by `src/control-plane/priority-recovery-completion.js`
    - derives one canonical completion state plus bounded
      `temporaryOverflowVoterBudget` for critical replace/remove recovery
-11. `OwnerContractOutcome`
+11. `PriorityRecoveryPartitionObservation`
+   - owned by `src/control-plane/priority-recovery-snapshot.js`
+   - derives one partition observation contract from:
+     - workflow-bearing `replica_operations` rows and timeline evidence
+     - visibility evidence carried by the shared snapshot surface
+     - spread/admission/publication convergence state
+   - emits one explicit three-axis view:
+     - `workflowState`: `none`, `in_flight`, `remove_phase`, `terminal`
+     - `visibilityState`: `none`, `cache_visible`, `deferred`, `unknown`
+     - `convergenceState`: `converged`,
+       `spread_satisfied_in_flight`, or `spread_gap`
+   - also emits provenance:
+     - `capturedAt`
+     - `workflowSource`
+     - `timelineSource`
+     - `semanticSource`
+   - is shared by admin/control-snapshot diagnostics and harness witness
+     construction so those consumers do not merge workflow truth, visibility
+     lag, and convergence state back into one local semantic guess
+12. `PriorityRecoveryObservationSnapshot`
+   - owned by `src/control-plane/priority-recovery-observation-snapshot.js`
+   - derives one canonical observation contract from:
+     - `PriorityRecoveryDecisionSnapshot` partition evidence
+     - publication convergence and recovery-gate state
+     - active-gate progress, blocker history, and closure witness evidence
+     - projection diagnostics and invariant summaries
+   - emits one shared diagnostics-only envelope:
+     - publication/recovery protocol state
+     - canonical reason codes and gate reasons
+     - blocked versus unresolved partition views
+     - per-partition witness snapshots, blocker history, and semantic-state
+       history
+   - is shared by readiness, admin/control-snapshot surfaces, scenario
+     retained diagnostics, cluster wait/error shaping, failure bundles,
+     playback artifacts, and report generation so those consumers do not
+     reconstruct priority-recovery meaning from partial snapshots or collapse
+     deferred evidence into `null`, `[]`, or `0`
+13. `PriorityRecoveryDecisionSnapshot`
+   - owned by `src/control-plane/priority-recovery-snapshot.js` and exposed at
+     runtime through
+     `OperationWorkflowOwner.getPriorityRecoveryDecisionSnapshotForOperation(...)`
+     and
+     `OperationWorkflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations(...)`
+   - reuses one existing composed envelope:
+     `completion`,
+     `observation`,
+     `semanticState`,
+     `spreadCompletion`,
+     `admission`,
+     `publication`,
+     `coordinator`,
+     and `blockerReasons`
+   - keeps terminal workflow semantics for completed follow-up `ADD`
+     operations while still counting an eligible operational target as
+     spread-satisfying evidence, so consumers do not reopen a synthetic
+     rebalancer-handoff stall from the same snapshot
+   - is now shared by runtime add-budget and priority remove-safety consumers,
+     and feeds the canonical priority-recovery observation snapshot so touched
+     runtime and reporting paths do not rebuild completion from planning
+     snapshots, projection cohorts, or stale publication math
+14. `OwnerContractOutcome`
    - owned by `src/control-plane/owner-contract-outcome.js`
    - normalizes one promise-shaped cross-layer envelope: `contractState`
      (`ready`, `pending`, `deferred`, `blocked`, `failed`) plus `nextAction`
@@ -104,7 +185,7 @@ The current shared building blocks for control-plane work are:
      projection membership both come from one recovery-owned contract
      instead of duplicated local voter-count or stale published-membership
      branches
-12. `MessageGroupStrictCdcRecoveryRouting`
+15. `MessageGroupStrictCdcRecoveryRouting`
    - owned by
      `MessageGroupForwardingOwner.resolveStrictCdcRecoveryRoutingContract(...)`
    - derives one canonical strict-CDC recovery-routing state for
@@ -119,7 +200,7 @@ The current shared building blocks for control-plane work are:
      selection, and local-vs-forward CDC apply decisions so those call sites
      consume one recovery-owned contract instead of separately inferring
      leader-unknown, local-ingress, or widened-forward fallbacks
-13. `ControlPlaneWriteHealth`
+16. `ControlPlaneWriteHealth`
    - owned by `src/bootstrap/control-plane-write-health-owner.js`
    - derives one explicit write-health state from:
      - heartbeat publication failure count and last publication mode
@@ -133,6 +214,75 @@ The current shared building blocks for control-plane work are:
    - is shared by bootstrap/startup readiness so background observability
      backlog no longer poisons the same hard dependency used by real
      control-plane write exhaustion
+17. `StartupWorkflowStore`
+   - owned by `src/bootstrap/startup-workflow-store.js` with
+     `JoinSessionStore` and `SeedStartupSessionStore` as boundary-specific
+     wrappers
+   - derives one durable startup workflow record from:
+     - workflow kind plus node/session identity
+     - checkpoint and phase progression
+     - retryability, terminal outcome, and failure details
+     - attempt accounting and timestamps
+   - emits one workflow status: `active`, `failed_retryable`,
+     `failed_terminal`, or `completed`
+   - is shared by `StartupPipelineRunner.runWorkflow(...)`, join startup, and
+     seed bootstrap so resume and failure meaning come from one persisted
+     contract instead of local phase reconstruction
+18. `StartupAuthoritySnapshot`
+   - owned by
+     `src/control-plane/startup-authority-snapshot-owner.js` and served
+     through `ControlPlaneReadinessService.getStartupAuthoritySnapshot...`
+   - derives one startup-authority snapshot from:
+     - planning snapshots
+     - publication observation
+     - priority-partition recovery state
+     - target participation and failure reason evidence
+   - emits one startup-authority state: `ready`, `recovery_pending`,
+     `seed_locally_ready_unpublished`, `authority_unavailable`, or `blocked`
+   - is shared by startup recovery, bootstrap cluster view, bootstrap
+     readiness, and join readiness so those consumers do not rebuild startup
+     authority from local cache rows or phase-specific booleans
+19. `StartupRuntimeHandoffOwner`
+   - owned by `src/bootstrap/owners/startup-runtime-handoff-owner.js` with
+     `activateSteadyStateRuntimeHandoff(...)` and
+     `attachSqlRuntimeToStartupOwner(...)` as the canonical handoff helpers
+   - derives one startup-to-runtime handoff contract from:
+     - metadata publication readiness
+     - control-plane background writer activation
+     - CDC/runtime SQL engine upgrade
+     - deferred recovery and latency-topology activation
+   - emits one owner-controlled activation path for steady-state writers,
+     runtime SQL wiring, deferred recovery, and post-bootstrap topology
+   - is shared by seed bootstrap and join finalization so runtime handoff no
+     longer depends on duplicated tail orchestration at phase completion
+20. `PriorityRecoveryProgressContract`
+   - owned by `src/control-plane/priority-recovery-snapshot.js`
+   - extends the existing
+     `PriorityRecoveryDecisionSnapshot`
+     instead of creating a second owner surface
+   - derives one explicit liveness/handoff contract from:
+     - `PriorityRecoveryCompletion`
+     - `PriorityRecoveryPartitionObservation`
+     - existing blocker reasons and semantic-state evidence
+     - operation `updatedAt` / `completedAt` timestamps already owned by the
+       workflow/coordinator path
+     - workflow-step age and timeout evidence reused from the existing
+       workflow-owner / `ReplicaOperationLiveness` path
+     - the shared `OwnerContractOutcome` vocabulary for
+       `contractState` and `nextAction`
+   - emits one contract:
+     `PriorityRecoveryProgressContract { contractState, nextAction, currentOwner, nextRequiredAction, blockingBoundary, waitMode, workflowProgressPhaseId, stepAgeMs, stepTimeoutMs, lastProgressAtMs, retryAfterMs, evidenceSourceIds }`
+   - keeps terminal prior-operation evidence in
+     `workflowProgressPhaseId`,
+     `lastProgressAtMs`,
+     and related observation fields,
+     but `actuation.state = completed` is only valid when the same snapshot no
+     longer requires a new recovery action
+   - is shared by priority-recovery observation snapshots and later
+     admin/harness/reporting consumers so the touched path can discuss
+     owner handoff, blocked-next-progress, and timeout-reconcile-due workflow
+     waits without rebuilding meaning from partial workflow, visibility, or
+     planner evidence
 
 New control-plane work should extend these shared owners before adding
 feature-local mechanics.
@@ -201,9 +351,13 @@ heuristics.
 | Control-plane write health | `ControlPlaneWriteHealth` | heartbeat publication failures, last publication mode, message-router pressure summary, contained background backlog evidence | `healthy`, `background_backlog_contained`, `critical_write_unhealthy` plus dependency classification `hard` or `soft` | bootstrap/startup readiness, diagnostics, probe consumers | callers must not equate background heartbeat failure churn with true critical control-plane write loss when critical reserve is still available | readiness snapshots, degraded reasons, heartbeat publication diagnostics, transport queue pressure summaries |
 | Membership publication authority view | `MembershipPublicationCoordinator` with `AuthoritativeControlPlaneView` as the shared read ingress | latest publication row, latest published row, projected serving membership, retained owner-only reconciliation state | explicit non-overlapping views: `published_authority`, `observed_projection`, `retained_owner_state` | routing, readiness, topology planning, operator diagnostics | callers must not treat observed projection or retained owner state as a second publishable authority surface | publication convergence snapshots, projection diagnostics, recovery-protocol snapshots, membership-publication regression tests |
 | Canonical peer endpoint authority | `src/transport/node-address-resolution.js` consumed by `MessageRouter` | canonical `node_endpoints` data, ingress-normalized bootstrap inputs, transport-observed endpoint evidence | `canonical_endpoint_authority`, `ingress_normalized_endpoint`, `observed_transport_endpoint` | bootstrap registration, heartbeat/publication routing, reconnect planning, diagnostics | raw `node_address` and observed transport addresses must not overwrite canonical peer identity once ingress normalization completes | endpoint-resolution diagnostics, reconnect traces, node-endpoint regression tests |
-| Replica-operation visibility read contract | `ReplicaOperationRepository.queryIncompleteOperations(...)` and `queryAuthoritativeOperationVisibilityObservation(...)` | cache-visible `replica_operations` rows, owner-RPC visibility reads, deferred retry hints | visibility modes `cache_only`, `cache_preferred_sql_fallback`, `owner_rpc_required`; observation states `present`, `empty`, `deferred` | timeout recovery, priority recovery rediscovery, planner admission, operation diagnostics | callers must not rebuild these modes from boolean bags or treat cache-empty visibility as terminal absence when deferred visibility is active | incomplete-operation observation state, retry-after hints, authoritative visibility sources, repository/recovery regression tests |
+| Replica-operation visibility read contract | `ReplicaOperationRepository.queryIncompleteOperations(...)` and `queryAuthoritativeOperationVisibilityObservation(...)` | cache-visible `replica_operations` rows, owner-RPC visibility reads, deferred retry hints, deferred owner-read completion state | visibility modes `cache_only`, `cache_preferred_sql_fallback`, `owner_rpc_required`; observation states `present`, `empty`, `deferred` | timeout recovery, priority recovery rediscovery, planner admission, operation diagnostics | callers must not rebuild these modes from boolean bags, treat cache-empty visibility as terminal absence when deferred visibility is active, or let cache-visible current-operation rows erase a deferred authoritative owner-read when priority-recovery completion/remove-safety consumes the snapshot | incomplete-operation observation state, retry-after hints, authoritative visibility sources, repository/recovery regression tests |
 | Rebalancer concurrent-budget read mode | `RebalanceCoordinator.resolveConcurrentBudgetReadMode(...)` | cache counts, priority-partition classification, saturation recheck evidence | `cache_only`, `owner_rpc_recheck_on_saturation` | add/replace/remove admission, priority recovery serial gates, planner diagnostics | callers must not reintroduce `preferAuthoritativeCount` or perform their own saturation fallback outside the coordinator contract | concurrent-budget admission traces, serial-gate diagnostics, coordinator/rebalancer regression tests |
 | Node-state recovery publication | `NodeJoiningService.sendControlPlaneNodeStateUpdate(...)`, `ReplicaDispatchService.deferNodeStateUpdateRetry(...)`, and `MessageRouter` pending replacement | latest heartbeat-only node-state payload per target/node owner key, deferred retry slot per node, retry-after budget, transport pending replacement evidence | deferred recovery publication plus heartbeat-only pending replacement on `node_state_update:<target>:<node>` | node-joining recovery publication, replica-dispatch retry replay, transport diagnostics | callers must not let repeated heartbeat-only `NODE_STATE_UPDATE` deliveries accumulate in the pending queue when one owner slot already represents the latest semantic update | node-state deferred retry maps, router pending replacement results, queue source summaries, retry-after diagnostics |
+| Priority-recovery observation snapshot | `buildPriorityRecoveryObservationSnapshot(...)` from readiness/admin emitters and retained harness diagnostics | publication convergence, recovery-gate state, `PriorityRecoveryDecisionSnapshot`, active-gate witness state, projection diagnostics, invariant summaries | canonical observation snapshot with publication/recovery protocol state, canonical reason codes, blocked and unresolved partition views, per-partition witness snapshots, blocker history, semantic-state history, closure witness, and invariant failures | readiness, admin/control snapshots, scenario retained diagnostics, cluster wait/error shaping, failure bundle, playback/report writers, triage consumers | consumers must not narrow the shared snapshot to scenario-local subsets, recompute semantic state from raw rows, or coerce deferred/unknown evidence into `null`, `[]`, `0`, or passed | readiness/admin contract tests, node-join scenario tests, failure-bundle/report-writer regressions, sprint-level harness confirmation |
 | Structured deferred owner outcomes | `OwnerContractOutcome` carried by `ControlPlaneMutationReadiness`, `ControlPlaneSystemTableGateway`, `PriorityRecoveryCompletion`, and deferred-preserving harness consumers | readiness snapshot runtime authority, recovery assessment/planner state, retry-after hints, visibility outcome, owner-specific reason/evidence fields | `contractState` (`ready`, `pending`, `deferred`, `blocked`, `failed`) plus `nextAction` (`proceed`, `wait`, `retry`, `stop`); owner-specific fields such as `outcome`, `completionState`, `reasonCodes`, `retryAfterMs`, `runtimeAuthority`, `visibilityState`, and `allowTemporaryOverflowPromotion` remain evidence | gateway ingress, SQL DML, admin adapters, harness preparation helpers, diagnostics/report consumers | callers must not branch on timeout-only silence, `[]`, `null`, or raw phase/evidence when the canonical contract already answers the next legal move | contract-state/next-action fields in admin replies, harness traces, failure bundles, triage summaries, and owner-path regression tests |
 | Strict CDC recovery ingress | `MessageGroupForwardingOwner.resolveCdcIngressDecision(...)` with `MessageGroupStrictCdcRecoveryRouting` | live raft leadership, strict-forward target selection, system-table recovery-routing snapshot, connected forward candidates, local system-table write availability | ingress decision states `local_raft_leader`, `forward_non_strict`, `forward_strict_target`, `forward_strict_recovery_target`, `local_strict_convergence_ingress`, `local_strict_recovery_ingress`, `defer_ingress_not_initialized`, `defer_strict_target_unknown` plus recovery-routing state `none`, `remote_targets_available`, `local_only` | `canAcceptCDCEvent`, metadata-ingress readiness, strict CDC apply/forward execution, bootstrap/join CDC propagation | callers must not treat strict leader-target loss as immediate dead-end when recovery-owned remote candidates or bounded local system-table ingress still exist; callers must not widen non-strict CDC or bypass the forwarding owner with ad hoc local writes | message-group service decision snapshots, deferred retry hints, recovery-routing diagnostics in focused strict-CDC regressions |
+| Startup workflow durability | `StartupPipelineRunner.runWorkflow(...)` with `JoinSessionStore` and `SeedStartupSessionStore` | durable workflow record, checkpoint sequence, retryability, failure details, terminal state, timestamps | workflow statuses `active`, `failed_retryable`, `failed_terminal`, `completed` plus checkpoint/phase identity | `JoinCoordinator`, `NodeJoiningService`, `BootstrapService`, cleanup/report consumers, focused startup tests | callers must not rebuild startup progress from local phase strings or hidden post-pipeline tail work when the durable workflow record already answers checkpoint, failure, and resume state | join/seed session store tests, startup pipeline runner tests, bootstrap/join checkpoint characterization |
+| Startup authority snapshot | `ControlPlaneReadinessService.getStartupAuthoritySnapshot...` backed by `startup-authority-snapshot-owner.js` | planning snapshot, publication observation, priority recovery evidence, target participation, failure reason | startup-authority states `ready`, `recovery_pending`, `seed_locally_ready_unpublished`, `authority_unavailable`, `blocked` plus canonical startup node ids and publication descriptors | bootstrap readiness, startup recovery, bootstrap cluster view, join readiness, diagnostics | consumers must not infer startup authority from cache-local `nodes` rows, direct publication-status booleans, or phase-local fallback ladders once the canonical snapshot is available | startup-authority consumption tests, readiness diagnostics, recovery-protocol traces |
+| Startup runtime handoff | `StartupRuntimeHandoffOwner` with `activateSteadyStateRuntimeHandoff(...)` and `attachSqlRuntimeToStartupOwner(...)` | metadata-publication readiness, background-writer activation state, runtime SQL engine, CDC integration state, deferred recovery activation | one owner-controlled handoff path for background writers, runtime SQL/CDC upgrade, deferred recovery, and latency-topology start | seed/bootstrap finalization, join finalization, startup runtime diagnostics | callers must not duplicate post-phase runtime wiring or activate deferred recovery ahead of the handoff owner contract | startup-runtime-handoff-owner tests, startup-sql-runtime-handoff tests, bootstrap/join finalization regressions |
 | Canonical convergence diagnostics | report and bundle generation as consumers, not semantic owners | canonical harness snapshots already attached to scenario diagnostics | emitted derived views over canonical snapshots: histograms, dominant reasons, per-node convergence evaluations | `report-writer`, `failure-bundle`, triage markdown/json, admin report readers | report generation must not invent a second state vocabulary or drop the owner snapshot while preserving only symptom counters | triage summary `partitioning.*`, failure-bundle partitioning section, report detail payloads |

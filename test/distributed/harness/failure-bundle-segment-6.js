@@ -1,3 +1,7 @@
+import {
+  PRIORITY_RECOVERY_BLOCKER_REASON_FALLBACK,
+  PRIORITY_RECOVERY_SEMANTIC_STATE,
+} from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
 import { FAILURE_BUNDLE_SEGMENT_5 } from "./failure-bundle-segment-5.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -174,11 +178,13 @@ const {
   buildScenarioTriageSummary,
   renderScenarioTriageSummaryMarkdown,
   formatList,
+  formatObservedList,
   formatCountEntries,
   formatPartitioningConvergenceEvaluations,
   formatStabilityGate,
   formatStabilityGateSummary,
   formatReasonPartitionEntries,
+  formatProjectionDiagnostics,
   formatPriorityRecoveryInvariantFailures,
 } = FAILURE_BUNDLE_SEGMENT_5;
 
@@ -191,7 +197,9 @@ function formatPriorityRecoveryPartitionBlockerHistory(history) {
     .map((entry) => {
       const partitionId = String(entry?.partitionId || "").trim();
       const blockerReasons = normalizeDistinctStringArray(
-        entry?.blockerReasons,
+        Array.isArray(entry?.blockerReasonCodes) ?
+          entry.blockerReasonCodes :
+          entry?.blockerReasons,
       );
       return (
         (partitionId.length > ZERO ? partitionId : UNKNOWN_VALUE) +
@@ -214,7 +222,9 @@ function formatPriorityRecoveryPartitionSemanticStateHistory(history) {
     .map((entry) => {
       const partitionId = String(entry?.partitionId || "").trim();
       const semanticStates = normalizeDistinctStringArray(
-        entry?.semanticStates,
+        Array.isArray(entry?.semanticStateIds) ?
+          entry.semanticStateIds :
+          entry?.semanticStates,
       );
       return (
         (partitionId.length > ZERO ? partitionId : UNKNOWN_VALUE) +
@@ -237,7 +247,9 @@ function formatPriorityRecoveryPartitionWitnesses(witnesses) {
     .map((entry) => {
       const partitionId = String(entry?.partitionId || "").trim();
       const parts = [partitionId.length > ZERO ? partitionId : UNKNOWN_VALUE];
-      const semanticState = String(entry?.semanticState || "").trim();
+      const semanticState = String(
+        entry?.semanticState || entry?.semanticStateId || "",
+      ).trim();
       if (semanticState.length > ZERO) {
         parts.push("state=" + semanticState);
       }
@@ -245,7 +257,11 @@ function formatPriorityRecoveryPartitionWitnesses(witnesses) {
         parts.push("gap=" + String(entry.spreadGap));
       }
       const blockerReasons = normalizeDistinctStringArray(
-        entry?.blockerReasons,
+        Array.isArray(entry?.blockerReasonCodes) ?
+          entry.blockerReasonCodes :
+          Array.isArray(entry?.progressClassIds) ?
+            entry.progressClassIds :
+            entry?.blockerReasons,
       );
       if (blockerReasons.length > ZERO) {
         parts.push("blockers=" + blockerReasons.join("|"));
@@ -254,8 +270,13 @@ function formatPriorityRecoveryPartitionWitnesses(witnesses) {
       if (decisionDimension.length > ZERO) {
         parts.push("decision=" + decisionDimension);
       }
-      if (Number.isInteger(entry?.eligibleNodeCount)) {
-        parts.push("eligible=" + String(entry.eligibleNodeCount));
+      const eligibleNodeCount = Number.isInteger(entry?.eligibleNodeCount) ?
+        entry.eligibleNodeCount :
+        Array.isArray(entry?.eligibleNodeIds) ?
+          entry.eligibleNodeIds.length :
+          null;
+      if (Number.isInteger(eligibleNodeCount)) {
+        parts.push("eligible=" + String(eligibleNodeCount));
       }
       const operationIds = normalizeDistinctStringArray(entry?.operationIds);
       if (operationIds.length > ZERO) {
@@ -672,10 +693,11 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           "- Blocked Node Count: " +
             String(bundle.publicationConvergence.blockedNodeCount ?? ZERO),
           "- Pending Ack Nodes: " +
-            formatList(bundle.publicationConvergence.pendingAckNodeIds),
+            formatObservedList(bundle.publicationConvergence.pendingAckNodeIds),
           "- Blocked Nodes: " +
-            formatList(bundle.publicationConvergence.blockedNodeIds),
-          "- Publication Gate Reasons: " + formatList(publicationGateReasons),
+            formatObservedList(bundle.publicationConvergence.blockedNodeIds),
+          "- Publication Gate Reasons: " +
+            formatObservedList(publicationGateReasons),
           "- Priority Recovery Progress Classes: " +
             formatList(
               bundle.publicationConvergence.priorityRecoveryProgressClassIds,
@@ -692,6 +714,16 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           "- Priority Recovery Blocked Partitions: " +
             formatList(
               bundle.publicationConvergence.priorityRecoveryBlockedPartitionIds,
+            ),
+          "- Priority Recovery Unresolved Partition Count: " +
+            String(
+              bundle.publicationConvergence
+                .priorityRecoveryUnresolvedPartitionCount ?? ZERO,
+            ),
+          "- Priority Recovery Unresolved Partitions: " +
+            formatList(
+              bundle.publicationConvergence
+                .priorityRecoveryUnresolvedPartitionIds,
             ),
           "- Priority Recovery Partition Blockers: " +
             formatReasonPartitionEntries(
@@ -729,6 +761,19 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           "- Priority Recovery Invariant Failures: " +
             formatPriorityRecoveryInvariantFailures(
               bundle.publicationConvergence.priorityRecoveryInvariantFailures,
+            ),
+          "- Closure Record Id: " +
+            String(
+              bundle.publicationConvergence.closureRecordId || UNKNOWN_VALUE,
+            ),
+          "- Closure Witness Class: " +
+            String(
+              bundle.publicationConvergence.closureWitnessClass ||
+                UNKNOWN_VALUE,
+            ),
+          "- Projection Diagnostics: " +
+            formatProjectionDiagnostics(
+              bundle.publicationConvergence.projectionDiagnostics,
             ),
           "- Active Gate Progress: " +
             formatActiveGateProgress(

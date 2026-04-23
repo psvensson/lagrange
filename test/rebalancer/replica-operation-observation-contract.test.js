@@ -74,3 +74,33 @@ test('ReplicaOperationRepository exposes cache fallback after authoritative fail
       'cache fallback should remain explicit when authoritative reads fail',
     );
   });
+
+test('ReplicaOperationRepository keeps authoritative failure without cache visibility unavailable',
+  async (t) => {
+    const repository = createRepository({
+      controlPlaneSystemTableGateway: {
+        async readAuthoritativeRows() {
+          return {
+            success: false,
+            rows: [],
+          };
+        },
+      },
+    });
+    repository.getObservedReplicaRowFromCache = () => null;
+
+    const observation = await repository.getActualReplicaObservation(
+      'replica-1',
+      'partition-1',
+      'node-2',
+    );
+
+    t.same(
+      observation,
+      {
+        state: 'unavailable',
+        source: 'unavailable',
+      },
+      'failed authoritative reads without cache visibility should stay unresolved',
+    );
+  });

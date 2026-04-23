@@ -65,6 +65,25 @@ The package is not done merely because the named tests pass. Test closure and
 package closure both require the final affected-area deep dive required by
 `.kiro/steering/system guidelines.md`.
 
+## Scenario-Driven Failure Migration Validation Policy
+
+When a package exists because a distributed, integration, load, or scenario
+failure exposed a blocker, validation must prove not only the local fix but
+also what the original scenario does next.
+
+Required workflow:
+
+1. Keep one named reference scenario or blocker probe for the package.
+2. After targeted regression and owner-path proof is green, rerun that
+   scenario or probe before treating the analysis as closed.
+3. If the scenario still fails, record whether the dominant blocker is the
+   same or has migrated.
+4. If the blocker migrated, update the active package or split a follow-on
+   package in the same work cycle instead of burying the new blocker in
+   commentary or memory.
+5. Do not close the package on local green proof alone while the reference
+   scenario still fails for a different named reason.
+
 ## Runner Stability Boundary Policy
 
 When a validation run fails with unrelated TAP child-worker crashes such as
@@ -297,6 +316,28 @@ Required coverage:
 8. **Cache observation boundary** - Add a regression proving cache divergence
    emits typed diagnostics/invariant input and that recovery re-enters the same
    owner queue rather than a direct mutation fallback.
+
+## Temporal Witness Replay Policy
+
+When a bug depends on stale cache truth, stale routing, delayed authoritative
+visibility, no-handler witnesses, or other cross-time evidence races, the
+regression must replay the witness order that triggered the bug rather than
+asserting only the final steady state.
+
+Required coverage:
+
+1. Capture at least one stale or degraded earlier witness that points to the
+   old state.
+2. Capture the newer runtime or authoritative witness that disproves the old
+   state.
+3. Assert the owner emits the canonical deferred, repair, widen, or blocked
+   outcome for that witness ordering.
+4. Assert the caller or consumer does not fall back to stale routing, empty
+   visibility, or local semantic reinterpretation after the newer witness
+   arrives.
+5. Prefer focused unit or integration replays over broad scenario-only proof,
+   but keep the original scenario or representative blocker probe in the
+   validation surface.
 
 ## Continuity And Lifetime Regression Policy
 

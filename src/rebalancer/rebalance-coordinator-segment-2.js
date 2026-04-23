@@ -88,6 +88,38 @@ const {
   uuidv4,
 } = REBALANCE_COORDINATOR_SHARED;
 
+const CANONICAL_REPLICA_ID_DECIMAL_RADIX = 10;
+
+function extractCanonicalReplicaIndex(replicaId, canonicalPrefix) {
+  if (typeof replicaId !== "string" || replicaId.length === NUM.ZERO) {
+    return null;
+  }
+  if (
+    typeof canonicalPrefix !== "string" ||
+    canonicalPrefix.length === NUM.ZERO ||
+    !replicaId.startsWith(canonicalPrefix)
+  ) {
+    return null;
+  }
+
+  const rawIndex = replicaId.slice(canonicalPrefix.length);
+  if (rawIndex.length === NUM.ZERO) {
+    return null;
+  }
+
+  const parsedIndex = Number.parseInt(
+    rawIndex,
+    CANONICAL_REPLICA_ID_DECIMAL_RADIX,
+  );
+  if (
+    !Number.isInteger(parsedIndex) ||
+    parsedIndex < REPLICA_ID_START_INDEX
+  ) {
+    return null;
+  }
+  return parsedIndex;
+}
+
 class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
   async resolveTopologyGuardTargetReplicaCount({ partitionId, entityType }) {
     if (entityType !== SERVICE_TYPE.PARTITION) {
@@ -410,14 +442,22 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
     }
 
     const canonicalPrefix = `${entityId}${REPLICA_ID_SEPARATOR}`;
-    let candidateIndex = REPLICA_ID_START_INDEX;
-    while (true) {
-      const candidateReplicaId = `${canonicalPrefix}${candidateIndex}`;
-      if (!usedReplicaIds.has(candidateReplicaId)) {
-        return candidateReplicaId;
+    let highestObservedReplicaIndex = REPLICA_ID_START_INDEX - NUM.ONE;
+    for (const replicaId of usedReplicaIds) {
+      const replicaIndex = extractCanonicalReplicaIndex(
+        replicaId,
+        canonicalPrefix,
+      );
+      if (
+        Number.isInteger(replicaIndex) &&
+        replicaIndex > highestObservedReplicaIndex
+      ) {
+        highestObservedReplicaIndex = replicaIndex;
       }
-      candidateIndex++;
     }
+
+    const candidateIndex = highestObservedReplicaIndex + NUM.ONE;
+    return `${canonicalPrefix}${candidateIndex}`;
   }
 
   /**
@@ -705,6 +745,14 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       });
     }
     if (
+      observation?.state === INCOMPLETE_OPERATION_OBSERVATION_STATE.EMPTY
+    ) {
+      return Object.freeze({
+        state: RECENT_OPERATION_INTENT_VISIBILITY_STATE.MISSING,
+        operation: null,
+      });
+    }
+    if (
       !Array.isArray(observation?.operations) ||
       observation.operations.length === NUM.ZERO
     ) {
@@ -893,6 +941,17 @@ class RebalanceCoordinatorSegment2 extends RebalanceCoordinatorSegment1 {
       !this.isPriorityControlPlanePartition(partitionId)
     ) {
       return false;
+    }
+
+    // Source-removal phase must stay exclusive until entity visibility
+    // explicitly proves the older REPLACE cleared. Timing out this recent
+    // intent on a deferred read admits a second replacement and can multiply
+    // active replicas for the same critical partition.
+    const keepSourceRemovalIntentExclusive =
+      operation.type === OperationType.REPLACE &&
+      this.isReplaceRemoveDispatchPhase(operation);
+    if (keepSourceRemovalIntentExclusive) {
+      return true;
     }
 
     const reuseBudgetMs = this.getRecentOperationMissReuseBudgetMs(operation);

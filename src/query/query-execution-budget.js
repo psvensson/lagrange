@@ -1,6 +1,7 @@
 import { ERRORS, NUM, TYPEOF } from "../constants/index.js";
 
 const QUERY_EXECUTION_BUDGET_FIELD = Object.freeze({
+  DELIVERY_SOURCE: "deliverySource",
   DELIVERY_PRIORITY: "deliveryPriority",
 });
 
@@ -138,6 +139,14 @@ export function createPartitionExecutionBudget({
         executionOptions.deliveryPriority.length > NUM.ZERO
       ) {
         routerOptions.deliveryPriority = executionOptions.deliveryPriority;
+      }
+      if (
+        typeof executionOptions?.[
+          QUERY_EXECUTION_BUDGET_FIELD.DELIVERY_SOURCE
+        ] === TYPEOF.STRING &&
+        executionOptions.deliverySource.length > NUM.ZERO
+      ) {
+        routerOptions.deliverySource = executionOptions.deliverySource;
       }
       const routerDeliveryTimeoutMs = getRouterDeliveryTimeoutMs();
       if (routerDeliveryTimeoutMs !== null) {

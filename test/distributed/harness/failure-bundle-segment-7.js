@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { FAILURE_BUNDLE_SEGMENT_6 } from "./failure-bundle-segment-6.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -271,6 +273,13 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
       bundleJson.controlPlane.priorityRecoveryDecisionSnapshots;
     entry.priorityRecoveryDecisionSnapshots =
       bundleJson.controlPlane.priorityRecoveryDecisionSnapshots;
+  }
+
+  if (isRecord(bundleJson.controlPlane?.priorityRecoveryObservation)) {
+    diagnostics.priorityRecoveryObservation =
+      bundleJson.controlPlane.priorityRecoveryObservation;
+    entry.priorityRecoveryObservation =
+      bundleJson.controlPlane.priorityRecoveryObservation;
   }
 
   if (isRecord(bundleJson.controlPlane?.priorityRecoveryInvariants)) {

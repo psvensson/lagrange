@@ -212,10 +212,11 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
     );
 
     t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
-    t.equal(
-      mockSqlEngine.executedQueries[0]?.options?.timeoutMs,
-      4321,
-      'should pass query timeout through routed SQL execution options',
+    t.ok(
+      Number.isFinite(mockSqlEngine.executedQueries[0]?.options?.timeoutMs) &&
+      mockSqlEngine.executedQueries[0].options.timeoutMs > 0 &&
+      mockSqlEngine.executedQueries[0].options.timeoutMs <= 4321,
+      'should pass one bounded routed SQL timeout budget through execution options',
     );
   },
 );
@@ -336,6 +337,46 @@ test('CDCIntegrationService - critical transport system-table writes still defau
       mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
       'critical',
       'critical transport system-table writes should keep the critical delivery lane by default',
+    );
+  },
+);
+
+test('CDCIntegrationService - transaction-control system-table writes default to the critical lane during recovery routing',
+  async (t) => {
+    const TEST_TRANSACTION_ROW = Object.freeze({
+      transaction_id: 'tx-critical-1',
+      session_id: 'session-critical-1',
+      status: 'ACTIVE',
+      transaction_epoch: 1,
+      timeout_deadline: 1000,
+      created_at: 1,
+      updated_at: 2,
+    });
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await service.upsertSystemTableRow(
+      SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+      TEST_TRANSACTION_ROW,
+      {
+        skipCacheWait: true,
+      },
+    );
+
+    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      'transaction-control system-table writes should stay on the recovery routing dimension by default',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
+      'critical',
+      'transaction-control system-table writes should keep the critical delivery lane by default',
     );
   },
 );

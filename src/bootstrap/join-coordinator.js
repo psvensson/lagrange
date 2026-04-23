@@ -1,4 +1,5 @@
 import {JOIN_SESSION_ERROR, JoinSessionStore} from './join-session-store.js';
+import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 
 /**
  * JoinCoordinator executes checkpointed join steps idempotently.
@@ -8,6 +9,13 @@ class JoinCoordinator {
     this.joinSessionStore = options.joinSessionStore instanceof JoinSessionStore ?
       options.joinSessionStore :
       new JoinSessionStore();
+    this.workflowRunner =
+      options.workflowRunner instanceof StartupPipelineRunner ?
+        options.workflowRunner :
+        new StartupPipelineRunner({
+          logger: options.logger,
+          eventSink: options.eventSink || null,
+        });
   }
 
   /**
@@ -20,55 +28,20 @@ class JoinCoordinator {
    */
   async run(options = {}) {
     const steps = Array.isArray(options.steps) ? options.steps : [];
-    let session = await this.joinSessionStore.createOrLoadSession({
-      nodeId: options.nodeId,
-      sessionId: options.sessionId,
-    });
-
     for (const step of steps) {
       this.assertValidStep(step);
-
-      const checkpointSatisfied = this.joinSessionStore.isCheckpointSatisfied(
-        session.checkpoint,
-        step.checkpoint,
-      );
-      const shouldRerun = checkpointSatisfied &&
-        typeof step.shouldRerun === 'function' &&
-        step.shouldRerun(session) === true;
-      if (checkpointSatisfied && !shouldRerun) {
-        continue;
-      }
-      const rerunningSatisfiedStep = checkpointSatisfied && shouldRerun;
-
-      try {
-        await step.run(session);
-      } catch (error) {
-        session = await this.joinSessionStore.recordFailure({
-          nodeId: options.nodeId,
-          sessionId: options.sessionId,
-          phase: step.phase,
-          errorCode: this.extractErrorCode(error),
-          retryAfterMs: error?.retryAfterMs,
-          retryable: error?.retryable !== false,
-        });
-        throw error;
-      }
-
-      if (rerunningSatisfiedStep &&
-          this.joinSessionStore.getCheckpointIndex(step.checkpoint) <
-            this.joinSessionStore.getCheckpointIndex(session.checkpoint)) {
-        continue;
-      }
-
-      session = await this.joinSessionStore.advanceCheckpoint({
-        nodeId: options.nodeId,
-        sessionId: options.sessionId,
-        checkpoint: step.checkpoint,
-        phase: step.phase,
-      });
     }
-
-    return session;
+    const result = await this.workflowRunner.runWorkflow({
+      nodeId: options.nodeId,
+      sessionId: options.sessionId,
+      allowResumeLatest: options.allowResumeLatest === true,
+      planVersion: options.planVersion,
+      sessionStore: this.joinSessionStore,
+      steps,
+      extractErrorCode: (error) => this.extractErrorCode(error),
+      isRetryableFailure: (error) => error?.retryable !== false,
+    });
+    return result.session;
   }
 
   assertValidStep(step) {

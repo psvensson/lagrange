@@ -285,6 +285,12 @@ function resolveTransportDeliveryOptions(targetService, overrides = null) {
   ) {
     baseOptions.deliveryPriority = overrides.deliveryPriority;
   }
+  if (
+    typeof overrides?.deliverySource === TYPEOF.STRING &&
+    overrides.deliverySource.length > NUM.ZERO
+  ) {
+    baseOptions.deliverySource = overrides.deliverySource;
+  }
   return Object.keys(baseOptions).length > NUM.ZERO ? baseOptions : undefined;
 }
 function normalizeMessageDeliveryMode(deliveryMode) {
@@ -929,4 +935,64 @@ class MessageGroupService extends MessageGroupServicePart1 {
     }
   }
 }
-export { MessageGroupService };
+
+const MESSAGE_GROUP_SERVICE_RUNTIME_METHODS =
+  createMessageGroupServiceRuntimeMethods({
+    CDC_BATCH_COMMAND_TYPE,
+    CDC_FORWARD_MAX_RELAY_DEPTH,
+    CONTROL_PLANE_READINESS_DIMENSION,
+    DIRECT_ONLY_MESSAGE_TYPES,
+    HLCTimestamp,
+    INITIAL_MESSAGE_GROUP_ID,
+    LifeRaft,
+    MESSAGE_DELIVERY_MODE,
+    MESSAGE_GROUP_APPLICATION_ERROR_MSG,
+    MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+    MESSAGE_GROUP_APPLICATION_STATUS,
+    MESSAGE_GROUP_CDC_ERROR_MSG,
+    MESSAGE_GROUP_CDC_INGRESS_ACTION,
+    MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
+    MESSAGE_GROUP_SERVICE_ERROR_MSG,
+    MESSAGE_GROUP_SERVICE_LITERAL,
+    MESSAGE_GROUP_SERVICE_LOG_MSG,
+    METRICS_LOG_TAG,
+    MessageStatus,
+    NUM,
+    QUERY_MESSAGE_TYPE,
+    RAFT_PACKET_TYPE,
+    RebalancerEntityType,
+    SYSTEM_TABLE_NAME,
+    TIME_MS,
+    TYPEOF,
+    UnifiedRebalancer,
+    boundCdcForwardErrorDetail,
+    buildDeferredCdcForwardError,
+    buildDeferredDeliveryError,
+    buildLatencyCdcPropagationResult,
+    getOrCreateCauseId,
+    isRaftPacket,
+    isSystemTableWriteReady,
+    normalizeCauseId,
+    normalizeMessageDeliveryMode,
+    normalizePublishedRaftRole,
+    resolveRaftTransportDeliveryOptions,
+    resolveTransportDeliveryOptions,
+    shouldDeferImmediateDeliveryRetry,
+    uuidv4,
+    wrapCdcProposeError,
+    RaftRole,
+  });
+
+Object.assign(
+  MessageGroupService.prototype,
+  MESSAGE_GROUP_SERVICE_RUNTIME_METHODS,
+);
+
+export {
+  MessageGroupOperationLedger,
+  MessageGroupService,
+  MessageStatus,
+  RaftRole,
+  isRaftPacket,
+  RAFT_PACKET_TYPES,
+};

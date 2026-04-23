@@ -1,3 +1,10 @@
+import { classifyActiveGateClosureWitness } from "./active-gate-closure-classification.js";
+import { STARTUP_READINESS_MODE_STARTUP } from "./startup-readiness-evidence.js";
+import { buildPriorityRecoveryObservationSnapshot } from "../../../src/control-plane/priority-recovery-observation-snapshot.js";
+import {
+  buildPriorityRecoveryProgressSummary,
+  normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
+} from "./priority-recovery-summary-normalization.js";
 import { FAILURE_BUNDLE_SEGMENT_3 } from "./failure-bundle-segment-3.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -90,6 +97,7 @@ const {
   resolveRoutingDiagnostics,
   resolveFailureDiagnostics,
   addNormalizedReasonCount,
+  buildPriorityRecoveryProgressDominantReason,
   deriveReasonCountsFromPublicationConvergence,
   isRecord,
   normalizeActiveGateReadinessDelay,
@@ -152,6 +160,101 @@ const {
   mergeByNodeIdMaps,
 } = FAILURE_BUNDLE_SEGMENT_3;
 
+function resolvePriorityRecoveryObservation(controlPlane) {
+  const priorityRecoveryObservation =
+    controlPlane?.priorityRecoveryObservation &&
+    typeof controlPlane.priorityRecoveryObservation === "object"
+      ? controlPlane.priorityRecoveryObservation
+      : null;
+  if (priorityRecoveryObservation) {
+    return priorityRecoveryObservation;
+  }
+  const publicationConvergence =
+    controlPlane?.publicationConvergence &&
+    typeof controlPlane.publicationConvergence === "object"
+      ? controlPlane.publicationConvergence
+      : null;
+  const publicationConvergenceGate =
+    controlPlane?.publicationConvergenceGate &&
+    typeof controlPlane.publicationConvergenceGate === "object"
+      ? controlPlane.publicationConvergenceGate
+      : null;
+  const priorityRecoveryDecisionSnapshots =
+    controlPlane?.priorityRecoveryDecisionSnapshots &&
+    typeof controlPlane.priorityRecoveryDecisionSnapshots === "object"
+      ? controlPlane.priorityRecoveryDecisionSnapshots
+      : null;
+  const priorityRecoveryInvariants =
+    controlPlane?.priorityRecoveryInvariants &&
+    typeof controlPlane.priorityRecoveryInvariants === "object"
+      ? controlPlane.priorityRecoveryInvariants
+      : null;
+  const activeGateProgress =
+    controlPlane?.activeGateProgress &&
+    typeof controlPlane.activeGateProgress === "object"
+      ? controlPlane.activeGateProgress
+      : null;
+  const activeGateBestProgress =
+    controlPlane?.activeGateBestProgress &&
+    typeof controlPlane.activeGateBestProgress === "object"
+      ? controlPlane.activeGateBestProgress
+      : null;
+  const activeGateNoProgress =
+    controlPlane?.activeGateNoProgress &&
+    typeof controlPlane.activeGateNoProgress === "object"
+      ? controlPlane.activeGateNoProgress
+      : null;
+  const activeGateBlockerHistory = Array.isArray(
+    controlPlane?.activeGateBlockerHistory,
+  )
+    ? controlPlane.activeGateBlockerHistory
+    : null;
+  const logsTable =
+    controlPlane?.logsTable &&
+    typeof controlPlane.logsTable === "object"
+      ? controlPlane.logsTable
+      : null;
+  if (
+    !publicationConvergence &&
+    !publicationConvergenceGate &&
+    !priorityRecoveryDecisionSnapshots &&
+    !priorityRecoveryInvariants &&
+    !activeGateProgress &&
+    !activeGateBestProgress &&
+    !activeGateNoProgress &&
+    !activeGateBlockerHistory &&
+    !logsTable
+  ) {
+    return null;
+  }
+  return buildPriorityRecoveryObservationSnapshot({
+    publicationConvergence,
+    publicationConvergenceGate,
+    priorityRecoveryDecisionSnapshots,
+    priorityRecoveryInvariants,
+    activeGateProgress,
+    activeGateBestProgress,
+    activeGateNoProgress,
+    activeGateBlockerHistory,
+    logsTable,
+  });
+}
+
+function attachPriorityRecoveryObservation(controlPlane) {
+  if (!isRecord(controlPlane)) {
+    return null;
+  }
+  const priorityRecoveryObservation =
+    resolvePriorityRecoveryObservation(controlPlane);
+  if (!priorityRecoveryObservation) {
+    return controlPlane;
+  }
+  return {
+    ...controlPlane,
+    priorityRecoveryObservation,
+  };
+}
+
 function mergeControlPlaneDiagnostics(primary, fallback) {
   const hasPrimary = isRecord(primary);
   const hasFallback = isRecord(fallback);
@@ -159,7 +262,7 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
     return null;
   }
   if (!hasPrimary) {
-    return {
+    return attachPriorityRecoveryObservation({
       ...fallback,
       priorityRecoveryDecisionSnapshots:
         normalizePriorityRecoveryDecisionSnapshots(
@@ -168,10 +271,10 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
       priorityRecoveryInvariants: normalizePriorityRecoveryInvariants(
         fallback?.priorityRecoveryInvariants,
       ),
-    };
+    });
   }
   if (!hasFallback) {
-    return {
+    return attachPriorityRecoveryObservation({
       ...primary,
       priorityRecoveryDecisionSnapshots:
         normalizePriorityRecoveryDecisionSnapshots(
@@ -180,10 +283,10 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
       priorityRecoveryInvariants: normalizePriorityRecoveryInvariants(
         primary?.priorityRecoveryInvariants,
       ),
-    };
+    });
   }
 
-  return {
+  return attachPriorityRecoveryObservation({
     ...fallback,
     ...primary,
     publicationConvergence:
@@ -242,7 +345,7 @@ function mergeControlPlaneDiagnostics(primary, fallback) {
       primary.priorityRecoveryInvariants,
       fallback.priorityRecoveryInvariants,
     ),
-  };
+  });
 }
 
 function mergeControlSnapshotByNodeId(primary, fallback) {
@@ -445,6 +548,7 @@ function buildFailureArtifact({
   );
   const publicationConvergenceReasonCounts =
     deriveReasonCountsFromPublicationConvergence(controlPlane);
+  const publicationConvergence = buildPublicationConvergenceSummary(controlPlane);
   const reasonCounts = mergeReasonCounts(
     isRecord(existingFailure.reasonCounts)
       ? existingFailure.reasonCounts
@@ -455,11 +559,17 @@ function buildFailureArtifact({
   );
   const timelineDominantReason =
     resolveDominantReasonFromFirstFaultTimeline(firstFaultTimeline);
+  const progressDominantReason = buildPriorityRecoveryProgressDominantReason(
+    publicationConvergence?.priorityRecoveryProgressSummary,
+  );
   const dominantReason =
     typeof existingFailure.dominantReason === "string" &&
     existingFailure.dominantReason.length > ZERO
       ? existingFailure.dominantReason
-      : buildDominantReason(reasonCounts) || timelineDominantReason || null;
+      : progressDominantReason ||
+        buildDominantReason(reasonCounts) ||
+        timelineDominantReason ||
+        null;
   if (dominantReason && !Object.hasOwn(reasonCounts, dominantReason)) {
     reasonCounts[dominantReason] = 1;
   }
@@ -507,13 +617,8 @@ function buildPublicationConvergenceSummary(controlPlane) {
     typeof controlPlane.publicationConvergenceGate === "object"
       ? controlPlane.publicationConvergenceGate
       : null;
-  const priorityRecoveryDecisionSnapshotSummary =
-    summarizePriorityRecoveryDecisionSnapshots(
-      controlPlane?.priorityRecoveryDecisionSnapshots,
-    );
-  const priorityRecoveryInvariants = normalizePriorityRecoveryInvariants(
-    controlPlane?.priorityRecoveryInvariants,
-  );
+  const priorityRecoveryObservation =
+    resolvePriorityRecoveryObservation(controlPlane);
   const hasActiveGatePublicationEvidence =
     (controlPlane?.publicationConvergenceGate &&
       typeof controlPlane.publicationConvergenceGate === "object") ||
@@ -525,17 +630,11 @@ function buildPublicationConvergenceSummary(controlPlane) {
       typeof controlPlane.activeGateNoProgress === "object");
   if (
     !publicationConvergence &&
-    !priorityRecoveryDecisionSnapshotSummary &&
-    !priorityRecoveryInvariants &&
+    !priorityRecoveryObservation &&
     !hasActiveGatePublicationEvidence
   ) {
     return null;
   }
-  const pendingAckNodeIds = Array.isArray(
-    publicationConvergence?.pendingAckNodeIds,
-  )
-    ? publicationConvergence.pendingAckNodeIds
-    : [];
   const blockedNodeIds = [];
   const blockingReasonCounts = {};
   for (const [nodeId, readiness] of Object.entries(
@@ -559,88 +658,18 @@ function buildPublicationConvergenceSummary(controlPlane) {
       blockingReasonCounts[reason] = (blockingReasonCounts[reason] || ZERO) + 1;
     }
   }
-  const gateReasons = Array.isArray(publicationConvergenceGate?.reasons)
-    ? publicationConvergenceGate.reasons
-        .map((reason) => String(reason || "").trim())
-        .filter((reason) => reason.length > ZERO)
+  const pendingAckNodeIds = Array.isArray(
+    priorityRecoveryObservation?.pendingAckNodeIds,
+  )
+    ? priorityRecoveryObservation.pendingAckNodeIds
     : [];
-  const recoveryProtocolState =
-    typeof publicationConvergence?.recoveryProtocolState === "string"
-      ? publicationConvergence.recoveryProtocolState
-      : typeof publicationConvergence?.membershipLifecycleSummary
-            ?.recoveryProtocolState === "string"
-        ? publicationConvergence.membershipLifecycleSummary
-            .recoveryProtocolState
-        : null;
-  const priorityRecoveryReasonCodes = normalizeDistinctStringArray(
-    Array.isArray(publicationConvergence?.priorityRecoveryReasonCodes)
-      ? publicationConvergence.priorityRecoveryReasonCodes
-      : publicationConvergence?.membershipLifecycleSummary
-          ?.recoveryProtocolReasonCodes,
-  );
-  const priorityPartitionSummary =
-    publicationConvergence?.priorityPartitionSummary &&
-    typeof publicationConvergence.priorityPartitionSummary === "object"
-      ? publicationConvergence.priorityPartitionSummary
-      : publicationConvergenceGate?.priorityPartitionSummary &&
-          typeof publicationConvergenceGate.priorityPartitionSummary ===
-            "object"
-        ? publicationConvergenceGate.priorityPartitionSummary
-        : null;
-  const prioritySpreadPending =
-    gateReasons.includes("priority_control_plane_spread_pending") ||
-    priorityRecoveryReasonCodes.includes("priority_partitions_not_spread") ||
-    recoveryProtocolState === "priority_spread_pending" ||
-    (priorityPartitionSummary && priorityPartitionSummary.satisfied === false);
-  const publicationPending =
-    priorityRecoveryReasonCodes.includes("publication_epoch_pending") ||
-    recoveryProtocolState === "publication_pending";
-  const membershipProjectionDiagnostics =
-    publicationConvergence?.membershipLifecycleSummary?.projectionDiagnostics &&
-    typeof publicationConvergence.membershipLifecycleSummary
-      .projectionDiagnostics === "object"
-      ? publicationConvergence.membershipLifecycleSummary.projectionDiagnostics
-      : null;
-  const projectionDiagnosticsSource =
-    publicationConvergence?.projectionDiagnostics &&
-    typeof publicationConvergence.projectionDiagnostics === "object"
-      ? publicationConvergence.projectionDiagnostics
-      : membershipProjectionDiagnostics;
-  const projectionDiagnostics = projectionDiagnosticsSource
-    ? {
-        readinessDecisionMode:
-          typeof projectionDiagnosticsSource.readinessDecisionMode === "string"
-            ? projectionDiagnosticsSource.readinessDecisionMode
-            : null,
-        readinessDecisionDimensions: Array.isArray(
-          projectionDiagnosticsSource.readinessDecisionDimensions,
-        )
-          ? projectionDiagnosticsSource.readinessDecisionDimensions
-          : [],
-        recoveryEligibleProjectionEnabled:
-          projectionDiagnosticsSource.recoveryEligibleProjectionEnabled ===
-          true,
-        recoveryEligibleIncludedNodeIds: Array.isArray(
-          projectionDiagnosticsSource.recoveryEligibleIncludedNodeIds,
-        )
-          ? projectionDiagnosticsSource.recoveryEligibleIncludedNodeIds
-          : [],
-        readinessExcludedNodeIds: Array.isArray(
-          projectionDiagnosticsSource.readinessExcludedNodeIds,
-        )
-          ? projectionDiagnosticsSource.readinessExcludedNodeIds
-          : [],
-        clusterMemberUnhealthyExcludedNodeIds: Array.isArray(
-          projectionDiagnosticsSource.clusterMemberUnhealthyExcludedNodeIds,
-        )
-          ? projectionDiagnosticsSource.clusterMemberUnhealthyExcludedNodeIds
-          : [],
-      }
-    : null;
   const activeGateProgress =
-    controlPlane?.activeGateProgress &&
-    typeof controlPlane.activeGateProgress === "object"
-      ? controlPlane.activeGateProgress
+    priorityRecoveryObservation?.activeGateProgress &&
+    typeof priorityRecoveryObservation.activeGateProgress === "object"
+      ? priorityRecoveryObservation.activeGateProgress
+      : controlPlane?.activeGateProgress &&
+          typeof controlPlane.activeGateProgress === "object"
+        ? controlPlane.activeGateProgress
       : null;
   const activeGateSnapshotCoverage =
     controlPlane?.activeGateSnapshotCoverage &&
@@ -648,14 +677,20 @@ function buildPublicationConvergenceSummary(controlPlane) {
       ? controlPlane.activeGateSnapshotCoverage
       : null;
   const activeGateBestProgress =
-    controlPlane?.activeGateBestProgress &&
-    typeof controlPlane.activeGateBestProgress === "object"
-      ? controlPlane.activeGateBestProgress
+    priorityRecoveryObservation?.activeGateBestProgress &&
+    typeof priorityRecoveryObservation.activeGateBestProgress === "object"
+      ? priorityRecoveryObservation.activeGateBestProgress
+      : controlPlane?.activeGateBestProgress &&
+          typeof controlPlane.activeGateBestProgress === "object"
+        ? controlPlane.activeGateBestProgress
       : null;
   const activeGateNoProgress =
-    controlPlane?.activeGateNoProgress &&
-    typeof controlPlane.activeGateNoProgress === "object"
-      ? controlPlane.activeGateNoProgress
+    priorityRecoveryObservation?.activeGateNoProgress &&
+    typeof priorityRecoveryObservation.activeGateNoProgress === "object"
+      ? priorityRecoveryObservation.activeGateNoProgress
+      : controlPlane?.activeGateNoProgress &&
+          typeof controlPlane.activeGateNoProgress === "object"
+        ? controlPlane.activeGateNoProgress
       : null;
   const activeGateReadinessDelay = normalizeActiveGateReadinessDelay(
     activeGateNoProgress?.readinessDelay ||
@@ -665,36 +700,11 @@ function buildPublicationConvergenceSummary(controlPlane) {
       null,
   );
   const activeGateBlockerHistory = Array.isArray(
-    controlPlane?.activeGateBlockerHistory,
+    priorityRecoveryObservation?.activeGateBlockerHistory,
   )
-    ? controlPlane.activeGateBlockerHistory
-    : [];
-  const priorityRecoveryInvariantFailures = Array.isArray(
-    priorityRecoveryInvariants?.invariants,
-  )
-    ? priorityRecoveryInvariants.invariants
-        .filter((invariant) => invariant?.passed !== true)
-        .map((invariant) => ({
-          id: String(invariant?.id || PRIORITY_RECOVERY_INVARIANT_FALLBACK),
-          invariantId: String(
-            invariant?.invariantId ||
-              invariant?.id ||
-              PRIORITY_RECOVERY_INVARIANT_FALLBACK,
-          ),
-          reasonCode: String(
-            invariant?.reasonCode ||
-              invariant?.code ||
-              PRIORITY_RECOVERY_INVARIANT_FALLBACK,
-          ),
-          severity:
-            typeof invariant?.severity === "string" ? invariant.severity : null,
-          scope: typeof invariant?.scope === "string" ? invariant.scope : null,
-          owningSubsystem:
-            typeof invariant?.owningSubsystem === "string"
-              ? invariant.owningSubsystem
-              : null,
-          details: isRecord(invariant?.details) ? invariant.details : null,
-        }))
+    ? priorityRecoveryObservation.activeGateBlockerHistory
+    : Array.isArray(controlPlane?.activeGateBlockerHistory)
+      ? controlPlane.activeGateBlockerHistory
     : [];
   const closureProgressSnapshot =
     activeGateProgress ||
@@ -713,24 +723,28 @@ function buildPublicationConvergenceSummary(controlPlane) {
               ?.publicationStatus ||
             null,
           pendingAckCount: Array.isArray(
-            publicationConvergence?.pendingAckNodeIds,
+            pendingAckNodeIds,
           )
-            ? publicationConvergence.pendingAckNodeIds.length
-            : Array.isArray(publicationConvergenceGate?.pendingAckNodeIds)
-              ? publicationConvergenceGate.pendingAckNodeIds.length
-              : ZERO,
+            ? pendingAckNodeIds.length
+            : ZERO,
           missingPublishedCount: Array.isArray(
             publicationConvergenceGate?.missingPublishedNodeIds,
           )
             ? publicationConvergenceGate.missingPublishedNodeIds.length
             : ZERO,
-          recoveryProtocolState,
-          priorityRecoveryReasonCodes,
-          gateReasons,
+          recoveryProtocolState:
+            priorityRecoveryObservation?.recoveryProtocolState || null,
+          priorityRecoveryReasonCodes:
+            priorityRecoveryObservation?.priorityRecoveryReasonCodes || [],
+          gateReasons:
+            priorityRecoveryObservation?.publicationConvergenceGateReasons ||
+            [],
           prioritySpreadSatisfied:
-            priorityPartitionSummary?.satisfied === true
+            priorityRecoveryObservation?.priorityPartitionSummary?.satisfied ===
+            true
               ? true
-              : priorityPartitionSummary?.satisfied === false
+              : priorityRecoveryObservation?.priorityPartitionSummary
+                    ?.satisfied === false
                 ? false
                 : null,
         }
@@ -741,109 +755,100 @@ function buildPublicationConvergenceSummary(controlPlane) {
     publicationConvergenceGate,
     readinessMode: activeGateNoProgress?.mode || null,
   });
+  const priorityRecoveryPartitionWitnesses =
+    normalizePriorityRecoveryPartitionWitnessesForDiagnostics(
+      priorityRecoveryObservation?.priorityRecoveryPartitionWitnesses,
+    );
+  const priorityRecoveryProgressSummary = buildPriorityRecoveryProgressSummary(
+    priorityRecoveryObservation,
+  );
   return {
-    publicationEpoch: publicationConvergence?.publicationEpoch ?? null,
-    publicationStatus: publicationConvergence?.publicationStatus || null,
+    publicationEpoch:
+      priorityRecoveryObservation?.publicationEpoch ??
+      publicationConvergence?.publicationEpoch ??
+      null,
+    publicationStatus: priorityRecoveryObservation?.publicationStatus || null,
     pendingAckNodeIds,
-    pendingAckCount: pendingAckNodeIds.length,
+    pendingAckCount:
+      priorityRecoveryObservation?.pendingAckCount ?? pendingAckNodeIds.length,
     blockedNodeIds,
     blockedNodeCount: blockedNodeIds.length,
     blockingReasonCounts,
     publishedActiveNodeIds: Array.isArray(
-      publicationConvergence?.publishedActiveNodeIds,
+      priorityRecoveryObservation?.publishedActiveNodeIds,
     )
-      ? publicationConvergence.publishedActiveNodeIds
+      ? priorityRecoveryObservation.publishedActiveNodeIds
       : [],
     publishedAt: publicationConvergence?.publishedAt || null,
     updatedAt: publicationConvergence?.updatedAt || null,
-    recoveryProtocolState,
-    priorityRecoveryReasonCodes,
-    publicationPending,
-    prioritySpreadPending,
-    publicationConvergenceGateReasons: gateReasons,
+    recoveryProtocolState:
+      priorityRecoveryObservation?.recoveryProtocolState || null,
+    priorityRecoveryReasonCodes:
+      priorityRecoveryObservation?.priorityRecoveryReasonCodes || [],
+    publicationPending:
+      priorityRecoveryObservation?.publicationPending === true,
+    prioritySpreadPending:
+      priorityRecoveryObservation?.prioritySpreadPending === true,
+    publicationConvergenceGateReasons:
+      priorityRecoveryObservation?.publicationConvergenceGateReasons || [],
     activeGateProgress,
     activeGateBestProgress,
     activeGateNoProgress,
     activeGateReadinessDelay,
     activeGateBlockerHistory,
     closureRecordId:
-      activeGateProgress?.closureRecordId ||
-      activeGateBestProgress?.closureRecordId ||
-      activeGateNoProgress?.closureRecordId ||
+      priorityRecoveryObservation?.closureRecordId ||
       activeGateClosureWitness?.closureRecordId ||
       null,
     closureWitnessClass:
-      activeGateProgress?.closureWitnessClass ||
-      activeGateBestProgress?.closureWitnessClass ||
-      activeGateNoProgress?.closureWitnessClass ||
+      priorityRecoveryObservation?.closureWitnessClass ||
       activeGateClosureWitness?.closureWitnessClass ||
       null,
-    projectionDiagnostics,
-    priorityPartitionSummary: priorityPartitionSummary
-      ? {
-          satisfied: priorityPartitionSummary.satisfied === true,
-          requiredDistinctNodeCount: Number(
-            priorityPartitionSummary.requiredDistinctNodeCount || ZERO,
-          ),
-          readyEligibleNodeCount: Number(
-            priorityPartitionSummary.readyEligibleNodeCount || ZERO,
-          ),
-          totalPriorityPartitionCount: Number(
-            priorityPartitionSummary.totalPriorityPartitionCount || ZERO,
-          ),
-          missingPartitionIds: Array.isArray(
-            priorityPartitionSummary.missingPartitionIds,
-          )
-            ? priorityPartitionSummary.missingPartitionIds
-            : [],
-          blockedPartitionCount: Number(
-            priorityPartitionSummary.blockedPartitionCount || ZERO,
-          ),
-          largestSpreadGap: Number(
-            priorityPartitionSummary.largestSpreadGap || ZERO,
-          ),
-          totalSpreadGap: Number(
-            priorityPartitionSummary.totalSpreadGap || ZERO,
-          ),
-        }
-      : null,
+    projectionDiagnostics:
+      priorityRecoveryObservation?.projectionDiagnostics || null,
+    priorityPartitionSummary:
+      priorityRecoveryObservation?.priorityPartitionSummary || null,
     priorityRecoveryProgressClassIds:
-      priorityRecoveryDecisionSnapshotSummary?.unresolvedClassIds || [],
+      priorityRecoveryObservation?.priorityRecoveryProgressClassIds || [],
     priorityRecoveryProgressClassCount:
-      priorityRecoveryDecisionSnapshotSummary?.unresolvedClassCount || ZERO,
+      priorityRecoveryObservation?.priorityRecoveryProgressClassCount || ZERO,
     priorityRecoverySemanticStateIds:
-      priorityRecoveryDecisionSnapshotSummary?.unresolvedSemanticStateIds || [],
+      priorityRecoveryObservation?.priorityRecoverySemanticStateIds || [],
     priorityRecoverySemanticStateCount:
-      priorityRecoveryDecisionSnapshotSummary?.unresolvedSemanticStateCount ||
-      ZERO,
+      priorityRecoveryObservation?.priorityRecoverySemanticStateCount || ZERO,
     priorityRecoveryBlockedPartitionIds:
-      priorityRecoveryDecisionSnapshotSummary?.blockedPartitionIds || [],
+      priorityRecoveryObservation?.priorityRecoveryBlockedPartitionIds || [],
     priorityRecoveryBlockedPartitionCount:
-      priorityRecoveryDecisionSnapshotSummary?.blockedPartitionCount || ZERO,
+      priorityRecoveryObservation?.priorityRecoveryBlockedPartitionCount ||
+      ZERO,
+    priorityRecoveryUnresolvedPartitionIds:
+      priorityRecoveryObservation?.priorityRecoveryUnresolvedPartitionIds || [],
+    priorityRecoveryUnresolvedPartitionCount:
+      priorityRecoveryObservation?.priorityRecoveryUnresolvedPartitionCount ||
+      ZERO,
     priorityRecoveryBlockerPartitionIdsByReason:
-      priorityRecoveryDecisionSnapshotSummary?.blockerPartitionIdsByReason ||
+      priorityRecoveryObservation?.priorityRecoveryBlockerPartitionIdsByReason ||
       {},
     priorityRecoveryPartitionIdsBySemanticState:
-      priorityRecoveryDecisionSnapshotSummary?.partitionIdsBySemanticState ||
+      priorityRecoveryObservation?.priorityRecoveryPartitionIdsBySemanticState ||
       {},
     priorityRecoveryPartitionBlockerHistory:
-      priorityRecoveryDecisionSnapshotSummary?.partitionBlockerHistory || [],
+      priorityRecoveryObservation?.priorityRecoveryPartitionBlockerHistory ||
+      [],
     priorityRecoveryPartitionSemanticStateHistory:
-      priorityRecoveryDecisionSnapshotSummary?.partitionSemanticStateHistory ||
-      [],
-    priorityRecoveryPartitionWitnesses:
-      priorityRecoveryDecisionSnapshotSummary?.partitionWitnesses || [],
+      priorityRecoveryObservation
+        ?.priorityRecoveryPartitionSemanticStateHistory || [],
+    priorityRecoveryPartitionWitnesses,
+    priorityRecoveryProgressSummary,
     priorityRecoveryAdmissionDecisionDimensions:
-      priorityRecoveryDecisionSnapshotSummary?.admissionDecisionDimensions ||
-      [],
+      priorityRecoveryObservation
+        ?.priorityRecoveryAdmissionDecisionDimensions || [],
     priorityRecoveryInvariantFailingIds:
-      priorityRecoveryInvariants?.failingInvariantIds || [],
-    priorityRecoveryInvariantFailures,
-    priorityRecoveryInvariantCount: Array.isArray(
-      priorityRecoveryInvariants?.invariants,
-    )
-      ? priorityRecoveryInvariants.invariants.length
-      : ZERO,
+      priorityRecoveryObservation?.priorityRecoveryInvariantFailingIds || [],
+    priorityRecoveryInvariantFailures:
+      priorityRecoveryObservation?.priorityRecoveryInvariantFailures || [],
+    priorityRecoveryInvariantCount:
+      priorityRecoveryObservation?.priorityRecoveryInvariantCount || ZERO,
   };
 }
 

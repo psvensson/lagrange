@@ -1,66 +1,120 @@
-import { QUERY_EXECUTOR_SHARED } from "./query-executor-shared.js";
-import { QueryExecutorSegment2Part1 } from "./query-executor-segment-2-part-1.js";
+import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {QueryExecutorSegment2Part1} from './query-executor-segment-2-part-1.js';
 
 const {
+  CANONICAL_LEADER_IDENTITY_STATE,
+  CANONICAL_LEADER_ROUTING_GAP_STATE,
   COLUMN,
-  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
-  ConfigurationManager,
-  DISTRIBUTED_JOIN_STRATEGY,
-  DistributedMergeEngine,
   ERRORS,
-  HLCClockService,
-  LEADER_GAP_REASON_OWNER_MISSING,
-  LEADER_GAP_REASON_SERVICE_MISSING,
-  LOG_MSG,
-  LoggingService,
-  METRICS_LOG_TAG,
-  MIGRATION_PARTITION_OPERATION,
   NUM,
   PARTITION_SERVICE_ERROR_MSG,
-  PG_EXPR_TYPE,
-  ParallelQueryCoordinator,
-  QUERY_AST_NODE,
-  QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
-  QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
-  QUERY_JOIN_TYPE,
-  QUERY_LOG_MSG,
-  QUERY_MESSAGE_FIELD_MIGRATION_ID,
-  QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
-  QUERY_MESSAGE_FIELD_SESSION_ID,
-  QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
-  QUERY_MESSAGE_TYPE,
-  QUERY_OPERATOR,
-  QUERY_RESPONSE_TYPE,
-  QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
-  QUERY_SQL,
-  QUERY_SUBSYSTEM,
-  RAFT_ROLE,
-  SERVICE_STATUS,
-  SERVICE_TYPE,
-  SQL,
   SYSTEM_TABLE_NAMES,
-  TABLES,
   TRANSPORT_ERROR_MSG,
-  buildDistributedFailureSummary,
-  buildParticipantFailureEntry,
-  buildPartitionServiceWitnessFingerprint,
-  compactEligibilitySnapshot,
-  evaluateEligibilityDecision,
+  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
-  normalizeParticipantFailureString,
   normalizeParticipantRetryAfterMs,
-  resolveBootstrapLeaderSelection,
-  resolveParticipantBackpressureState,
+  resolveCanonicalLeaderIdentitySnapshot,
+  resolveCanonicalLeaderRoutingGapState,
 } = QUERY_EXECUTOR_SHARED;
 
 class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
+  resolveCanonicalPartitionLeaderIdentity(
+    partitionId,
+    serviceRows = null,
+    partitionRow = null,
+  ) {
+    const resolvedPartitionRow = partitionRow || this.getPartitionRecord(partitionId);
+    const resolvedServiceRows =
+      Array.isArray(serviceRows) ?
+        serviceRows :
+        this.getPartitionServiceRows(partitionId);
+    if (
+      typeof this.bootstrapTopologySnapshotOwner
+        ?.resolveCanonicalPartitionLeaderIdentity ===
+      QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
+    ) {
+      const ownerIdentity =
+        this.bootstrapTopologySnapshotOwner.resolveCanonicalPartitionLeaderIdentity(
+          partitionId,
+          resolvedServiceRows,
+        );
+      if (
+        ownerIdentity &&
+        typeof ownerIdentity === QUERY_EXECUTOR_LITERAL.STRING_OBJECT
+      ) {
+        return ownerIdentity;
+      }
+    }
+    return resolveCanonicalLeaderIdentitySnapshot({
+      partition: resolvedPartitionRow,
+      partitionPresent:
+        resolvedPartitionRow &&
+        typeof resolvedPartitionRow === QUERY_EXECUTOR_LITERAL.STRING_OBJECT,
+      serviceRows: resolvedServiceRows,
+    });
+  }
+
+  resolveCanonicalLeaderGapRecoveryRoutingContract(
+    partitionId,
+    routingSnapshot = null,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+    allowReadinessAuthoritativeRefresh = false,
+  ) {
+    const resolvedPartitionId =
+      typeof partitionId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      partitionId.length > NUM.ZERO ?
+        partitionId :
+        routingSnapshot?.partitionId || null;
+    const resolvedRoutingReadinessDimension =
+      typeof routingReadinessDimension === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      routingReadinessDimension.length > NUM.ZERO ?
+        routingReadinessDimension :
+        this.defaultRoutingReadinessDimension;
+    const resolvedRoutingSnapshot =
+      routingSnapshot && typeof routingSnapshot ===
+        QUERY_EXECUTOR_LITERAL.STRING_OBJECT ?
+        routingSnapshot :
+        resolvedPartitionId ?
+          this.getPartitionRoutingSnapshot(
+            resolvedPartitionId,
+            resolvedRoutingReadinessDimension,
+            {
+              allowReadinessAuthoritativeRefresh,
+            },
+          ) :
+          null;
+    const canonicalLeaderRoutingGapState =
+      resolveCanonicalLeaderRoutingGapState(resolvedRoutingSnapshot);
+    const partitionRow =
+      resolvedPartitionId !== null ?
+        this.getPartitionRecord(resolvedPartitionId) :
+        null;
+    const priorityRecoveryRouting =
+      resolvedRoutingReadinessDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE &&
+      isPriorityControlPlanePartition({
+        partitionId: resolvedPartitionId,
+        partitionRow,
+      }) &&
+      Number(resolvedRoutingSnapshot?.routableServiceCount) > NUM.ZERO;
+    const preferDifferentNodeAfterRuntimeWitness = priorityRecoveryRouting;
+    const recoveryCandidateWidening =
+      preferDifferentNodeAfterRuntimeWitness &&
+      canonicalLeaderRoutingGapState !==
+        CANONICAL_LEADER_ROUTING_GAP_STATE.NONE;
+    return Object.freeze({
+      partitionId: resolvedPartitionId,
+      routingReadinessDimension: resolvedRoutingReadinessDimension,
+      canonicalLeaderRoutingGapState,
+      priorityRecoveryRouting,
+      preferDifferentNodeAfterRuntimeWitness,
+      recoveryCandidateWidening,
+    });
+  }
 
 
   /**
@@ -77,18 +131,24 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     attemptedAddresses = new Set(),
     preferSameLatencyGroup = false,
   ) {
-    const routableServices = Array.isArray(routingSnapshot?.routableServices)
-      ? routingSnapshot.routableServices
-      : [];
+    const routableServices = Array.isArray(routingSnapshot?.routableServices) ?
+      routingSnapshot.routableServices :
+      [];
     const localGroupId = this.resolveNodeLatencyGroupId(this.nodeId);
     const orderedServices = this.orderServicesByLatencyGroup(
       routableServices,
       localGroupId,
       preferSameLatencyGroup,
     );
+    const candidateServices = this.resolveLeaderRecoveryCandidateServices(
+      routingSnapshot,
+      orderedServices,
+      routableServices,
+      attemptedAddresses,
+    );
     const candidates = [];
     const seen = new Set();
-    for (const service of orderedServices) {
+    for (const service of candidateServices) {
       const address = service?.address;
       if (
         typeof address !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
@@ -117,6 +177,99 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
   }
 
   /**
+   * Reorder recovery candidates so runtime-disproven nodes are tried after
+   * fresher alternatives on the priority recovery lane.
+   * @param {Object|null} routingSnapshot
+   * @param {Array<Object>} orderedServices
+   * @param {Array<Object>} routableServices
+   * @param {Set<string>} attemptedAddresses
+   * @return {Array<Object>}
+   * @private
+   */
+  resolveLeaderRecoveryCandidateServices(
+    routingSnapshot,
+    orderedServices,
+    routableServices,
+    attemptedAddresses,
+  ) {
+    const deprioritizedNodeIds =
+      this.collectDeprioritizedLeaderRecoveryNodeIds(
+        routingSnapshot,
+        routableServices,
+        attemptedAddresses,
+      );
+    if (deprioritizedNodeIds.size === NUM.ZERO) {
+      return orderedServices;
+    }
+    return [
+      ...orderedServices.filter(
+        (service) => !deprioritizedNodeIds.has(service?.node_id),
+      ),
+      ...orderedServices.filter(
+        (service) => deprioritizedNodeIds.has(service?.node_id),
+      ),
+    ];
+  }
+
+  /**
+   * Resolve node IDs that should be demoted after a runtime witness disproves
+   * the current priority-recovery owner path.
+   * @param {Object|null} routingSnapshot
+   * @param {Array<Object>} routableServices
+   * @param {Set<string>} attemptedAddresses
+   * @return {Set<string>}
+   * @private
+   */
+  collectDeprioritizedLeaderRecoveryNodeIds(
+    routingSnapshot,
+    routableServices,
+    attemptedAddresses,
+  ) {
+    const partitionId =
+      typeof routingSnapshot?.partitionId ===
+        QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      routingSnapshot.partitionId.length > NUM.ZERO ?
+        routingSnapshot.partitionId :
+        null;
+    const recoveryRoutingContract =
+      this.resolveCanonicalLeaderGapRecoveryRoutingContract(
+        partitionId,
+        routingSnapshot,
+        routingSnapshot?.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
+      );
+    const deprioritizedNodeIds = new Set();
+    if (
+      recoveryRoutingContract.preferDifferentNodeAfterRuntimeWitness === true &&
+      attemptedAddresses instanceof Set &&
+      attemptedAddresses.size > NUM.ZERO
+    ) {
+      for (const service of routableServices) {
+        if (
+          attemptedAddresses.has(service?.address) &&
+          typeof service?.node_id === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+          service.node_id.length > NUM.ZERO
+        ) {
+          deprioritizedNodeIds.add(service.node_id);
+        }
+      }
+    }
+    const canonicalLeaderNodeId =
+      typeof routingSnapshot?.canonicalLeaderNodeId ===
+        QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO ?
+        routingSnapshot.canonicalLeaderNodeId :
+        null;
+    if (
+      recoveryRoutingContract.recoveryCandidateWidening === true &&
+      canonicalLeaderNodeId
+    ) {
+      deprioritizedNodeIds.add(canonicalLeaderNodeId);
+    }
+    return deprioritizedNodeIds;
+  }
+
+  /**
    * Collect node IDs that should be refreshed when runtime routing disproves
    * local partition-service metadata.
    * @param {Object|null} routingSnapshot
@@ -132,7 +285,7 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     const seen = new Set();
     const addNodeId = (nodeId) => {
       if (
-        typeof nodeId !== "string" ||
+        typeof nodeId !== 'string' ||
         nodeId.length === NUM.ZERO ||
         seen.has(nodeId)
       ) {
@@ -235,10 +388,10 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
       return false;
     }
     const partitionId =
-      typeof options.partitionId === "string" &&
-      options.partitionId.length > NUM.ZERO
-        ? options.partitionId
-        : routingSnapshot?.partitionId || null;
+      typeof options.partitionId === 'string' &&
+      options.partitionId.length > NUM.ZERO ?
+        options.partitionId :
+        routingSnapshot?.partitionId || null;
     if (
       typeof partitionId !== QUERY_EXECUTOR_LITERAL.STRING_STRING ||
       partitionId.length === NUM.ZERO
@@ -287,9 +440,9 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     const maxRecoveryAttempts = NUM.TEN * NUM.FOUR;
     const retryDelayMs = Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
     const executionTimeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO
-        ? Math.floor(options.timeoutMs)
-        : this.queryTimeoutMs;
+      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO ?
+        Math.floor(options.timeoutMs) :
+        this.queryTimeoutMs;
     const timeoutBoundAttempts = Math.ceil(executionTimeoutMs / retryDelayMs);
     const boundedAttempts = Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
     return Math.max(this.leaderRetryAttempts, boundedAttempts);
@@ -376,7 +529,7 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     ) {
       return null;
     }
-    const fallbackTableName = partitionId.replace(/-p\d+$/, "");
+    const fallbackTableName = partitionId.replace(/-p\d+$/, '');
     return fallbackTableName.length > NUM.ZERO ? fallbackTableName : null;
   }
 
@@ -406,8 +559,11 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
 
   /**
    * Resolve the canonical retry decision for routed control-plane writes.
-   * Deferred transport failures must pause the current partition attempt so
-   * reconnect timers can complete before the next write attempt is issued.
+   * Deferred transport failures normally pause the current partition attempt
+   * so reconnect timers can complete before the next write attempt is issued.
+   * Priority-recovery partitions instead widen to another live candidate once
+   * the current target has been disproven or admitted as too hot to accept
+   * the write on the current attempt.
    * @param {string} partitionId
    * @param {Object} executionOptions
    * @param {Object} failure
@@ -433,21 +589,11 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
       SYSTEM_TABLE_NAMES.has(
         String(tableName || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
       );
-    if (systemTableWrite && deferredFailure) {
-      return {
-        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
-      };
-    }
     const retryable = this.isRetryableControlPlaneWriteFailure(
       partitionId,
       failure,
       forRead,
     );
-    if (!retryable) {
-      return {
-        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
-      };
-    }
     if (
       this.shouldRetryTransactionActiveWriteOnSameAddress(
         partitionId,
@@ -458,6 +604,41 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
     ) {
       return {
         state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS,
+      };
+    }
+    const priorityControlPlaneWrite =
+      !forRead &&
+      isPriorityControlPlanePartition({
+        partitionId,
+        partitionRow: this.getPartitionRecord(partitionId),
+      });
+    const failureMessage =
+      typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+        failure.message :
+        typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+          failure.error :
+          QUERY_EXECUTOR_LITERAL.STRING_VALUE;
+    const failureCode =
+      typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+        failure.errorCode :
+        typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+          failure.code :
+          null;
+    if (systemTableWrite && deferredFailure) {
+      if (priorityControlPlaneWrite && retryable) {
+        return {
+          state:
+            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE
+              .WIDEN_TO_RECOVERY_CANDIDATE,
+        };
+      }
+      return {
+        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY,
+      };
+    }
+    if (!retryable) {
+      return {
+        state: CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.NONE,
       };
     }
     return {
@@ -496,11 +677,11 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
       return false;
     }
     const failureMessage =
-      typeof failure?.message === "string"
-        ? failure.message
-        : typeof failure?.error === "string"
-          ? failure.error
-          : "";
+      typeof failure?.message === 'string' ?
+        failure.message :
+        typeof failure?.error === 'string' ?
+          failure.error :
+          '';
     return failureMessage.includes(
       PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
     );
@@ -514,4 +695,4 @@ class QueryExecutorSegment2 extends QueryExecutorSegment2Part1 {
    */
 }
 
-export { QueryExecutorSegment2 };
+export {QueryExecutorSegment2};

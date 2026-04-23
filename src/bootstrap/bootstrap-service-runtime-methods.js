@@ -506,6 +506,7 @@ function createBootstrapServiceRuntimeMethods() {
         systemTableCache: this.systemTableCache,
         tablePolicyService: this.tablePolicyService,
         messageGroupServices: this.messageGroupServices,
+        getLocalClusterIncarnationFence: () => this.clusterIncarnationFence,
         rebalanceCoordinator: this.rebalanceCoordinator,
         bootstrapReadinessState: this.bootstrapReadinessState,
       });

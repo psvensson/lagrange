@@ -1,4 +1,7 @@
-import {NUM} from '../constants/index.js';
+import {
+  STARTUP_WORKFLOW_ERROR,
+  StartupWorkflowStore,
+} from './startup-workflow-store.js';
 
 const JOIN_CHECKPOINT = Object.freeze({
   SESSION_CREATED: 'SESSION_CREATED',
@@ -28,13 +31,14 @@ const JOIN_CHECKPOINT_INDEX = Object.freeze(
 const JOIN_SESSION_DEFAULT = Object.freeze({
   PHASE: 'session_created',
   RETRY_AFTER_MS: 0,
+  PLAN_VERSION: 'join-startup-plan/v1',
 });
 
 const JOIN_SESSION_ERROR = Object.freeze({
-  NODE_ID_REQUIRED: 'nodeId is required',
-  SESSION_ID_REQUIRED: 'sessionId is required',
-  INVALID_CHECKPOINT: 'invalid join checkpoint',
-  CHECKPOINT_REGRESSION: 'checkpoint regression',
+  NODE_ID_REQUIRED: STARTUP_WORKFLOW_ERROR.NODE_ID_REQUIRED,
+  SESSION_ID_REQUIRED: STARTUP_WORKFLOW_ERROR.SESSION_ID_REQUIRED,
+  INVALID_CHECKPOINT: STARTUP_WORKFLOW_ERROR.INVALID_CHECKPOINT,
+  CHECKPOINT_REGRESSION: STARTUP_WORKFLOW_ERROR.CHECKPOINT_REGRESSION,
 });
 
 /**
@@ -42,12 +46,19 @@ const JOIN_SESSION_ERROR = Object.freeze({
  */
 class JoinSessionStore {
   constructor(options = {}) {
-    this._storage = options.storage instanceof Map ?
-      options.storage :
-      new Map();
-    this._now = typeof options.now === 'function' ?
-      options.now :
-      () => Date.now();
+    this.workflowStore = options.workflowStore instanceof StartupWorkflowStore ?
+      options.workflowStore :
+      new StartupWorkflowStore({
+        workflowKind: 'join',
+        checkpointSequence: JOIN_CHECKPOINT_SEQUENCE,
+        initialCheckpoint: JOIN_CHECKPOINT.SESSION_CREATED,
+        initialPhase: JOIN_SESSION_DEFAULT.PHASE,
+        planVersion: options.planVersion || JOIN_SESSION_DEFAULT.PLAN_VERSION,
+        now: options.now,
+        dataDir: options.dataDir,
+        storage: options.storage,
+        restartTerminalSession: false,
+      });
   }
 
   /**
@@ -58,9 +69,29 @@ class JoinSessionStore {
    * @return {Promise<Object|null>}
    */
   async loadSession(options = {}) {
-    const compositeKey = this.buildCompositeKey(options);
-    const record = this._storage.get(compositeKey) || null;
-    return record ? this.cloneRecord(record) : null;
+    return this.workflowStore.loadSession(options);
+  }
+
+  /**
+   * Load the latest session for one node regardless of session id.
+   * @param {Object} options
+   * @param {string} options.nodeId
+   * @return {Promise<Object|null>}
+   */
+  async loadLatestSession(options = {}) {
+    return this.workflowStore.loadLatestSession(options);
+  }
+
+  /**
+   * Resolve the effective session identity.
+   * @param {Object} options
+   * @param {string} options.nodeId
+   * @param {string} [options.sessionId]
+   * @param {boolean} [options.allowResumeLatest]
+   * @return {Promise<string|null>}
+   */
+  async resolveSessionId(options = {}) {
+    return this.workflowStore.resolveSessionId(options);
   }
 
   /**
@@ -71,34 +102,7 @@ class JoinSessionStore {
    * @return {Promise<Object>}
    */
   async createOrLoadSession(options = {}) {
-    const compositeKey = this.buildCompositeKey(options);
-    const now = this._now();
-    const existing = this._storage.get(compositeKey);
-    if (existing) {
-      const updated = {
-        ...existing,
-        attemptCount: existing.attemptCount + 1,
-        updatedAt: now,
-      };
-      this._storage.set(compositeKey, updated);
-      return this.cloneRecord(updated);
-    }
-
-    const created = {
-      nodeId: options.nodeId,
-      sessionId: options.sessionId,
-      checkpoint: JOIN_CHECKPOINT.SESSION_CREATED,
-      phase: JOIN_SESSION_DEFAULT.PHASE,
-      attemptCount: 1,
-      lastErrorCode: null,
-      retryAfterMs: JOIN_SESSION_DEFAULT.RETRY_AFTER_MS,
-      terminal: false,
-      retryable: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this._storage.set(compositeKey, created);
-    return this.cloneRecord(created);
+    return this.workflowStore.createOrLoadSession(options);
   }
 
   /**
@@ -111,39 +115,10 @@ class JoinSessionStore {
    * @return {Promise<Object>}
    */
   async advanceCheckpoint(options = {}) {
-    const compositeKey = this.buildCompositeKey(options);
-    const nextCheckpoint = this.normalizeCheckpoint(options.checkpoint);
-    const existing = this._storage.get(compositeKey);
-    if (!existing) {
-      throw new Error('join session not found: ' + compositeKey);
-    }
-
-    const currentIndex = this.getCheckpointIndex(existing.checkpoint);
-    const nextIndex = this.getCheckpointIndex(nextCheckpoint);
-    if (nextIndex < currentIndex) {
-      throw new Error(
-        JOIN_SESSION_ERROR.CHECKPOINT_REGRESSION +
-        ` (${existing.checkpoint} -> ${nextCheckpoint})`,
-      );
-    }
-    if (nextIndex === currentIndex) {
-      return this.cloneRecord(existing);
-    }
-
-    const updated = {
-      ...existing,
-      checkpoint: nextCheckpoint,
-      phase: typeof options.phase === 'string' && options.phase.length > NUM.ZERO ?
-        options.phase :
-        existing.phase,
-      lastErrorCode: null,
-      retryAfterMs: JOIN_SESSION_DEFAULT.RETRY_AFTER_MS,
-      terminal: false,
-      retryable: true,
-      updatedAt: this._now(),
-    };
-    this._storage.set(compositeKey, updated);
-    return this.cloneRecord(updated);
+    return this.workflowStore.advanceCheckpoint({
+      ...options,
+      terminal: options.terminal === true,
+    });
   }
 
   /**
@@ -158,28 +133,7 @@ class JoinSessionStore {
    * @return {Promise<Object>}
    */
   async recordFailure(options = {}) {
-    const compositeKey = this.buildCompositeKey(options);
-    const existing = this._storage.get(compositeKey);
-    if (!existing) {
-      throw new Error('join session not found: ' + compositeKey);
-    }
-    const updated = {
-      ...existing,
-      phase: typeof options.phase === 'string' && options.phase.length > NUM.ZERO ?
-        options.phase :
-        existing.phase,
-      lastErrorCode: typeof options.errorCode === 'string' ?
-        options.errorCode :
-        existing.lastErrorCode,
-      retryAfterMs: Number.isFinite(options.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
-        existing.retryAfterMs,
-      retryable: options.retryable !== false,
-      terminal: options.retryable === false,
-      updatedAt: this._now(),
-    };
-    this._storage.set(compositeKey, updated);
-    return this.cloneRecord(updated);
+    return this.workflowStore.recordFailure(options);
   }
 
   /**
@@ -189,46 +143,18 @@ class JoinSessionStore {
    * @return {boolean}
    */
   isCheckpointSatisfied(currentCheckpoint, targetCheckpoint) {
-    return this.getCheckpointIndex(currentCheckpoint) >=
-      this.getCheckpointIndex(targetCheckpoint);
-  }
-
-  buildCompositeKey(options = {}) {
-    if (typeof options.nodeId !== 'string' || options.nodeId.length === 0) {
-      throw new Error(JOIN_SESSION_ERROR.NODE_ID_REQUIRED);
-    }
-    if (typeof options.sessionId !== 'string' || options.sessionId.length === 0) {
-      throw new Error(JOIN_SESSION_ERROR.SESSION_ID_REQUIRED);
-    }
-    return options.nodeId + '::' + options.sessionId;
+    return this.workflowStore.isCheckpointSatisfied(
+      currentCheckpoint,
+      targetCheckpoint,
+    );
   }
 
   normalizeCheckpoint(checkpoint) {
-    if (!Object.prototype.hasOwnProperty.call(JOIN_CHECKPOINT_INDEX, checkpoint)) {
-      throw new Error(JOIN_SESSION_ERROR.INVALID_CHECKPOINT + ': ' + String(checkpoint));
-    }
-    return checkpoint;
+    return this.workflowStore.normalizeCheckpoint(checkpoint);
   }
 
   getCheckpointIndex(checkpoint) {
-    const normalized = this.normalizeCheckpoint(checkpoint);
-    return JOIN_CHECKPOINT_INDEX[normalized];
-  }
-
-  cloneRecord(record) {
-    return {
-      nodeId: record.nodeId,
-      sessionId: record.sessionId,
-      checkpoint: record.checkpoint,
-      phase: record.phase,
-      attemptCount: record.attemptCount,
-      lastErrorCode: record.lastErrorCode,
-      retryAfterMs: record.retryAfterMs,
-      retryable: record.retryable,
-      terminal: record.terminal,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-    };
+    return this.workflowStore.getCheckpointIndex(checkpoint);
   }
 }
 

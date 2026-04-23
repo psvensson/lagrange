@@ -90,3 +90,33 @@ test('JoinReadinessEvaluator falls back to readiness-owned startup authority sna
   );
   t.end();
 });
+
+test('JoinReadinessEvaluator does not rebuild startup authority from local node rows when readiness authority is unavailable', async (t) => {
+  const evaluator = new JoinReadinessEvaluator({
+    nodeId: 'joining-node',
+    now: () => 1234,
+    sleep: async () => {},
+    delegates: {
+      getBootstrapTopologySnapshotActiveNodeIds: () => ['wrong-node'],
+    },
+  });
+
+  const nodeIds = evaluator.getCanonicalJoinActiveNodeIds({
+    getAll(tableName) {
+      if (tableName !== 'nodes') {
+        return [];
+      }
+      return [
+        {node_id: 'seed-node', status: 'active'},
+        {node_id: 'joining-node', status: 'active'},
+      ];
+    },
+  });
+
+  t.same(
+    nodeIds,
+    [],
+    'join readiness should not synthesize a competing startup cohort from raw node rows or bootstrap topology',
+  );
+  t.end();
+});

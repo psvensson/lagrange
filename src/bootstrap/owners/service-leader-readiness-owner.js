@@ -46,6 +46,11 @@ const TRAFFIC_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODE_ENDPOINTS,
 ]);
 
+const DURABLE_REJOIN_REQUIRED_LEADER_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.NODE_ENDPOINTS,
+]);
+
 function isLiveServiceLeader(service) {
   if (!service) {
     return false;
@@ -199,8 +204,8 @@ class ServiceLeaderReadinessOwner {
   }
 
   filterMissingRequiredPartitionIds(
-      partitionIds = [],
-      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+    partitionIds = [],
+    requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
   ) {
     if (!Array.isArray(partitionIds) || partitionIds.length === NUM.ZERO) {
       return [];
@@ -256,8 +261,8 @@ class ServiceLeaderReadinessOwner {
   }
 
   normalizeLeaderStatusForRequiredTables(
-      missing = {},
-      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+    missing = {},
+    requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
   ) {
     const cachedPartitionLeaders = this.getCachedLeaderMetadataByServiceType(
       SERVICE_TYPE.PARTITION,
@@ -321,7 +326,7 @@ class ServiceLeaderReadinessOwner {
   resolveRequiredLeaderTables(options = {}) {
     return resolveMembershipJoinIntentType(options.startupMode) ===
       MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY ?
-      TRAFFIC_REQUIRED_LEADER_TABLES :
+      DURABLE_REJOIN_REQUIRED_LEADER_TABLES :
       BOOTSTRAP_REQUIRED_LEADER_TABLES;
   }
 
@@ -447,6 +452,7 @@ class ServiceLeaderReadinessOwner {
 
 export {
   BOOTSTRAP_REQUIRED_LEADER_TABLES,
+  DURABLE_REJOIN_REQUIRED_LEADER_TABLES,
   ServiceLeaderReadinessOwner,
   TRAFFIC_REQUIRED_LEADER_TABLES,
   isLiveServiceLeader,

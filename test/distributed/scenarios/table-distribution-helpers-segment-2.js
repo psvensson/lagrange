@@ -1,5 +1,10 @@
 import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 } from "./table-distribution-helpers-segment-1.js";
+
+const TABLE_DISTRIBUTION_HELPERS_SEGMENT_4_MODULE_PATH =
+  "./table-distribution-helpers-segment-4.js";
+
 const {
+  BENCHMARK_DEFAULTS,
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
   SERVICE_TYPE_PARTITION,
@@ -70,6 +75,12 @@ const {
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD,
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED,
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED,
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
+  normalizeControlPlaneSystemTableVisibilityState,
+  isPendingControlPlaneSystemTableVisibilityState,
+  OWNER_CONTRACT_STATE,
+  normalizeOwnerContractNextAction,
+  normalizeOwnerContractState,
   sleep,
   mapNodeIds,
   normalizePlannerObservationReasonCodes,
@@ -114,7 +125,24 @@ const {
   resolveBenchmarkBootstrapRequiredNodeCount,
   resolveBenchmarkAdmissionTimeoutMs,
   resolveBenchmarkAdmissionStableWindowMs,
+  buildBenchmarkLoadAdmissionSnapshot,
+  buildBenchmarkPartitionConvergenceSnapshot,
+  BENCHMARK_PARTITION_DISPATCH_MODE,
+  isBenchmarkCriticalControlPlaneStable,
+  resolveBenchmarkPartitionDispatchMode,
 } = TABLE_DISTRIBUTION_HELPERS_SEGMENT_1;
+
+let tableDistributionHelpersSegment4Promise = null;
+
+async function queryTableDistribution(seedNode, options = {}) {
+  if (!tableDistributionHelpersSegment4Promise) {
+    tableDistributionHelpersSegment4Promise = import(
+      TABLE_DISTRIBUTION_HELPERS_SEGMENT_4_MODULE_PATH
+    ).then((module) => module.TABLE_DISTRIBUTION_HELPERS_SEGMENT_4);
+  }
+  const segment4 = await tableDistributionHelpersSegment4Promise;
+  return segment4.queryTableDistribution(seedNode, options);
+}
 
 function resolveBenchmarkAdmissionPollIntervalMs(cluster, options = {}) {
   if (
@@ -1165,6 +1193,12 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_2 = {
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD,
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED,
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED,
+  normalizeControlPlaneSystemTableVisibilityState,
+  isPendingControlPlaneSystemTableVisibilityState,
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
+  OWNER_CONTRACT_STATE,
+  normalizeOwnerContractNextAction,
+  normalizeOwnerContractState,
   sleep,
   mapNodeIds,
   normalizePlannerObservationReasonCodes,
@@ -1228,4 +1262,5 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_2 = {
   summarizeMutationVisibility,
   advanceMutationVisibilitySummary,
   shouldDeferAuthoritativeRepair,
+  queryTableDistribution,
 };

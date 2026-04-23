@@ -22,6 +22,7 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {CONTROL_PLANE_WORKLOAD_CLASS} from '../../src/control-plane/control-plane-workload-profile.js';
+import {CONTROL_PLANE_TIMEOUT_DEFAULT} from '../../src/control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
@@ -30,6 +31,7 @@ import {
   PRIORITY_RECOVERY_COMPLETION_REASON,
   PRIORITY_RECOVERY_COMPLETION_STATE,
 } from '../../src/control-plane/priority-recovery-completion.js';
+import {LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY} from '../../src/cdc/cdc-integration-service.js';
 import {
   OperationType,
   REPLICA_OPERATION_SEMANTIC_PHASE,
@@ -60,6 +62,7 @@ const TEST_CREATING_STATUS = 'creating';
 const VISIBILITY_CONFIRMATION_STATE_DEFERRED = 'deferred';
 const TEST_CACHE_BACKED_VISIBILITY_OPERATION_ID = 'op-cache-backed-visibility';
 const TEST_PENDING_STATUS = 'pending';
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
 const PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_FAILURE_SOURCE =
   'priority_recovery_authoritative_operation_visibility_failure';
 const PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_VISIBILITY_EMPTY_READ_SOURCE =
@@ -734,6 +737,11 @@ test(
       'replica_operations owner reads should use critical delivery priority',
     );
     t.equal(
+      capturedReads[0]?.options?.timeoutMs,
+      CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+      'generic replica_operations owner reads should keep the shared control-plane timeout budget',
+    );
+    t.equal(
       capturedReads[0]?.options?.allowPressureDefer,
       false,
       'replica_operations owner reads should not defer under transport pressure',
@@ -955,6 +963,121 @@ test(
       observation?.retryAfterMs,
       250,
       'single-operation visibility should preserve bounded retry guidance',
+    );
+  },
+);
+
+test(
+  'persistNewOperation keeps a deferred owner-persisted transition visible ' +
+    'to later single-operation reads when authoritative confirmation stays empty',
+  async (t) => {
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      authoritativeVisibilityRetryDelayMs: 123,
+      controlPlaneSystemTableGateway: {
+        readRows: async () => ({success: true, rows: []}),
+        executeQuery: async () => ({success: true, changes: 1}),
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      },
+    });
+    const operation = repo.rowToOperation(makeRow({
+      type: OperationType.REPLACE,
+      status: TEST_CREATING_STATUS,
+      workflow_step: WORKFLOW_STEP.CREATING,
+      updated_at: 200,
+    }));
+
+    const persisted = await repo.persistNewOperation(operation);
+    const visibilityObservation = await repo.getOperationByIdVisibilityObservation(
+      operation.operationId,
+    );
+
+    t.equal(
+      persisted,
+      true,
+      'deferred authoritative confirmation should not unwind the persisted insert',
+    );
+    t.equal(
+      visibilityObservation?.state,
+      INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+      'later single-operation reads should keep the owner-persisted transition visible',
+    );
+    t.equal(
+      visibilityObservation?.operation?.workflowStep,
+      WORKFLOW_STEP.CREATING,
+      'the fallback visibility should preserve the owner-persisted workflow step',
+    );
+    t.equal(
+      visibilityObservation?.deferredOutcome?.reasonCode,
+      OWNER_PERSISTED_TRANSITION_PENDING_AUTHORITATIVE_CONFIRMATION_REASON,
+      'the later read should preserve the canonical owner-persisted deferred reason',
+    );
+    t.equal(
+      visibilityObservation?.deferredOutcome?.source,
+      OWNER_PERSISTED_TRANSITION_VISIBILITY_EMPTY_READ_SOURCE,
+      'the later read should preserve the owner-persisted empty-read source',
+    );
+  },
+);
+
+test(
+  'persistOperationUpdate keeps a deferred owner-persisted transition visible ' +
+    'to later entity observations when authoritative rows stay on an older step',
+  async (t) => {
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      authoritativeVisibilityRetryDelayMs: 123,
+      controlPlaneSystemTableGateway: {
+        readRows: async () => ({
+          success: true,
+          rows: [
+            makeRow({
+              type: OperationType.REPLACE,
+              status: TEST_CREATING_STATUS,
+              workflow_step: WORKFLOW_STEP.CREATING,
+              updated_at: 150,
+            }),
+          ],
+        }),
+        executeQuery: async () => ({success: true, changes: 1}),
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      },
+    });
+    const operation = repo.rowToOperation(makeRow({
+      type: OperationType.REPLACE,
+      status: 'active',
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      updated_at: 200,
+    }));
+
+    const persisted = await repo.persistOperationUpdate(operation);
+    const observation = await repo.getOperationsByEntityAuthoritativeObservation(
+      TEST_ENTITY_TYPE,
+      TEST_PARTITION_ID,
+    );
+
+    t.equal(
+      persisted,
+      true,
+      'deferred authoritative confirmation should not unwind the persisted update',
+    );
+    t.equal(
+      observation?.state,
+      INCOMPLETE_OPERATION_OBSERVATION_STATE.PRESENT,
+      'later entity observations should keep the owner-persisted transition visible',
+    );
+    t.same(
+      observation?.operations?.map((entry) => entry.workflowStep),
+      [WORKFLOW_STEP.ACTIVE],
+      'the entity observation should project the newer owner-persisted workflow step',
     );
   },
 );
@@ -1452,6 +1575,100 @@ test('getReplaceTargetReplicaId returns replicaId when different from source', a
   t.equal(repo.getReplaceTargetReplicaId(op), 'tgt-r2');
 });
 
+test('queryIncompleteOperations requests bounded local replica fallback for authoritative replica_operations reads', async (t) => {
+  const authoritativeReadCalls = [];
+  const repo = createTestRepository({
+    systemTableCache: {
+      get: () => null,
+      getAll: () => [],
+      filter: () => [],
+    },
+    controlPlaneSystemTableGateway: {
+      readRows: async (_tableName, _sql, _params, options = {}) => {
+        authoritativeReadCalls.push(options);
+        if (
+          options?.replicaFallbackConsistency !==
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
+        ) {
+          return {success: false, rows: [], error: 'missing_replica_fallback'};
+        }
+        return {
+          success: true,
+          rows: [
+            makeRow({
+              status: TEST_PENDING_STATUS,
+              workflow_step: WORKFLOW_STEP.PENDING,
+            }),
+          ],
+        };
+      },
+    },
+  });
+
+  const operations = await repo.queryIncompleteOperations();
+
+  t.equal(
+    operations.length,
+    1,
+    'authoritative incomplete-operation reads should remain visible through the bounded local replica fallback lane',
+  );
+  t.equal(
+    authoritativeReadCalls[0]?.replicaFallbackConsistency,
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+    'replica_operations owner reads should request bounded local replica fallback',
+  );
+});
+
+test('persistOperationUpdate requests bounded local replica fallback for authoritative replica_operations confirmation', async (t) => {
+  const authoritativeReadCalls = [];
+  const confirmedUpdatedAt = 200;
+  const repo = createTestRepository({
+    authoritativeVisibilityTimeoutMs: 0,
+    controlPlaneSystemTableGateway: {
+      executeQuery: async () => ({success: true, changes: 1}),
+      readRows: async (_tableName, _sql, _params, options = {}) => {
+        authoritativeReadCalls.push(options);
+        if (
+          options?.replicaFallbackConsistency !==
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
+        ) {
+          return {success: true, rows: []};
+        }
+        return {
+          success: true,
+          rows: [
+            makeRow({
+              status: 'active',
+              workflow_step: WORKFLOW_STEP.ACTIVE,
+              updated_at: confirmedUpdatedAt,
+            }),
+          ],
+        };
+      },
+    },
+  });
+  const operation = repo.rowToOperation(
+    makeRow({
+      status: 'active',
+      workflow_step: WORKFLOW_STEP.ACTIVE,
+      updated_at: confirmedUpdatedAt,
+    }),
+  );
+
+  const persisted = await repo.persistOperationUpdate(operation);
+
+  t.equal(
+    persisted,
+    true,
+    'authoritative confirmation should succeed once the shared replica fallback contract exposes the persisted row',
+  );
+  t.equal(
+    authoritativeReadCalls[0]?.replicaFallbackConsistency,
+    LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+    'persistence confirmation should reuse the bounded local replica fallback contract',
+  );
+});
+
 
 registerReplicaOperationRepositoryTailTests({
   test,
@@ -1486,6 +1703,7 @@ registerReplicaOperationRepositoryTailTests({
   PRIORITY_RECOVERY_COMPLETION_REASON,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   OperationType,
+  ReplicaOperationRepository,
   REPLICA_OPERATION_SEMANTIC_PHASE,
   TERMINAL_STATUSES,
   INCOMPLETE_OPERATION_OBSERVATION_STATE,

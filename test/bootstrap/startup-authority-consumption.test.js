@@ -126,3 +126,47 @@ test('StartupRecoveryCoordinator keeps bootstrap-init recovery bypass open for e
   t.equal(result.shouldBypassLocalPriorityControlPlaneStartupReadiness, true);
   t.end();
 });
+
+test('StartupRecoveryCoordinator keeps bootstrap-init recovery bypass open for recovery-pending startup authority with converging publication details', async (t) => {
+  const coordinator = new StartupRecoveryCoordinator({
+    readinessState: {
+      evaluate() {
+        return {
+          ready: false,
+          phase: 'INIT',
+          reasons: [
+            'BOOTSTRAP_PHASE_INCOMPLETE',
+            'SQL_ENGINE_UNAVAILABLE',
+            'LEADER_METADATA_INCOMPLETE',
+            'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING',
+            'local_query_transport_not_ready',
+          ],
+        };
+      },
+    },
+  });
+
+  const result = coordinator.evaluate({
+    partitionId: 'control_plane_publications-p1',
+    allowBootstrapInitPriorityBypass: true,
+    startupAuthority: {
+      state: 'recovery_pending',
+      authorityAvailable: true,
+      publicationObservationState: 'establishing',
+      recoveryProtocolState: 'publication_pending',
+      canonicalStartupNodeIds: ['seed-node', 'node-2'],
+    },
+  });
+
+  t.equal(result.startupAuthorityState, 'recovery_pending');
+  t.equal(result.startupAuthorityAvailable, true);
+  t.equal(result.publicationObservationState, 'establishing');
+  t.same(result.startupAuthorityFailure, {
+    state: 'none',
+  });
+  t.same(result.startupAuthorityPublication, {
+    observationState: 'establishing',
+  });
+  t.equal(result.shouldBypassLocalPriorityControlPlaneStartupReadiness, true);
+  t.end();
+});

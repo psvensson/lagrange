@@ -1,5 +1,7 @@
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests} from './rebalance-coordinator-timeout-cache-visibility-tail-final-test-cases.js';
 
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
+
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests({
   test,
   RebalanceCoordinator,
@@ -378,8 +380,8 @@ test('queryIncompleteOperations scopes reads to local operation owner',
     );
     t.equal(
       operationQuery.options.timeoutMs,
-      CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-      'owner-scoped query should retain shared timeout budget',
+      REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS,
+      'owner-scoped query should retain the critical recovery timeout budget',
     );
   });
 

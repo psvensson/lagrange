@@ -1,63 +1,22 @@
-import { QUERY_EXECUTOR_SHARED } from "./query-executor-shared.js";
-import { QueryExecutorSegment2 } from "./query-executor-segment-2.js";
+import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {QueryExecutorSegment2} from './query-executor-segment-2.js';
 
 const {
   COLUMN,
-  CONTROL_PLANE_PARTICIPATION_KIND,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
-  ConfigurationManager,
-  DISTRIBUTED_JOIN_STRATEGY,
-  DistributedMergeEngine,
-  ERRORS,
-  HLCClockService,
   LEADER_GAP_REASON_OWNER_MISSING,
   LEADER_GAP_REASON_SERVICE_MISSING,
   LOG_MSG,
-  LoggingService,
-  METRICS_LOG_TAG,
-  MIGRATION_PARTITION_OPERATION,
   NUM,
-  PARTITION_SERVICE_ERROR_MSG,
-  PG_EXPR_TYPE,
-  ParallelQueryCoordinator,
-  QUERY_AST_NODE,
-  QUERY_AST_TYPE,
-  QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
-  QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
-  QUERY_MESSAGE_FIELD_MIGRATION_ID,
-  QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
-  QUERY_MESSAGE_FIELD_SESSION_ID,
-  QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
-  QUERY_MESSAGE_TYPE,
-  QUERY_OPERATOR,
-  QUERY_RESPONSE_TYPE,
   QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_ROUTING_REPAIR_REASON,
-  QUERY_SQL,
-  QUERY_SUBSYSTEM,
-  RAFT_ROLE,
-  SERVICE_STATUS,
   SERVICE_TYPE,
-  SQL,
   SYSTEM_TABLE_NAMES,
   TABLES,
-  TRANSPORT_ERROR_MSG,
-  buildDistributedFailureSummary,
-  buildParticipantFailureEntry,
   buildPartitionServiceWitnessFingerprint,
-  compactEligibilitySnapshot,
-  evaluateEligibilityDecision,
-  isRetryableControlPlaneError,
-  normalizeParticipantFailureString,
-  normalizeParticipantRetryAfterMs,
-  resolveBootstrapLeaderSelection,
-  resolveParticipantBackpressureState,
+  resolveCanonicalLeaderRoutingGapState,
 } = QUERY_EXECUTOR_SHARED;
 
 class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
@@ -176,11 +135,11 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
       return false;
     }
     const entry = existing.get(address);
-    const expiresAt = Number.isFinite(entry)
-      ? entry
-      : Number.isFinite(entry?.expiresAt)
-        ? entry.expiresAt
-        : null;
+    const expiresAt = Number.isFinite(entry) ?
+      entry :
+      Number.isFinite(entry?.expiresAt) ?
+        entry.expiresAt :
+        null;
     if (!Number.isFinite(expiresAt)) {
       existing.delete(address);
       if (existing.size === NUM.ZERO) {
@@ -247,21 +206,21 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
    * @private
    */
   findRoutingSnapshotService(routingSnapshot, serviceInfo, address) {
-    const serviceRows = Array.isArray(routingSnapshot?.serviceRows)
-      ? routingSnapshot.serviceRows
-      : [];
+    const serviceRows = Array.isArray(routingSnapshot?.serviceRows) ?
+      routingSnapshot.serviceRows :
+      [];
     const replicaId =
-      typeof serviceInfo?.replicaId === "string" &&
-      serviceInfo.replicaId.length > NUM.ZERO
-        ? serviceInfo.replicaId
-        : null;
+      typeof serviceInfo?.replicaId === 'string' &&
+      serviceInfo.replicaId.length > NUM.ZERO ?
+        serviceInfo.replicaId :
+        null;
     const nodeId =
-      typeof serviceInfo?.nodeId === "string" &&
-      serviceInfo.nodeId.length > NUM.ZERO
-        ? serviceInfo.nodeId
-        : null;
+      typeof serviceInfo?.nodeId === 'string' &&
+      serviceInfo.nodeId.length > NUM.ZERO ?
+        serviceInfo.nodeId :
+        null;
     const normalizedAddress =
-      typeof address === "string" && address.length > NUM.ZERO ? address : null;
+      typeof address === 'string' && address.length > NUM.ZERO ? address : null;
     for (const service of serviceRows) {
       if (
         replicaId &&
@@ -342,10 +301,17 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
       forRead && preferSameLatencyGroup,
     );
     const canonicalLeaderNodeId = routingSnapshot.canonicalLeaderNodeId;
+    const recoveryRoutingContract =
+      this.resolveCanonicalLeaderGapRecoveryRoutingContract(
+        partitionId,
+        routingSnapshot,
+        routingReadinessDimension,
+        routingOptions?.allowReadinessAuthoritativeRefresh !== false,
+      );
     const bootstrapLeaderServices =
-      !forRead && !canonicalLeaderNodeId
-        ? this.getFreshBootstrapLeaderServices(partitionId, orderedServices)
-        : [];
+      !forRead && !canonicalLeaderNodeId ?
+        this.getFreshBootstrapLeaderServices(partitionId, orderedServices) :
+        [];
     const candidates = [];
     const seen = new Set();
     const addService = (service) => {
@@ -372,11 +338,11 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         replicaId: service.service_id || service.replica_id,
       });
     };
-    const canonicalLeaderServices = canonicalLeaderNodeId
-      ? orderedServices.filter(
-          (service) => service.node_id === canonicalLeaderNodeId,
-        )
-      : [];
+    const canonicalLeaderServices = canonicalLeaderNodeId ?
+      orderedServices.filter(
+        (service) => service.node_id === canonicalLeaderNodeId,
+      ) :
+      [];
     if (!forRead) {
       if (!canonicalLeaderNodeId) {
         if (bootstrapLeaderServices.length > NUM.ZERO) {
@@ -385,6 +351,15 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
             candidates,
             routingSnapshot,
           };
+        }
+        if (recoveryRoutingContract.recoveryCandidateWidening === true) {
+          orderedServices.forEach(addService);
+          if (candidates.length > NUM.ZERO) {
+            return {
+              candidates,
+              routingSnapshot,
+            };
+          }
         }
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_OWNER_MISSING,
@@ -397,6 +372,15 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         };
       }
       if (canonicalLeaderServices.length === NUM.ZERO) {
+        if (recoveryRoutingContract.recoveryCandidateWidening === true) {
+          orderedServices.forEach(addService);
+          if (candidates.length > NUM.ZERO) {
+            return {
+              candidates,
+              routingSnapshot,
+            };
+          }
+        }
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_SERVICE_MISSING,
           canonicalLeaderNodeId,
@@ -446,7 +430,14 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
     routingOptions = {},
   ) {
     const serviceRows = this.getPartitionServiceRows(partitionId);
-    const canonicalLeaderNodeId = this.getPartitionLeaderNodeId(partitionId);
+    const canonicalLeaderRoutingState =
+      this.getCanonicalPartitionLeaderRoutingState(partitionId, serviceRows);
+    const canonicalLeaderIdentity =
+      canonicalLeaderRoutingState.canonicalLeaderIdentity;
+    const canonicalLeaderObservation =
+      canonicalLeaderRoutingState.canonicalLeaderObservation;
+    const canonicalLeaderNodeId =
+      canonicalLeaderRoutingState.canonicalLeaderNodeId;
     const evaluatedServices = serviceRows.map((service) => ({
       service,
       routing: this.evaluatePartitionServiceRoutability(
@@ -468,11 +459,18 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
     const routableServices = evaluatedServices
       .filter((entry) => entry.routing.routable === true)
       .map((entry) => entry.service);
-    const canonicalLeaderServiceCount = canonicalLeaderNodeId
-      ? serviceRows.filter(
-          (service) => service?.node_id === canonicalLeaderNodeId,
-        ).length
-      : NUM.ZERO;
+    const canonicalLeaderServiceCount = canonicalLeaderNodeId ?
+      serviceRows.filter(
+        (service) => service?.node_id === canonicalLeaderNodeId,
+      ).length :
+      NUM.ZERO;
+    const canonicalLeaderRoutingGapState =
+      resolveCanonicalLeaderRoutingGapState({
+        canonicalLeaderNodeId,
+        canonicalLeaderServiceCount,
+        serviceRowCount: serviceRows.length,
+        activeAddressedServiceCount: activeAddressedServices.length,
+      });
     return Object.freeze({
       partitionId,
       routingReadinessDimension,
@@ -481,7 +479,16 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         activeAddressedServices,
         routableServices,
       ),
+      canonicalLeaderIdentityState:
+        canonicalLeaderIdentity?.state || null,
+      canonicalLeaderIdentitySource:
+        canonicalLeaderIdentity?.source || null,
+      canonicalLeaderObservationState:
+        canonicalLeaderObservation?.state || null,
+      canonicalLeaderObservationReasonCode:
+        canonicalLeaderObservation?.reasonCode || null,
       canonicalLeaderNodeId,
+      canonicalLeaderRoutingGapState,
       leaderKnown: canonicalLeaderNodeId !== null,
       serviceRowCount: serviceRows.length,
       activeAddressedServiceCount: activeAddressedServices.length,
@@ -553,6 +560,8 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
   getPartitionServiceRows(partitionId) {
     const overlayServices = this.getOverlayPartitionServices(partitionId);
     const hasOverlayServices = overlayServices.length > 0;
+    const overlayMasksCacheServices =
+      this.shouldOverlayMaskCacheServices(partitionId);
     if (!this.systemCache && !hasOverlayServices) {
       this.logger.warn(LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE, {
         partitionId,
@@ -579,6 +588,7 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
     );
     services.push(...overlayRows);
     if (
+      !overlayMasksCacheServices &&
       this.systemCache &&
       typeof this.systemCache.filter === QUERY_EXECUTOR_LITERAL.STRING_FUNCTION
     ) {
@@ -642,12 +652,12 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
    */
   buildRoutingDeniedNodeSummary(evaluatedServices, routingReadinessDimension) {
     const deniedByNodeId = {};
-    for (const entry of Array.isArray(evaluatedServices)
-      ? evaluatedServices
-      : []) {
+    for (const entry of Array.isArray(evaluatedServices) ?
+      evaluatedServices :
+      []) {
       const service = entry?.service || null;
       const routing = entry?.routing || null;
-      const nodeId = String(service?.node_id || service?.nodeId || "");
+      const nodeId = String(service?.node_id || service?.nodeId || '');
       if (
         !nodeId ||
         !routing ||
@@ -722,7 +732,7 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
         QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
     );
     const warnKey =
-      String(routingSnapshot?.partitionId || "") + ":" + reasonCode;
+      String(routingSnapshot?.partitionId || '') + ':' + reasonCode;
     const now = Date.now();
     const lastWarnAt = this.noServiceWarnLastAt.get(warnKey);
     if (
@@ -734,9 +744,9 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
     this.noServiceWarnLastAt.set(warnKey, now);
     const message =
       reasonCode ===
-      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS
-        ? QUERY_LOG_MSG.PARTITION_ROUTING_CANDIDATES_FILTERED
-        : QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION;
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS ?
+        QUERY_LOG_MSG.PARTITION_ROUTING_CANDIDATES_FILTERED :
+        QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION;
     this.logger.warn(message, {
       partitionId: routingSnapshot?.partitionId || null,
       routingSnapshot: this.summarizePartitionRoutingSnapshot(routingSnapshot),
@@ -758,13 +768,13 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
       this.shouldAllowRoutingAuthoritativeRefresh(options);
     const canRefreshReadiness =
       this.controlPlaneReadinessService &&
-      typeof this.controlPlaneReadinessService.getNodeReadiness === "function";
+      typeof this.controlPlaneReadinessService.getNodeReadiness === 'function';
     const deniedNodeIds =
       routingSnapshot.reasonCode ===
         QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS &&
-      routingSnapshot.activeAddressedServiceCount > NUM.ZERO
-        ? Object.keys(routingSnapshot.deniedByNodeId || {})
-        : [];
+      routingSnapshot.activeAddressedServiceCount > NUM.ZERO ?
+        Object.keys(routingSnapshot.deniedByNodeId || {}) :
+        [];
     const shouldRepairServiceGap =
       this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot);
     const repairNodeIds = new Set(deniedNodeIds);
@@ -928,4 +938,4 @@ class QueryExecutorSegment3Part1 extends QueryExecutorSegment2 {
     return this.getOverlayPartitionRecord(partitionId) !== null;
   }
 }
-export { QueryExecutorSegment3Part1 };
+export {QueryExecutorSegment3Part1};

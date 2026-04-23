@@ -14,7 +14,7 @@
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {basename, dirname, extname, join, resolve} from 'node:path';
 import {execFile} from 'node:child_process';
-import {readdir, readFile} from 'node:fs/promises';
+import {mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
 import {parseConfig} from './harness/config-parser.js';
 import {
   discoverScenarios,
@@ -108,8 +108,18 @@ const IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX =
 const RUN_OUTPUT_DIRNAME = '.playback';
 const REPORT_JSON_EXTENSION = '.report.json';
 const FALLBACK_OUTPUT_BASENAME = 'report';
+const RUN_STATUS_FILENAME = 'run-status.json';
+const RUN_STATUS_ARTIFACT_TYPE = 'distributed-run-status';
+const RUN_STATUS_STATE_RUNNING = 'running';
+const RUN_STATUS_STATE_SCENARIO_PLAYBACK_COMPLETE =
+  'scenario-playback-complete';
+const RUN_STATUS_STATE_FAILURE_BUNDLES_WRITTEN = 'failure-bundles-written';
+const RUN_STATUS_STATE_REPORT_WRITTEN = 'report-written';
+const RUN_STATUS_STATE_FATAL_ERROR = 'fatal-error';
 const HISTORICAL_REPORT_SCAN_LIMIT = 20;
 const UTF8_ENCODING = 'utf8';
+const NEWLINE = '\n';
+const JSON_INDENT = 2;
 const TRACE_ASSERTION_ERROR_PREFIX = 'Trace assertion failed: ';
 const TRACE_ASSERTION_MISSING_ARTIFACT = 'trace artifact missing';
 const TRACE_ASSERTION_NO_EVENTS = 'no trace events captured';
@@ -900,6 +910,38 @@ function deriveRunOutputDir(reportOutputPath) {
   return join(reportDir, RUN_OUTPUT_DIRNAME, outputBasename);
 }
 
+function deriveRunStatusPath(outputDir) {
+  return join(String(outputDir || ''), RUN_STATUS_FILENAME);
+}
+
+function buildRunStatusArtifact(fields = {}) {
+  const artifact = {
+    artifactType: RUN_STATUS_ARTIFACT_TYPE,
+    updatedAt: new Date().toISOString(),
+  };
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined && value !== null) {
+      artifact[key] = value;
+    }
+  }
+  return artifact;
+}
+
+async function writeRunStatusArtifact(outputDir, fields = {}) {
+  const statusPath = deriveRunStatusPath(outputDir);
+  const artifact = buildRunStatusArtifact(fields);
+  await mkdir(dirname(statusPath), {recursive: true});
+  await writeFile(
+    statusPath,
+    JSON.stringify(artifact, null, JSON_INDENT) + NEWLINE,
+    UTF8_ENCODING,
+  );
+  return {
+    path: statusPath,
+    artifact,
+  };
+}
+
 function parseTimestampMs(value) {
   const parsed = Date.parse(String(value || ''));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -1265,160 +1307,250 @@ function evaluateBenchmarkRegressionGate(reportPayload, historyReports, config) 
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-
-  if (args.verbose) {
-    process.stdout.write(
-      RUNNER_STAGE_CONFIG_LOADING + String(args.config) + '\n',
-    );
-  }
-  const config = await parseConfig(args.config);
-  const outputDir = config.outputDir || deriveRunOutputDir(args.output);
-  let runConfig = {
-    ...config,
-    outputDir,
-  };
-  if (resolveFastLocalMode(args, runConfig)) {
-    runConfig = applyFastLocalConfig(runConfig);
-    if (args.verbose) {
-      process.stdout.write(FAST_LOCAL_LOG_PREFIX);
+  let runStatusContext = null;
+  const writeRunnerStatus = async (status, fields = {}) => {
+    if (!runStatusContext) {
+      return null;
     }
-  }
-  const deterministicDebug = resolveDeterministicDebugConfig(args, runConfig);
-  if (deterministicDebug.enabled) {
-    runConfig = applyDeterministicDebugConfig(runConfig, deterministicDebug);
-    installDeterministicRandom(deterministicDebug.seed);
-  }
-  if (args.verbose) {
-    const hasRemoteHosts = Array.isArray(runConfig?.docker?.hosts) &&
-      runConfig.docker.hosts.length > 0;
-    const dockerSummary = hasRemoteHosts ?
-      `${RUNNER_STAGE_REMOTE_HOSTS}:${runConfig.docker.hosts.length}` :
-      `${RUNNER_STAGE_LOCAL_SOCKET}:${runConfig?.docker?.socketPath || 'default'}`;
-    process.stdout.write(
-      RUNNER_STAGE_CONFIG_LOADED +
-      RUNNER_STAGE_CLUSTER_SIZE_PREFIX + String(runConfig.size) + ', ' +
-      RUNNER_STAGE_DOCKER_MODE_PREFIX + dockerSummary + '\n',
+    return writeRunStatusArtifact(
+      runStatusContext.outputDir,
+      {
+        ...runStatusContext.base,
+        status,
+        milestones: {...runStatusContext.milestones},
+        ...fields,
+      },
     );
-    process.stdout.write(
-      RUNNER_STAGE_ARTIFACTS_DIR_PREFIX + runConfig.outputDir + '\n',
-    );
-    if (deterministicDebug.enabled) {
+  };
+  try {
+
+    if (args.verbose) {
       process.stdout.write(
-        RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX +
-        'seed=' + deterministicDebug.seed +
-        ', convergence_sample_interval_ms=' +
-        deterministicDebug.convergenceSampleIntervalMs +
-        ', preflight_sample_interval_ms=' +
-        deterministicDebug.preflightSampleIntervalMs +
+        RUNNER_STAGE_CONFIG_LOADING + String(args.config) + '\n',
+      );
+    }
+    const config = await parseConfig(args.config);
+    const outputDir = config.outputDir || deriveRunOutputDir(args.output);
+    let runConfig = {
+      ...config,
+      outputDir,
+    };
+    if (resolveFastLocalMode(args, runConfig)) {
+      runConfig = applyFastLocalConfig(runConfig);
+      if (args.verbose) {
+        process.stdout.write(FAST_LOCAL_LOG_PREFIX);
+      }
+    }
+    const deterministicDebug = resolveDeterministicDebugConfig(args, runConfig);
+    if (deterministicDebug.enabled) {
+      runConfig = applyDeterministicDebugConfig(runConfig, deterministicDebug);
+      installDeterministicRandom(deterministicDebug.seed);
+    }
+    runStatusContext = {
+      outputDir: runConfig.outputDir,
+      base: {
+        reportPath: resolve(String(args.output || CLI.DEFAULT_OUTPUT)),
+        outputDir: resolve(runConfig.outputDir),
+      },
+      milestones: {
+        startedAt: new Date().toISOString(),
+      },
+    };
+    if (args.verbose) {
+      const hasRemoteHosts = Array.isArray(runConfig?.docker?.hosts) &&
+        runConfig.docker.hosts.length > 0;
+      const dockerSummary = hasRemoteHosts ?
+        `${RUNNER_STAGE_REMOTE_HOSTS}:${runConfig.docker.hosts.length}` :
+        `${RUNNER_STAGE_LOCAL_SOCKET}:${runConfig?.docker?.socketPath || 'default'}`;
+      process.stdout.write(
+        RUNNER_STAGE_CONFIG_LOADED +
+        RUNNER_STAGE_CLUSTER_SIZE_PREFIX + String(runConfig.size) + ', ' +
+        RUNNER_STAGE_DOCKER_MODE_PREFIX + dockerSummary + '\n',
+      );
+      process.stdout.write(
+        RUNNER_STAGE_ARTIFACTS_DIR_PREFIX + runConfig.outputDir + '\n',
+      );
+      if (deterministicDebug.enabled) {
+        process.stdout.write(
+          RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX +
+          'seed=' + deterministicDebug.seed +
+          ', convergence_sample_interval_ms=' +
+          deterministicDebug.convergenceSampleIntervalMs +
+          ', preflight_sample_interval_ms=' +
+          deterministicDebug.preflightSampleIntervalMs +
+          '\n',
+        );
+      }
+      process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
+    }
+
+    // Build Docker image before running scenarios
+    const dockerOperationSink = createDockerOperationSink(args.verbose);
+    try {
+      await buildImage(runConfig, args.verbose, dockerOperationSink);
+    } catch (err) {
+      runStatusContext.milestones.failedAt = new Date().toISOString();
+      await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+        error: err.message,
+        stackTrace: err.stack || null,
+      });
+      process.stderr.write(
+        'Failed to build image: ' + err.message + '\n',
+      );
+      process.exit(EXIT_CODES.FAILURE);
+    }
+
+    const allScenarios = await discoverScenarios();
+    const scenarios = args.scenario ?
+      filterScenarios(allScenarios, args.scenario) :
+      selectCanonicalScenariosForConfig(allScenarios, args.config);
+
+    if (args.verbose) {
+      process.stdout.write(
+        RUNNER_STAGE_SCENARIO_FILTER_PREFIX +
+        String(args.scenario || RUNNER_STAGE_SCENARIO_FILTER_ALL) + '\n',
+      );
+    }
+
+    if (scenarios.length === 0) {
+      runStatusContext.milestones.failedAt = new Date().toISOString();
+      await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+        error: 'No scenarios found.',
+      });
+      process.stderr.write('No scenarios found.\n');
+      process.exit(EXIT_CODES.FAILURE);
+    }
+
+    runStatusContext.base = {
+      ...runStatusContext.base,
+      scenarioFilter: String(args.scenario || RUNNER_STAGE_SCENARIO_FILTER_ALL),
+      raftProvider: resolveRunRaftProvider(runConfig),
+      scenarioCount: scenarios.length,
+      scenarioNames: scenarios.map((scenario) => scenario.name),
+    };
+    await writeRunnerStatus(RUN_STATUS_STATE_RUNNING);
+
+    if (args.verbose) {
+      process.stdout.write(
+        RUNNER_STAGE_SCENARIO_COUNT_PREFIX +
+        scenarios.length +
+        RUNNER_STAGE_SCENARIO_COUNT_SUFFIX,
+      );
+    }
+
+    const historicalReports = await loadHistoricalReports(args.output);
+    const reportMetadata = buildReportMetadata(
+      args,
+      runConfig,
+      deterministicDebug,
+    );
+
+    const {report, hasFailures} = await runScenarios(
+      runConfig,
+      scenarios,
+      {
+        output: args.output,
+        verbose: args.verbose,
+        historyReports: historicalReports,
+        dockerOperationSink,
+        reportMetadata,
+      },
+    );
+
+    const reportPreview = {
+      summary: computeSummary(report.scenarios),
+      standardSummary: computeStandardSummary(
+        report.scenarios,
+        historicalReports,
+      ),
+    };
+    const benchmarkRegressionGate = evaluateBenchmarkRegressionGate(
+      reportPreview,
+      historicalReports,
+      runConfig,
+    );
+    runStatusContext.milestones.scenarioPlaybackCompleteAt =
+      new Date().toISOString();
+    await writeRunnerStatus(RUN_STATUS_STATE_SCENARIO_PLAYBACK_COMPLETE, {
+      summary: reportPreview.summary,
+      standardSummary: reportPreview.standardSummary,
+      benchmarkRegressionGate,
+      hasScenarioFailures: hasFailures,
+    });
+    const failureBundle = await writeFailureBundlesForReport({
+      scenarios: report.scenarios,
+      reportOutputPath: args.output,
+      outputDir: runConfig.outputDir,
+      reportSummary: reportPreview.summary,
+      standardSummary: reportPreview.standardSummary,
+      benchmarkRegressionGate,
+    });
+    runStatusContext.milestones.failureBundlesWrittenAt =
+      new Date().toISOString();
+    await writeRunnerStatus(RUN_STATUS_STATE_FAILURE_BUNDLES_WRITTEN, {
+      summary: reportPreview.summary,
+      standardSummary: reportPreview.standardSummary,
+      benchmarkRegressionGate,
+      failureBundle: failureBundle.runBundle,
+      hasScenarioFailures: hasFailures,
+    });
+    await report.write({
+      benchmarkRegressionGate,
+      ...(failureBundle.runBundle ?
+        {failureBundle: failureBundle.runBundle} :
+        {}),
+    });
+
+    if (args.verbose) {
+      process.stdout.write(
+        'Report written to ' + args.output + '\n',
+      );
+    }
+
+    process.stdout.write(
+      formatRunSummary(reportPreview, report.scenarios),
+    );
+
+    const gateFailed =
+      benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;
+    const hasRunFailures = hasFailures || gateFailed;
+    runStatusContext.milestones.reportWrittenAt = new Date().toISOString();
+    await writeRunnerStatus(RUN_STATUS_STATE_REPORT_WRITTEN, {
+      summary: reportPreview.summary,
+      standardSummary: reportPreview.standardSummary,
+      benchmarkRegressionGate,
+      failureBundle: failureBundle.runBundle,
+      hasScenarioFailures: hasFailures,
+      exitCode: hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
+    });
+    if (args.verbose && gateFailed) {
+      process.stderr.write(
+        'Benchmark regression gate failed: ' +
+        String(
+          benchmarkRegressionGate.reason ||
+          BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION,
+        ) +
         '\n',
       );
     }
-    process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
-  }
 
-  // Build Docker image before running scenarios
-  const dockerOperationSink = createDockerOperationSink(args.verbose);
-  try {
-    await buildImage(runConfig, args.verbose, dockerOperationSink);
+    process.exit(
+      hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
+    );
   } catch (err) {
-    process.stderr.write(
-      'Failed to build image: ' + err.message + '\n',
-    );
-    process.exit(EXIT_CODES.FAILURE);
+    if (runStatusContext) {
+      runStatusContext.milestones.failedAt = new Date().toISOString();
+      try {
+        await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+          error: err.message,
+          stackTrace: err.stack || null,
+        });
+      } catch (_statusErr) {
+        // Best-effort runner status update
+      }
+    }
+    throw err;
   }
-
-  const allScenarios = await discoverScenarios();
-  const scenarios = args.scenario ?
-    filterScenarios(allScenarios, args.scenario) :
-    selectCanonicalScenariosForConfig(allScenarios, args.config);
-
-  if (args.verbose) {
-    process.stdout.write(
-      RUNNER_STAGE_SCENARIO_FILTER_PREFIX +
-      String(args.scenario || RUNNER_STAGE_SCENARIO_FILTER_ALL) + '\n',
-    );
-  }
-
-  if (scenarios.length === 0) {
-    process.stderr.write('No scenarios found.\n');
-    process.exit(EXIT_CODES.FAILURE);
-  }
-
-  if (args.verbose) {
-    process.stdout.write(
-      RUNNER_STAGE_SCENARIO_COUNT_PREFIX +
-      scenarios.length +
-      RUNNER_STAGE_SCENARIO_COUNT_SUFFIX,
-    );
-  }
-
-  const historicalReports = await loadHistoricalReports(args.output);
-  const reportMetadata = buildReportMetadata(
-    args,
-    runConfig,
-    deterministicDebug,
-  );
-
-  const {report, hasFailures} = await runScenarios(
-    runConfig,
-    scenarios,
-    {
-      output: args.output,
-      verbose: args.verbose,
-      historyReports: historicalReports,
-      dockerOperationSink,
-      reportMetadata,
-    },
-  );
-
-  const reportPreview = {
-    summary: computeSummary(report.scenarios),
-    standardSummary: computeStandardSummary(
-      report.scenarios,
-      historicalReports,
-    ),
-  };
-  const benchmarkRegressionGate = evaluateBenchmarkRegressionGate(
-    reportPreview,
-    historicalReports,
-    runConfig,
-  );
-  const failureBundle = await writeFailureBundlesForReport({
-    scenarios: report.scenarios,
-    reportOutputPath: args.output,
-    outputDir: runConfig.outputDir,
-    reportSummary: reportPreview.summary,
-    standardSummary: reportPreview.standardSummary,
-    benchmarkRegressionGate,
-  });
-  await report.write({
-    benchmarkRegressionGate,
-    ...(failureBundle.runBundle ? {failureBundle: failureBundle.runBundle} : {}),
-  });
-
-  if (args.verbose) {
-    process.stdout.write(
-      'Report written to ' + args.output + '\n',
-    );
-  }
-
-  process.stdout.write(
-    formatRunSummary(reportPreview, report.scenarios),
-  );
-
-  const gateFailed = benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;
-  const hasRunFailures = hasFailures || gateFailed;
-  if (args.verbose && gateFailed) {
-    process.stderr.write(
-      'Benchmark regression gate failed: ' +
-      String(benchmarkRegressionGate.reason || BENCHMARK_GATE_FAIL_REASON.THROUGHPUT_REGRESSION) +
-      '\n',
-    );
-  }
-
-  process.exit(
-    hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
-  );
 }
 
 // Run main only when executed directly (not when imported by tests)
@@ -1455,6 +1587,9 @@ export {
   formatScenarioPhaseEventLine,
   resolveGitDirty,
   deriveRunOutputDir,
+  deriveRunStatusPath,
+  buildRunStatusArtifact,
+  writeRunStatusArtifact,
   loadHistoricalReports,
   formatRunSummary,
 };

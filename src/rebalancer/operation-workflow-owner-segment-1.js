@@ -153,6 +153,7 @@ class OperationWorkflowOwnerSegment1 {
     this.createdOperationHandoffRetryTimerByOperationId = new Map();
     this.transitionRetryTimerByOperationId = new Map();
     this.transitionRetryGraceDeadlineByOperationId = new Map();
+    this.transitionRetryOperationSnapshotByOperationId = new Map();
     this.transitionExecutionAttemptByStepOwnerKey = new Map();
 
     if (
@@ -204,6 +205,7 @@ class OperationWorkflowOwnerSegment1 {
     }
     this.transitionRetryTimerByOperationId.clear();
     this.transitionRetryGraceDeadlineByOperationId.clear();
+    this.transitionRetryOperationSnapshotByOperationId.clear();
   }
 
   /**
@@ -275,6 +277,7 @@ class OperationWorkflowOwnerSegment1 {
    */
   clearTransitionRetry(operationId) {
     const timerHandle = this.transitionRetryTimerByOperationId.get(operationId);
+    this.transitionRetryOperationSnapshotByOperationId.delete(operationId);
     if (!timerHandle) {
       this.transitionRetryGraceDeadlineByOperationId.delete(operationId);
       return;
@@ -282,6 +285,38 @@ class OperationWorkflowOwnerSegment1 {
     this.clearTimeoutFn(timerHandle);
     this.transitionRetryTimerByOperationId.delete(operationId);
     this.transitionRetryGraceDeadlineByOperationId.delete(operationId);
+  }
+
+  /**
+   * @param {Object|null} operation
+   * @return {void}
+   * @private
+   */
+  recordTransitionRetryOperationSnapshot(operation) {
+    const operationSnapshot = this.cloneOperationSnapshot(operation);
+    const operationId = operationSnapshot?.operationId || null;
+    if (!operationId) {
+      return;
+    }
+    this.transitionRetryOperationSnapshotByOperationId.set(
+      operationId,
+      operationSnapshot,
+    );
+  }
+
+  /**
+   * @param {string|null} operationId
+   * @return {Object|null}
+   * @private
+   */
+  getTransitionRetryOperationSnapshot(operationId) {
+    if (!operationId) {
+      return null;
+    }
+    return this.cloneOperationSnapshot(
+      this.transitionRetryOperationSnapshotByOperationId.get(operationId) ||
+        null,
+    );
   }
 
   /**
@@ -313,9 +348,12 @@ class OperationWorkflowOwnerSegment1 {
       : Number.isFinite(context.createdAt)
         ? context.createdAt
         : null;
-    const timeoutCeilingMs = Number.isFinite(durableProgressAtMs)
-      ? durableProgressAtMs + stepTimeout
-      : null;
+    const timeoutCeilingMs = this.resolveTransitionRetryGraceTimeoutCeilingMs(
+      context,
+      workflowStep,
+      durableProgressAtMs,
+      stepTimeout,
+    );
     const graceDeadlineMs = Number.isFinite(timeoutCeilingMs)
       ? Math.min(timeoutCeilingMs, requestedGraceDeadlineMs)
       : requestedGraceDeadlineMs;
@@ -332,6 +370,75 @@ class OperationWorkflowOwnerSegment1 {
         : Number.isFinite(existingDeadlineMs)
           ? Math.max(existingDeadlineMs, graceDeadlineMs)
           : graceDeadlineMs,
+    );
+  }
+
+  /**
+   * Critical dispatch/remove-dispatch retries may stay explicitly deferred
+   * under control-plane pressure until the enclosing rebalance budget is
+   * exhausted. Create-rearm retries still use the stricter step timeout
+   * ceiling because they model stalled target provisioning, not dispatch
+   * pressure.
+   *
+   * @param {Object} context
+   * @param {string} workflowStep
+   * @param {number|null} durableProgressAtMs
+   * @param {number} stepTimeout
+   * @return {number|null}
+   * @private
+   */
+  resolveTransitionRetryGraceTimeoutCeilingMs(
+    context,
+    workflowStep,
+    durableProgressAtMs,
+    stepTimeout,
+  ) {
+    if (!Number.isFinite(durableProgressAtMs)) {
+      return null;
+    }
+    if (
+      !this.shouldUseOperationBudgetTransitionRetryGrace(
+        context,
+        workflowStep,
+      )
+    ) {
+      return durableProgressAtMs + stepTimeout;
+    }
+
+    const operationStartedAtMs = Number.isFinite(context.createdAt)
+      ? context.createdAt
+      : durableProgressAtMs;
+    return operationStartedAtMs +
+      TIMEOUT_BUDGET_DEFAULT.REBALANCE_OPERATION_BUDGET_MS;
+  }
+
+  /**
+   * Retryable control-plane pressure on critical dispatch/remove-dispatch
+   * workflow steps should spend the overall rebalance budget instead of
+   * expiring at the stale step timestamp.
+   *
+   * @param {Object} context
+   * @param {string} workflowStep
+   * @return {boolean}
+   * @private
+   */
+  shouldUseOperationBudgetTransitionRetryGrace(context, workflowStep) {
+    const partitionId =
+      typeof context?.partitionId === TYPEOF.STRING &&
+      context.partitionId.length > NUM.ZERO
+        ? context.partitionId
+        : null;
+    if (!this.isCriticalSystemPartition(partitionId)) {
+      return false;
+    }
+    if (workflowStep === WORKFLOW_STEP.CREATING) {
+      return false;
+    }
+    return (
+      workflowStep === WORKFLOW_STEP.PENDING ||
+      workflowStep === WORKFLOW_STEP.SENDING ||
+      workflowStep === WORKFLOW_STEP.ACTIVE ||
+      workflowStep === WORKFLOW_STEP.STOPPING
     );
   }
 
@@ -758,12 +865,15 @@ class OperationWorkflowOwnerSegment1 {
         requireOwnerRpcRead: false,
         allowPriorityRecoveryDeferredVisibility: true,
       });
-    const operation = visibilityObservation?.operation || null;
+    const operation =
+      visibilityObservation?.operation ||
+      this.getTransitionRetryOperationSnapshot(operationId);
     if (
       !operation ||
       this.repository.isOperationTerminal(operation) ||
       !this.repository.isOperationLocallyOwned(operation)
     ) {
+      this.clearTransitionRetry(operationId);
       return;
     }
 
@@ -799,6 +909,9 @@ class OperationWorkflowOwnerSegment1 {
     if (!operationId || !isRetryableControlPlaneError(errorLike)) {
       return false;
     }
+    this.recordTransitionRetryOperationSnapshot(
+      context.operationSnapshot || context.operation || null,
+    );
     const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
     const delayMs =
       Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO

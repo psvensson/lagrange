@@ -813,9 +813,10 @@ class SQLQueryEngineSegment6 extends SQLQueryEngineSegment5 {
         preferLeader,
         deliveryPriority,
         distributedPlan,
-        routingReadinessDimension:
-          queryOptions.routingReadinessDimension ||
-          this.defaultRoutingReadinessDimension,
+        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+          tableName,
+          queryOptions.routingReadinessDimension,
+        ),
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
       },

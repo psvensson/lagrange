@@ -698,6 +698,59 @@ test(
 );
 
 test(
+  'BootstrapTopologySnapshotOwner builds bootstrap response snapshots from published authority or observed cache without local reads',
+  async (t) => {
+    let prepareCallCount = 0;
+    const replacementLeaderNodeId = 'replacement-leader';
+    const authoritativePartitionRow = {
+      ...CACHE_PARTITION_ROW,
+      [COLUMN.LEADER_NODE_ID]: replacementLeaderNodeId,
+      [COLUMN.UPDATED_AT]: 300,
+    };
+    const owner = createOwner({
+      onPrepare() {
+        prepareCallCount++;
+      },
+      partitionRows: [authoritativePartitionRow],
+    });
+
+    const observedEnvelope = owner.buildBootstrapResponseTopologySnapshotEnvelope();
+    const observedPartitionRow =
+      observedEnvelope.systemTableSnapshots[TABLES.PARTITIONS]
+        .find((row) => row?.[COLUMN.PARTITION_ID] === PARTITION_ID);
+    t.equal(
+      prepareCallCount,
+      0,
+      'bootstrap response snapshot should not query local authoritative partitions on the HTTP hot path',
+    );
+    t.equal(
+      observedPartitionRow?.[COLUMN.LEADER_NODE_ID],
+      SEED_NODE_ID,
+      'bootstrap response snapshot should fall back to observed cache rows before published authority exists',
+    );
+
+    owner.resolveAuthoritativeSystemTableSnapshotRows(
+      TABLE_NAME,
+      [CACHE_PARTITION_ROW],
+    );
+    const publishedEnvelope = owner.buildBootstrapResponseTopologySnapshotEnvelope();
+    const publishedPartitionRow =
+      publishedEnvelope.systemTableSnapshots[TABLES.PARTITIONS]
+        .find((row) => row?.[COLUMN.PARTITION_ID] === PARTITION_ID);
+    t.equal(
+      prepareCallCount,
+      1,
+      'authoritative publish should still perform one local read outside the bounded response path',
+    );
+    t.equal(
+      publishedPartitionRow?.[COLUMN.LEADER_NODE_ID],
+      replacementLeaderNodeId,
+      'bootstrap response snapshot should reuse published authority once it exists',
+    );
+  },
+);
+
+test(
   'BootstrapTopologySnapshotOwner invalidates bounded authoritative snapshot cache after a mutation',
   async (t) => {
     let prepareCallCount = 0;

@@ -310,15 +310,53 @@ function evaluateLoadPublishedConvergence(
 ) {
   const expectedPublishedNodeIds =
     normalizeDistinctStringArray(expectedNodeIds);
+  const selectedPublicationConvergenceGate =
+    snapshotCoverage?.selectedPublicationConvergenceGate &&
+    typeof snapshotCoverage.selectedPublicationConvergenceGate === "object"
+      ? snapshotCoverage.selectedPublicationConvergenceGate
+      : null;
   const publicationConvergence =
     snapshotCoverage?.selectedPublicationConvergence &&
     typeof snapshotCoverage.selectedPublicationConvergence === "object"
       ? snapshotCoverage.selectedPublicationConvergence
       : null;
+  const publicationRecoveryGate = selectedPublicationConvergenceGate ?
+    buildPublicationRecoveryGateSnapshot({
+      ...selectedPublicationConvergenceGate,
+      publicationStatus:
+        selectedPublicationConvergenceGate.publicationStatus ??
+        publicationConvergence?.publicationStatus ??
+        publicationConvergence?.status,
+      recoveryProtocolState:
+        selectedPublicationConvergenceGate.recoveryProtocolState,
+      priorityRecoveryReasonCodes:
+        selectedPublicationConvergenceGate.priorityRecoveryReasonCodes ??
+        selectedPublicationConvergenceGate.reasonCodes,
+      priorityPartitionSummary:
+        selectedPublicationConvergenceGate.priorityPartitionSummary,
+      pendingAckNodeIds:
+        selectedPublicationConvergenceGate.pendingAckNodeIds,
+      missingPublishedNodeIds:
+        selectedPublicationConvergenceGate.missingPublishedNodeIds,
+    }) :
+    buildPublicationRecoveryGateSnapshot({
+      publicationStatus:
+        publicationConvergence?.publicationStatus ??
+        publicationConvergence?.status,
+      recoveryProtocolState: publicationConvergence?.recoveryProtocolState,
+      priorityRecoveryReasonCodes:
+        publicationConvergence?.priorityRecoveryReasonCodes,
+      priorityPartitionSummary:
+        publicationConvergence?.priorityPartitionSummary,
+      pendingAckNodeIds: publicationConvergence?.pendingAckNodeIds,
+    });
   const publicationStatus =
-    typeof publicationConvergence?.publicationStatus === "string"
-      ? publicationConvergence.publicationStatus.toUpperCase()
-      : null;
+    typeof publicationRecoveryGate?.publicationStatusNormalized === "string" &&
+    publicationRecoveryGate.publicationStatusNormalized.length > ZERO
+      ? publicationRecoveryGate.publicationStatusNormalized
+      : typeof publicationConvergence?.publicationStatus === "string"
+        ? publicationConvergence.publicationStatus.toUpperCase()
+        : null;
   const publishedActiveNodeIds = normalizeDistinctStringArray(
     publicationConvergence?.publishedActiveNodeIds,
   );
@@ -333,35 +371,41 @@ function evaluateLoadPublishedConvergence(
       publicationConvergence?.publishedActiveNodeIds,
   );
   const pendingAckNodeIds = normalizeDistinctStringArray(
-    publicationConvergence?.pendingAckNodeIds,
+    publicationRecoveryGate?.pendingAckNodeIds ??
+      publicationConvergence?.pendingAckNodeIds,
   );
   const recoveryProtocolState =
-    typeof publicationConvergence?.recoveryProtocolState === "string" &&
-    publicationConvergence.recoveryProtocolState.length > ZERO
-      ? publicationConvergence.recoveryProtocolState
-      : null;
+    typeof publicationRecoveryGate?.recoveryProtocolState === "string" &&
+    publicationRecoveryGate.recoveryProtocolState.length > ZERO
+      ? publicationRecoveryGate.recoveryProtocolState
+      : typeof publicationConvergence?.recoveryProtocolState === "string" &&
+          publicationConvergence.recoveryProtocolState.length > ZERO
+        ? publicationConvergence.recoveryProtocolState
+        : null;
   const priorityRecoveryReasonCodes = normalizeDistinctStringArray(
-    publicationConvergence?.priorityRecoveryReasonCodes,
+    publicationRecoveryGate?.reasonCodes ??
+      publicationConvergence?.priorityRecoveryReasonCodes,
   );
   const priorityPartitionSummary =
-    publicationConvergence?.priorityPartitionSummary &&
-    typeof publicationConvergence.priorityPartitionSummary === "object"
-      ? publicationConvergence.priorityPartitionSummary
-      : null;
+    publicationRecoveryGate?.priorityPartitionSummary &&
+    typeof publicationRecoveryGate.priorityPartitionSummary === "object"
+      ? publicationRecoveryGate.priorityPartitionSummary
+      : publicationConvergence?.priorityPartitionSummary &&
+          typeof publicationConvergence.priorityPartitionSummary === "object"
+        ? publicationConvergence.priorityPartitionSummary
+        : null;
   const missingPublishedNodeIds = expectedPublishedNodeIds.filter((nodeId) => {
     return !publishedActiveNodeIds.includes(nodeId);
   });
-  const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
-    publicationStatus,
-    recoveryProtocolState,
-    priorityRecoveryReasonCodes,
-    priorityPartitionSummary,
-    pendingAckNodeIds,
-    missingPublishedNodeIds,
-  });
+  const publicationRecoveryGateMissingPublishedNodeIds =
+    normalizeDistinctStringArray(publicationRecoveryGate?.missingPublishedNodeIds);
+  const effectiveMissingPublishedNodeIds = normalizeDistinctStringArray([
+    ...missingPublishedNodeIds,
+    ...publicationRecoveryGateMissingPublishedNodeIds,
+  ]);
   const reasons = [];
 
-  if (!publicationConvergence) {
+  if (!publicationConvergence && !selectedPublicationConvergenceGate) {
     reasons.push(ACTIVE_PROBE_REASON_PUBLICATION_CONVERGENCE_MISSING);
   }
   if (publicationStatus !== "PUBLISHED") {
@@ -384,6 +428,11 @@ function evaluateLoadPublishedConvergence(
       ACTIVE_PROBE_REASON_PUBLICATION_MISSING_ACTIVE_NODE_PREFIX + nodeId,
     );
   }
+  for (const nodeId of effectiveMissingPublishedNodeIds) {
+    reasons.push(
+      ACTIVE_PROBE_REASON_PUBLICATION_MISSING_ACTIVE_NODE_PREFIX + nodeId,
+    );
+  }
   if (publicationRecoveryGate.prioritySpreadPending === true) {
     reasons.push(ACTIVE_PROBE_REASON_PRIORITY_SPREAD_PENDING);
   }
@@ -402,7 +451,7 @@ function evaluateLoadPublishedConvergence(
         ? publicationConvergence.recoveryActiveNodeSource
         : null,
     pendingAckNodeIds,
-    missingPublishedNodeIds,
+    missingPublishedNodeIds: effectiveMissingPublishedNodeIds,
     missingRecoveryActiveNodeIds,
     priorityPartitionSummary,
   };

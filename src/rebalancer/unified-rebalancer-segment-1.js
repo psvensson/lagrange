@@ -88,7 +88,7 @@ const {
   hasPriorityRecoverySpreadGap,
   isBackgroundWorkLifecycleReadySnapshot,
   isCoordinatorOwnedOperationType,
-  isCriticalTransportControlPlanePartitionTable,
+  isPriorityRecoveryEmergencyPartition,
   isNodeReadyLeaseExplicitlyCleared,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
@@ -522,6 +522,9 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
         entityId: this.entityId,
         entityType: this.entityType,
       });
+      if (this.isControlPlanePriorityPartition()) {
+        this.enqueueRebalanceCheck(RECONCILE_REASON.PERIODIC_CHECK);
+      }
       this.scheduleNextCheck(this.getLeadershipStartDelayMs());
     } else if (!isLeader && wasLeader) {
       this.logger.info(REBALANCER_LOG_MSG.LEADER_STOP, {
@@ -779,14 +782,16 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
 
   /**
    * `control_plane_publications` owns the publication path other priority
-   * partitions depend on, so its endpoint visibility must cover every active
-   * node before source movement begins. Other priority partitions may recover
-   * against the quorum-sized replica target.
+   * partitions depend on, so it still requires coverage for every active node.
+   * Priority partitions should, however, consume canonical readiness backfill
+   * for endpoint visibility rather than waiting only on service-endpoint row
+   * publication. Other priority partitions may recover against the quorum-
+   * sized replica target.
    *
    * @return {boolean}
    * @private
    */
-  shouldRequireFullPriorityEndpointVisibility() {
+  isControlPlanePublicationPriorityPartition() {
     if (!this.isControlPlanePriorityPartition()) {
       return false;
     }
@@ -799,6 +804,41 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
         ? partitionRow.table_id
         : partitionRow?.tableId;
     return tableId === SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS;
+  }
+
+  /**
+   * Resolve one canonical endpoint-visibility policy for the current critical
+   * system partition.
+   *
+   * @param {string[]} activeNodeIds
+   * @return {{allowReadinessBackfill:boolean,requiredReadyNodeCount:number}}
+   * @private
+   */
+  getCriticalSystemEndpointVisibilityPolicy(activeNodeIds = []) {
+    const activeNodeCount = Array.isArray(activeNodeIds)
+      ? activeNodeIds.filter(
+          (nodeId) => typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO,
+        ).length
+      : NUM.ZERO;
+    const isPriorityPartition = this.isControlPlanePriorityPartition();
+    const requireEveryActiveNode =
+      this.isControlPlanePublicationPriorityPartition();
+    const requiredReadyNodeCount =
+      isPriorityPartition &&
+      !requireEveryActiveNode &&
+      activeNodeCount > NUM.ZERO
+        ? Math.max(
+            NUM.ONE,
+            Math.min(
+              activeNodeCount,
+              this.getPriorityControlPlaneTargetReplicaCount(),
+            ),
+          )
+        : activeNodeCount;
+    return Object.freeze({
+      allowReadinessBackfill: isPriorityPartition,
+      requiredReadyNodeCount,
+    });
   }
 
   /**
@@ -1091,16 +1131,16 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
   }
 
   /**
-   * Critical transport partitions own publication and replica-operation
-   * convergence for the rest of the control plane.
+   * Publication and replica-operation partitions own the recovery surfaces
+   * the rest of priority convergence depends on. Keep the emergency
+   * classification aligned with the coordinator admission contract rather
+   * than the broader transport-critical routing classifier.
    * @param {string|null} partitionId
    * @return {boolean}
    * @private
    */
   isEmergencyPriorityControlPlanePartition(partitionId) {
-    return isCriticalTransportControlPlanePartitionTable({
-      partitionId,
-    });
+    return isPriorityRecoveryEmergencyPartition(partitionId);
   }
 
   /**

@@ -134,6 +134,14 @@ const {
   resolveRetryableControlPlaneMutationDeferState,
 } = SQL_QUERY_ENGINE_SHARED;
 
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000;
+const NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION = Object.freeze({
+  PERSIST: 'persist',
+  SKIP_RETRYABLE_CONTROL_PLANE_FAILURE:
+    'skip_retryable_control_plane_failure',
+});
+
 class SQLQueryEngine extends SQLQueryEngineSegment7 {
   async persistDistributedTransactionRow(record) {
     if (!this.canPersistDistributedTransactionState()) {
@@ -266,6 +274,14 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
     if (result?.success === true) {
       return;
     }
+    const trackingDisposition =
+      this.resolveNonTransactionalWriteTrackingDisposition(result);
+    if (
+      trackingDisposition !==
+      NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION.PERSIST
+    ) {
+      return;
+    }
     const now = Date.now();
     this.persistDistributedWriteOperationRow({
       operationId: writePlan.operationId,
@@ -290,6 +306,26 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
         error: error.message,
       });
     });
+  }
+
+  /**
+   * Classify whether one non-transactional write failure should be persisted
+   * into sql_write_operations.
+   *
+   * Retryable control-plane failures remain transient admission/routing
+   * observations, not terminal write results. Recording those defers as
+   * durable write-operation rows feeds more load into the same recovering
+   * priority partition without improving transaction recovery.
+   *
+   * @param {Object} result - Write result.
+   * @return {string}
+   * @private
+   */
+  resolveNonTransactionalWriteTrackingDisposition(result) {
+    return isRetryableControlPlaneError(result) ?
+      NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION
+        .SKIP_RETRYABLE_CONTROL_PLANE_FAILURE :
+      NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION.PERSIST;
   }
 
   /**
@@ -446,6 +482,64 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
   }
 
   /**
+   * Resolve the routed delivery profile for one transaction-control message.
+   * Priority control-plane recovery must not reuse the generic background
+   * query lane while the transaction tables that own recovery still converge.
+   *
+   * @param {string} partitionId
+   * @return {Object}
+   * @private
+   */
+  buildTransactionOperationDeliveryProfile(partitionId) {
+    const priorityControlPlanePartition =
+      isPriorityControlPlanePartition({partitionId});
+    return Object.freeze({
+      routingReadinessDimension:
+        this.resolveTransactionOperationRoutingReadinessDimension(partitionId),
+      deliveryPriority:
+        priorityControlPlanePartition ?
+          PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY :
+          undefined,
+      timeoutMs:
+        priorityControlPlanePartition ?
+          PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS :
+          undefined,
+    });
+  }
+
+  /**
+   * Resolve the canonical routing readiness dimension for one table-scoped
+   * SQL operation.
+   *
+   * System-table traffic must stay on the control-plane recovery lane unless a
+   * caller explicitly asks for a narrower dimension. Otherwise plain SQL can
+   * diverge from the system-metadata owners and reintroduce `serveEligible`
+   * filtering while priority recovery is still converging.
+   *
+   * @param {string|null} tableName
+   * @param {string|undefined|null} routingReadinessDimension
+   * @return {string}
+   * @private
+   */
+  resolveTableRoutingReadinessDimension(
+    tableName,
+    routingReadinessDimension,
+  ) {
+    if (
+      typeof routingReadinessDimension === 'string' &&
+      routingReadinessDimension.length > 0
+    ) {
+      return routingReadinessDimension;
+    }
+    if (this.isSystemTable(tableName)) {
+      return CONTROL_PLANE_READINESS_DIMENSION
+        .CONTROL_PLANE_RECOVERY_ELIGIBLE;
+    }
+    return this.defaultRoutingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+  }
+
+  /**
    * Deliver one transaction control operation to a partition service.
    * @param {string} sessionId - Session ID.
    * @param {string} partitionId - Partition ID.
@@ -456,8 +550,8 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
    * @private
    */
   async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
-    const routingReadinessDimension =
-      this.resolveTransactionOperationRoutingReadinessDimension(partitionId);
+    const deliveryProfile =
+      this.buildTransactionOperationDeliveryProfile(partitionId);
     const payload = {
       type: QUERY_OPERATION.TRANSACTION,
       operation,
@@ -479,7 +573,10 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
         isSuccessfulResponse: (response) =>
           response?.acknowledged === true &&
           response?.success === true,
-        routingReadinessDimension,
+        routingReadinessDimension:
+          deliveryProfile.routingReadinessDimension,
+        deliveryPriority: deliveryProfile.deliveryPriority,
+        timeoutMs: deliveryProfile.timeoutMs,
         clearSessionPartitionAffinityOnSuccess:
           operation === QUERY_OPERATION.COMMIT ||
           operation === QUERY_OPERATION.ROLLBACK,
@@ -1085,4 +1182,3 @@ class SQLQueryEngine extends SQLQueryEngineSegment7 {
   }
 }
 export {SQLQueryEngine};
-

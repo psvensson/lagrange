@@ -1154,6 +1154,7 @@ class CDCGroupPropagationService extends EventEmitter {
         result = await this.messageRouter.deliver(target.address, payload, {
           targetNodeId: target.coordinatorNodeId,
           deliveryPriority: deliveryProfile.deliveryPriority,
+          deliverySource: deliveryProfile.deliverySource,
         });
       } catch (error) {
         deliveryFailures.push({

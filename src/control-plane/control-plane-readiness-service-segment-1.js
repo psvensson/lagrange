@@ -50,6 +50,7 @@ const {
   RUNTIME_AUTHORITY_VISIBILITY_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STARTUP_AUTHORITY_ADMISSION_STATE,
   STARTUP_AUTHORITY_STATE,
   STATE,
   TABLES,
@@ -216,6 +217,10 @@ class ControlPlaneReadinessServiceSegment1 {
             now: options.now,
           }).controlPlaneSystemTableGateway
         : null);
+    this.localClusterIncarnationFenceProvider =
+      typeof options.getLocalClusterIncarnationFence === TYPEOF.FUNCTION ?
+        options.getLocalClusterIncarnationFence :
+        null;
     this.now =
       typeof options.now === TYPEOF.FUNCTION ? options.now : () => Date.now();
     this.participationDecisionLedger =

@@ -1,0 +1,79 @@
+import {createCluster, Cluster, NodeHandle, distributeNodes} from '../cluster.js';
+import {
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
+  BENCHMARK_DEGRADATION_STATE,
+  BENCHMARK_LOAD_ADMISSION_STATE,
+} from '../benchmark-partition-convergence.js';
+import {
+  LABELS,
+  NODE_ROLES,
+  CONTAINER_ENV_KEYS,
+  PORTS,
+  PLAYBACK_EVENT_TYPE,
+  RAFT_PROVIDER_DEFAULTS,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+} from '../constants.js';
+import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
+
+const LOAD_STOP_DISPATCH_SETTLE_MS = 25;
+const LOAD_STOP_WAIT_TIMEOUT_MS = 250;
+const ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS = 150;
+const ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS = 80;
+const CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE =
+  '(HTTP code 304) container already stopped -  ';
+const DEFAULT_DISCOVERY_CAPTURED_AT = 1;
+const SERVICE_ID_PREFIX = 'svc';
+
+function buildCriticalSystemDiscoverySnapshot(
+  nodeIds,
+  capturedAt = DEFAULT_DISCOVERY_CAPTURED_AT,
+) {
+  return {
+    rows: [{
+      capturedAt,
+      services: [{
+        replicas: nodeIds.map((nodeId, index) => ({
+          nodeId,
+          serviceId: `${SERVICE_ID_PREFIX}-${nodeId}-${index + 1}`,
+          readiness: {
+            routingReady: true,
+          },
+        })),
+      }],
+    }],
+  };
+}
+
+export {
+  ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
+  ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_REASON_SNAPSHOT_UNAVAILABLE,
+  BENCHMARK_CRITICAL_CONTROL_PLANE_STABILITY_STATE,
+  BENCHMARK_DEGRADATION_STATE,
+  BENCHMARK_LOAD_ADMISSION_STATE,
+  buildCriticalSystemDiscoverySnapshot,
+  Cluster,
+  CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE,
+  CONTAINER_ENV_KEYS,
+  createCluster,
+  distributeNodes,
+  ENTRYPOINT_ENV,
+  LABELS,
+  LOAD_STOP_DISPATCH_SETTLE_MS,
+  LOAD_STOP_WAIT_TIMEOUT_MS,
+  NodeHandle,
+  NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_SERVICE_DISCOVERY_SQL,
+  NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+  NODE_ROLES,
+  PLAYBACK_EVENT_TYPE,
+  PORTS,
+  RAFT_PROVIDER_DEFAULTS,
+};

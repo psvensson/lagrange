@@ -767,6 +767,8 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
 
 test('QueryExecutor - executeOnPartition forwards router delivery overrides',
   async (t) => {
+    const QUERY_EXECUTOR_DELIVERY_SOURCE =
+      'control-plane:read:control_plane_publications';
     const deliveries = [];
     const messageRouter = {
       deliver: async (address, message, options) => {
@@ -789,6 +791,7 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
       false,
       {
         deliveryPriority: 'critical',
+        deliverySource: QUERY_EXECUTOR_DELIVERY_SOURCE,
         timeoutMs: 4321,
       },
     );
@@ -804,6 +807,11 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
       deliveries[0]?.options?.timeoutMs,
       4321,
       'partition execution should preserve per-call timeout overrides',
+    );
+    t.equal(
+      deliveries[0]?.options?.deliverySource,
+      QUERY_EXECUTOR_DELIVERY_SOURCE,
+      'partition execution should preserve explicit delivery-source overrides',
     );
   });
 

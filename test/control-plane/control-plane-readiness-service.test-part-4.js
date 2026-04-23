@@ -56,6 +56,19 @@ const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
   PENDING_PUBLICATION: 'pending_publication',
   RETAINED_LOCAL_RUNTIME: 'retained_local_runtime',
 });
+const TEST_STARTUP_ADMISSION_STATE_BLOCKED = 'blocked';
+const TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY =
+  'cluster_incarnation_identity_mismatch';
+const TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze([
+    TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY,
+  ]),
+  localIdentityState: 'mismatched',
+  durableMembershipState: 'present',
+  peerProofState: 'recovered',
+});
 
 function createCache({nodes = [], services = []} = {}) {
   const nodeRows = new Map(nodes.map((row) => [row[COLUMN.NODE_ID], row]));
@@ -352,6 +365,56 @@ test('ControlPlaneReadinessService falls back to the sync planning snapshot when
       answer?.recoveryProtocolState,
       'steady_published',
       'canonical sync planning answer should preserve recovery protocol visibility',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService enriches the local planning answer with startup admission evidence',
+  (t) => {
+    const nodeId = 'node-priority-local-admission';
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId,
+      systemTableCache: createCache(),
+      getLocalClusterIncarnationFence: () =>
+        TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED,
+      membershipPublicationService: {
+        getLatestPublicationForNodeSync(targetNodeId) {
+          if (targetNodeId !== nodeId) {
+            return null;
+          }
+          return {
+            publicationEpoch: 35,
+            status: 'PUBLISHED',
+            createdAt: 1200,
+            publishedActiveNodeIds: [nodeId],
+            requiredAckNodeIds: [nodeId],
+            acknowledgedNodeIds: [nodeId],
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const answer =
+      readinessService.getPriorityRecoveryPlanningAnswerSync(
+        nodeId,
+        1500,
+      );
+
+    t.equal(
+      answer?.admissionState,
+      TEST_STARTUP_ADMISSION_STATE_BLOCKED,
+      'local planning answers should preserve the startup-owned admission block',
+    );
+    t.same(
+      answer?.admissionReasonCodes,
+      [TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY],
+      'local planning answers should carry the canonical admission reason codes',
+    );
+    t.same(
+      answer?.clusterIncarnationFence,
+      TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED,
+      'local planning answers should keep the startup fence evidence attached',
     );
     t.end();
   });
@@ -685,6 +748,118 @@ test('ControlPlaneReadinessService exposes a readiness-owned current published m
     t.end();
   });
 
+test('ControlPlaneReadinessService projects control-plane writable blockers through the canonical recovery projection',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'seed-node',
+      systemTableCache: createCache(),
+      now: () => 1500,
+    });
+
+    const projection = readinessService.getPriorityControlPlaneRecoveryState({
+      observedAt: 1500,
+      membershipPublication: {
+        publicationEpoch: 24,
+        status: 'PUBLISHED',
+        createdAt: 1200,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: 24,
+        publicationStatus: 'PUBLISHED',
+        priorityPartitionSummary: {
+          satisfied: true,
+        },
+      },
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+      },
+    });
+
+    t.equal(
+      projection.publicationRecoveryGate.active,
+      false,
+      'settled publication gate should stay ready',
+    );
+    t.same(
+      projection.reasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE],
+      'readiness projection should add the canonical writable blocker without rebuilding gate meaning locally',
+    );
+    t.equal(
+      projection.active,
+      true,
+      'readiness-side blockers should keep the recovery projection active',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService projects recovery eligibility blockers without overriding publication-gate blockers',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'seed-node',
+      systemTableCache: createCache(),
+      now: () => 1500,
+    });
+
+    const settledProjection =
+      readinessService.getPriorityControlPlaneRecoveryState({
+        observedAt: 1500,
+        membershipPublication: {
+          publicationEpoch: 24,
+          status: 'PUBLISHED',
+          createdAt: 1200,
+        },
+        membershipPublicationPlanningSnapshot: {
+          publicationEpoch: 24,
+          publicationStatus: 'PUBLISHED',
+          priorityPartitionSummary: {
+            satisfied: true,
+          },
+        },
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+            false,
+        },
+      });
+
+    t.same(
+      settledProjection.reasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.RECOVERY_ELIGIBILITY_PENDING],
+      'recovery eligibility should project one explicit blocker when publication has already settled',
+    );
+
+    const pendingProjection =
+      readinessService.getPriorityControlPlaneRecoveryState({
+        observedAt: 1600,
+        membershipPublication: {
+          publicationEpoch: 25,
+          status: 'ACK_PENDING',
+          createdAt: 1300,
+        },
+        membershipPublicationPlanningSnapshot: {
+          publicationEpoch: 25,
+          publicationStatus: 'ACK_PENDING',
+          requiredAckNodeIds: ['seed-node', 'node-b'],
+          acknowledgedNodeIds: ['seed-node'],
+        },
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+            false,
+        },
+      });
+
+    t.same(
+      pendingProjection.reasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
+      'publication-gate blockers should remain canonical without an extra recovery-eligibility shadow blocker',
+    );
+    t.end();
+  });
+
 test('ControlPlaneReadinessService preserves source snapshot version in membership publication diagnostics',
   async (t) => {
     const nodeId = 'node-publication-source-version';
@@ -786,6 +961,23 @@ test('ControlPlaneReadinessService reports stale published priority summaries wi
     t.same(
       readiness.priorityControlPlaneRecovery.reasonCodes,
       [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD],
+    );
+    t.match(
+      readiness.priorityControlPlaneRecovery.priorityRecoveryObservation,
+      {
+        publicationStatus: 'PUBLISHED',
+        recoveryProtocolState: 'priority_spread_pending',
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        priorityPartitionSummary: {
+          satisfied: false,
+          missingPartitionIds: ['sql_write_operations-p1'],
+        },
+        priorityRecoveryBlockedPartitionCount: 1,
+        priorityRecoveryPartitionSnapshots: [],
+      },
+      'readiness should expose the shared priority-recovery observation contract',
     );
     t.equal(
       queueEnqueues.length,

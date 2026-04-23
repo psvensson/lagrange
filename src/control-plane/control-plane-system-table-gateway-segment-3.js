@@ -1,130 +1,48 @@
-import { CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED } from "./control-plane-system-table-gateway-shared.js";
-import { ControlPlaneSystemTableGatewaySegment2 } from "./control-plane-system-table-gateway-segment-2.js";
-
-const {
-  CANONICAL_LEADER_ROUTING_GAP_STATE,
-  CDC_OPERATION,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-  CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
-  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
-  CONTROL_PLANE_DEFERRED_MUTATION_FAILURE_SENTINEL,
-  CONTROL_PLANE_GATEWAY_ERROR_CODE,
-  CONTROL_PLANE_GATEWAY_LIMIT,
-  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
-  CONTROL_PLANE_MUTATION_QUEUE_STATE,
-  CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
-  CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READ_OUTCOME,
-  CONTROL_PLANE_READ_PROFILE,
   CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-  CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD,
-  CONTROL_PLANE_SQL_OPERATION,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
-  ControlPlaneDiagnosticsLedger,
   GATEWAY_ERROR_MSG,
-  GATEWAY_LOG_MSG,
-  INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
-  PressureGovernor,
-  SQL,
-  SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_NAMES,
   TYPEOF,
-  applyProfileDefault,
-  applyReadWorkloadProfileDefaults,
-  areCanonicalSystemTableRowsEqual,
-  buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
-  buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
+  buildAuthoritativeControlPlaneReadRequestOptions,
+  buildControlPlaneMutationIntent,
   buildPressureAdmissionFailure,
-  canonicalizeSystemTableRow,
-  copyOption,
-  createDeferredPromise,
-  extractSqlOperationKind,
-  extractSystemTableNameFromSql,
-  getControlPlaneErrorCode,
-  getControlPlaneFailureSummary,
-  getControlPlaneRetryAfterMs,
-  getLocalControlPlaneMutationReadinessBlocker,
-  getRemainingBudgetMs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  hasUsablePrimaryKeyValue,
-  normalizeAuthoritativeReadMode,
+  canonicalizeControlPlaneMutation,
   normalizeCoalescingToken,
-  normalizeControlPlaneSystemTableVisibilityState,
-  normalizeDistinctStringArray,
-  normalizeMutationMergePolicy,
   normalizeMutationOperation,
   normalizePhaseScope,
-  normalizePositiveInteger,
-  normalizeReadProfile,
   normalizeReadStrategy,
-  normalizeSqlOperationKind,
   normalizeSystemTableName,
-  requiresStableLocalControlPlaneMutationReadiness,
+  resolveControlPlaneReadIntent,
   resolveAuthoritativeReadModeContract,
-  resolveCanonicalLeaderIdentitySnapshot,
-  resolveCanonicalLeaderRoutingGapState,
-  resolveControlPlaneCacheReconcileDeletePolicy,
-  resolveControlPlaneCacheReconcileIntent,
-  resolveLegacyAuthoritativeReadMode,
-  resolveMutationCompletionState,
   resolveReadProfileOptions,
-  resolveReadStrategyForProfile,
-  sortObjectKeys,
-  stableSerialize,
-} = CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED;
+} from './control-plane-system-table-gateway-shared.js';
+import {
+  ControlPlaneSystemTableGatewaySegment2,
+} from './control-plane-system-table-gateway-segment-2.js';
 
 class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGatewaySegment2 {
   async readRows(tableName, sql, params = [], options = {}) {
-    const readProfile = normalizeReadProfile(
-      options?.readProfile || options?.profile,
-    );
-    const profileStrategy = resolveReadStrategyForProfile(readProfile);
     const cdcIntegrationService = this.resolveCdcIntegrationService();
-    const strategy = normalizeReadStrategy(
-      options?.strategy ||
-        options?.readStrategy ||
-        profileStrategy ||
-        (options?.bootstrapSnapshotRows ||
-        typeof options?.readBootstrapSnapshot === TYPEOF.FUNCTION
-          ? CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT
-          : options?.cachePredicate ||
-              typeof options?.readFromCache === TYPEOF.FUNCTION
-            ? CONTROL_PLANE_READ_STRATEGY.CACHE
-            : options?.requireAuthoritative === true
-              ? CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-              : typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
-                  TYPEOF.FUNCTION
-                ? CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE
-                : CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED),
+    const {readIntent, readProfile} = resolveControlPlaneReadIntent(
+      tableName,
+      sql,
+      params,
+      options,
+      typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
+        TYPEOF.FUNCTION,
     );
     return this.executeRead(
-      {
-        tableName,
-        sql,
-        params,
-        strategy,
-        cachePredicate: options?.cachePredicate,
-        readFromCache: options?.readFromCache,
-        readBootstrapSnapshot: options?.readBootstrapSnapshot,
-        bootstrapSnapshotRows: options?.bootstrapSnapshotRows,
-        phaseScope: normalizePhaseScope(options?.phaseScope),
-      },
+      readIntent,
       {
         ...options,
         readProfile,
@@ -190,56 +108,56 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
             return {
               ...failure,
               outcome:
-                pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER
-                  ? CONTROL_PLANE_READ_OUTCOME.DEFERRED
-                  : CONTROL_PLANE_READ_OUTCOME.REJECTED,
+                pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+                  CONTROL_PLANE_READ_OUTCOME.DEFERRED :
+                  CONTROL_PLANE_READ_OUTCOME.REJECTED,
               strategyUsed: strategy,
             };
           }
 
           switch (strategy) {
-            case CONTROL_PLANE_READ_STRATEGY.CACHE:
-              return this.executeCacheRead(
-                tableName,
-                readIntent,
-                mergedOptions,
-              );
-            case CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE:
-            case CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED:
-              return this.executeAuthoritativeRead(
-                tableName,
-                sql,
-                params,
-                strategy,
-                mergedOptions,
-              );
-            case CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED:
-              return this.executeOwnerLocalRead(
-                tableName,
-                sql,
-                params,
-                mergedOptions,
-              );
-            case CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT:
-              return this.executeBootstrapSnapshotRead(
-                tableName,
-                readIntent,
-                mergedOptions,
-              );
-            default:
-              return {
-                success: false,
-                error: "unsupported_control_plane_read_strategy",
-                tableName,
-                rows: [],
-                outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
-                strategyUsed: null,
-              };
+          case CONTROL_PLANE_READ_STRATEGY.CACHE:
+            return this.executeCacheRead(
+              tableName,
+              readIntent,
+              mergedOptions,
+            );
+          case CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE:
+          case CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED:
+            return this.executeAuthoritativeRead(
+              tableName,
+              sql,
+              params,
+              strategy,
+              mergedOptions,
+            );
+          case CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED:
+            return this.executeOwnerLocalRead(
+              tableName,
+              sql,
+              params,
+              mergedOptions,
+            );
+          case CONTROL_PLANE_READ_STRATEGY.BOOTSTRAP_SNAPSHOT:
+            return this.executeBootstrapSnapshotRead(
+              tableName,
+              readIntent,
+              mergedOptions,
+            );
+          default:
+            return {
+              success: false,
+              error: 'unsupported_control_plane_read_strategy',
+              tableName,
+              rows: [],
+              outcome: CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+              strategyUsed: null,
+            };
           }
         },
         {
-          joinMetricName: "readSingleFlightJoinCount",
-          bypassMetricName: "readTrackingBypassCount",
+          joinMetricName: 'readSingleFlightJoinCount',
+          bypassMetricName: 'readTrackingBypassCount',
           maxTrackedRequests: this.gatewayLimits.maxTrackedReadRequests,
         },
       );
@@ -255,11 +173,11 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
           CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
         outcome: result?.outcome || null,
         success: result?.success === true,
-        rowCount: Number.isFinite(result?.rowCount)
-          ? result.rowCount
-          : Array.isArray(result?.rows)
-            ? result.rows.length
-            : NUM.ZERO,
+        rowCount: Number.isFinite(result?.rowCount) ?
+          result.rowCount :
+          Array.isArray(result?.rows) ?
+            result.rows.length :
+            NUM.ZERO,
         source: result?.source || null,
         usedSqlFallback: result?.usedSqlFallback === true,
         error: result?.success === true ? null : result?.error || null,
@@ -309,11 +227,11 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async insertSystemTableRow(tableName, row, options = {}) {
     return this.submitMutation(
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+      buildControlPlaneMutationIntent(
+        CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName,
-        row,
-      },
+        {row},
+      ),
       options,
     );
   }
@@ -327,12 +245,11 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async updateSystemTableRow(tableName, whereClause, data, options = {}) {
     return this.submitMutation(
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      buildControlPlaneMutationIntent(
+        CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName,
-        whereClause,
-        data,
-      },
+        {whereClause, data},
+      ),
       options,
     );
   }
@@ -345,11 +262,11 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async upsertSystemTableRow(tableName, row, options = {}) {
     return this.submitMutation(
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      buildControlPlaneMutationIntent(
+        CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
         tableName,
-        row,
-      },
+        {row},
+      ),
       options,
     );
   }
@@ -362,11 +279,11 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async deleteSystemTableRow(tableName, whereClause, options = {}) {
     return this.submitMutation(
-      {
-        operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+      buildControlPlaneMutationIntent(
+        CONTROL_PLANE_MUTATION_OPERATION.DELETE,
         tableName,
-        whereClause,
-      },
+        {whereClause},
+      ),
       options,
     );
   }
@@ -389,19 +306,17 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
     if (!tableName) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_TABLE_REQUIRED);
     }
-    const normalizedMutation = {
-      ...mutation,
+    const normalizedMutation = canonicalizeControlPlaneMutation(
+      mutation,
       operation,
       tableName,
-      row:
-        operation === CONTROL_PLANE_MUTATION_OPERATION.INSERT ||
-        operation === CONTROL_PLANE_MUTATION_OPERATION.UPSERT
-          ? canonicalizeSystemTableRow(tableName, mutation?.row)
-          : mutation?.row,
-    };
-    let writeOptions = this.buildWriteOptions(options);
+    );
+    let writeOptions = this.buildWriteOptions(options, {
+      tableName,
+      operationKind: operation,
+    });
     const cdcIntegrationService = this.resolveCdcIntegrationService();
-    const { requestKey, mergePolicy } = this.buildMutationCoalescingDescriptor(
+    const {requestKey, mergePolicy} = this.buildMutationCoalescingDescriptor(
       normalizedMutation,
       writeOptions,
     );
@@ -550,65 +465,48 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
       mergePolicy === CONTROL_PLANE_MUTATION_MERGE_POLICY.SINGLE_FLIGHT &&
       requestKey
     ) {
-      try {
-        const result = await this.runSingleFlight(
+      return this.executeMutationWithDiagnostics(
+        () => this.runSingleFlight(
           this.inFlightMutationRequestsByKey,
           requestKey,
           executionFactory,
           {
-            joinMetricName: "mutationSingleFlightJoinCount",
+            joinMetricName: 'mutationSingleFlightJoinCount',
             maxTrackedRequests: this.gatewayLimits.maxTrackedMutationRequests,
           },
-        );
-        this.recordControlPlaneOperation({
-          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
-          tableName,
-          mutationOperation: operation,
-          routingReadinessDimension:
-            writeOptions?.routingReadinessDimension ||
-            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          outcome: result?.outcome || null,
-          success: result?.success !== false,
-          affectedRows: Number(
-            result?.partitionResult?.affectedRows ??
-              result?.affectedRows ??
-              NUM.ZERO,
-          ),
-          error: result?.success === false ? result?.error || null : null,
-          ...this.buildOperationLedgerDiagnostics(tableName, result, {
-            ...writeOptions,
-            operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
-          }),
-        });
-        this.recordMutationTelemetry(telemetryContext, result);
-        return result;
-      } catch (error) {
-        this.recordControlPlaneOperation({
-          operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
-          tableName,
-          mutationOperation: operation,
-          routingReadinessDimension:
-            writeOptions?.routingReadinessDimension ||
-            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-          outcome:
-            error?.outcome || CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-          success: false,
-          affectedRows: NUM.ZERO,
-          error: error?.message || String(error),
-          ...this.buildOperationLedgerDiagnostics(tableName, error, {
-            ...writeOptions,
-            operationClass: CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION,
-          }),
-        });
-        this.recordMutationTelemetry(telemetryContext, {
-          success: false,
-          outcome:
-            error?.outcome || CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-        });
-        throw error;
-      }
+        ),
+        tableName,
+        operation,
+        writeOptions,
+        telemetryContext,
+      );
     }
 
+    return this.executeMutationWithDiagnostics(
+      executionFactory,
+      tableName,
+      operation,
+      writeOptions,
+      telemetryContext,
+    );
+  }
+
+  /**
+   * @param {Function} executionFactory
+   * @param {string} tableName
+   * @param {string} operation
+   * @param {Object} writeOptions
+   * @param {Object} telemetryContext
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeMutationWithDiagnostics(
+    executionFactory,
+    tableName,
+    operation,
+    writeOptions,
+    telemetryContext,
+  ) {
     try {
       const result = await executionFactory();
       this.recordControlPlaneOperation({
@@ -670,13 +568,13 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
   async executeCacheRead(tableName, readIntent, options) {
     const systemTableCache = this.resolveSystemTableCache();
     const readFromCache =
-      typeof readIntent?.readFromCache === TYPEOF.FUNCTION
-        ? readIntent.readFromCache
-        : null;
+      typeof readIntent?.readFromCache === TYPEOF.FUNCTION ?
+        readIntent.readFromCache :
+        null;
     const cachePredicate =
-      typeof readIntent?.cachePredicate === TYPEOF.FUNCTION
-        ? readIntent.cachePredicate
-        : null;
+      typeof readIntent?.cachePredicate === TYPEOF.FUNCTION ?
+        readIntent.cachePredicate :
+        null;
     if (!systemTableCache && !readFromCache) {
       return {
         success: false,
@@ -767,54 +665,9 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    * @private
    */
   resolveAuthoritativeReadFailureOutcome(strategy) {
-    return strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED
-      ? CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED
-      : CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
-  }
-
-  /**
-   * @param {Object} result
-   * @return {{outcome: string, completionState: string}}
-   * @private
-   */
-  resolveNormalizedMutationState(result) {
-    const affectedRows = Number(
-      result?.partitionResult?.affectedRows ?? result?.affectedRows,
-    );
-    if (result?.outcome) {
-      return {
-        outcome: result.outcome,
-        completionState: resolveMutationCompletionState(result),
-      };
-    } else if (result?.success === false) {
-      return {
-        outcome:
-          result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER
-            ? CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED
-            : result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT
-              ? CONTROL_PLANE_MUTATION_OUTCOME.REJECTED
-              : CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-        completionState: resolveMutationCompletionState(result),
-      };
-    } else if (
-      typeof result?.visibilityState === TYPEOF.STRING &&
-      result.visibilityState !==
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
-    ) {
-      return {
-        outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-        completionState: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-      };
-    } else if (Number.isFinite(affectedRows) && affectedRows <= NUM.ZERO) {
-      return {
-        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
-        completionState: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
-      };
-    }
-    return {
-      outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-      completionState: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-    };
+    return strategy === CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED ?
+      CONTROL_PLANE_READ_OUTCOME.STALE_NOT_ALLOWED :
+      CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY;
   }
 
   /**
@@ -860,8 +713,17 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
-    const authoritativeReadModeContract =
-      resolveAuthoritativeReadModeContract(options);
+    const queryOptions = this.buildQueryOptions(options, {
+      tableName,
+      sql,
+    });
+    const {
+      authoritativeReadModeContract,
+      requestOptions,
+    } = buildAuthoritativeControlPlaneReadRequestOptions(
+      options,
+      queryOptions,
+    );
     const allowSqlFallback = authoritativeReadModeContract.allowSqlFallback;
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
@@ -876,15 +738,15 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
           const result = await sqlQueryEngine.executeQuery(
             sql,
             params,
-            this.buildQueryOptions(options),
+            queryOptions,
           );
           return this.buildGatewayReadResult(
             result,
             tableName,
             strategy,
-            result?.success === true
-              ? CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE
-              : CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+            result?.success === true ?
+              CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+              CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
             {
               source:
                 CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE.SQL_QUERY_ENGINE,
@@ -906,32 +768,16 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
         tableName,
         sql,
         params,
-        {
-          localReadConsistency:
-            options?.localReadConsistency ||
-            CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-          replicaFallbackConsistency:
-            options?.replicaFallbackConsistency ||
-            CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-          authoritativeReadMode:
-            authoritativeReadModeContract.authoritativeReadMode,
-          preferOwnerRpcRead: authoritativeReadModeContract.preferOwnerRpcRead,
-          requireOwnerRpcRead:
-            authoritativeReadModeContract.requireOwnerRpcRead,
-          allowOwnerRpcFallback:
-            authoritativeReadModeContract.allowOwnerRpcFallback,
-          allowSqlFallback: authoritativeReadModeContract.allowSqlFallback,
-          queryOptions: this.buildQueryOptions(options),
-        },
+        requestOptions,
       );
 
     return this.buildGatewayReadResult(
       authoritativeResult,
       tableName,
       strategy,
-      authoritativeResult?.success === true
-        ? CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE
-        : this.resolveAuthoritativeReadFailureOutcome(strategy),
+      authoritativeResult?.success === true ?
+        CONTROL_PLANE_READ_OUTCOME.AUTHORITATIVE :
+        this.resolveAuthoritativeReadFailureOutcome(strategy),
     );
   }
 
@@ -945,8 +791,14 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
    */
   async executeOwnerLocalRead(tableName, sql, params, options) {
     const cdcIntegrationService = this.resolveCdcIntegrationService();
-    const authoritativeReadModeContract =
-      resolveAuthoritativeReadModeContract(options);
+    const queryOptions = this.buildQueryOptions(options, {
+      tableName,
+      sql,
+    });
+    const {requestOptions} = buildAuthoritativeControlPlaneReadRequestOptions(
+      options,
+      queryOptions,
+    );
     if (
       typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
       TYPEOF.FUNCTION
@@ -956,38 +808,21 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
           tableName,
           sql,
           params,
-          {
-            localReadConsistency:
-              options?.localReadConsistency ||
-              CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-            replicaFallbackConsistency:
-              options?.replicaFallbackConsistency ||
-              CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-            authoritativeReadMode:
-              authoritativeReadModeContract.authoritativeReadMode,
-            preferOwnerRpcRead:
-              authoritativeReadModeContract.preferOwnerRpcRead,
-            requireOwnerRpcRead:
-              authoritativeReadModeContract.requireOwnerRpcRead,
-            allowOwnerRpcFallback:
-              authoritativeReadModeContract.allowOwnerRpcFallback,
-            allowSqlFallback: authoritativeReadModeContract.allowSqlFallback,
-            queryOptions: this.buildQueryOptions(options),
-          },
+          requestOptions,
         );
       return this.buildGatewayReadResult(
         authoritativeResult,
         tableName,
         CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-        authoritativeResult?.success === true
-          ? CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED
-          : CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+        authoritativeResult?.success === true ?
+          CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED :
+          CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
         {
-          rowCount: Number.isFinite(authoritativeResult?.rowCount)
-            ? authoritativeResult.rowCount
-            : Array.isArray(authoritativeResult?.rows)
-              ? authoritativeResult.rows.length
-              : NUM.ZERO,
+          rowCount: Number.isFinite(authoritativeResult?.rowCount) ?
+            authoritativeResult.rowCount :
+            Array.isArray(authoritativeResult?.rows) ?
+              authoritativeResult.rows.length :
+              NUM.ZERO,
         },
       );
     }
@@ -1003,15 +838,15 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
     const result = await sqlQueryEngine.executeQuery(
       sql,
       params,
-      this.buildQueryOptions(options),
+      queryOptions,
     );
     return this.buildGatewayReadResult(
       result,
       tableName,
       CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
-      result?.success === false
-        ? CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY
-        : CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
+      result?.success === false ?
+        CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY :
+        CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED,
     );
   }
 
@@ -1051,67 +886,9 @@ class ControlPlaneSystemTableGatewaySegment3 extends ControlPlaneSystemTableGate
 
   /**
    * @param {Object} result
-   * @param {Object} normalizedState
-   * @return {Object}
-   * @private
-   */
-  resolveNormalizedMutationContractOutcome(result, normalizedState) {
-    const visibilityState = normalizeControlPlaneSystemTableVisibilityState(
-      result?.visibilityState,
-      null,
-    );
-    if (
-      visibilityState ===
-      CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.DEFERRED_BY_PRESSURE
-    ) {
-      return buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.DEFERRED,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-      });
-    }
-    if (
-      visibilityState ===
-        CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY ||
-      visibilityState ===
-        CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE.AUTHORITATIVE_CONFIRMATION_PENDING
-    ) {
-      return buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.PENDING,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.WAIT,
-      });
-    }
-    if (
-      normalizedState.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED ||
-      normalizedState.outcome === CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
-    ) {
-      return buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.DEFERRED,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.RETRY,
-      });
-    }
-    if (normalizedState.outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED) {
-      return buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.BLOCKED,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.STOP,
-      });
-    }
-    if (result?.success === false) {
-      return buildOwnerContractOutcome({
-        contractState: OWNER_CONTRACT_STATE.FAILED,
-        nextAction: OWNER_CONTRACT_NEXT_ACTION.STOP,
-      });
-    }
-    return buildOwnerContractOutcome({
-      contractState: OWNER_CONTRACT_STATE.READY,
-      nextAction: OWNER_CONTRACT_NEXT_ACTION.PROCEED,
-    });
-  }
-
-  /**
-   * @param {Object} result
    * @return {Object}
    * @private
    */
 }
 
-export { ControlPlaneSystemTableGatewaySegment3 };
+export {ControlPlaneSystemTableGatewaySegment3};

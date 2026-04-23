@@ -40,12 +40,18 @@ import {
   PRESSURE_WORK_CLASS,
 } from '../../src/control-plane/pressure-governor.js';
 import {
+  CONTROL_PLANE_WORKLOAD_CLASS,
+} from '../../src/control-plane/control-plane-workload-profile.js';
+import {
   CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
 } from '../../src/control-plane/control-plane-system-table-visibility-constants.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
 } from '../../src/control-plane/owner-contract-outcome.js';
+import {
+  LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
+} from '../../src/cdc/cdc-integration-service.js';
 import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
@@ -56,6 +62,11 @@ import {createSqlRequest} from '../../src/query/sql-request.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
+
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000;
+const AUTHORITATIVE_OVERLAY_STATE_AUTHORITATIVE_MISSING =
+  'authoritative_missing';
 
 // Mock partition data for routing
 const mockPartitionData = new Map();
@@ -803,10 +814,25 @@ test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
     'composed overlay should expose authoritative refresh for runtime routing repair');
   t.equal(authoritativeReads.length, 2,
     'authoritative refresh should read both partitions and services for the target partition');
+  t.equal(
+    engine.authoritativeRoutingOverlay.shouldMaskCacheServicesForPartition(
+      partitionId,
+    ),
+    true,
+    'authoritative overlay should suppress stale cached service rows after refresh',
+  );
 
   const candidates = engine.queryExecutor.getPartitionServiceCandidates(
     partitionId,
     true,
+  );
+  t.notOk(
+    candidates.some(
+      (candidate) =>
+        candidate.address ===
+        'old-owner/partition/replica_operations-p1-r1',
+    ),
+    'stale cached owner endpoint should be masked once authoritative refresh publishes a new service set',
   );
   t.ok(
     candidates.some(
@@ -829,6 +855,159 @@ test('SQLQueryEngine - composes authoritative routing overlay refresh ' +
     recoveryCandidates[0].address,
     'new-owner/partition/replica_operations-p1-r4',
     'leader recovery should target the refreshed authoritative owner endpoint',
+  );
+});
+
+test('SQLQueryEngine - authoritative routing overlay refresh masks stale ' +
+  'cached service rows when authoritative reads confirm the partition is absent',
+async (t) => {
+  const partitionId = 'control_plane_publications-p1';
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.CONTROL_PLANE_PUBLICATIONS,
+        leader_node_id: 'stale-owner',
+      },
+    ], [
+      {
+        service_id: 'control_plane_publications-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'stale-owner',
+        raft_role: 'leader',
+        address: 'stale-owner/partition/control_plane_publications-p1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ]),
+    messageRouter: createMockMessageRouter(),
+    authoritativeControlPlaneView: {
+      async readRows() {
+        return {
+          success: true,
+          rows: [],
+        };
+      },
+    },
+  });
+
+  const refreshed =
+    await engine.queryExecutor.routingMetadataOverlay
+      .refreshPartitionRouting(partitionId);
+
+  t.equal(
+    refreshed,
+    true,
+    'authoritative refresh should still install overlay state when absence is confirmed',
+  );
+  t.equal(
+    engine.getAuthoritativeRoutingOverlayEntryState(partitionId).state,
+    AUTHORITATIVE_OVERLAY_STATE_AUTHORITATIVE_MISSING,
+    'authoritative absence should be recorded explicitly in overlay state',
+  );
+  t.equal(
+    engine.queryExecutor.getPartitionRoutingSnapshot(partitionId).serviceRowCount,
+    0,
+    'stale cached service rows should be masked when the authoritative owner reports no partition routing rows',
+  );
+});
+
+test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
+  'bounded local replica fallback for control-plane routing repair', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const authoritativeReads = [];
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.REPLICA_OPERATIONS,
+        leader_node_id: 'old-owner',
+      },
+    ], [
+      {
+        service_id: 'replica_operations-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'old-owner',
+        raft_role: 'leader',
+        address: 'old-owner/partition/replica_operations-p1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ]),
+    messageRouter: createMockMessageRouter(),
+    authoritativeControlPlaneView: {
+      async readRows(tableName, _sql, params, options) {
+        authoritativeReads.push({tableName, params, options});
+        if (
+          options?.replicaFallbackConsistency !==
+          LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
+        ) {
+          return {
+            success: false,
+            rows: [],
+            error: 'expected_any_replica_fallback',
+          };
+        }
+        if (tableName === TABLES.PARTITIONS) {
+          return {
+            success: true,
+            rows: [
+              {
+                partition_id: partitionId,
+                table_name: TABLES.REPLICA_OPERATIONS,
+                leader_node_id: 'new-owner',
+              },
+            ],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [
+              {
+                service_id: 'replica_operations-p1-r5',
+                service_type: SERVICE_TYPE.PARTITION,
+                partition_id: partitionId,
+                node_id: 'new-owner',
+                raft_role: 'leader',
+                address: 'new-owner/partition/replica_operations-p1-r5',
+                status: SERVICE_STATUS.ACTIVE,
+              },
+            ],
+          };
+        }
+        return {
+          success: false,
+          rows: [],
+        };
+      },
+    },
+  });
+
+  const refreshed =
+    await engine.queryExecutor.routingMetadataOverlay
+      .refreshPartitionRouting(partitionId);
+
+  t.equal(refreshed, true,
+    'authoritative routing refresh should succeed through bounded local replica fallback');
+  t.equal(authoritativeReads.length, 2,
+    'routing repair should still read both partition and service metadata');
+  t.same(
+    authoritativeReads.map((entry) => entry.options?.replicaFallbackConsistency),
+    [
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
+    ],
+    'routing repair should request bounded local replica fallback for both authoritative reads',
+  );
+  const candidates = engine.queryExecutor.getPartitionServiceCandidates(
+    partitionId,
+    true,
+  );
+  t.ok(
+    candidates.some((candidate) =>
+      candidate.address === 'new-owner/partition/replica_operations-p1-r5'),
+    'runtime routing should expose the repaired service row after fallback-backed refresh',
   );
 });
 
@@ -939,7 +1118,9 @@ test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
       forRead,
       preferLeader,
       preferSameLatencyGroup,
+      deliveryPriority: executionOptions.deliveryPriority,
       routingReadinessDimension: executionOptions.routingReadinessDimension,
+      timeoutMs: executionOptions.timeoutMs,
     });
     return {success: true};
   };
@@ -959,8 +1140,11 @@ test('SQLQueryEngine - routes priority control-plane transaction delivery ' +
     forRead: false,
     preferLeader: false,
     preferSameLatencyGroup: false,
+    deliveryPriority:
+      TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY,
     routingReadinessDimension:
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    timeoutMs: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS,
   }, 'priority control-plane transaction delivery should use recovery routing');
 });
 
@@ -990,7 +1174,9 @@ test('SQLQueryEngine - keeps user transaction delivery on the default ' +
       forRead,
       preferLeader,
       preferSameLatencyGroup,
+      deliveryPriority: executionOptions.deliveryPriority,
       routingReadinessDimension: executionOptions.routingReadinessDimension,
+      timeoutMs: executionOptions.timeoutMs,
     });
     return {success: true};
   };
@@ -1010,9 +1196,176 @@ test('SQLQueryEngine - keeps user transaction delivery on the default ' +
     forRead: false,
     preferLeader: false,
     preferSameLatencyGroup: false,
+    deliveryPriority: undefined,
     routingReadinessDimension:
       CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    timeoutMs: undefined,
   }, 'user transaction delivery should keep the default serve routing');
+});
+
+test('SQLQueryEngine - defaults system-table selects to recovery routing', async (t) => {
+  const partitionId = 'logs-p1';
+  const cache = createMockSystemCache(
+    [
+      {
+        table_name: TABLES.LOGS,
+      },
+    ],
+    [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.LOGS,
+      },
+    ],
+    [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'seed-node',
+        raft_role: 'leader',
+        address: `seed-node/partition/${partitionId}-r1`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+  );
+  const engine = new SQLQueryEngine({
+    nodeId: 'select-node',
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    distributedQueryPlanner: {
+      planSelect() {
+        return {
+          tablePlans: new Map([
+            [
+              TABLES.LOGS,
+              {
+                partitions: [partitionId],
+              },
+            ],
+          ]),
+          diagnostics: {
+            tablePlans: [],
+          },
+        };
+      },
+    },
+  });
+  let capturedExecutionOptions = null;
+  engine.queryExecutor = {
+    async executeSelect(_ast, _partitionIds, _params, executionOptions = {}) {
+      capturedExecutionOptions = executionOptions;
+      return {
+        success: true,
+        rows: [],
+        count: 0,
+        distributedMetrics: {},
+      };
+    },
+  };
+
+  const result = await engine.executeQuery(
+    "SELECT * FROM logs WHERE log_id = 'log-1'",
+  );
+
+  t.equal(result.success, true, 'system-table select should still succeed');
+  t.equal(
+    capturedExecutionOptions?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'system-table select should default to the recovery-eligible routing lane',
+  );
+});
+
+test('SQLQueryEngine - defaults system-table writes to recovery routing', async (t) => {
+  const partitionId = 'nodes-p1';
+  const cache = createMockSystemCache(
+    [
+      {
+        table_name: TABLES.NODES,
+      },
+    ],
+    [
+      {
+        partition_id: partitionId,
+        table_name: TABLES.NODES,
+      },
+    ],
+    [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: partitionId,
+        node_id: 'seed-node',
+        raft_role: 'leader',
+        address: `seed-node/partition/${partitionId}-r1`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+  );
+  let capturedExecutionOptions = null;
+  const engine = new SQLQueryEngine({
+    nodeId: 'write-node',
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    distributedQueryPlanner: {
+      planUpdate() {
+        return {
+          statementType: 'UPDATE',
+          executionPolicy: 'distributed_write',
+          tablePlans: new Map([
+            [
+              TABLES.NODES,
+              {
+                partitions: [partitionId],
+              },
+            ],
+          ]),
+          diagnostics: {
+            tablePlans: [],
+          },
+        };
+      },
+    },
+    distributedWriteCoordinator: {
+      createWritePlan() {
+        return {
+          operationId: 'system-table-update',
+          idempotencyKey: 'system-table-update',
+          partitionStatements: new Map([
+            [
+              partitionId,
+              {
+                ast: {
+                  type: 'UPDATE',
+                  table: TABLES.NODES,
+                },
+                role: 'primary',
+                executionOptions: {},
+              },
+            ],
+          ]),
+        };
+      },
+      async executePlan(_writePlan, _params, executionOptions = {}) {
+        capturedExecutionOptions = executionOptions;
+        return {
+          success: true,
+          changes: 1,
+        };
+      },
+    },
+  });
+
+  const result = await engine.executeQuery(
+    "UPDATE nodes SET status = 'active' WHERE node_id = 'node-a'",
+  );
+
+  t.equal(result.success, true, 'system-table write should still succeed');
+  t.equal(
+    capturedExecutionOptions?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    'system-table write should default to the recovery-eligible routing lane',
+  );
 });
 
 test('SQLQueryEngine - transaction delivery repairs stale no-handler owner ' +
@@ -1154,6 +1507,26 @@ async (t) => {
     'participant rows should stay on the critical delivery lane');
   t.equal(submissions[2].options.deliveryPriority, 'background',
     'write-operation telemetry should remain on the background delivery lane');
+  t.equal(
+    submissions[0].options.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+    'transaction rows should carry the shared transaction-control workload class',
+  );
+  t.equal(
+    submissions[1].options.workloadClass,
+    CONTROL_PLANE_WORKLOAD_CLASS.TRANSACTION_CONTROL_MUTATION,
+    'participant rows should carry the shared transaction-control workload class',
+  );
+  t.equal(
+    submissions[0].options.allowPressureDefer,
+    false,
+    'transaction rows should preserve the workload-owned no-defer contract',
+  );
+  t.equal(
+    submissions[1].options.allowPressureDefer,
+    false,
+    'participant rows should preserve the workload-owned no-defer contract',
+  );
   t.equal(submissions[0].options.skipCacheWait, true,
     'transaction rows should not fail closed on cache visibility lag');
   t.equal(submissions[1].options.skipCacheWait, true,

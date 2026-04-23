@@ -284,6 +284,12 @@ function resolveTransportDeliveryOptions(targetService, overrides = null) {
   ) {
     baseOptions.deliveryPriority = overrides.deliveryPriority;
   }
+  if (
+    typeof overrides?.deliverySource === TYPEOF.STRING &&
+    overrides.deliverySource.length > NUM.ZERO
+  ) {
+    baseOptions.deliverySource = overrides.deliverySource;
+  }
   return Object.keys(baseOptions).length > NUM.ZERO ? baseOptions : undefined;
 }
 function normalizeMessageDeliveryMode(deliveryMode) {

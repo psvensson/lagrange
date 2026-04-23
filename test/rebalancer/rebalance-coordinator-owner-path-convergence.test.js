@@ -39,6 +39,14 @@ const TEST_NODE_ID = 'convergence-node';
 const TEST_PARTITION_ID = 'partition-conv-1';
 const TEST_REPLICA_ID = 'partition-conv-1-r1';
 const TEST_OPERATION_ID = 'op-conv-1';
+const TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID =
+  'op-observed-progress-replace-fallback';
+const TEST_OBSERVED_PROGRESS_TARGET_NODE_ID = 'node-target';
+const TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID = 'partition-conv-1-r1';
+const TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID = 'partition-conv-1-r2';
+const TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE =
+  'test-observed-progress-visibility-fallback';
+const TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS = 25;
 
 function buildOperationOwnerKey(operationId) {
   return `operation:${operationId}`;
@@ -421,6 +429,124 @@ test('Owner-path convergence: all progression entry points ' +
         t.ok(
           recordedOwnerKeys.includes(buildOperationOwnerKey(TEST_OPERATION_ID)),
           'services cache progression must route through the shared owner key',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'services cache progression keeps REPLACE source removal moving when ' +
+    'authoritative operation visibility is missing',
+    async (t) => {
+      const replaceRow = buildOperationRow({
+        operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        type: OperationType.REPLACE,
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: ReplicaStatus.CREATING,
+        replicaId: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+        sourceNodeId: TEST_NODE_ID,
+        targetNodeId: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
+      });
+      const {
+        coordinator,
+        recordedOwnerKeys,
+        operationMap,
+        applyCacheChange,
+      } = createConvergenceCoordinator({
+        operationRows: [replaceRow],
+      });
+      const visibilityObservationCalls = [];
+      const originalEvaluateRemoveSafety =
+        coordinator.workflowOwner.evaluateRemoveSafety.bind(
+          coordinator.workflowOwner,
+        );
+      coordinator.workflowOwner.evaluateRemoveSafety =
+        async (operation) => {
+          if (operation?.operationId ===
+            TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID &&
+            operation?.type === OperationType.REPLACE &&
+            operation?.workflowStep === WORKFLOW_STEP.ACTIVE) {
+            return coordinator.workflowOwner
+              .buildSafeRemoveSafetyEvaluation();
+          }
+          return originalEvaluateRemoveSafety(operation);
+        };
+      coordinator.repository.queryAuthoritativeOperationById = async () => null;
+      coordinator.repository.getOperationByIdVisibilityObservation =
+        async (operationId, options = {}) => {
+          visibilityObservationCalls.push({
+            operationId,
+            options: {...options},
+          });
+          if (operationId !== TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID) {
+            return {
+              operation: null,
+              deferredOutcome: null,
+            };
+          }
+          return {
+            operation: {
+              ...coordinator.repository.rowToOperation(
+                operationMap.get(TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID),
+              ),
+              sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
+            },
+            deferredOutcome: {
+              completionState: 'deferred',
+              retryAfterMs:
+                TEST_OBSERVED_PROGRESS_VISIBILITY_RETRY_AFTER_MS,
+              source: TEST_OBSERVED_PROGRESS_VISIBILITY_DEFERRED_SOURCE,
+            },
+          };
+        };
+
+      try {
+        applyCacheChange(SYSTEM_TABLE_NAME.SERVICES, 'UPDATE', {
+          service_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+          replica_id: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+          partition_id: TEST_PARTITION_ID,
+          node_id: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: 'follower',
+        });
+
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const updated = operationMap.get(
+          TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+        );
+        t.equal(
+          updated?.workflow_step,
+          WORKFLOW_STEP.STOPPING,
+          'service-row progress should continue the REPLACE into source removal even when authoritative operation reads miss',
+        );
+        t.equal(
+          updated?.status,
+          ReplicaStatus.REMOVING,
+          'the durable row should reflect source removal in progress after the visibility fallback',
+        );
+        t.same(
+          visibilityObservationCalls,
+          [{
+            operationId: TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+            options: {
+              requireOwnerRpcRead: false,
+              allowPriorityRecoveryDeferredVisibility: true,
+            },
+          }],
+          'observed progress should use the repository visibility observation contract instead of abandoning on authoritative reread misses',
+        );
+        t.ok(
+          recordedOwnerKeys.includes(
+            buildOperationOwnerKey(
+              TEST_OBSERVED_PROGRESS_REPLACE_OPERATION_ID,
+            ),
+          ),
+          'services cache progression must still route through the shared owner key during visibility fallback',
         );
       } finally {
         await coordinator.shutdown();

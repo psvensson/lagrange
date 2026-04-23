@@ -31,6 +31,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     StartupRecoveryCoordinator,
     attachAuthoritativeRepairDiagnostics,
     buildMembershipPublicationReadOptions,
+    buildPublicationRecoveryGateSnapshot,
     buildPriorityRecoveryAdmissionByPartitionId,
     buildPriorityRecoveryLearnerPromotionByPartitionId,
     buildPriorityRecoveryPlannerByPartitionId,
@@ -52,6 +53,49 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     uniqueSorted,
   } = options;
   class AdminControlSnapshotReadinessDiagnosticsMethods {
+    resolvePublicationConvergenceGateDiagnostics(readinessEntries = []) {
+      for (const readiness of Array.isArray(readinessEntries)
+        ? readinessEntries
+        : []) {
+        const priorityControlPlaneRecovery =
+          readiness?.priorityControlPlaneRecovery;
+        if (
+          !priorityControlPlaneRecovery ||
+          typeof priorityControlPlaneRecovery !== TYPEOF.OBJECT
+        ) {
+          continue;
+        }
+        const publicationRecoveryGate =
+          priorityControlPlaneRecovery.publicationRecoveryGate;
+        if (
+          !publicationRecoveryGate ||
+          typeof publicationRecoveryGate !== TYPEOF.OBJECT
+        ) {
+          continue;
+        }
+        return buildPublicationRecoveryGateSnapshot({
+          ...publicationRecoveryGate,
+          publicationEpoch:
+            publicationRecoveryGate.publicationEpoch ??
+            priorityControlPlaneRecovery.publicationEpoch ??
+            null,
+          publicationStatus:
+            publicationRecoveryGate.publicationStatus ??
+            priorityControlPlaneRecovery.publicationStatus ??
+            null,
+          priorityRecoveryReasonCodes:
+            publicationRecoveryGate.reasonCodes ??
+            priorityControlPlaneRecovery.reasonCodes ??
+            [],
+          priorityPartitionSummary:
+            publicationRecoveryGate.priorityPartitionSummary ??
+            priorityControlPlaneRecovery.priorityPartitionSummary ??
+            null,
+        });
+      }
+      return null;
+    }
+
     resolvePublicationConvergenceDiagnostics(
       readinessEntries = [],
       fallbackPublication = null,
@@ -132,6 +176,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           recoveryProtocolState: publicationSnapshot.recoveryProtocolState,
           priorityRecoveryReasonCodes:
             publicationSnapshot.priorityRecoveryReasonCodes,
+          publicationRecoveryGate: publicationSnapshot.publicationRecoveryGate,
         };
       };
       for (const readiness of Array.isArray(readinessEntries)
@@ -480,6 +525,22 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         timeoutClassifications,
       };
     }
+    resolveWorkflowTransitionMetadataObject(metadata, field) {
+      const entry = metadata?.[field];
+      if (entry && typeof entry === TYPEOF.OBJECT) {
+        return entry;
+      }
+      return null;
+    }
+    resolveWorkflowTransitionArray(primaryEntries, fallbackEntries = null) {
+      if (Array.isArray(primaryEntries)) {
+        return primaryEntries;
+      }
+      if (Array.isArray(fallbackEntries)) {
+        return fallbackEntries;
+      }
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
     /**
      * Build one workflow-admission record from table transition metadata.
      * @param {Object} tableRow
@@ -489,8 +550,8 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     buildWorkflowAdmissionEntry(tableRow) {
       const transitionState = firstStringField(
         tableRow,
-        "partition_transition_state",
-        "partitionTransitionState",
+        'partition_transition_state',
+        'partitionTransitionState',
       );
       const metadata = this.parseWorkflowTransitionMetadata(tableRow);
       const workflowId = firstStringField(
@@ -500,39 +561,29 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
       if (!transitionState || !metadata || !workflowId) {
         return null;
       }
-      const admission =
-        metadata?.[PARTITION_TRANSITION_METADATA_FIELD.ADMISSION] &&
-        typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.ADMISSION] ===
-          TYPEOF.OBJECT
-          ? metadata[PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]
-          : null;
-      const failure =
-        metadata?.[PARTITION_TRANSITION_METADATA_FIELD.FAILURE] &&
-        typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.FAILURE] ===
-          TYPEOF.OBJECT
-          ? metadata[PARTITION_TRANSITION_METADATA_FIELD.FAILURE]
-          : null;
+      const admission = this.resolveWorkflowTransitionMetadataObject(
+        metadata,
+        PARTITION_TRANSITION_METADATA_FIELD.ADMISSION,
+      );
+      const failure = this.resolveWorkflowTransitionMetadataObject(
+        metadata,
+        PARTITION_TRANSITION_METADATA_FIELD.FAILURE,
+      );
       const blockingReasons = Array.isArray(admission?.blockingReasons)
         ? admission.blockingReasons
         : ADMIN_CACHE_DUMP.EMPTY;
-      const timeoutClassification =
-        failure?.timeoutClassification &&
-        typeof failure.timeoutClassification === TYPEOF.OBJECT
-          ? failure.timeoutClassification
-          : null;
-      const retry =
-        metadata?.[PARTITION_TRANSITION_METADATA_FIELD.RETRY] &&
-        typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY] ===
-          TYPEOF.OBJECT
-          ? metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY]
-          : null;
-      const topologySnapshot =
-        metadata?.[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] &&
-        typeof metadata[
-          PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT
-        ] === TYPEOF.OBJECT
-          ? metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]
-          : null;
+      const timeoutClassification = this.resolveWorkflowTransitionMetadataObject(
+        failure,
+        'timeoutClassification',
+      );
+      const retry = this.resolveWorkflowTransitionMetadataObject(
+        metadata,
+        PARTITION_TRANSITION_METADATA_FIELD.RETRY,
+      );
+      const topologySnapshot = this.resolveWorkflowTransitionMetadataObject(
+        metadata,
+        PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT,
+      );
       return {
         workflowId,
         workflowType: MANAGED_SPLIT_WORKFLOW_TYPE,
@@ -551,11 +602,9 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           metadata,
           PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID,
         ),
-        targetPartitionIds: Array.isArray(
+        targetPartitionIds: this.resolveWorkflowTransitionArray(
           metadata?.[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS],
-        )
-          ? metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]
-          : ADMIN_CACHE_DUMP.EMPTY,
+        ),
         topologySnapshotCapturedAt: firstStringField(
           topologySnapshot,
           ADMIN_CONTROL_SNAPSHOT_LITERAL.CAPTUREDAT,
@@ -564,22 +613,20 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
           topologySnapshot,
           ADMIN_CONTROL_SNAPSHOT_LITERAL.SOURCELEADERNODEID,
         ),
-        candidateTargetNodeIds: Array.isArray(admission?.candidateTargetNodeIds)
-          ? admission.candidateTargetNodeIds
-          : Array.isArray(topologySnapshot?.candidateTargetNodeIds)
-            ? topologySnapshot.candidateTargetNodeIds
-            : ADMIN_CACHE_DUMP.EMPTY,
-        sourceRoutableNodeIds: Array.isArray(admission?.sourceRoutableNodeIds)
-          ? admission.sourceRoutableNodeIds
-          : Array.isArray(topologySnapshot?.sourceRoutableNodeIds)
-            ? topologySnapshot.sourceRoutableNodeIds
-            : ADMIN_CACHE_DUMP.EMPTY,
-        eligibleNodeIds: Array.isArray(admission?.eligibleNodeIds)
-          ? admission.eligibleNodeIds
-          : ADMIN_CACHE_DUMP.EMPTY,
-        ineligibleNodes: Array.isArray(admission?.ineligibleNodes)
-          ? admission.ineligibleNodes
-          : ADMIN_CACHE_DUMP.EMPTY,
+        candidateTargetNodeIds: this.resolveWorkflowTransitionArray(
+          admission?.candidateTargetNodeIds,
+          topologySnapshot?.candidateTargetNodeIds,
+        ),
+        sourceRoutableNodeIds: this.resolveWorkflowTransitionArray(
+          admission?.sourceRoutableNodeIds,
+          topologySnapshot?.sourceRoutableNodeIds,
+        ),
+        eligibleNodeIds: this.resolveWorkflowTransitionArray(
+          admission?.eligibleNodeIds,
+        ),
+        ineligibleNodes: this.resolveWorkflowTransitionArray(
+          admission?.ineligibleNodes,
+        ),
         estimatedBytes: Number.isFinite(Number(admission?.estimatedBytes))
           ? Number(admission.estimatedBytes)
           : null,

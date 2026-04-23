@@ -118,6 +118,8 @@ const LOAD_STOP_DISPATCH_SETTLE_MS = 25;
 const LOAD_STOP_WAIT_TIMEOUT_MS = 250;
 const ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS = 150;
 const ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS = 80;
+const CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE =
+  '(HTTP code 304) container already stopped -  ';
 
 function buildCriticalSystemDiscoverySnapshot(nodeIds, capturedAt = 1) {
   return {
@@ -205,6 +207,50 @@ test('Unit: restartNode stages stop, shutdown boundary, start, and admin readine
     cluster._chaos = {
       async stopNode(nodeId) {
         calls.push(['stopNode', nodeId]);
+      },
+      async startNode(nodeId) {
+        calls.push(['startNode', nodeId]);
+      },
+    };
+    cluster._waitForRestartShutdownBoundary = async (nodeId) => {
+      calls.push(['waitForRestartShutdownBoundary', nodeId]);
+    };
+    cluster._waitForNodeAdminReadiness = async (nodeId) => {
+      calls.push(['waitForNodeAdminReadiness', nodeId]);
+    };
+
+    await cluster.restartNode('node-a');
+
+    assert.deepStrictEqual(calls, [
+      ['closeQueryConnection'],
+      ['stopNode', 'node-a'],
+      ['waitForRestartShutdownBoundary', 'node-a'],
+      ['startNode', 'node-a'],
+      ['closeQueryConnection'],
+      ['waitForNodeAdminReadiness', 'node-a'],
+    ]);
+  });
+
+test('Unit: restartNode tolerates ignorable already-stopped stop errors',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const calls = [];
+    cluster._nodes.set('node-a', {
+      id: 'node-a',
+      role: NODE_ROLES.SEED,
+      closeQueryConnection() {
+        calls.push(['closeQueryConnection']);
+      },
+    });
+    cluster._chaos = {
+      async stopNode(nodeId) {
+        calls.push(['stopNode', nodeId]);
+        throw new Error(CONTAINER_ALREADY_STOPPED_ERROR_MESSAGE);
       },
       async startNode(nodeId) {
         calls.push(['startNode', nodeId]);
@@ -1322,3 +1368,101 @@ async () => {
     load_lane_denied: 1,
   });
 });
+
+test(
+  'Unit: load-mode active convergence prefers the live publication gate ' +
+    'over stale publication summary',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const createNode = (nodeId) => ({
+      id: nodeId,
+      role: nodeId === 'node-a' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async probeTrafficReadiness() {
+        return {
+          status: 200,
+          phase: 'TRAFFIC_READY',
+          state: 'traffic_ready',
+          reasons: [],
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a', 'node-b'],
+            controlPlaneDiagnostics: {
+              publicationConvergence: {
+                publicationEpoch: 12,
+                publicationStatus: 'PUBLISHED',
+                publishedActiveNodeIds: ['node-a', 'node-b'],
+                pendingAckNodeIds: [],
+                acknowledgedNodeIds: ['node-a', 'node-b'],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  missingPartitionIds: ['replica_operations-p1'],
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    requiredDistinctNodeCount: 3,
+                    readyDistinctNodeCount: 2,
+                    spreadGap: 1,
+                  }],
+                },
+                recoveryProtocolState: 'priority_spread_pending',
+                priorityRecoveryReasonCodes: [
+                  'priority_partitions_not_spread',
+                ],
+              },
+              publicationConvergenceGate: {
+                state: 'ready',
+                ready: true,
+                active: false,
+                publicationEpoch: 12,
+                publicationStatus: 'PUBLISHED',
+                reasonCodes: [],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  requiredDistinctNodeCount: 3,
+                  readyEligibleNodeCount: 2,
+                  totalPriorityPartitionCount: 5,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+                pendingAckNodeIds: [],
+                missingPublishedNodeIds: [],
+                prioritySpreadPending: false,
+                publicationPending: false,
+                ackPending: false,
+              },
+            },
+          }],
+        };
+      },
+      async getLogs() {
+        return '';
+      },
+    });
+
+    cluster._nodes.set('node-a', createNode('node-a'));
+    cluster._nodes.set('node-b', createNode('node-b'));
+
+    const probeResult = await cluster._probeClusterActiveState(
+      Date.now() + 1000,
+      {mode: 'load'},
+    );
+
+    assert.strictEqual(
+      probeResult.publicationConvergenceGate.ready,
+      true,
+      'load-mode convergence should follow the live readiness-owned gate',
+    );
+    assert.strictEqual(
+      probeResult.allActive,
+      true,
+      'stale publication summary should not keep load readiness blocked once the live gate is ready',
+    );
+  },
+);

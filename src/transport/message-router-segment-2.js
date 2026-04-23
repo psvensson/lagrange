@@ -1110,6 +1110,12 @@ class MessageRouterSegment2 extends MessageRouterSegment1 {
     ) {
       transportDeliveryOptions.deliveryPriority = options.deliveryPriority;
     }
+    if (
+      typeof options?.deliverySource === TRANSPORT_TYPEOF.STRING &&
+      options.deliverySource.length > TRANSPORT_NUM.ZERO
+    ) {
+      transportDeliveryOptions.deliverySource = options.deliverySource;
+    }
     if (Object.keys(transportDeliveryOptions).length === TRANSPORT_NUM.ZERO) {
       return {};
     }

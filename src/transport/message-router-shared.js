@@ -97,6 +97,7 @@ const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = "timeout.websocketConnectMs";
 const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = "WS_CONNECT_TIMEOUT";
 const RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS = 5e3;
 const UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS = 3e4;
+const DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT = 4;
 const RETIRED_PENDING_RESPONSE_REASON = Object.freeze({
   TIMEOUT: "timeout",
   CANCELLED: "cancelled",
@@ -414,6 +415,42 @@ function summarizeRaftAppendCommand(command) {
   }
   return `raft:append:${commandType}`;
 }
+function buildTypelessQueryDeliverySource(message) {
+  const tableName = extractSqlTableName(message?.sql);
+  const operationKind = extractSqlOperationKind(message?.sql);
+  if (
+    !tableName &&
+    operationKind === MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN
+  ) {
+    return null;
+  }
+  return `query:${operationKind}:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
+}
+function buildTypelessCdcDeliverySource(message) {
+  const tableName = normalizeIdentifier(message?.tableName)?.toLowerCase();
+  const operation = normalizeIdentifier(message?.operation)?.toLowerCase();
+  if (tableName && operation) {
+    return `cdc:${operation}:${tableName}`;
+  }
+  const events = Array.isArray(message?.events) ? message.events : [];
+  if (events.length === TRANSPORT_NUM.ZERO) {
+    return null;
+  }
+  const distinctTableNames = [
+    ...new Set(
+      events
+        .map((event) => normalizeIdentifier(event?.tableName)?.toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (distinctTableNames.length === TRANSPORT_NUM.ONE) {
+    return `cdc_batch:${distinctTableNames[TRANSPORT_NUM.ZERO]}:${events.length}`;
+  }
+  if (distinctTableNames.length > TRANSPORT_NUM.ONE) {
+    return `cdc_batch:mixed:${events.length}`;
+  }
+  return MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH;
+}
 function isSupersedableRaftHeartbeatAppend(message) {
   const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
   if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
@@ -471,22 +508,60 @@ function resolvePendingReplacementKey(targetAddress, message, options = {}) {
   }
   return `raft:append:heartbeat:${normalizedTargetAddress}`;
 }
+function resolveSemanticDeliverySourceMessage(message) {
+  let semanticMessage = message;
+  let unwrapCount = TRANSPORT_NUM.ZERO;
+  while (
+    semanticMessage &&
+    typeof semanticMessage === TRANSPORT_TYPEOF.OBJECT &&
+    unwrapCount < DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT
+  ) {
+    const messageType = normalizeIdentifier(semanticMessage?.type);
+    if (messageType) {
+      return semanticMessage;
+    }
+    const nestedPayload = semanticMessage?.payload;
+    if (
+      !nestedPayload ||
+      typeof nestedPayload !== TRANSPORT_TYPEOF.OBJECT ||
+      nestedPayload === semanticMessage
+    ) {
+      return semanticMessage;
+    }
+    semanticMessage = nestedPayload;
+    unwrapCount += TRANSPORT_NUM.ONE;
+  }
+  return semanticMessage;
+}
 function buildDerivedDeliverySource(targetAddress, message) {
-  const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
+  const semanticMessage = resolveSemanticDeliverySourceMessage(message);
+  const messageType = normalizeIdentifier(semanticMessage?.type)?.toLowerCase();
   if (messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
-    if (isSupersedableRaftHeartbeatAppend(message)) {
+    if (isSupersedableRaftHeartbeatAppend(semanticMessage)) {
       return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
     }
-    const entry = Array.isArray(message?.data) ? message.data[0] : null;
+    const entry = Array.isArray(semanticMessage?.data) ?
+      semanticMessage.data[0] :
+      null;
     return summarizeRaftAppendCommand(entry?.command);
   }
   if (messageType === QUERY_DATA_PLANE_MESSAGE_TYPE.toLowerCase()) {
-    const tableName = extractSqlTableName(message?.sql);
-    const operationKind = extractSqlOperationKind(message?.sql);
+    const tableName = extractSqlTableName(semanticMessage?.sql);
+    const operationKind = extractSqlOperationKind(semanticMessage?.sql);
     return `query:${operationKind}:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
   }
   if (messageType) {
     return `message:${messageType}`;
+  }
+  const typelessQueryDeliverySource =
+    buildTypelessQueryDeliverySource(semanticMessage);
+  if (typelessQueryDeliverySource) {
+    return typelessQueryDeliverySource;
+  }
+  const typelessCdcDeliverySource =
+    buildTypelessCdcDeliverySource(semanticMessage);
+  if (typelessCdcDeliverySource) {
+    return typelessCdcDeliverySource;
   }
   const normalizedTarget = normalizeIdentifier(targetAddress);
   if (normalizedTarget) {
@@ -638,6 +713,20 @@ function countPendingBySource(queue, deliverySource) {
       ? count + TRANSPORT_NUM.ONE
       : count;
   }, TRANSPORT_NUM.ZERO);
+}
+function buildPendingSourceAdmission(queue, deliverySource, deliveryPriority) {
+  const pendingForSource = countPendingBySource(queue, deliverySource);
+  const pendingSourceLimit = resolvePendingSourceLimit(queue);
+  const applySourceLimit = pendingSourceLimit > TRANSPORT_NUM.ZERO;
+  return Object.freeze({
+    pendingForSource,
+    pendingSourceLimit,
+    applySourceLimit,
+    sourceBackpressured:
+      applySourceLimit &&
+      pendingSourceLimit > TRANSPORT_NUM.ZERO &&
+      pendingForSource >= pendingSourceLimit,
+  });
 }
 function resolvePendingSourceLimit(queue) {
   if (!queue) {
@@ -848,15 +937,17 @@ class OutboundDeliveryRegistryOwner {
         OutboundDeliveryPriority.BACKGROUND,
       );
       const backgroundPendingLimit = resolveBackgroundPendingLimit(queue);
-      const pendingForSource = countPendingBySource(queue, deliverySource);
-      const pendingSourceLimit = resolvePendingSourceLimit(queue);
+      const pendingSourceAdmission = buildPendingSourceAdmission(
+        queue,
+        deliverySource,
+        deliveryPriority,
+      );
       const isNodeBackpressured =
         deliveryPriority === OutboundDeliveryPriority.CRITICAL
           ? queue.pending.length >= queue.maxPending
           : pendingBackground >= backgroundPendingLimit;
       const isSourceBackpressured =
-        pendingSourceLimit > TRANSPORT_NUM.ZERO &&
-        pendingForSource >= pendingSourceLimit;
+        pendingSourceAdmission.sourceBackpressured === true;
       if (isNodeBackpressured || isSourceBackpressured) {
         const error = new Error(
           ROUTER_ERROR_MSG.outboundQueueBackpressured(nodeId, queue.maxPending),
@@ -880,8 +971,9 @@ class OutboundDeliveryRegistryOwner {
               OutboundDeliveryPriority.CRITICAL,
             ),
             pendingBackground,
-            pendingForSource,
-            pendingSourceLimit,
+            pendingForSource: pendingSourceAdmission.pendingForSource,
+            pendingSourceLimit: pendingSourceAdmission.pendingSourceLimit,
+            sourceLimitApplied: pendingSourceAdmission.applySourceLimit,
             backgroundPendingLimit,
             criticalReserve: queue.criticalReserve,
             maxPending: queue.maxPending,

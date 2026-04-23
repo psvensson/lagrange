@@ -1093,6 +1093,174 @@ test('RebalanceCoordinator - dispatches priority REPLACE source removal when can
     }
   });
 
+test('RebalanceCoordinator - keeps priority REPLACE source removal deferred when authoritative visibility is unresolved despite locally safe spread',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const deliveries = [];
+    const convergedPlanningSnapshot = Object.freeze({
+      publishedActiveNodeIdsPresent: true,
+      publishedActiveNodeIds: Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]),
+      recoveryActiveNodeIds: Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]),
+      projectedServingNodeIds: Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]),
+      locallyEligibleNodeIds: Object.freeze([
+        'node-a',
+        'node-b',
+        'node-c',
+        'node-d',
+      ]),
+      publishedMembershipIncludesTargetNode: true,
+      priorityPartitionSummary: Object.freeze({
+        satisfied: true,
+        requiredDistinctNodeCount: 3,
+      }),
+    });
+    const coordinator = createTestCoordinator({
+      nodeId: 'node-d',
+      enableTimeouts: false,
+      messageRouter: {
+        deliver: async () => {
+          deliveries.push('deliver');
+          return {acknowledged: true, status: 'initiated'};
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              repairEligible: true,
+              serveEligible: true,
+            },
+          };
+        },
+        async getMembershipPublicationPlanningSnapshotBestEffort() {
+          return convergedPlanningSnapshot;
+        },
+        async getMembershipPublicationPlanningSnapshot() {
+          return convergedPlanningSnapshot;
+        },
+        getMembershipPublicationPlanningSnapshotSync() {
+          return convergedPlanningSnapshot;
+        },
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3}),
+      },
+      cacheData: {
+        nodes: [
+          createReadyNode('node-a'),
+          createReadyNode('node-b'),
+          createReadyNode('node-c'),
+          createReadyNode('node-d'),
+        ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: 'replica_operations-p1',
+            replicaId: 'replica_operations-p1-r1',
+            nodeId: 'node-a',
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'replica_operations-p1',
+            replicaId: 'replica_operations-p1-r2',
+            nodeId: 'node-b',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'replica_operations-p1',
+            replicaId: 'replica_operations-p1-r3',
+            nodeId: 'node-c',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'replica_operations-p1',
+            replicaId: 'replica_operations-p1-r4',
+            nodeId: 'node-d',
+            raftRole: 'follower',
+          }),
+        ],
+      },
+    });
+
+    coordinator.initialize();
+    coordinator.repository.getLastIncompleteOperationReadOutcome = () => ({
+      completionState: 'operation_visibility_deferred',
+      retryAfterMs: 250,
+    });
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: 'replica_operations-p1',
+        nodeId: 'node-d',
+        sourceNodeId: 'node-a',
+        replicaId: 'replica_operations-p1-r1',
+      });
+
+      operation.replicaId = 'replica_operations-p1-r4';
+      operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      operation.status = 'active';
+
+      const result = await coordinator.executeOperation(operation);
+
+      t.equal(
+        result.success,
+        false,
+        'priority source removal should stay deferred while the shared visibility contract remains unresolved',
+      );
+      t.equal(
+        result.skipped,
+        true,
+        'priority source removal should keep the canonical defer path instead of falling through to local membership math',
+      );
+      t.equal(
+        result.deferReason,
+        REBALANCE_COORDINATOR_DEFER_REASON.REPLACE_REMOVE_SAFETY_BLOCKED,
+        'priority source removal should preserve the canonical replace-remove safety defer reason',
+      );
+      t.match(
+        result.error,
+        /operation visibility is deferred for safe removal/,
+        'the defer should explain that authoritative visibility is still unresolved',
+      );
+      t.equal(
+        deliveries.length,
+        0,
+        'priority source removal should not dispatch while authoritative visibility is unresolved',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the source remove phase should remain deferred while the shared visibility contract is unresolved',
+      );
+    } finally {
+      await coordinator.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 
   registerQuorumConditionedRemoveSafetyTailFinalTests({
     test,

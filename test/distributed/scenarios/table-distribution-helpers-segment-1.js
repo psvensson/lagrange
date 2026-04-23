@@ -748,8 +748,16 @@ async function queryControl(node, sql, params = [], options = {}) {
 }
 
 function resolveControlQueryNodes(primaryNode, options = {}) {
+  const hasControlQueryCapability = (node) => {
+    return (
+      node &&
+      typeof node === "object" &&
+      (typeof node.query === "function" ||
+        typeof node.queryWithTimeout === "function")
+    );
+  };
   const candidates = [];
-  if (primaryNode && typeof primaryNode === "object") {
+  if (hasControlQueryCapability(primaryNode)) {
     candidates.push(primaryNode);
   }
   const extraNodes = Array.isArray(options.queryNodes)
@@ -758,7 +766,7 @@ function resolveControlQueryNodes(primaryNode, options = {}) {
       ? options.fallbackNodes
       : [];
   for (const node of extraNodes) {
-    if (node && typeof node === "object") {
+    if (hasControlQueryCapability(node)) {
       candidates.push(node);
     }
   }
@@ -776,6 +784,39 @@ function resolveControlQueryNodes(primaryNode, options = {}) {
     uniqueCandidates.push(node);
   }
   return uniqueCandidates;
+}
+
+async function forceRepairControlSnapshot(node) {
+  const candidateLanes = [
+    CONTROL_QUERY_LANE_SNAPSHOT,
+    CONTROL_QUERY_LANE_CONTROL,
+  ];
+  for (const lane of candidateLanes) {
+    try {
+      const localSnapshot = await queryControlSingle(
+        node,
+        SQL_CONTROL_SNAPSHOT,
+        [],
+        {
+          lane,
+        },
+      );
+      if (!shouldFallbackToForcedControlSnapshot(localSnapshot)) {
+        return false;
+      }
+    } catch (_localSnapshotError) {
+      // Fall through to the forced query on this lane.
+    }
+    try {
+      await queryControlSingle(node, SQL_CONTROL_SNAPSHOT_FORCE_REPAIR, [], {
+        lane,
+      });
+      return true;
+    } catch (_forcedSnapshotError) {
+      continue;
+    }
+  }
+  return false;
 }
 
 async function forceRepairControlSnapshotAcrossQueryNodes(
@@ -1010,6 +1051,7 @@ function resolveBenchmarkAdmissionStableWindowMs(cluster, options = {}) {
 }
 
 export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 = {
+  BENCHMARK_DEFAULTS,
   TABLE_NAME_LOGS,
   TABLE_NAME_BENCHMARK_EVENTS,
   SERVICE_TYPE_PARTITION,
@@ -1080,6 +1122,12 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 = {
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD,
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED,
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED,
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
+  normalizeControlPlaneSystemTableVisibilityState,
+  isPendingControlPlaneSystemTableVisibilityState,
+  OWNER_CONTRACT_STATE,
+  normalizeOwnerContractNextAction,
+  normalizeOwnerContractState,
   sleep,
   mapNodeIds,
   normalizePlannerObservationReasonCodes,
@@ -1124,4 +1172,9 @@ export const TABLE_DISTRIBUTION_HELPERS_SEGMENT_1 = {
   resolveBenchmarkBootstrapRequiredNodeCount,
   resolveBenchmarkAdmissionTimeoutMs,
   resolveBenchmarkAdmissionStableWindowMs,
+  buildBenchmarkLoadAdmissionSnapshot,
+  buildBenchmarkPartitionConvergenceSnapshot,
+  BENCHMARK_PARTITION_DISPATCH_MODE,
+  isBenchmarkCriticalControlPlaneStable,
+  resolveBenchmarkPartitionDispatchMode,
 };

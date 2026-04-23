@@ -39,6 +39,8 @@ const GATEWAY_FAILURE_DISTRIBUTED_PARTICIPANT_CODE =
   'DISTRIBUTED_PARTICIPANT_FAILURE';
 const GATEWAY_FAILURE_RECONNECT_MESSAGE =
   'Connection to node node-2 closed';
+const CONTROL_PLANE_PUBLICATION_READ_DELIVERY_SOURCE =
+  'control-plane:read:control_plane_publications';
 
 test('ControlPlaneSystemTableGateway readRows uses authoritative recovery-' +
   'eligible defaults', async (t) => {
@@ -146,6 +148,11 @@ async (t) => {
     calls[0]?.options?.replicaFallbackConsistency,
     'local_leader',
     'gateway should preserve explicit replica-fallback consistency',
+  );
+  t.equal(
+    calls[0]?.options?.queryOptions?.deliverySource,
+    CONTROL_PLANE_PUBLICATION_READ_DELIVERY_SOURCE,
+    'gateway should stamp one canonical delivery source for priority publication reads',
   );
 });
 

@@ -1,147 +1,30 @@
-import { PARTITION_SERVICE_SHARED } from "./partition-service-shared.js";
-import { PartitionServiceSegment3Part1 } from "./partition-service-segment-3-part-1.js";
+import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {PartitionServiceSegment3Part1} from './partition-service-segment-3-part-1.js';
 
 const {
-  ACTIVE_VOTER_ROLES,
-  ADD_LIKE_REPLICA_OPERATION_TYPES,
-  AddressManager,
-  AuthoritativeRowMutationHelper,
-  CANONICAL_PARTITION_LEADER_OBSERVATION_STATE,
-  CDCEventBuffer,
-  CDCOperation,
-  CDCPipelineMetrics,
   CDC_LIFECYCLE_LOG_MSG,
-  CDC_OPERATION,
   CDC_PIPELINE_METRIC,
-  COLUMN,
-  CONFIG_KEY,
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_PARTITION_IDS,
-  CONTROL_PLANE_READINESS_DIMENSION,
-  CRITICAL_SYSTEM_PARTITION_IDS,
-  ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
-  Database,
-  ENTITY_TYPE,
   ERRORS,
-  EntityType,
-  EventEmitter,
-  HLCClockService,
-  INITIAL_PARTITION_IDS,
-  LIFECYCLE_REASON,
-  LeaderActivationGate,
-  LeaderActivationScheduler,
-  LifeRaft,
-  LiferaftProvider,
-  LoggingService,
-  METRICS_LOG_TAG,
   NUM,
-  OperationType,
-  PARTICIPANT_ACK_FIELD,
   PARTITION_CDC_EVENT_BUILD_STATE,
-  PARTITION_RAFT_ROLE,
-  PARTITION_REPLICA_COUNT_FIELD,
-  PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_INIT_STAGE,
-  PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
-  PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_OPERATION,
-  PARTITION_SERVICE_REASON,
-  PARTITION_SERVICE_RESPONSE,
-  PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL,
-  PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SPLIT_MIRROR_ORIGIN,
-  PARTITION_STATE,
-  PARTITION_SUBSYSTEM,
-  PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
-  PARTITION_WRITE_COMMIT_MODE,
-  PRESSURE_WORK_CLASS,
-  PartitionCDCDelivery,
-  PartitionCDCGenerator,
-  PartitionRaftLogEntry,
-  PartitionRaftStorage,
-  PartitionState,
-  PendingRequestTracker,
-  ProposalQueue,
-  QUERY_PAYLOAD_FIELD_MIGRATION_ID,
-  QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
-  RaftRole,
-  ReplicaStatus,
-  SERVICE_TYPE,
-  SPLIT_ACK_CHECKPOINT_FIELD,
-  SPLIT_ACK_STATUS,
-  SPLIT_PARTICIPANT_PREFIX,
-  SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS,
   SQL,
-  SQLiteLogAdapter,
   STRING,
   SYSTEM_TABLE_NAME,
-  TABLES,
-  TERMINAL_STATUSES,
-  TIMEOUT_BUDGET_DEFAULT,
   TYPEOF,
-  UnifiedRebalancer,
-  WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-  WRITE_PHASE_FIELD_ENTRY_BUILD_MS,
-  WRITE_PHASE_FIELD_FORWARD_DELIVER_MS,
-  WRITE_PHASE_FIELD_LOG_APPEND_MS,
-  WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
-  WRITE_PHASE_FIELD_SQLITE_RUN_MS,
-  WRITE_PHASE_FIELD_TOTAL_MS,
-  applyRuntimeRaftTiming,
-  assertCritical,
-  assertRaftProviderContract,
-  attachTrafficReadinessListener,
-  buildPartitionWriteEntry,
-  buildPartitionWriteFailureResult,
-  buildPartitionWriteSideEffectPlan,
-  buildPriorityRecoveryCompletion,
-  buildPriorityRecoveryOperationContextFromRecord,
-  buildPriorityRecoveryPartitionAssessment,
-  cloneSplitRoutingEntry,
-  computeReplicaElectionTimeouts,
-  createControlPlaneRuntimeBundle,
-  executePartitionWriteStatement,
-  extractPartitionSplitRoutingKey,
   fs,
-  getSystemCachePrimaryKeyFieldOrFallback,
-  getTrafficReadinessSnapshot,
-  hasPriorityRecoverySpreadGap,
-  isBackgroundWorkLifecycleReady,
-  isMetadataPublicationLifecycleReady,
-  isPriorityControlPlanePartition,
-  isRaftPacket,
-  isSystemTableWriteReady,
-  normalizePublishedRaftRole,
-  path,
-  replayPartitionSplitEntry,
-  resolveCanonicalPartitionLeaderObservation,
-  resolvePartitionSplitTargetPartitionId,
-  resolvePartitionWriteCommitMode,
-  resolvePriorityRecoveryActiveNodeCohort,
-  resolveRaftTransportDeliveryOptions,
-  routePartitionSplitMirroredWrite,
-  runRetryableControlPlaneWrite,
-  wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
 
 class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
-
   /**
    * Generate a CDC event for a write operation.
    * @param {Object} entry - Write entry.
@@ -155,9 +38,9 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.GENERATE_CDC_EVENT_CALLED, {
       partitionId: this.partitionId,
       entryType: entry.type,
-      sql: entry.sql
-        ? entry.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT)
-        : null,
+      sql: entry.sql ?
+        entry.sql.substring(NUM.ZERO, PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT) :
+        null,
       subscriberCount: this.cdcSubscribers.size,
     });
     const cdcGenerator = this.syncCDCGeneratorDependencies();
@@ -297,13 +180,13 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
       }
     }
     switch (entryType) {
-      case PARTITION_SERVICE_OPERATION.INSERT:
-      case PARTITION_SERVICE_OPERATION.UPDATE:
-      case PARTITION_SERVICE_OPERATION.UPSERT:
-      case PARTITION_SERVICE_OPERATION.DELETE:
-        return entryType;
-      default:
-        return null;
+    case PARTITION_SERVICE_OPERATION.INSERT:
+    case PARTITION_SERVICE_OPERATION.UPDATE:
+    case PARTITION_SERVICE_OPERATION.UPSERT:
+    case PARTITION_SERVICE_OPERATION.DELETE:
+      return entryType;
+    default:
+      return null;
     }
   }
   syncCDCGeneratorDependencies() {
@@ -361,9 +244,9 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
       return Promise.reject(new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE));
     }
     const timeoutMs =
-      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO
-        ? Math.floor(options.timeoutMs)
-        : PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS;
+      Number.isFinite(options?.timeoutMs) && options.timeoutMs > NUM.ZERO ?
+        Math.floor(options.timeoutMs) :
+        PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS;
     let resolvePending = null;
     let rejectPending = null;
     const commitPromise = new Promise((resolve, reject) => {
@@ -383,9 +266,9 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
         timeoutId,
         logIndex: Number.isFinite(options?.logIndex) ? options.logIndex : null,
         result:
-          options?.result && typeof options.result === TYPEOF.OBJECT
-            ? { ...options.result }
-            : null,
+          options?.result && typeof options.result === TYPEOF.OBJECT ?
+            {...options.result} :
+            null,
       });
     } catch (error) {
       clearTimeout(timeoutId);
@@ -399,7 +282,7 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
       return false;
     }
     pending.result =
-      result && typeof result === TYPEOF.OBJECT ? { ...result } : null;
+      result && typeof result === TYPEOF.OBJECT ? {...result} : null;
     return true;
   }
   resolveCommittedWrite(entryId, result = null) {
@@ -408,9 +291,9 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
       return false;
     }
     const resolvedResult = {
-      ...(pending.result && typeof pending.result === TYPEOF.OBJECT
-        ? pending.result
-        : {}),
+      ...(pending.result && typeof pending.result === TYPEOF.OBJECT ?
+        pending.result :
+        {}),
       ...(result && typeof result === TYPEOF.OBJECT ? result : {}),
     };
     if (
@@ -443,9 +326,9 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
     if (command.entryId) {
       return `entry:${command.entryId}`;
     }
-    const params = Array.isArray(command.params)
-      ? JSON.stringify(command.params)
-      : STRING.EMPTY;
+    const params = Array.isArray(command.params) ?
+      JSON.stringify(command.params) :
+      STRING.EMPTY;
     return [
       command.proposedBy || STRING.EMPTY,
       String(command.proposedAt || NUM.ZERO),
@@ -474,12 +357,12 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
     if (!isInsertStatement) {
       return false;
     }
-    const code = String(error.code || "").toUpperCase();
+    const code = String(error.code || '').toUpperCase();
     if (code === PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT_PRIMARYKEY) {
       return true;
     }
     if (code.startsWith(PARTITION_SERVICE_LITERAL.SQLITE_CONSTRAINT)) {
-      const message = String(error.message || "");
+      const message = String(error.message || '');
       if (
         message
           .toUpperCase()
@@ -811,7 +694,7 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
     } catch (error) {
       this.logger.error(
         PARTITION_SERVICE_ERROR_MSG.PARTITION_SIZE_UPDATE_FAILED,
-        { partitionId: this.partitionId, error: error.message },
+        {partitionId: this.partitionId, error: error.message},
       );
     }
   }
@@ -874,4 +757,4 @@ class PartitionServiceSegment3 extends PartitionServiceSegment3Part1 {
   }
 }
 
-export { PartitionServiceSegment3 };
+export {PartitionServiceSegment3};

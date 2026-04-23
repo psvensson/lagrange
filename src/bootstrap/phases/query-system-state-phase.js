@@ -10,10 +10,10 @@
 import {assertCritical} from '../../utils/assert.js';
 import {NodeService} from '../../node/node-service.js';
 import {NodeRegistrationOwner} from '../shared/node-registration-owner.js';
-import {
-  getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
-} from '../../control-plane/control-plane-error-classification.js';
+import {isRetryableControlPlaneError} from
+  '../../control-plane/control-plane-error-classification.js';
+import {getControlPlaneRetryAfterMs} from
+  '../../control-plane/control-plane-error-classification.js';
 import {
   CACHE_DEFAULT,
   CACHE_HYDRATION_TABLES,
@@ -63,9 +63,11 @@ const LOG_BLOCKING_BACKFILL_COMPLETE =
 const LOG_BLOCKING_BACKFILL_FAILED =
   'Blocking join backfill failed for discovery-critical propagated tables';
 const LOG_BLOCKING_BACKFILL_SKIPPED =
-  'Skipping blocking join backfill because bootstrap snapshot already covers discovery-critical propagated tables';
+  'Skipping blocking join backfill because bootstrap snapshot already covers ' +
+  'discovery-critical propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_SKIPPED =
-  'Skipping opportunistic join backfill because bootstrap snapshot already covers opportunistic propagated tables';
+  'Skipping opportunistic join backfill because bootstrap snapshot already ' +
+  'covers opportunistic propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_COMPLETE =
   'Completed opportunistic join backfill for non-critical propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
@@ -93,6 +95,7 @@ class QuerySystemStatePhase {
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.opportunisticBackfillPromise = null;
+    this.joinAdmissionSqlQueryEngine = null;
     this.nodeRegistrationOwner = new NodeRegistrationOwner({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
@@ -110,6 +113,8 @@ class QuerySystemStatePhase {
           this.delegates.connectToClusterNodes?.(),
         getCdcIntegrationService: () =>
           this.delegates.getCdcIntegrationService(),
+        getJoinAdmissionSqlQueryEngine: () =>
+          this.joinAdmissionSqlQueryEngine,
         getCdcSubscriptionsActive: () =>
           this.delegates.getCdcSubscriptionsActive(),
         getNodeStorageBudgetService: () =>
@@ -120,6 +125,10 @@ class QuerySystemStatePhase {
           this.delegates.getJoinLifecycleIntentType?.() || null,
         getJoinStartupMode: () =>
           this.delegates.getJoinStartupMode?.() || null,
+        getClusterIncarnationFence: () =>
+          this.delegates.getClusterIncarnationFence?.() || null,
+        getDataDir: () =>
+          this.delegates.getDataDir?.() || null,
         getNodeCapabilities: () =>
           this.delegates.getNodeCapabilities(),
       },
@@ -158,6 +167,7 @@ class QuerySystemStatePhase {
       this.delegates.getCdcIntegrationService()?.sqlQueryEngine,
       JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
     );
+    this.joinAdmissionSqlQueryEngine = queryEngine;
     assertCritical(
       this.delegates.getMessageRouter(),
       JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED,
@@ -813,6 +823,20 @@ class QuerySystemStatePhase {
   async upsertSystemTableRowWithRetry(tableName, rowData, options = {}) {
     return this.nodeRegistrationOwner.upsertSystemTableRowWithRetry(
       tableName,
+      rowData,
+      options,
+    );
+  }
+
+  /**
+   * Upsert one services row through the shared retryable join-time
+   * control-plane publication path.
+   * @param {Object} rowData
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async upsertJoinServiceRowWithRetry(rowData, options = {}) {
+    return this.nodeRegistrationOwner.upsertJoinServiceRowWithRetry(
       rowData,
       options,
     );

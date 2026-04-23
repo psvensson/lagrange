@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { TABLE_DISTRIBUTION_HELPERS_SEGMENT_2 } from "./table-distribution-helpers-segment-2.js";
 const {
   TABLE_NAME_LOGS,
@@ -70,6 +71,12 @@ const {
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FIELD,
   CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED,
   CONTROL_SNAPSHOT_OBSERVATION_CONTRACT_STATE_FAILED,
+  normalizeControlPlaneSystemTableVisibilityState,
+  isPendingControlPlaneSystemTableVisibilityState,
+  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
+  OWNER_CONTRACT_STATE,
+  normalizeOwnerContractNextAction,
+  normalizeOwnerContractState,
   sleep,
   mapNodeIds,
   normalizePlannerObservationReasonCodes,

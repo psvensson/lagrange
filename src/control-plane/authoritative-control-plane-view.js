@@ -20,6 +20,7 @@ import {
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   resolveAuthoritativeReadModeContract,
+  resolveControlPlaneSystemTableDeliverySource,
   resolveReadProfileOptions,
 } from './control-plane-system-table-gateway.js';
 import {
@@ -436,6 +437,14 @@ class AuthoritativeControlPlaneView {
         // refresh through routed owner-RPC fallback.
         allowReadinessAuthoritativeRefresh: false,
       };
+      const deliverySource = resolveControlPlaneSystemTableDeliverySource({
+        deliverySource: queryOptions.deliverySource || null,
+        tableName,
+        sql,
+      });
+      if (typeof deliverySource === TYPEOF.STRING && deliverySource.length > NUM.ZERO) {
+        queryOptions.deliverySource = deliverySource;
+      }
       if (!this.canRead()) {
         return Object.freeze({
           success: false,

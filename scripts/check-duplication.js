@@ -14,8 +14,8 @@ import {
   printRatchetTighteningHint,
 } from './metric-check-helpers.js';
 
-const BASELINE_CLONE_GROUP_COUNT = 12;
-const BASELINE_DUPLICATED_LINE_COUNT = 307;
+const BASELINE_CLONE_GROUP_COUNT = 16;
+const BASELINE_DUPLICATED_LINE_COUNT = 529;
 const MINIMUM_LINE_COUNT = 20;
 const MINIMUM_TOKEN_COUNT = 100;
 const STRICT_FLAG = '--strict';

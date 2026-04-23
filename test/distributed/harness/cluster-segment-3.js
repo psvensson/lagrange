@@ -5,6 +5,7 @@ const {
   ADMIN_QUERY_TRACE_NORMALIZE_PATTERN,
   ADMIN_QUERY_TRACE_SQL_FINGERPRINT_LENGTH,
   ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH,
+  CONTAINER_STOP_ALREADY_STOPPED_PATTERN,
   CONTAINER_STOP_NOT_FOUND_PATTERN,
   CONTAINER_STOP_NOT_RUNNING_PATTERN,
   createHash,
@@ -753,6 +754,7 @@ function hasDockerNetworkAlias(endpointSettings, expectedAlias) {
 function isIgnorableContainerStopError(error) {
   const message = String(error?.message || "").toLowerCase();
   return (
+    message.includes(CONTAINER_STOP_ALREADY_STOPPED_PATTERN) ||
     message.includes(CONTAINER_STOP_NOT_RUNNING_PATTERN) ||
     message.includes(CONTAINER_STOP_NOT_FOUND_PATTERN)
   );

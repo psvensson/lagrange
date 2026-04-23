@@ -11,6 +11,15 @@ import {
   RECOVERY_PROTOCOL_STATE,
 } from '../../src/control-plane/recovery-protocol-snapshot.js';
 
+const RECOVERY_PROTOCOL_ADMISSION_STATE_BLOCKED = 'blocked';
+const RECOVERY_PROTOCOL_ADMISSION_REASON_CLUSTER_INTEGRITY =
+  'cluster_incarnation_identity_mismatch';
+const RECOVERY_PROTOCOL_BLOCKED_FENCE = Object.freeze({
+  state: 'identity_mismatch',
+  allowed: false,
+  reasonCodes: Object.freeze([RECOVERY_PROTOCOL_ADMISSION_REASON_CLUSTER_INTEGRITY]),
+});
+
 test('buildRecoveryProtocolSnapshot derives one canonical participation state per node',
   async (t) => {
     const snapshot = buildRecoveryProtocolSnapshot({
@@ -89,4 +98,56 @@ test('buildRecoveryProtocolSnapshot derives one canonical participation state pe
       state: NODE_PARTICIPATION_STATE.RECOVERY_PENDING_PUBLISH,
       recoverySource: 'recovery_eligible_projection',
     });
+  });
+
+test('buildRecoveryProtocolSnapshot preserves explicit admission blocking on the target participation',
+  async (t) => {
+    const snapshot = buildRecoveryProtocolSnapshot({
+      publicationEpoch: 21,
+      publicationStatus: 'ACK_PENDING',
+      targetNodeId: 'node-c',
+      admissionState: RECOVERY_PROTOCOL_ADMISSION_STATE_BLOCKED,
+      admissionReasonCodes: [
+        RECOVERY_PROTOCOL_ADMISSION_REASON_CLUSTER_INTEGRITY,
+      ],
+      clusterIncarnationFence: RECOVERY_PROTOCOL_BLOCKED_FENCE,
+      publishedActiveNodeIdsPresent: true,
+      publishedActiveNodeIds: ['node-a', 'node-b'],
+      durablePublishedActiveNodeIds: ['node-a', 'node-b'],
+      membershipLifecycleSummary: {
+        publishedActiveNodeIds: ['node-a', 'node-b'],
+        projectedServingNodeIds: ['node-a', 'node-b', 'node-c'],
+        locallyEligibleNodeIds: ['node-a', 'node-b', 'node-c'],
+        recoveryActiveNodeIds: ['node-a', 'node-b', 'node-c'],
+        recoveryActiveNodeSource: 'recovery_eligible_projection',
+        missingPublishedRecoveryActiveNodeIds: ['node-c'],
+        memberStatesByNodeId: {
+          'node-a': MEMBERSHIP_MEMBER_STATE.SERVING,
+          'node-b': MEMBERSHIP_MEMBER_STATE.SERVING,
+          'node-c': MEMBERSHIP_MEMBER_STATE.JOINING,
+        },
+      },
+    });
+
+    t.match(snapshot.targetParticipation, {
+      nodeId: 'node-c',
+      state: NODE_PARTICIPATION_STATE.RECOVERY_PENDING_PUBLISH,
+      admissionState: RECOVERY_PROTOCOL_ADMISSION_STATE_BLOCKED,
+      admitted: false,
+      admissionReasonCodes: [
+        RECOVERY_PROTOCOL_ADMISSION_REASON_CLUSTER_INTEGRITY,
+      ],
+      clusterIncarnationFence: RECOVERY_PROTOCOL_BLOCKED_FENCE,
+    });
+    t.same(
+      snapshot.targetParticipation?.reasons,
+      [
+        'recovery_active',
+        'projected_serving',
+        'locally_eligible',
+        'node_admission_blocked',
+        RECOVERY_PROTOCOL_ADMISSION_REASON_CLUSTER_INTEGRITY,
+      ],
+      'the shared participation model should surface admission blocking without erasing the observed recovery state',
+    );
   });

@@ -956,6 +956,21 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           'observed-state adoption should keep the canonical retiring source replica id',
         );
         t.equal(
+          operation.stepsHistory[0]?.sourceReplicaId,
+          'control_plane_publications-p1-r1',
+          'observed-state adoption should preserve source-replica metadata in persisted step history',
+        );
+        const persistedObservedRow =
+          coordinator.repository.buildReplicaOperationRow(operation);
+        const persistedStepsHistory = JSON.parse(
+          persistedObservedRow.steps_history,
+        );
+        t.equal(
+          persistedStepsHistory[0]?.sourceReplicaId,
+          'control_plane_publications-p1-r1',
+          'persisted replica-operation rows should retain the canonical retiring source replica id after observed-state adoption',
+        );
+        t.equal(
           operation.workflowStep,
           WORKFLOW_STEP.ACTIVE,
           'observed-state adoption should still advance workflow state',

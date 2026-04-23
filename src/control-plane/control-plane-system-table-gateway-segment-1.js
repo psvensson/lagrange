@@ -1,60 +1,26 @@
-import { CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED } from "./control-plane-system-table-gateway-shared.js";
-
-const {
-  CANONICAL_LEADER_ROUTING_GAP_STATE,
+import {
   CDC_OPERATION,
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_CACHE_RECONCILE_DELETE_POLICY,
-  CONTROL_PLANE_CACHE_RECONCILE_INTENT,
-  CONTROL_PLANE_DEFERRED_MUTATION_FAILURE_SENTINEL,
-  CONTROL_PLANE_GATEWAY_ERROR_CODE,
   CONTROL_PLANE_GATEWAY_LIMIT,
-  CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-  CONTROL_PLANE_MUTATION_MERGE_POLICY,
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
-  CONTROL_PLANE_MUTATION_QUEUE_STATE,
   CONTROL_PLANE_OPERATION_LEDGER_LIMIT,
-  CONTROL_PLANE_PHASE_SCOPE,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CONTROL_PLANE_READ_OUTCOME,
-  CONTROL_PLANE_READ_PROFILE,
-  CONTROL_PLANE_READ_STRATEGY,
-  CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
   CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD,
-  CONTROL_PLANE_SQL_OPERATION,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_ERROR,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
   CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SOURCE,
-  CONTROL_PLANE_SYSTEM_TABLE_VISIBILITY_STATE,
   ControlPlaneDiagnosticsLedger,
-  GATEWAY_ERROR_MSG,
-  GATEWAY_LOG_MSG,
   INITIAL_PARTITION_IDS,
-  METRICS_LOG_TAG,
   NUM,
-  OWNER_CONTRACT_NEXT_ACTION,
-  OWNER_CONTRACT_STATE,
-  PRESSURE_GOVERNOR_ACTION,
-  PRESSURE_WORK_CLASS,
   PressureGovernor,
-  SQL,
   SYSTEM_TABLE_NAME,
-  SYSTEM_TABLE_NAMES,
   TYPEOF,
-  applyProfileDefault,
-  applyReadWorkloadProfileDefaults,
+  applyMutationWorkloadProfileDefaults,
   areCanonicalSystemTableRowsEqual,
+  buildControlPlaneCacheReconcileContract,
   buildControlPlaneQueryOptions,
-  buildControlPlaneWorkloadProfile,
   buildLocalControlPlaneMutationReadinessFailure,
-  buildOwnerContractOutcome,
-  buildPressureAdmissionFailure,
   canonicalizeSystemTableRow,
   copyOption,
-  createDeferredPromise,
-  extractSqlOperationKind,
-  extractSystemTableNameFromSql,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneRetryAfterMs,
@@ -62,31 +28,12 @@ const {
   getRemainingBudgetMs,
   getSystemCachePrimaryKeyFieldOrFallback,
   hasUsablePrimaryKeyValue,
-  normalizeAuthoritativeReadMode,
-  normalizeCoalescingToken,
-  normalizeControlPlaneSystemTableVisibilityState,
-  normalizeDistinctStringArray,
-  normalizeMutationMergePolicy,
-  normalizeMutationOperation,
-  normalizePhaseScope,
   normalizePositiveInteger,
-  normalizeReadProfile,
-  normalizeReadStrategy,
-  normalizeSqlOperationKind,
-  normalizeSystemTableName,
   requiresStableLocalControlPlaneMutationReadiness,
-  resolveAuthoritativeReadModeContract,
   resolveCanonicalLeaderIdentitySnapshot,
   resolveCanonicalLeaderRoutingGapState,
-  resolveControlPlaneCacheReconcileDeletePolicy,
-  resolveControlPlaneCacheReconcileIntent,
-  resolveLegacyAuthoritativeReadMode,
-  resolveMutationCompletionState,
-  resolveReadProfileOptions,
-  resolveReadStrategyForProfile,
-  sortObjectKeys,
-  stableSerialize,
-} = CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_SHARED;
+  resolveControlPlaneSystemTableDeliverySource,
+} from './control-plane-system-table-gateway-shared.js';
 
 class ControlPlaneSystemTableGatewaySegment1 {
   constructor(options = {}) {
@@ -98,25 +45,25 @@ class ControlPlaneSystemTableGatewaySegment1 {
     this._controlPlaneReadinessService =
       options.controlPlaneReadinessService || null;
     this.sqlQueryEngineProvider =
-      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION
-        ? options.getSqlQueryEngine
-        : null;
+      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
+        options.getSqlQueryEngine :
+        null;
     this.cdcIntegrationServiceProvider =
-      typeof options.getCdcIntegrationService === TYPEOF.FUNCTION
-        ? options.getCdcIntegrationService
-        : null;
+      typeof options.getCdcIntegrationService === TYPEOF.FUNCTION ?
+        options.getCdcIntegrationService :
+        null;
     this.systemTableCacheProvider =
-      typeof options.getSystemTableCache === TYPEOF.FUNCTION
-        ? options.getSystemTableCache
-        : null;
+      typeof options.getSystemTableCache === TYPEOF.FUNCTION ?
+        options.getSystemTableCache :
+        null;
     this.messageRouterProvider =
-      typeof options.getMessageRouter === TYPEOF.FUNCTION
-        ? options.getMessageRouter
-        : null;
+      typeof options.getMessageRouter === TYPEOF.FUNCTION ?
+        options.getMessageRouter :
+        null;
     this.controlPlaneReadinessServiceProvider =
-      typeof options.getControlPlaneReadinessService === TYPEOF.FUNCTION
-        ? options.getControlPlaneReadinessService
-        : null;
+      typeof options.getControlPlaneReadinessService === TYPEOF.FUNCTION ?
+        options.getControlPlaneReadinessService :
+        null;
     this.pressureGovernor = options.pressureGovernor || null;
     this.logger = options.logger || null;
     this.now =
@@ -201,9 +148,9 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @return {Object[]}
    */
   getControlPlaneOperationLedgerEntries(options = {}) {
-    return this.controlPlaneOperationLedger
-      ? this.controlPlaneOperationLedger.getEntries(options)
-      : Object.freeze([]);
+    return this.controlPlaneOperationLedger ?
+      this.controlPlaneOperationLedger.getEntries(options) :
+      Object.freeze([]);
   }
 
   get sqlQueryEngine() {
@@ -388,35 +335,30 @@ class ControlPlaneSystemTableGatewaySegment1 {
 
     const primaryKeyField =
       options?.primaryKeyField ||
-      getSystemCachePrimaryKeyFieldOrFallback(tableName, "id");
-    const reconcileIntent = resolveControlPlaneCacheReconcileIntent(
-      options?.reconcileIntent,
-    );
-    const deleteMissingPolicy = resolveControlPlaneCacheReconcileDeletePolicy({
-      deleteMissing: options?.deleteMissing,
-      reconcileIntent,
-    });
-    const authoritativeEntries = Array.isArray(authoritativeRows)
-      ? authoritativeRows
-      : [];
-    const cachedEntries = Array.isArray(options?.cachedRows)
-      ? options.cachedRows
-      : typeof options?.cachedRowFilter === TYPEOF.FUNCTION &&
-          typeof readableCache.filter === TYPEOF.FUNCTION
-        ? readableCache.filter(tableName, options.cachedRowFilter) || []
-        : typeof readableCache.getAll === TYPEOF.FUNCTION
-          ? readableCache.getAll(tableName) || []
-          : [];
+      getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
+    const {reconcileIntent, deleteMissingPolicy} =
+      buildControlPlaneCacheReconcileContract(options);
+    const authoritativeEntries = Array.isArray(authoritativeRows) ?
+      authoritativeRows :
+      [];
+    const cachedEntries = Array.isArray(options?.cachedRows) ?
+      options.cachedRows :
+      typeof options?.cachedRowFilter === TYPEOF.FUNCTION &&
+          typeof readableCache.filter === TYPEOF.FUNCTION ?
+        readableCache.filter(tableName, options.cachedRowFilter) || [] :
+        typeof readableCache.getAll === TYPEOF.FUNCTION ?
+          readableCache.getAll(tableName) || [] :
+          [];
     const rowComparator =
-      typeof options?.areRowsEqual === TYPEOF.FUNCTION
-        ? options.areRowsEqual
-        : (left, right) =>
-            areCanonicalSystemTableRowsEqual(tableName, left, right);
+      typeof options?.areRowsEqual === TYPEOF.FUNCTION ?
+        options.areRowsEqual :
+        (left, right) =>
+          areCanonicalSystemTableRowsEqual(tableName, left, right);
     const causeOptions =
       typeof options?.causeId === TYPEOF.STRING &&
-      options.causeId.length > NUM.ZERO
-        ? { causeId: options.causeId }
-        : undefined;
+      options.causeId.length > NUM.ZERO ?
+        {causeId: options.causeId} :
+        undefined;
     const cachedRowsByKey = new Map();
     const authoritativeKeys = new Set();
     let mutationCount = NUM.ZERO;
@@ -478,9 +420,9 @@ class ControlPlaneSystemTableGatewaySegment1 {
       reconcileIntent,
       mutationCount,
       outcome:
-        mutationCount > NUM.ZERO
-          ? CONTROL_PLANE_MUTATION_OUTCOME.APPLIED
-          : CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
+        mutationCount > NUM.ZERO ?
+          CONTROL_PLANE_MUTATION_OUTCOME.APPLIED :
+          CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
     };
   }
 
@@ -597,81 +539,81 @@ class ControlPlaneSystemTableGatewaySegment1 {
 
     const hasRoutingSnapshot =
       routingSnapshot && typeof routingSnapshot === TYPEOF.OBJECT;
-    const fallbackCanonicalLeaderIdentity = hasRoutingSnapshot
-      ? null
-      : resolveCanonicalLeaderIdentitySnapshot({
-          partition: partitionRow || null,
-          partitionPresent: partitionRow !== null,
-          serviceRows,
-        });
-    const leaderNodeId = hasRoutingSnapshot
-      ? routingSnapshot[
-          CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_NODE_ID
-        ]
-      : fallbackCanonicalLeaderIdentity?.leaderNodeId;
-    const canonicalLeaderIdentityState = hasRoutingSnapshot
-      ? typeof routingSnapshot[
+    const fallbackCanonicalLeaderIdentity = hasRoutingSnapshot ?
+      null :
+      resolveCanonicalLeaderIdentitySnapshot({
+        partition: partitionRow || null,
+        partitionPresent: partitionRow !== null,
+        serviceRows,
+      });
+    const leaderNodeId = hasRoutingSnapshot ?
+      routingSnapshot[
+        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_NODE_ID
+      ] :
+      fallbackCanonicalLeaderIdentity?.leaderNodeId;
+    const canonicalLeaderIdentityState = hasRoutingSnapshot ?
+      typeof routingSnapshot[
+        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
+      ] === TYPEOF.STRING ?
+        routingSnapshot[
           CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
-        ] === TYPEOF.STRING
-        ? routingSnapshot[
-            CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD.CANONICAL_LEADER_IDENTITY_STATE
-          ]
-        : null
-      : fallbackCanonicalLeaderIdentity?.state || null;
+        ] :
+        null :
+      fallbackCanonicalLeaderIdentity?.state || null;
     const routableServiceCount = Number.isFinite(
       routingSnapshot?.routableServiceCount,
-    )
-      ? routingSnapshot.routableServiceCount
-      : serviceRows.filter(
-          (row) =>
-            row?.status === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ACTIVE &&
+    ) ?
+      routingSnapshot.routableServiceCount :
+      serviceRows.filter(
+        (row) =>
+          row?.status === CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ACTIVE &&
             typeof row?.address === TYPEOF.STRING &&
             row.address.length > NUM.ZERO,
-        ).length;
-    const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount)
-      ? routingSnapshot.serviceRowCount
-      : serviceRows.length;
-    const canonicalLeaderRoutingGapState = hasRoutingSnapshot
-      ? typeof routingSnapshot[
+      ).length;
+    const serviceRowCount = Number.isFinite(routingSnapshot?.serviceRowCount) ?
+      routingSnapshot.serviceRowCount :
+      serviceRows.length;
+    const canonicalLeaderRoutingGapState = hasRoutingSnapshot ?
+      typeof routingSnapshot[
+        CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
+          .CANONICAL_LEADER_ROUTING_GAP_STATE
+      ] === TYPEOF.STRING ?
+        routingSnapshot[
           CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
             .CANONICAL_LEADER_ROUTING_GAP_STATE
-        ] === TYPEOF.STRING
-        ? routingSnapshot[
-            CONTROL_PLANE_ROUTING_SNAPSHOT_FIELD
-              .CANONICAL_LEADER_ROUTING_GAP_STATE
-          ]
-        : null
-      : resolveCanonicalLeaderRoutingGapState({
-          canonicalLeaderIdentityState,
-          canonicalLeaderNodeId: leaderNodeId,
-          serviceRowCount,
-          activeAddressedServiceCount: routableServiceCount,
-        });
+        ] :
+        null :
+      resolveCanonicalLeaderRoutingGapState({
+        canonicalLeaderIdentityState,
+        canonicalLeaderNodeId: leaderNodeId,
+        serviceRowCount,
+        activeAddressedServiceCount: routableServiceCount,
+      });
     return {
       partitionId,
-      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING
-        ? {
-            canonicalLeaderIdentityState,
-          }
-        : {}),
-      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING
-        ? {
-            canonicalLeaderRoutingGapState,
-          }
-        : {}),
+      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
+        {
+          canonicalLeaderIdentityState,
+        } :
+        {}),
+      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
+        {
+          canonicalLeaderRoutingGapState,
+        } :
+        {}),
       ...(typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO
-        ? {
-            leaderNodeId,
-          }
-        : {}),
+      leaderNodeId.length > NUM.ZERO ?
+        {
+          leaderNodeId,
+        } :
+        {}),
       serviceRowCount,
       routableServiceCount,
       deniedByReadiness:
         routingSnapshot &&
-        typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT
-          ? Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO
-          : false,
+        typeof routingSnapshot.deniedByNodeId === TYPEOF.OBJECT ?
+          Object.keys(routingSnapshot.deniedByNodeId).length > NUM.ZERO :
+          false,
     };
   }
 
@@ -693,18 +635,18 @@ class ControlPlaneSystemTableGatewaySegment1 {
       Array.isArray(result?.participantFailures);
     const systemTableDiagnostics =
       result?.systemTableDiagnostics &&
-      typeof result.systemTableDiagnostics === TYPEOF.OBJECT
-        ? result.systemTableDiagnostics
-        : {};
-    const failureSummary = hasFailureSignals
-      ? getControlPlaneFailureSummary(result)
-      : null;
-    const retryAfterMs = hasFailureSignals
-      ? getControlPlaneRetryAfterMs(result)
-      : NUM.ZERO;
-    const errorCode = hasFailureSignals
-      ? getControlPlaneErrorCode(result) || null
-      : null;
+      typeof result.systemTableDiagnostics === TYPEOF.OBJECT ?
+        result.systemTableDiagnostics :
+        {};
+    const failureSummary = hasFailureSignals ?
+      getControlPlaneFailureSummary(result) :
+      null;
+    const retryAfterMs = hasFailureSignals ?
+      getControlPlaneRetryAfterMs(result) :
+      NUM.ZERO;
+    const errorCode = hasFailureSignals ?
+      getControlPlaneErrorCode(result) || null :
+      null;
     const fallbackDiagnostics = this.buildFallbackSystemTableRoutingDiagnostics(
       tableName,
       routingReadinessDimension,
@@ -719,25 +661,25 @@ class ControlPlaneSystemTableGatewaySegment1 {
       null;
     const leaderNodeId =
       typeof systemTableDiagnostics.leaderNodeId === TYPEOF.STRING &&
-      systemTableDiagnostics.leaderNodeId.length > NUM.ZERO
-        ? systemTableDiagnostics.leaderNodeId
-        : typeof fallbackDiagnostics.leaderNodeId === TYPEOF.STRING &&
-            fallbackDiagnostics.leaderNodeId.length > NUM.ZERO
-          ? fallbackDiagnostics.leaderNodeId
-          : null;
+      systemTableDiagnostics.leaderNodeId.length > NUM.ZERO ?
+        systemTableDiagnostics.leaderNodeId :
+        typeof fallbackDiagnostics.leaderNodeId === TYPEOF.STRING &&
+            fallbackDiagnostics.leaderNodeId.length > NUM.ZERO ?
+          fallbackDiagnostics.leaderNodeId :
+          null;
     const queryTimeoutMs = Number.isFinite(
       systemTableDiagnostics.queryTimeoutMs,
-    )
-      ? systemTableDiagnostics.queryTimeoutMs
-      : Number.isFinite(result?.queryTimeoutMs)
-        ? result.queryTimeoutMs
-        : Number.isFinite(options?.timeoutMs)
-          ? options.timeoutMs
-          : Number.isFinite(options?.queryTimeoutMs)
-            ? options.queryTimeoutMs
-            : Number.isFinite(options?.requestedTimeoutMs)
-              ? options.requestedTimeoutMs
-              : null;
+    ) ?
+      systemTableDiagnostics.queryTimeoutMs :
+      Number.isFinite(result?.queryTimeoutMs) ?
+        result.queryTimeoutMs :
+        Number.isFinite(options?.timeoutMs) ?
+          options.timeoutMs :
+          Number.isFinite(options?.queryTimeoutMs) ?
+            options.queryTimeoutMs :
+            Number.isFinite(options?.requestedTimeoutMs) ?
+              options.requestedTimeoutMs :
+              null;
     const routedToNode =
       systemTableDiagnostics.routedToNode ||
       (result?.source ===
@@ -747,9 +689,9 @@ class ControlPlaneSystemTableGatewaySegment1 {
       options?.operationClass ===
         CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.MUTATION ||
       options?.operationClass ===
-        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY
-        ? leaderNodeId
-        : null);
+        CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.QUERY ?
+        leaderNodeId :
+        null);
     return {
       partitionId:
         systemTableDiagnostics.partitionId ||
@@ -764,77 +706,77 @@ class ControlPlaneSystemTableGatewaySegment1 {
         result?.localReplicaFallbackHit === true ||
         systemTableDiagnostics.localReplicaFallbackHit === true,
       ...(typeof routedToNode === TYPEOF.STRING &&
-      routedToNode.length > NUM.ZERO
-        ? {
-            routedToNode,
-          }
-        : {}),
+      routedToNode.length > NUM.ZERO ?
+        {
+          routedToNode,
+        } :
+        {}),
       deniedByReadiness:
         systemTableDiagnostics.deniedByReadiness === true ||
         fallbackDiagnostics.deniedByReadiness === true ||
         result?.errorCode ===
           CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ROUTER_QUERY_TRANSPORT_NOT_READY ||
         (result?.success === false && result?.deferRetry === true),
-      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING
-        ? {
-            canonicalLeaderIdentityState,
-          }
-        : {}),
-      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING
-        ? {
-            canonicalLeaderRoutingGapState,
-          }
-        : {}),
+      ...(typeof canonicalLeaderIdentityState === TYPEOF.STRING ?
+        {
+          canonicalLeaderIdentityState,
+        } :
+        {}),
+      ...(typeof canonicalLeaderRoutingGapState === TYPEOF.STRING ?
+        {
+          canonicalLeaderRoutingGapState,
+        } :
+        {}),
       ...(typeof leaderNodeId === TYPEOF.STRING &&
-      leaderNodeId.length > NUM.ZERO
-        ? {
-            leaderNodeId,
-          }
-        : {}),
-      serviceRowCount: Number.isFinite(systemTableDiagnostics.serviceRowCount)
-        ? systemTableDiagnostics.serviceRowCount
-        : fallbackDiagnostics.serviceRowCount,
+      leaderNodeId.length > NUM.ZERO ?
+        {
+          leaderNodeId,
+        } :
+        {}),
+      serviceRowCount: Number.isFinite(systemTableDiagnostics.serviceRowCount) ?
+        systemTableDiagnostics.serviceRowCount :
+        fallbackDiagnostics.serviceRowCount,
       routableServiceCount: Number.isFinite(
         systemTableDiagnostics.routableServiceCount,
-      )
-        ? systemTableDiagnostics.routableServiceCount
-        : fallbackDiagnostics.routableServiceCount,
+      ) ?
+        systemTableDiagnostics.routableServiceCount :
+        fallbackDiagnostics.routableServiceCount,
       queryTimeoutMs:
-        Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO
-          ? Math.floor(queryTimeoutMs)
-          : null,
-      ...(typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO
-        ? {
-            errorCode,
-          }
-        : {}),
-      ...(retryAfterMs > NUM.ZERO
-        ? {
-            retryAfterMs,
-          }
-        : {}),
-      ...(failureSummary && failureSummary.linkedFailureCount > NUM.ZERO
-        ? {
-            canonicalFailureReason: failureSummary.primaryReason,
-            linkedFailureCount: failureSummary.linkedFailureCount,
-            authoritativeRowSourceUnavailableCount:
+        Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO ?
+          Math.floor(queryTimeoutMs) :
+          null,
+      ...(typeof errorCode === TYPEOF.STRING && errorCode.length > NUM.ZERO ?
+        {
+          errorCode,
+        } :
+        {}),
+      ...(retryAfterMs > NUM.ZERO ?
+        {
+          retryAfterMs,
+        } :
+        {}),
+      ...(failureSummary && failureSummary.linkedFailureCount > NUM.ZERO ?
+        {
+          canonicalFailureReason: failureSummary.primaryReason,
+          linkedFailureCount: failureSummary.linkedFailureCount,
+          authoritativeRowSourceUnavailableCount:
               failureSummary.authoritativeRowSourceUnavailableCount,
-            distributedParticipantFailureCount:
+          distributedParticipantFailureCount:
               failureSummary.distributedParticipantFailureCount,
-            reconnectDeliveryFailureCount:
+          reconnectDeliveryFailureCount:
               failureSummary.reconnectDeliveryFailureCount,
-          }
-        : {}),
-      ...(Number.isFinite(result?.queueWaitMs)
-        ? {
-            queueWaitMs: Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)),
-          }
-        : {}),
-      ...(typeof result?.queueState === TYPEOF.STRING
-        ? {
-            queueState: result.queueState,
-          }
-        : {}),
+        } :
+        {}),
+      ...(Number.isFinite(result?.queueWaitMs) ?
+        {
+          queueWaitMs: Math.max(NUM.ZERO, Math.floor(result.queueWaitMs)),
+        } :
+        {}),
+      ...(typeof result?.queueState === TYPEOF.STRING ?
+        {
+          queueState: result.queueState,
+        } :
+        {}),
     };
   }
 
@@ -871,12 +813,18 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @return {Object}
    * @private
    */
-  buildQueryOptions(options = {}) {
-    const requestedTimeoutMs = Number.isFinite(options?.timeoutMs)
-      ? options.timeoutMs
-      : Number.isFinite(options?.queryTimeoutMs)
-        ? options.queryTimeoutMs
-        : options?.requestedTimeoutMs;
+  buildQueryOptions(options = {}, context = {}) {
+    const requestedTimeoutMs = Number.isFinite(options?.timeoutMs) ?
+      options.timeoutMs :
+      Number.isFinite(options?.queryTimeoutMs) ?
+        options.queryTimeoutMs :
+        options?.requestedTimeoutMs;
+    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
+      deliverySource: options?.deliverySource,
+      tableName: context?.tableName || null,
+      sql: context?.sql || null,
+      operationKind: context?.operationKind || null,
+    });
     let queryOptions = {
       ...buildControlPlaneQueryOptions({
         requestedTimeoutMs,
@@ -901,6 +849,11 @@ class ControlPlaneSystemTableGatewaySegment1 {
       options,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYPRIORITY,
     );
+    if (typeof deliverySource === TYPEOF.STRING &&
+      deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
+      queryOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
+        deliverySource;
+    }
     return queryOptions;
   }
 
@@ -909,15 +862,20 @@ class ControlPlaneSystemTableGatewaySegment1 {
    * @return {Object}
    * @private
    */
-  buildWriteOptions(options = {}) {
+  buildWriteOptions(options = {}, context = {}) {
+    const deliverySource = resolveControlPlaneSystemTableDeliverySource({
+      deliverySource: options?.deliverySource,
+      tableName: context?.tableName || null,
+      operationKind: context?.operationKind || null,
+    });
     let writeOptions = {
       routingReadinessDimension:
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
     };
-    const queryTimeoutMs = Number.isFinite(options?.queryTimeoutMs)
-      ? options.queryTimeoutMs
-      : options?.timeoutMs;
+    const queryTimeoutMs = Number.isFinite(options?.queryTimeoutMs) ?
+      options.queryTimeoutMs :
+      options?.timeoutMs;
     if (Number.isFinite(queryTimeoutMs)) {
       writeOptions.queryTimeoutMs = queryTimeoutMs;
     } else if (
@@ -992,6 +950,11 @@ class ControlPlaneSystemTableGatewaySegment1 {
     writeOptions = copyOption(
       writeOptions,
       options,
+      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.WORKLOADCLASS,
+    );
+    writeOptions = copyOption(
+      writeOptions,
+      options,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.IGNOREEXISTING,
     );
     writeOptions = copyOption(
@@ -1029,6 +992,12 @@ class ControlPlaneSystemTableGatewaySegment1 {
       options,
       CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.RECOVERYCANDIDATESELECTIONKEY,
     );
+    writeOptions = applyMutationWorkloadProfileDefaults(writeOptions, options);
+    if (typeof deliverySource === TYPEOF.STRING &&
+      deliverySource.length > CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.ZERO) {
+      writeOptions[CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.DELIVERYSOURCE] =
+        deliverySource;
+    }
     return writeOptions;
   }
 
@@ -1037,7 +1006,7 @@ class ControlPlaneSystemTableGatewaySegment1 {
    */
   getStats() {
     return {
-      limits: { ...this.gatewayLimits },
+      limits: {...this.gatewayLimits},
       retainedRequests: {
         inFlightReads: this.inFlightReadRequestsByKey.size,
         inFlightQueries: this.inFlightQueryRequestsByKey.size,
@@ -1060,8 +1029,8 @@ class ControlPlaneSystemTableGatewaySegment1 {
   buildGatewayMetricsSnapshot() {
     return {
       ...this.gatewayMetrics,
-      readOutcomeCounts: { ...this.gatewayMetrics.readOutcomeCounts },
-      mutationOutcomeCounts: { ...this.gatewayMetrics.mutationOutcomeCounts },
+      readOutcomeCounts: {...this.gatewayMetrics.readOutcomeCounts},
+      mutationOutcomeCounts: {...this.gatewayMetrics.mutationOutcomeCounts},
       mutationFailureReasonCounts: {
         ...this.gatewayMetrics.mutationFailureReasonCounts,
       },
@@ -1100,12 +1069,12 @@ class ControlPlaneSystemTableGatewaySegment1 {
     return {
       nodeId: this.nodeId,
       retainedRequests,
-      limits: { ...this.gatewayLimits },
+      limits: {...this.gatewayLimits},
       retainedRequestCapacity,
       retainedRequestUtilization:
-        retainedRequestCapacity > NUM.ZERO
-          ? retainedRequests.total / retainedRequestCapacity
-          : NUM.ZERO,
+        retainedRequestCapacity > NUM.ZERO ?
+          retainedRequests.total / retainedRequestCapacity :
+          NUM.ZERO,
       boundedByTrackedCapacity:
         retainedRequests.total <= retainedRequestCapacity,
       maxObservedRetainedRequestCount:
@@ -1194,4 +1163,4 @@ class ControlPlaneSystemTableGatewaySegment1 {
    */
 }
 
-export { ControlPlaneSystemTableGatewaySegment1 };
+export {ControlPlaneSystemTableGatewaySegment1};

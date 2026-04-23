@@ -5,9 +5,9 @@
  * Requirements: 7.2, 7.4, 22.1, 22.2, 22.3, 22.4, 22.5, 22.6, 22.7
  */
 
-import { LoggingService } from "../logging/logging-service.js";
-import { HLCClockService } from "../hlc/hlc-clock-service.js";
-import { ConfigurationManager } from "../config/configuration-manager.js";
+import {LoggingService} from '../logging/logging-service.js';
+import {HLCClockService} from '../hlc/hlc-clock-service.js';
+import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
   COLUMN,
   ERRORS,
@@ -18,9 +18,9 @@ import {
   TABLES,
   SERVICE_STATUS,
   SERVICE_TYPE,
-} from "../constants/index.js";
-import { TRANSPORT_ERROR_MSG } from "../constants/transport.js";
-import { RAFT_ROLE } from "../raft/constants.js";
+} from '../constants/index.js';
+import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {
   QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
@@ -37,102 +37,111 @@ import {
   QUERY_RESPONSE_TYPE,
   QUERY_SQL,
   QUERY_SUBSYSTEM,
-} from "./query-constants.js";
-import { PG_EXPR_TYPE } from "./pg/pg-compat-constants.js";
-import { DistributedMergeEngine } from "./distributed/distributed-merge-engine.js";
-import { ParallelQueryCoordinator } from "./distributed/parallel-query-coordinator.js";
-import { DISTRIBUTED_JOIN_STRATEGY } from "./distributed/distributed-query-plan-constants.js";
-import { MIGRATION_PARTITION_OPERATION } from "../migration/migration-constants.js";
+} from './query-constants.js';
+import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
+import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
+import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
+import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
+import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
-} from "../control-plane/control-plane-readiness-constants.js";
+} from '../control-plane/control-plane-readiness-constants.js';
 import {
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
-} from "../control-plane/eligibility-snapshot.js";
-import { isRetryableControlPlaneError } from "../control-plane/control-plane-error-classification.js";
-import { PARTITION_SERVICE_ERROR_MSG } from "../partition/partition-service-constants.js";
-import { resolveBootstrapLeaderSelection } from "./bootstrap-leader-selection.js";
+} from '../control-plane/eligibility-snapshot.js';
+import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
+import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
+import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
+import {
+  CANONICAL_LEADER_IDENTITY_SOURCE,
+  CANONICAL_LEADER_IDENTITY_STATE,
+  CANONICAL_LEADER_ROUTING_GAP_STATE,
+  resolveCanonicalLeaderIdentitySnapshot,
+  resolveCanonicalLeaderRoutingGapState,
+  resolveCanonicalPartitionLeaderObservation,
+} from './canonical-leader-routing.js';
+import {resolveBootstrapLeaderSelection} from './bootstrap-leader-selection.js';
 const QUERY_EXECUTOR_LITERAL = Object.freeze({
-  STRING_OBJECT: "object",
-  STRING_VALUE: "",
-  STRING_VALUE_2: "|",
-  STRING_STRING: "string",
-  STRING_BOOLEAN: "boolean",
-  STRING_PINNED: "pinned",
-  STRING_UNPINNED: "unpinned",
-  STRING_LEFT: "left",
-  STRING_RIGHT: "right",
-  STRING_SELECT: "SELECT ",
-  STRING_DISTINCT: "DISTINCT ",
-  STRING_VALUE_3: "*",
-  STRING_FUNCTION: "function",
-  STRING_ROUTER_CONNECTION_CLOSED: "ROUTER_CONNECTION_CLOSED",
-  STRING_CONNECTION_TO_NODE: "Connection to node",
-  STRING_CLOSED: "closed",
-  STRING_RECONNECTING: "reconnecting",
-  STRING_DISCONNECTED: "disconnected",
-  STRING_NO_CONNECTION_TO_NODE: "No connection to node",
-  STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER: "Failed to forward write to leader",
-  STRING_AGGREGATE: "aggregate",
-  STRING_COLUMN_REF: "column_ref",
-  STRING_STAR: "star",
-  STRING_VALUE_4: "?",
-  STRING_COUNT: "COUNT",
-  STRING_SUM: "SUM",
-  STRING_AVG: "AVG",
-  STRING_MIN: "MIN",
-  STRING_MAX: "MAX",
-  STRING_BINARY: "binary",
-  STRING_UNARY: "unary",
-  STRING_IN: "in",
-  STRING_BETWEEN: "between",
-  STRING_LIKE: "like",
-  STRING_LITERAL: "literal",
-  STRING_AND: "AND",
-  STRING_OR: "OR",
-  STRING_VALUE_5: "=",
-  STRING_VALUE_6: "!=",
-  STRING_VALUE_7: "<>",
-  STRING_VALUE_8: "<",
-  STRING_VALUE_9: "<=",
-  STRING_VALUE_10: ">",
-  STRING_VALUE_11: ">=",
-  STRING_IS_NULL: "IS NULL",
-  STRING_IS_NOT_NULL: "IS NOT NULL",
-  STRING_NOT: "NOT",
-  STRING_VALUE_12: "+",
-  STRING_VALUE_13: "-",
-  STRING_VALUE_14: ", ",
-  STRING_NULL: "NULL",
-  STRING_NOT_LIKE: "NOT LIKE",
-  STRING_LIKE_2: "LIKE",
-  STRING_PARAMETER: "parameter",
-  STRING_CASE: "CASE",
-  STRING_VALUE_15: " ",
-  STRING_WHEN: " WHEN ",
-  STRING_THEN: " THEN ",
-  STRING_ELSE: " ELSE ",
-  STRING_END: " END",
-  STRING_EXECUTING_INSERT: "Executing INSERT",
-  STRING_INSERT: "INSERT",
-  STRING_NUMBER: "number",
-  STRING_EXECUTING_UPDATE: "Executing UPDATE",
-  STRING_EXECUTING_DELETE: "Executing DELETE",
+  STRING_OBJECT: 'object',
+  STRING_VALUE: '',
+  STRING_VALUE_2: '|',
+  STRING_STRING: 'string',
+  STRING_BOOLEAN: 'boolean',
+  STRING_PINNED: 'pinned',
+  STRING_UNPINNED: 'unpinned',
+  STRING_LEFT: 'left',
+  STRING_RIGHT: 'right',
+  STRING_SELECT: 'SELECT ',
+  STRING_DISTINCT: 'DISTINCT ',
+  STRING_VALUE_3: '*',
+  STRING_FUNCTION: 'function',
+  STRING_ROUTER_CONNECTION_CLOSED: 'ROUTER_CONNECTION_CLOSED',
+  STRING_CONNECTION_TO_NODE: 'Connection to node',
+  STRING_CLOSED: 'closed',
+  STRING_RECONNECTING: 'reconnecting',
+  STRING_DISCONNECTED: 'disconnected',
+  STRING_NO_CONNECTION_TO_NODE: 'No connection to node',
+  STRING_FAILED_TO_FORWARD_WRITE_TO_LEADER: 'Failed to forward write to leader',
+  STRING_AGGREGATE: 'aggregate',
+  STRING_COLUMN_REF: 'column_ref',
+  STRING_STAR: 'star',
+  STRING_VALUE_4: '?',
+  STRING_COUNT: 'COUNT',
+  STRING_SUM: 'SUM',
+  STRING_AVG: 'AVG',
+  STRING_MIN: 'MIN',
+  STRING_MAX: 'MAX',
+  STRING_BINARY: 'binary',
+  STRING_UNARY: 'unary',
+  STRING_IN: 'in',
+  STRING_BETWEEN: 'between',
+  STRING_LIKE: 'like',
+  STRING_LITERAL: 'literal',
+  STRING_AND: 'AND',
+  STRING_OR: 'OR',
+  STRING_VALUE_5: '=',
+  STRING_VALUE_6: '!=',
+  STRING_VALUE_7: '<>',
+  STRING_VALUE_8: '<',
+  STRING_VALUE_9: '<=',
+  STRING_VALUE_10: '>',
+  STRING_VALUE_11: '>=',
+  STRING_IS_NULL: 'IS NULL',
+  STRING_IS_NOT_NULL: 'IS NOT NULL',
+  STRING_NOT: 'NOT',
+  STRING_VALUE_12: '+',
+  STRING_VALUE_13: '-',
+  STRING_VALUE_14: ', ',
+  STRING_NULL: 'NULL',
+  STRING_NOT_LIKE: 'NOT LIKE',
+  STRING_LIKE_2: 'LIKE',
+  STRING_PARAMETER: 'parameter',
+  STRING_CASE: 'CASE',
+  STRING_VALUE_15: ' ',
+  STRING_WHEN: ' WHEN ',
+  STRING_THEN: ' THEN ',
+  STRING_ELSE: ' ELSE ',
+  STRING_END: ' END',
+  STRING_EXECUTING_INSERT: 'Executing INSERT',
+  STRING_INSERT: 'INSERT',
+  STRING_NUMBER: 'number',
+  STRING_EXECUTING_UPDATE: 'Executing UPDATE',
+  STRING_EXECUTING_DELETE: 'Executing DELETE',
 });
-const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = "splitMirrorOrigin";
-const QUERY_MESSAGE_FIELD_MIGRATION_OPERATION = "migrationOperation";
-const QUERY_MESSAGE_FIELD_MIGRATION_ID = "migrationId";
-const QUERY_MESSAGE_FIELD_SESSION_ID = "sessionId";
-const LEADER_GAP_REASON_OWNER_MISSING = "owner_missing";
-const LEADER_GAP_REASON_SERVICE_MISSING = "service_missing";
+const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = 'splitMirrorOrigin';
+const QUERY_MESSAGE_FIELD_MIGRATION_OPERATION = 'migrationOperation';
+const QUERY_MESSAGE_FIELD_MIGRATION_ID = 'migrationId';
+const QUERY_MESSAGE_FIELD_SESSION_ID = 'sessionId';
+const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
+const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
 const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
-  NONE: "none",
-  RETRY_SAME_ADDRESS: "retry_same_address",
-  DEFER_PARTITION_RETRY: "defer_partition_retry",
-  WIDEN_TO_RECOVERY_CANDIDATE: "widen_to_recovery_candidate",
+  NONE: 'none',
+  RETRY_SAME_ADDRESS: 'retry_same_address',
+  DEFER_PARTITION_RETRY: 'defer_partition_retry',
+  WIDEN_TO_RECOVERY_CANDIDATE: 'widen_to_recovery_candidate',
 });
 function buildPartitionServiceWitnessFingerprint(service) {
   if (!service || typeof service !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT) {
@@ -143,9 +152,9 @@ function buildPartitionServiceWitnessFingerprint(service) {
       service.replica_id ||
       service.serviceId ||
       service.replicaId ||
-      "",
+      '',
   );
-  const address = String(service.address || "");
+  const address = String(service.address || '');
   if (serviceId.length === NUM.ZERO && address.length === NUM.ZERO) {
     return null;
   }
@@ -167,16 +176,16 @@ function buildPartitionServiceWitnessFingerprint(service) {
         QUERY_EXECUTOR_LITERAL.STRING_VALUE,
     ),
     String(service.status || QUERY_EXECUTOR_LITERAL.STRING_VALUE),
-    Number.isFinite(updatedAt)
-      ? String(Math.floor(updatedAt))
-      : QUERY_EXECUTOR_LITERAL.STRING_VALUE,
+    Number.isFinite(updatedAt) ?
+      String(Math.floor(updatedAt)) :
+      QUERY_EXECUTOR_LITERAL.STRING_VALUE,
   ].join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_2);
 }
 function normalizeParticipantFailureString(value) {
   return typeof value === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-    value.length > NUM.ZERO
-    ? value
-    : null;
+    value.length > NUM.ZERO ?
+    value :
+    null;
 }
 function normalizeParticipantRetryAfterMs(value) {
   return Number.isFinite(value) && value >= NUM.ZERO ? Math.floor(value) : null;
@@ -203,9 +212,9 @@ function buildParticipantFailureEntry(result) {
     ),
     errorCode: normalizeParticipantFailureString(result.errorCode),
     error: result.error || ERRORS.QUERY_FAILED,
-    durationMs: Number.isFinite(result?.durationMs)
-      ? Math.max(NUM.ZERO, Math.floor(result.durationMs))
-      : null,
+    durationMs: Number.isFinite(result?.durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(result.durationMs)) :
+      null,
     retryAfterMs: normalizeParticipantRetryAfterMs(result?.retryAfterMs),
     deferRetry: result?.deferRetry === true,
     backpressured: resolveParticipantBackpressureState(result),
@@ -221,9 +230,9 @@ function buildDistributedFailureSummary(failedResults) {
     partitionErrors: participantFailures,
     participantFailures,
     firstFailedParticipant:
-      participantFailures.length > NUM.ZERO
-        ? participantFailures[NUM.ZERO]
-        : null,
+      participantFailures.length > NUM.ZERO ?
+        participantFailures[NUM.ZERO] :
+        null,
   };
 }
 
@@ -236,6 +245,9 @@ function buildDistributedFailureSummary(failedResults) {
  */
 
 export const QUERY_EXECUTOR_SHARED = {
+  CANONICAL_LEADER_IDENTITY_SOURCE,
+  CANONICAL_LEADER_IDENTITY_STATE,
+  CANONICAL_LEADER_ROUTING_GAP_STATE,
   COLUMN,
   CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -287,9 +299,13 @@ export const QUERY_EXECUTOR_SHARED = {
   buildPartitionServiceWitnessFingerprint,
   compactEligibilitySnapshot,
   evaluateEligibilityDecision,
+  isPriorityControlPlanePartition,
   isRetryableControlPlaneError,
   normalizeParticipantFailureString,
   normalizeParticipantRetryAfterMs,
+  resolveCanonicalLeaderIdentitySnapshot,
+  resolveCanonicalLeaderRoutingGapState,
+  resolveCanonicalPartitionLeaderObservation,
   resolveBootstrapLeaderSelection,
   resolveParticipantBackpressureState,
 };

@@ -443,7 +443,6 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         body: JSON.stringify(body),
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
       if (!response.ok) {
         const retryAfterHeader = response.headers.get(
           JOINING_HTTP.HEADER_RETRY_AFTER,
@@ -475,7 +474,9 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
         }
         throw error;
       }
-      return await response.json();
+      const responseBody = await response.json();
+      clearTimeout(timeoutId);
+      return responseBody;
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === JOINING_ERROR_NAME.ABORT) {
@@ -925,6 +926,7 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
       systemTableCache,
       tablePolicyService: this.tablePolicyService,
       messageGroupServices: this.messageGroupServices,
+      getLocalClusterIncarnationFence: () => this.clusterIncarnationFence,
       rebalanceCoordinator: this.rebalanceCoordinator,
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
@@ -1137,6 +1139,245 @@ class NodeJoiningServiceSegment5 extends NodeJoiningServiceSegment4 {
    * @return {Object}
    * @private
    */
+  ensureLatencyTopologyOwners() {
+    if (this.latencyTopology) {
+      return this.latencyTopology;
+    }
+    this.latencyTopology = LatencyTopologySetup.create({
+      nodeId: this.nodeId,
+      systemTableCache: NodeService.getInstance().getSystemTableCache(),
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+    });
+    this.latencyTopology.latencyTreeService.start({
+      recomputeImmediately: true,
+    });
+    this.latencyTopology.cdcGroupPropagationService.start();
+    this.logger.info(JOINING_LOG_MSG.LATENCY_TOPOLOGY_READY, {
+      nodeId: this.nodeId,
+      owner: NODE_JOINING_SERVICE_LITERAL.LATENCYTOPOLOGYSETUP,
+    });
+    return this.latencyTopology;
+  }
+  /**
+   * Start latency topology lifecycle owners.
+   * This is intentionally non-blocking relative to READY transition.
+   * @private
+   */
+  startLatencyTopologyLifecycle() {
+    return this.runtimeHandoffOwner.startLatencyTopologyLifecycle();
+  }
+  /**
+   * Propagate partition CDC via topology-owned propagation path.
+   * @param {Object} messageGroupService
+   * @param {Object} cdcEvent
+   * @return {Promise<Object>}
+   * @private
+   */
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+    const topologyOwners = assertCritical(
+      this.latencyTopology,
+      JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
+    );
+    return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
+      tableName: cdcEvent.tableName,
+      operation: cdcEvent.operation,
+      data: cdcEvent.data,
+      sourceMessageGroupService: messageGroupService,
+    });
+  }
+  /**
+   * Get the node storage budget service.
+   * @return {NodeStorageBudgetService}
+   * @private
+   */
+  getNodeStorageBudgetService() {
+    if (this.nodeStorageBudgetService) {
+      return this.nodeStorageBudgetService;
+    }
+    const service = NodeStorageBudgetSetup.create({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    this.nodeStorageBudgetService = service;
+    return service;
+  }
+  /**
+   * Expose the bootstrap topology owner surface to the steady-state SQL
+   * runtime so joined nodes can retain canonical leader identity while local
+   * system-table rows converge after bootstrap.
+   * @return {BootstrapTopologySnapshotOwner}
+   */
+  getBootstrapTopologySnapshotOwner() {
+    if (!this.bootstrapTopologySnapshotOwner) {
+      this.bootstrapTopologySnapshotOwner = new BootstrapTopologySnapshotOwner({
+        delegates: {
+          getSystemTableCache: () =>
+            NodeService.getInstance().getSystemTableCache(),
+          getPartitionServices: () => this.partitionServices,
+          getSeedNodeId: () => this.seedNodeId,
+          getLogger: () => this.logger,
+          getCurrentEpoch: () =>
+            this.epochManager?.getCurrentEpoch?.() || null,
+        },
+      });
+    }
+    return this.bootstrapTopologySnapshotOwner;
+  }
+  /**
+   * Get the current joining phase.
+   * @return {string} Current phase.
+   */
+  getPhase() {
+    return this.phase;
+  }
+  /**
+   * Get joining status.
+   * @return {Object} Joining status.
+   */
+  getStatus() {
+    const baseStatus = {
+      nodeId: this.nodeId,
+      phase: this.phase,
+      lifecycleState: this.lifecycleStateMachine.getState(),
+      startTime: this.startTime,
+      duration: this.startTime ? this.now() - this.startTime : NUM.ZERO,
+      messageGroupCount: this.messageGroupServices.size,
+      lastError: this.lastError?.message || null,
+    };
+    if (
+      !this.joinReadinessEvaluator ||
+      typeof this.joinReadinessEvaluator.buildCanonicalJoinReadinessSnapshot !==
+        TYPEOF.FUNCTION ||
+      typeof this.joinReadinessEvaluator
+        .evaluateCanonicalJoinReadinessSnapshot !== TYPEOF.FUNCTION
+    ) {
+      return baseStatus;
+    }
+    try {
+      const readinessSnapshot =
+        this.joinReadinessEvaluator.buildCanonicalJoinReadinessSnapshot();
+      const evaluation =
+        this.joinReadinessEvaluator.evaluateCanonicalJoinReadinessSnapshot(
+          readinessSnapshot,
+        );
+      return {
+        ...baseStatus,
+        promotionState: evaluation?.promotionState || null,
+        promotionReasons: Array.isArray(evaluation?.promotionReasons)
+          ? [...evaluation.promotionReasons]
+          : [],
+        snapshotRevision: evaluation?.snapshotRevision ?? null,
+        snapshotRevisionState: evaluation?.snapshotRevisionState || null,
+        snapshotExpectedMinimumRevision:
+          evaluation?.snapshotExpectedMinimumRevision ?? null,
+        snapshotRevisionGap: evaluation?.snapshotRevisionGap ?? null,
+        snapshotResumeToken: evaluation?.snapshotResumeToken || null,
+      };
+    } catch (_error) {
+      return baseStatus;
+    }
+  }
+  /**
+   * Get the node lifecycle state machine.
+   * @return {NodeLifecycleStateMachine} The lifecycle state machine.
+   */
+  getLifecycleStateMachine() {
+    return this.lifecycleStateMachine;
+  }
+  /**
+   * Check if joining has local message group replica with leadership.
+   * @return {boolean} True if has operational message group.
+   */
+  hasOperationalMessageGroup() {
+    return this.getLeaderMessageGroupService() !== null;
+  }
+  /**
+   * Check if any joined message group has a leader in the system cache.
+   * @param {Object} systemTableCache - System table cache.
+   * @return {boolean} True if cache reports a leader for any joined group.
+   * @private
+   */
+  hasMessageGroupLeaderInCache(systemTableCache) {
+    if (!systemTableCache) {
+      return false;
+    }
+    const groupIds = new Set();
+    for (const service of this.messageGroupServices.values()) {
+      if (service?.groupId) {
+        groupIds.add(service.groupId);
+      }
+    }
+    if (groupIds.size === NUM.ZERO) {
+      return false;
+    }
+    const services =
+      typeof systemTableCache.filter === TYPEOF.FUNCTION
+        ? systemTableCache.filter(
+            TABLES.SERVICES,
+            (service) =>
+              service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+              groupIds.has(service?.[COLUMN.GROUP_ID]) &&
+              service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+          )
+        : (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter(
+            (service) =>
+              service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+              groupIds.has(service?.[COLUMN.GROUP_ID]) &&
+              service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+          );
+    if (services.length === NUM.ZERO) {
+      return false;
+    }
+    const groupRows =
+      typeof systemTableCache.filter === TYPEOF.FUNCTION
+        ? systemTableCache.filter(TABLES.MESSAGE_GROUPS, (group) =>
+            groupIds.has(group?.[COLUMN.GROUP_ID]),
+          )
+        : (systemTableCache.getAll?.(TABLES.MESSAGE_GROUPS) || []).filter(
+            (group) => groupIds.has(group?.[COLUMN.GROUP_ID]),
+          );
+    const activeServiceExistsForCanonicalLeader = groupRows.some((group) => {
+      const groupId =
+        group?.[COLUMN.GROUP_ID] || group?.group_id || group?.groupId || null;
+      if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+        return false;
+      }
+      const groupServices = services.filter(
+        (service) => service?.[COLUMN.GROUP_ID] === groupId,
+      );
+      if (groupServices.length === NUM.ZERO) {
+        return false;
+      }
+      const leaderIdentity = resolveCanonicalLeaderIdentitySnapshot({
+        partition: group,
+        partitionPresent: true,
+        serviceRows: groupServices,
+      });
+      return (
+        typeof leaderIdentity?.leaderNodeId === TYPEOF.STRING &&
+        leaderIdentity.leaderNodeId.length > NUM.ZERO
+      );
+    });
+    if (activeServiceExistsForCanonicalLeader) {
+      return true;
+    }
+    return services.some((service) => {
+      return (
+        String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() ===
+        String(RAFT_ROLE.LEADER).toLowerCase()
+      );
+    });
+  }
+  /**
+   * Sleep for a specified duration.
+   * @param {number} ms - Milliseconds to sleep.
+   * @return {Promise<void>}
+   * @private
+   */
+  sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 }
 
 export { NodeJoiningServiceSegment5 };
