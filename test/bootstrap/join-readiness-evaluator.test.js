@@ -7,6 +7,10 @@ import {
   JOIN_READINESS_REPAIR,
 } from '../../src/bootstrap/node-joining-constants.js';
 
+const JOIN_READINESS_BLOCKED_ACTION_NONE = 'none';
+const JOIN_READINESS_BLOCKED_ACTION_REPAIR_TOPOLOGY_VISIBILITY =
+  'repair_topology_visibility';
+
 function createEvaluatorHarness(options = {}) {
   let nowMs = options.nowMs ?? 10000;
   const backfillCalls = [];
@@ -37,6 +41,7 @@ function createEvaluatorHarness(options = {}) {
         });
       },
       getCdcIntegrationService: () => ({sqlQueryEngine: {}}),
+      getBootstrapResponse: () => null,
       getLogger: () => logger,
       getMessageRouter: () => ({
         getOutboundPressureSummary: () => ({...routerPressure}),
@@ -63,6 +68,88 @@ function createTopologyBlockedEvaluation() {
     missingPostgresWireNodeIds: ['seed-node'],
   };
 }
+
+test(
+  'JoinReadinessEvaluator - groups one readiness attempt into snapshot, error, and evaluation',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    harness.evaluator.delegates.getSystemCacheHydrated = () => true;
+    harness.evaluator.delegates.getJoinStartupMode = () => null;
+    harness.evaluator.delegates.getDurableRejoinRestoreState = () => null;
+    harness.evaluator.delegates.getLifecycleState = () => null;
+    harness.evaluator.delegates.getJoinReadinessSnapshotProvider =
+      () => async () => ({
+        nodeId: 'joining-node-readiness-evaluator',
+        routingReady: true,
+        topologyReady: true,
+        requiredSchemaVersion: '5',
+        appliedSchemaVersion: '4',
+      });
+
+    const attempt =
+      await harness.evaluator.collectCanonicalJoinReadinessAttempt();
+
+    t.equal(
+      attempt.snapshotError,
+      null,
+      'one readiness attempt should preserve the absence of a snapshot error explicitly',
+    );
+    t.same(
+      attempt.snapshot,
+      {
+        nodeId: 'joining-node-readiness-evaluator',
+        routingReady: true,
+        topologyReady: true,
+        requiredSchemaVersion: '5',
+        appliedSchemaVersion: '4',
+      },
+      'one readiness attempt should preserve the collected snapshot verbatim',
+    );
+    t.same(
+      attempt.evaluation.reasons,
+      [JOIN_READINESS_REASON.SCHEMA_VERSION_LAG],
+      'one readiness attempt should preserve the evaluated blocker reasons alongside the collected snapshot',
+    );
+    t.equal(
+      attempt.evaluation.ready,
+      false,
+      'one readiness attempt should report the evaluated readiness directly',
+    );
+  },
+);
+
+test(
+  'JoinReadinessEvaluator - resolves one blocked action plan from the evaluated readiness reasons',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+
+    t.same(
+      harness.evaluator.resolveCanonicalJoinBlockedAction(
+        {
+          reasons: [JOIN_READINESS_REASON.ROUTING_NOT_READY],
+        },
+        1000,
+      ),
+      {
+        actionId: JOIN_READINESS_BLOCKED_ACTION_NONE,
+        pollIntervalMs: null,
+      },
+      'non-topology blockers should not invent a repair action plan',
+    );
+    t.same(
+      harness.evaluator.resolveCanonicalJoinBlockedAction(
+        createTopologyBlockedEvaluation(),
+        1000,
+      ),
+      {
+        actionId:
+          JOIN_READINESS_BLOCKED_ACTION_REPAIR_TOPOLOGY_VISIBILITY,
+        pollIntervalMs: 1000,
+      },
+      'topology blockers should resolve to the canonical repair action plan',
+    );
+  },
+);
 
 test(
   'JoinReadinessEvaluator - defers canonical repair while local router pressure is active',

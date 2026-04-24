@@ -1,4 +1,3 @@
-import { STARTUP_READINESS_MODE_STARTUP } from "./startup-readiness-evidence.js";
 import { PRIORITY_RECOVERY_INVARIANT_FALLBACK } from "../../../src/control-plane/priority-recovery-diagnostics-constants.js";
 import { FAILURE_BUNDLE_SEGMENT_4 } from "./failure-bundle-segment-4.js";
 const {
@@ -163,6 +162,8 @@ const {
   collectReadinessReasonCodes,
   buildRecoveryReadinessSummary,
   buildStabilityGate,
+  hasBlockingPublicationClosureRecord,
+  isStartupReadinessBlocked,
   countRestartBoundaries,
   buildConvergenceStabilityGate,
   buildFailoverStabilityGate,
@@ -180,7 +181,10 @@ function buildRestartRecoveryStabilityGate({
     .toLowerCase();
   const restartBoundaryCount = countRestartBoundaries(logs);
   const hasStartupReadinessBlocker =
-    readinessFailure?.mode === STARTUP_READINESS_MODE_STARTUP;
+    isStartupReadinessBlocked({
+      readinessFailure,
+      publicationConvergence,
+    });
   const startupRecovery = isRecord(controlPlane?.startupRecovery)
     ? controlPlane.startupRecovery
     : null;
@@ -219,8 +223,10 @@ function buildRestartRecoveryStabilityGate({
     blockers.push(STABILITY_GATE_BLOCKER_STARTUP_READINESS);
   }
   if (
-    typeof publicationConvergence?.closureRecordId === "string" &&
-    publicationConvergence.closureRecordId.length > ZERO
+    hasBlockingPublicationClosureRecord({
+      publicationConvergence,
+      readinessFailure,
+    })
   ) {
     blockers.push(STABILITY_GATE_BLOCKER_CLOSURE_RECORD);
   }
@@ -307,14 +313,22 @@ function buildFailureClassification({
       ? publicationConvergence.priorityRecoveryProgressSummary.dominantWitness
       : null;
   const hasStartupReadinessBlocker =
-    readinessFailure?.mode === STARTUP_READINESS_MODE_STARTUP;
+    isStartupReadinessBlocked({
+      readinessFailure,
+      publicationConvergence,
+    });
+  const hasBlockingClosureRecord = hasBlockingPublicationClosureRecord({
+    publicationConvergence,
+    readinessFailure,
+  });
 
   if (
     publicationConvergence &&
     (publicationConvergence.pendingAckCount > ZERO ||
       publicationConvergence.blockedNodeCount > ZERO ||
       publicationConvergence.prioritySpreadPending === true ||
-      hasStartupReadinessBlocker)
+      hasStartupReadinessBlocker ||
+      hasBlockingClosureRecord)
   ) {
     appendActiveGateReadinessDelaySignals(
       signals,

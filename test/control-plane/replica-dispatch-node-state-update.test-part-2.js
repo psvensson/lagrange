@@ -570,7 +570,11 @@ test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
       [{
         operationId: 'op-ready-retry-1',
         reason: RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
-        context: {row: pendingRow},
+        context: {
+          row: pendingRow,
+          readyNodeId: 'node-2',
+          readyNodeRow: readyNode,
+        },
       }],
       'ready-node retries must route pending operations through the canonical operation queue',
     );
@@ -795,6 +799,8 @@ test('ReplicaDispatchService ready-node retry uses authoritative fallback for pr
             entity_type: undefined,
             entity_id: undefined,
           },
+          readyNodeId: 'node-2',
+          readyNodeRow: readyNode,
         },
       }],
       'authoritative rediscovery should still re-enter the canonical per-operation queue',
@@ -969,7 +975,11 @@ test('ReplicaDispatchService ready-node retry prefers cache-visible rows over au
       [{
         operationId: 'op-ready-retry-cache-visible',
         reason: RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
-        context: {row: pendingRow},
+        context: {
+          row: pendingRow,
+          readyNodeId: 'node-2',
+          readyNodeRow: readyNode,
+        },
       }],
       'cache-visible retry rows should keep the existing dispatch retry path',
     );

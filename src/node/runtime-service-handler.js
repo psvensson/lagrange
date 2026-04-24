@@ -172,6 +172,12 @@ class RuntimeServiceHandler extends EventEmitter {
           RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
           { replicaId, nodeId: this.nodeId }
         );
+        this.emitExecutorOutcome(
+          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+          operationId,
+          WORKFLOW_STEP.ACTIVE,
+          { replicaId }
+        );
         return buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
           {

@@ -1,5 +1,9 @@
 import { REPLICA_DISPATCH_SERVICE_SHARED } from "./replica-dispatch-service-shared.js";
 import { ReplicaDispatchServiceSegment3 } from "./replica-dispatch-service-segment-3.js";
+import { MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS } from "../node/message-group-service-handler-constants.js";
+import { REPLICA_HANDLER_ADDRESS } from "../node/replica-handler-constants.js";
+import { RUNTIME_SERVICE_HANDLER_ADDRESS } from "../node/runtime-service-handler-constants.js";
+import { UNIFIED_SERVICE_TYPE } from "../constants/index.js";
 
 const {
   COLUMN,
@@ -74,6 +78,21 @@ const {
   unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const LOCAL_DISPATCH_HANDLER_ADDRESS = Object.freeze({
+  [SERVICE_TYPE.PARTITION]: Object.freeze({
+    serviceSegment: REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT,
+    handlerId: REPLICA_HANDLER_ADDRESS.HANDLER_ID,
+  }),
+  [SERVICE_TYPE.MESSAGE_GROUP]: Object.freeze({
+    serviceSegment: MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT,
+    handlerId: MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
+  }),
+  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: Object.freeze({
+    serviceSegment: RUNTIME_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT,
+    handlerId: RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID,
+  }),
+});
 
 class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
   replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
@@ -446,7 +465,7 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * }>}
    * @private
    */
-  async captureDispatchReadiness(operation) {
+  async captureDispatchReadiness(operation, options = {}) {
     const nodeId = operation?.targetNodeId || null;
     if (!nodeId) {
       return this.buildDispatchReadinessResult(null, null, {
@@ -456,6 +475,17 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       });
     }
     const decisionDimension = this.resolveDispatchReadinessDecisionDimension();
+    const readyRetryReadiness = this.buildReadyRetryDispatchReadiness(
+      operation,
+      decisionDimension,
+      options,
+    );
+    if (readyRetryReadiness) {
+      return this.buildDispatchReadinessResult(
+        readyRetryReadiness,
+        decisionDimension,
+      );
+    }
     const localHandlerReadiness = await this.buildLocalHandlerDispatchReadiness(
       operation,
       decisionDimension,
@@ -523,6 +553,60 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
       }
     }
     return this.buildDispatchReadinessResult(readiness, decisionDimension);
+  }
+
+  /**
+   * Ready-node retries already proved one fresh ready lease for the target.
+   * Reuse that evidence with the canonical sync readiness snapshot instead of
+   * forcing a second authoritative refresh before the same dispatch attempt.
+   *
+   * @param {Object|null} operation
+   * @param {string} decisionDimension
+   * @param {Object} [options={}]
+   * @return {Object|null}
+   * @private
+   */
+  buildReadyRetryDispatchReadiness(
+    operation,
+    decisionDimension,
+    options = {},
+  ) {
+    const readyNodeId =
+      typeof options?.readyNodeId === TYPEOF.STRING
+        ? options.readyNodeId
+        : null;
+    const targetNodeId = operation?.targetNodeId || null;
+    if (!readyNodeId || !targetNodeId || readyNodeId !== targetNodeId) {
+      return null;
+    }
+    const readyNodeRow =
+      options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT
+        ? options.readyNodeRow
+        : null;
+    if (
+      !readyNodeRow ||
+      !wasNodeRecordReadyWhenWritten(readyNodeRow, {
+        requireActiveStatus: true,
+      })
+    ) {
+      return null;
+    }
+    if (
+      typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+      TYPEOF.FUNCTION
+    ) {
+      return null;
+    }
+    const syncReadiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      targetNodeId,
+      {
+        decisionDimension,
+      },
+    );
+    if (!this.isReadinessDimensionSatisfied(syncReadiness, decisionDimension)) {
+      return null;
+    }
+    return syncReadiness;
   }
 
   /**
@@ -661,6 +745,19 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
    * @private
    */
   async hasHandlerOnTarget(nodeId, entityType) {
+    const localHandlerAddress = this.resolveLocalHandlerCapabilityAddress(
+      nodeId,
+      entityType,
+    );
+    if (
+      localHandlerAddress &&
+      this.messageRouter &&
+      typeof this.messageRouter.isRegistered === TYPEOF.FUNCTION &&
+      this.messageRouter.isRegistered(localHandlerAddress)
+    ) {
+      return true;
+    }
+
     const serviceRows =
       this.servicesOwner &&
       typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION
@@ -673,6 +770,33 @@ class ReplicaDispatchServiceSegment4 extends ReplicaDispatchServiceSegment3 {
         row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE
       );
     });
+  }
+
+  /**
+   * Resolve the canonical local handler address for same-node dispatch.
+   * Join/restart recovery may register the executor with the router before the
+   * durable `services` row reaches ACTIVE, so the router registration is the
+   * authoritative local capability signal on this bounded path.
+   *
+   * @param {string} nodeId
+   * @param {string} entityType
+   * @return {string|null}
+   * @private
+   */
+  resolveLocalHandlerCapabilityAddress(nodeId, entityType) {
+    if (!nodeId || nodeId !== this.nodeId) {
+      return null;
+    }
+    const handlerAddress =
+      LOCAL_DISPATCH_HANDLER_ADDRESS[entityType] || null;
+    if (!handlerAddress) {
+      return null;
+    }
+    return (
+      `${nodeId}/` +
+      `${handlerAddress.serviceSegment}/` +
+      `${handlerAddress.handlerId}`
+    );
   }
 
   /**

@@ -189,6 +189,12 @@ class MessageGroupServiceHandler extends EventEmitter {
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
         {groupId, replicaId, nodeId: this.nodeId},
       );
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
+        operationId,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId},
+      );
       return buildReplicaOperationResponse(
         ReplicaOperationResponseStatus.ALREADY_EXISTS,
         {

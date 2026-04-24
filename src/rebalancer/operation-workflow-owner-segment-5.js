@@ -12,7 +12,6 @@ const {
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
   DEFAULT_MIN_REPLICA_COUNT,
-  DIRECT_TRANSITION_PERSIST_PARTITION_IDS,
   DISPATCH_RETRY_DELAY_MS,
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
@@ -440,6 +439,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
   }
 
   /**
+   * @param {Object|null} evidence
+   * @return {boolean}
+   * @private
+   */
+  isPriorityPublicationLeaderHandoffRetrySuppressed(evidence) {
+    return (
+      !!evidence &&
+      Number.isFinite(evidence.observedAt) &&
+      Date.now() - evidence.observedAt <=
+        PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.REQUEST_RETRY_AFTER_MS
+    );
+  }
+
+  /**
    * @param {Object} operation
    * @param {string} sourceRoleState
    * @param {Object|null} partitionRow
@@ -457,30 +470,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
       return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
     }
 
-    const sourceNodeId =
+    const rawSourceNodeId =
       typeof operation?.sourceNodeId === TYPEOF.STRING
         ? operation.sourceNodeId.trim()
         : null;
+    const sourceNodeId =
+      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO
+        ? rawSourceNodeId
+        : null;
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
-    const completedLeaderHandoffEvidence =
-      this.getPriorityPublicationLeaderHandoffEvidence(
-        operation,
-        sourceReplicaId,
-      );
     if (sourceNodeId && partitionLeaderNodeId) {
-      if (
-        partitionLeaderNodeId === sourceNodeId &&
-        completedLeaderHandoffEvidence
-      ) {
-        return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
-      }
       return partitionLeaderNodeId === sourceNodeId
         ? PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.LEADER
         : PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
-    }
-    if (completedLeaderHandoffEvidence) {
-      return PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER;
     }
     return sourceRoleState;
   }
@@ -858,6 +861,27 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
     );
     const partitionLeaderNodeId =
       this.getCriticalPartitionLeaderNodeIdForSafety(partitionRow);
+    const rawSourceNodeId =
+      typeof operation?.sourceNodeId === TYPEOF.STRING
+        ? operation.sourceNodeId.trim()
+        : null;
+    const sourceNodeId =
+      rawSourceNodeId && rawSourceNodeId.length > NUM.ZERO
+        ? rawSourceNodeId
+        : null;
+    const completedLeaderHandoffEvidence =
+      this.getPriorityPublicationLeaderHandoffEvidence(
+        operation,
+        sourceReplicaId,
+      );
+    const handoffRequestRetrySuppressed =
+      this.isPriorityPublicationLeaderHandoffRetrySuppressed(
+        completedLeaderHandoffEvidence,
+      );
+    const replacementLeaderOwnershipObserved =
+      sourceNodeId !== null &&
+      partitionLeaderNodeId !== null &&
+      partitionLeaderNodeId !== sourceNodeId;
     const publicationStatus =
       this.normalizePriorityPublicationStatus(planningSnapshot);
 
@@ -871,20 +895,10 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceRoleState,
         observedSourceRoleState,
         sourceReplicaId,
+        sourceNodeId,
         partitionLeaderNodeId,
-        publicationPartitionId,
-        publicationStatus,
-      });
-    }
-
-    if (sourceRoleState === PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER) {
-      return Object.freeze({
-        state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
-        partitionId,
-        sourceRoleState,
-        observedSourceRoleState,
-        sourceReplicaId,
-        partitionLeaderNodeId,
+        replacementLeaderOwnershipObserved,
+        completedLeaderHandoffEvidence,
         publicationPartitionId,
         publicationStatus,
       });
@@ -898,7 +912,10 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceRoleState,
         observedSourceRoleState,
         sourceReplicaId,
+        sourceNodeId,
         partitionLeaderNodeId,
+        replacementLeaderOwnershipObserved,
+        completedLeaderHandoffEvidence,
         publicationPartitionId,
         publicationStatus: null,
       });
@@ -915,7 +932,47 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
         sourceRoleState,
         observedSourceRoleState,
         sourceReplicaId,
+        sourceNodeId,
         partitionLeaderNodeId,
+        replacementLeaderOwnershipObserved,
+        completedLeaderHandoffEvidence,
+        publicationPartitionId,
+        publicationStatus,
+      });
+    }
+
+    if (replacementLeaderOwnershipObserved) {
+      return Object.freeze({
+        state: PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.SAFE,
+        partitionId,
+        sourceRoleState,
+        observedSourceRoleState,
+        sourceReplicaId,
+        sourceNodeId,
+        partitionLeaderNodeId,
+        replacementLeaderOwnershipObserved,
+        completedLeaderHandoffEvidence,
+        publicationPartitionId,
+        publicationStatus,
+      });
+    }
+
+    if (
+      sourceRoleState !== PRIORITY_PUBLICATION_SOURCE_ROLE_STATE.FOLLOWER &&
+      (!completedLeaderHandoffEvidence || !handoffRequestRetrySuppressed)
+    ) {
+      return Object.freeze({
+        state:
+          PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
+        partitionId,
+        sourceRoleState,
+        observedSourceRoleState,
+        sourceReplicaId,
+        sourceNodeId,
+        partitionLeaderNodeId,
+        replacementLeaderOwnershipObserved,
+        completedLeaderHandoffEvidence,
+        handoffRequestRetrySuppressed,
         publicationPartitionId,
         publicationStatus,
       });
@@ -923,12 +980,16 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
 
     return Object.freeze({
       state:
-        PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.REQUEST_SOURCE_LEADER_HANDOFF,
+        PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_REPLACEMENT_LEADER_OWNERSHIP,
       partitionId,
       sourceRoleState,
       observedSourceRoleState,
       sourceReplicaId,
+      sourceNodeId,
       partitionLeaderNodeId,
+      replacementLeaderOwnershipObserved,
+      completedLeaderHandoffEvidence,
+      handoffRequestRetrySuppressed,
       publicationPartitionId,
       publicationStatus,
     });
@@ -999,6 +1060,20 @@ class OperationWorkflowOwnerSegment5 extends OperationWorkflowOwnerSegment4 {
           OPERATION_WORKFLOW_OWNER_LITERAL.CANNOT_BE_REMOVED_WHILE +
           OPERATION_WORKFLOW_OWNER_LITERAL.PUBLICATION_STATUS_IS +
           safetySnapshot.publicationStatus,
+      );
+    }
+
+    if (
+      safetySnapshot.state ===
+      PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE.WAIT_REPLACEMENT_LEADER_OWNERSHIP
+    ) {
+      return this.buildDeferredRemoveSafetyEvaluationForOperation(
+        operation,
+        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
+          safetySnapshot.partitionId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.SOURCE_LEADER +
+          safetySnapshot.sourceReplicaId +
+          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_LEADER_OWNERSHIP_PENDING_BEFORE_SAFE_REMOVAL,
       );
     }
 

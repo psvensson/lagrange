@@ -143,6 +143,17 @@ const SEED_WORKFLOW_PHASE = Object.freeze({
   RUNTIME_READY: 'seed_workflow:runtime_ready',
   FINALIZED: 'seed_workflow:finalized',
 });
+const SEED_STARTUP_CHECKPOINT_SNAPSHOT_FIELD = Object.freeze({
+  [SEED_STARTUP_CHECKPOINT.SESSION_CREATED]: 'sessionCreated',
+  [SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY]: 'infrastructureReady',
+  [SEED_STARTUP_CHECKPOINT.MESSAGE_GROUPS_READY]: 'messageGroupsReady',
+  [SEED_STARTUP_CHECKPOINT.PARTITIONS_READY]: 'partitionsReady',
+  [SEED_STARTUP_CHECKPOINT.REGISTRATION_READY]: 'registrationReady',
+  [SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED]: 'cacheHydrated',
+  [SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY]: 'controlPlaneReady',
+  [SEED_STARTUP_CHECKPOINT.RUNTIME_READY]: 'runtimeReady',
+  [SEED_STARTUP_CHECKPOINT.FINALIZED]: 'finalized',
+});
 
 function resolveBootstrapWorkflowDataDir(options = {}) {
   if (typeof options.dataDir === 'string' && options.dataDir.length > 0) {
@@ -1047,17 +1058,86 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Build one explicit seed-startup checkpoint snapshot for rerun guards.
+   * @return {Object}
+   * @private
+   */
+  buildSeedStartupCheckpointSnapshot() {
+    const messageRouterReady = Boolean(this.messageRouter);
+    const systemTableCache = this.peekSystemTableCache();
+    const localServiceEndpointsPublished =
+      systemTableCache !== null &&
+      this.hasPublishedLocalServiceEndpoints() === true;
+    const controlPlaneBackgroundWritersActive =
+      this.hasActiveControlPlaneBackgroundWriters() === true;
+    return Object.freeze({
+      sessionCreated: true,
+      phase: this.phase,
+      messageRouterReady,
+      infrastructureReady: messageRouterReady,
+      messageGroupsReady:
+        this.messageGroupServices.size > NUM.ZERO,
+      partitionsReady:
+        this.partitionServices.size > NUM.ZERO,
+      registrationReady: this.cdcIntegrationService !== null,
+      cacheHydrated: systemTableCache !== null,
+      replicaHandlerReady: Boolean(this.replicaHandler),
+      messageGroupServiceHandlerReady:
+        Boolean(this.messageGroupServiceHandler),
+      heartbeatServiceReady: Boolean(this.heartbeatService),
+      localAdminRuntimeReadyNotified:
+        this.localAdminRuntimeReadyNotified === true,
+      localServiceEndpointsPublished,
+      controlPlaneReady: Boolean(
+        this.replicaHandler &&
+        this.messageGroupServiceHandler &&
+        this.heartbeatService &&
+        this.localAdminRuntimeReadyNotified === true &&
+        localServiceEndpointsPublished
+      ),
+      runtimeServiceHandlerReady:
+        Boolean(this.runtimeServiceHandler),
+      externalTransportAdmissionOpen:
+        isExternalAdmissionOpen(this.messageRouter),
+      runtimeReady: Boolean(
+        this.runtimeServiceHandler &&
+        isExternalAdmissionOpen(this.messageRouter)
+      ),
+      bootstrapComplete: this.phase === BootstrapPhase.COMPLETE,
+      controlPlaneBackgroundWritersActive,
+      finalized: Boolean(
+        this.phase === BootstrapPhase.COMPLETE &&
+        controlPlaneBackgroundWritersActive
+      ),
+    });
+  }
+
+  /**
+   * Determine whether one seed startup checkpoint is satisfied.
+   * @param {string} checkpoint
+   * @param {Object|null} checkpointSnapshot
+   * @return {boolean}
+   * @private
+   */
+  isSeedCheckpointSatisfied(checkpoint, checkpointSnapshot = null) {
+    const snapshot = checkpointSnapshot &&
+      typeof checkpointSnapshot === 'object' ?
+      checkpointSnapshot :
+      this.buildSeedStartupCheckpointSnapshot();
+    const checkpointField =
+      SEED_STARTUP_CHECKPOINT_SNAPSHOT_FIELD[checkpoint] || null;
+    return checkpointField !== null &&
+      snapshot[checkpointField] === true;
+  }
+
+  /**
    * Determine whether post-pipeline control-plane startup wiring exists.
    * @return {boolean}
    * @private
    */
   hasSeedControlPlaneReady() {
-    return Boolean(
-      this.replicaHandler &&
-      this.messageGroupServiceHandler &&
-      this.heartbeatService &&
-      this.localAdminRuntimeReadyNotified === true &&
-      this.hasPublishedLocalServiceEndpoints() === true,
+    return this.isSeedCheckpointSatisfied(
+      SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY,
     );
   }
 
@@ -1067,9 +1147,8 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   hasSeedRuntimeReady() {
-    return Boolean(
-      this.runtimeServiceHandler &&
-      isExternalAdmissionOpen(this.messageRouter),
+    return this.isSeedCheckpointSatisfied(
+      SEED_STARTUP_CHECKPOINT.RUNTIME_READY,
     );
   }
 
@@ -1178,11 +1257,16 @@ class BootstrapService extends EventEmitter {
    */
   buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
     const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
+    const resolveCheckpointSnapshot = () =>
+      this.buildSeedStartupCheckpointSnapshot();
     return [
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY,
         phase: BootstrapPhase.INFRASTRUCTURE,
-        shouldRerun: () => !this.messageRouter,
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           await startupPipelineRunner.run({
             phases: phases.slice(NUM.ZERO, NUM.ONE),
@@ -1192,7 +1276,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.MESSAGE_GROUPS_READY,
         phase: BootstrapPhase.MESSAGE_GROUPS,
-        shouldRerun: () => this.messageGroupServices.size === NUM.ZERO,
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.MESSAGE_GROUPS_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           await startupPipelineRunner.run({
             phases: phases.slice(NUM.ONE, NUM.TWO),
@@ -1202,7 +1289,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.PARTITIONS_READY,
         phase: BootstrapPhase.PARTITIONS,
-        shouldRerun: () => this.partitionServices.size === NUM.ZERO,
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.PARTITIONS_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           await startupPipelineRunner.run({
             phases: phases.slice(NUM.TWO, NUM.THREE),
@@ -1212,7 +1302,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.REGISTRATION_READY,
         phase: BootstrapPhase.REGISTRATION,
-        shouldRerun: () => this.cdcIntegrationService === null,
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.REGISTRATION_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           await startupPipelineRunner.run({
             phases: phases.slice(NUM.THREE, NUM.FOUR),
@@ -1222,7 +1315,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED,
         phase: BootstrapPhase.CACHE_HYDRATION,
-        shouldRerun: () => this.getSystemTableCache() === null,
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           await startupPipelineRunner.run({
             phases: phases.slice(NUM.FOUR),
@@ -1232,7 +1328,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY,
         phase: SEED_WORKFLOW_PHASE.CONTROL_PLANE_READY,
-        shouldRerun: () => !this.hasSeedControlPlaneReady(),
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           this.logger.info('metrics.bootstrap.post_pipeline.start', {
             nodeId: this.nodeId,
@@ -1275,7 +1374,10 @@ class BootstrapService extends EventEmitter {
       {
         checkpoint: SEED_STARTUP_CHECKPOINT.RUNTIME_READY,
         phase: SEED_WORKFLOW_PHASE.RUNTIME_READY,
-        shouldRerun: () => !this.hasSeedRuntimeReady(),
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.RUNTIME_READY,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           const runtimeHandlerStartMs = Date.now();
           this.initializeRuntimeServiceHandler();
@@ -1290,12 +1392,10 @@ class BootstrapService extends EventEmitter {
         checkpoint: SEED_STARTUP_CHECKPOINT.FINALIZED,
         phase: SEED_WORKFLOW_PHASE.FINALIZED,
         terminal: true,
-        shouldRerun: () => {
-          return (
-            this.phase !== BootstrapPhase.COMPLETE ||
-            this.hasActiveControlPlaneBackgroundWriters() !== true
-          );
-        },
+        shouldRerun: () => !this.isSeedCheckpointSatisfied(
+          SEED_STARTUP_CHECKPOINT.FINALIZED,
+          resolveCheckpointSnapshot(),
+        ),
         run: async () => {
           this.completeSuccessfulBootstrap();
         },

@@ -236,3 +236,44 @@ test('ControlPlaneReadinessService marks startup authority blocked when explicit
   );
   t.end();
 });
+
+test('ControlPlaneReadinessService does not treat steady published participation reasons as recovery blockers once the publication gate is ready', async (t) => {
+  const service = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: createCache(),
+  });
+
+  const snapshot = service.buildStartupAuthoritySnapshotFromPlanningAnswer({
+    publicationEpoch: 8,
+    publicationStatus: 'PUBLISHED',
+    publicationObservationState: 'authoritative',
+    priorityPartitionSummary: {
+      satisfied: true,
+      missingPartitionIds: [],
+      blockedPartitions: [],
+    },
+    recoveryProtocolState: 'steady_published',
+    targetParticipation: {
+      nodeId: 'seed-node',
+      state: 'published_active',
+      reasons: ['published_membership', 'projected_serving', 'locally_eligible'],
+    },
+    recoveryActiveNodeIds: ['seed-node', 'node-2', 'node-3'],
+    recoveryActiveNodeSource: 'published_membership',
+  });
+
+  t.equal(snapshot.state, 'ready');
+  t.equal(snapshot.authorityAvailable, true);
+  t.equal(snapshot.ready, true);
+  t.same(
+    snapshot.priorityRecoveryReasonCodes,
+    [],
+    'participation diagnostics should not reopen recovery once the publication gate is ready',
+  );
+  t.match(snapshot.publicationRecoveryGate, {
+    state: 'ready',
+    ready: true,
+    active: false,
+  });
+  t.end();
+});

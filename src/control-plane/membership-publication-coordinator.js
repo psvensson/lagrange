@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {v4 as uuidv4} from 'uuid';
 import {
+  COLUMN,
   NUM,
   TABLES,
   TYPEOF,
@@ -57,6 +58,47 @@ const MEMBERSHIP_PUBLICATION_WORKFLOW_STEP = Object.freeze({
   DERIVING: 'DERIVING',
   OPEN: 'OPEN',
 });
+const MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD = Object.freeze({
+  CREATED_AT: 'createdAt',
+  ENDPOINT_ID: 'endpointId',
+  LAST_HEARTBEAT: 'lastHeartbeat',
+  NODE_ID: 'nodeId',
+  PARTITION_ID: 'partitionId',
+  READY_LEASE_EXPIRES_AT: 'readyLeaseExpiresAt',
+  SERVICE_ID: 'serviceId',
+  STORAGE_BUDGET_UPDATED_AT: 'storageBudgetUpdatedAt',
+  UPDATED_AT: 'updatedAt',
+});
+const MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE = Object.freeze({
+  [TABLES.NODES]: Object.freeze([
+    COLUMN.NODE_ID,
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.NODE_ID,
+  ]),
+  [TABLES.NODE_ENDPOINTS]: Object.freeze([
+    COLUMN.ENDPOINT_ID,
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.ENDPOINT_ID,
+  ]),
+  [TABLES.PARTITIONS]: Object.freeze([
+    COLUMN.PARTITION_ID,
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.PARTITION_ID,
+  ]),
+  [TABLES.SERVICES]: Object.freeze([
+    COLUMN.SERVICE_ID,
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.SERVICE_ID,
+  ]),
+});
+const MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS = Object.freeze([
+  COLUMN.UPDATED_AT,
+  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.UPDATED_AT,
+  COLUMN.LAST_HEARTBEAT,
+  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.LAST_HEARTBEAT,
+  COLUMN.STORAGE_BUDGET_UPDATED_AT,
+  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.STORAGE_BUDGET_UPDATED_AT,
+  COLUMN.READY_LEASE_EXPIRES_AT,
+  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.READY_LEASE_EXPIRES_AT,
+  COLUMN.CREATED_AT,
+  MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_FIELD.CREATED_AT,
+]);
 const PUBLICATION_WRITE_MAX_ATTEMPTS = 3;
 const PUBLICATION_REASON_ACK_TIMEOUT_EXCEEDED = 'ack_timeout_exceeded';
 const PUBLICATION_WORKFLOW_REASON = Object.freeze({
@@ -246,6 +288,85 @@ function normalizeTableRowsResult(result) {
   }
   return [];
 }
+function resolvePlanningEvidenceRowKey(tableName, row = {}) {
+  const keyFields =
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE[tableName] || [];
+  for (const keyField of keyFields) {
+    const key = String(
+      row?.[keyField] || MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY,
+    ).trim();
+    if (key.length > NUM.ZERO) {
+      return key;
+    }
+  }
+  return MEMBERSHIP_PUBLICATION_COORDINATOR_LITERAL.EMPTY;
+}
+function resolvePlanningEvidenceRowVersion(row = {}) {
+  const versions = MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_VERSION_FIELDS
+    .map((fieldName) => normalizePositiveInteger(row?.[fieldName], NUM.ZERO))
+    .filter((value) => value > NUM.ZERO);
+  if (versions.length === NUM.ZERO) {
+    return NUM.ZERO;
+  }
+  return Math.max(...versions);
+}
+function countPlanningEvidenceRowFields(row = {}) {
+  if (!row || typeof row !== TYPEOF.OBJECT) {
+    return NUM.ZERO;
+  }
+  return Object.keys(row).length;
+}
+function comparePlanningEvidenceRows(leftRow = {}, rightRow = {}) {
+  const leftRank = {
+    version: resolvePlanningEvidenceRowVersion(leftRow),
+    fieldCount: countPlanningEvidenceRowFields(leftRow),
+  };
+  const rightRank = {
+    version: resolvePlanningEvidenceRowVersion(rightRow),
+    fieldCount: countPlanningEvidenceRowFields(rightRow),
+  };
+  const decisiveDelta = [
+    rightRank.version - leftRank.version,
+    rightRank.fieldCount - leftRank.fieldCount,
+  ].find((delta) => delta !== NUM.ZERO);
+  return typeof decisiveDelta === TYPEOF.NUMBER ? decisiveDelta : NUM.ZERO;
+}
+function mergePlanningEvidenceRows(tableName, authoritativeRows = [], projectionRows = []) {
+  const keyFields =
+    MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE[tableName] || [];
+  if (keyFields.length === NUM.ZERO) {
+    return authoritativeRows;
+  }
+  const rowByKey = new Map();
+  const unkeyedRows = [];
+  for (const row of [
+    ...normalizeTableRowsResult(authoritativeRows),
+    ...normalizeTableRowsResult(projectionRows),
+  ]) {
+    const key = resolvePlanningEvidenceRowKey(tableName, row);
+    if (key.length === NUM.ZERO) {
+      unkeyedRows.push(row);
+      continue;
+    }
+    const existingRow = rowByKey.get(key);
+    if (!existingRow || comparePlanningEvidenceRows(existingRow, row) >= NUM.ZERO) {
+      rowByKey.set(key, row);
+    }
+  }
+  return [
+    ...[...rowByKey.entries()]
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+      .map(([, row]) => row),
+    ...unkeyedRows,
+  ];
+}
+function shouldMergePlanningEvidenceRows(tableName, options = {}) {
+  return (
+    resolveMembershipPublicationReadProfile(options.readProfile) ===
+      MEMBERSHIP_PUBLICATION_READ_PROFILE.PLANNING &&
+    Object.hasOwn(MEMBERSHIP_PUBLICATION_PLANNING_EVIDENCE_KEY_FIELDS_BY_TABLE, tableName)
+  );
+}
 function resolveControlPlanePublicationsOwner(options = {}) {
   if (options.controlPlanePublicationsOwner) {
     return options.controlPlanePublicationsOwner;
@@ -340,6 +461,8 @@ function buildMembershipPublicationEvidenceSnapshot(options = {}) {
     nodeEndpointRows: Array.isArray(options.nodeEndpointRows) ? options.nodeEndpointRows : [],
     serviceRows: Array.isArray(options.serviceRows) ? options.serviceRows : [],
     partitionRows: Array.isArray(options.partitionRows) ? options.partitionRows : [],
+    replicaOperationRows:
+      Array.isArray(options.replicaOperationRows) ? options.replicaOperationRows : [],
     readinessByNodeId:
       options.readinessByNodeId && typeof options.readinessByNodeId === TYPEOF.OBJECT ?
         options.readinessByNodeId :
@@ -767,7 +890,18 @@ class MembershipPublicationCoordinator {
         buildLocalAuthoritativeMembershipReadOptions(options),
       );
       if (result?.success === true) {
-        return normalizeTableRowsResult(result);
+        const authoritativeRows = normalizeTableRowsResult(result);
+        if (
+          shouldMergePlanningEvidenceRows(tableName, options) &&
+          typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION
+        ) {
+          return mergePlanningEvidenceRows(
+            tableName,
+            authoritativeRows,
+            this.systemTableCache.getAll(tableName) || [],
+          );
+        }
+        return authoritativeRows;
       }
     }
     if (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
@@ -1141,6 +1275,11 @@ class MembershipPublicationCoordinator {
       preferAuthoritativeRead: preferAuthoritativeMembershipState,
       preloadedRows: options.partitionRows,
     });
+    const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
+      options.replicaOperationRows :
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [] :
+        [];
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :
       this.controlPlaneReadinessService &&
@@ -1181,6 +1320,7 @@ class MembershipPublicationCoordinator {
       nodeEndpointRows,
       serviceRows,
       partitionRows,
+      replicaOperationRows,
       readinessEntries,
       recoveryEpochsByNodeId,
       connectedNodeIds,
@@ -1220,6 +1360,11 @@ class MembershipPublicationCoordinator {
       typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
         this.systemTableCache.getAll(TABLES.PARTITIONS) || [] :
         [];
+    const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
+      options.replicaOperationRows :
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [] :
+        [];
     const readinessEntries = Array.isArray(options.readinessEntries) ?
       options.readinessEntries :
       this.controlPlaneReadinessService &&
@@ -1249,6 +1394,7 @@ class MembershipPublicationCoordinator {
       nodeEndpointRows,
       serviceRows,
       partitionRows,
+      replicaOperationRows,
       readinessEntries,
       recoveryEpochsByNodeId,
       connectedNodeIds,

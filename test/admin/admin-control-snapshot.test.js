@@ -231,6 +231,216 @@ test('AdminControlSnapshot exports publication convergence gate from live priori
     );
   });
 
+test('AdminControlSnapshot refreshes stale readiness publication gates from the shared closure witness',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+            membershipPublication: {
+              publicationEpoch: 12,
+              status: 'PUBLISHED',
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+              acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+              priorityPartitionSummary: {
+                satisfied: false,
+                missingPartitionIds: ['replica_operations-p1'],
+                blockedPartitions: [{
+                  partitionId: 'replica_operations-p1',
+                  requiredDistinctNodeCount: 3,
+                  readyDistinctNodeCount: 2,
+                  spreadGap: 1,
+                }],
+              },
+            },
+            priorityControlPlaneRecovery: {
+              active: true,
+              reasonCodes: ['priority_partitions_not_spread'],
+              publicationRecoveryGate: {
+                state: 'priority_spread_pending',
+                ready: false,
+                active: true,
+                publicationEpoch: 12,
+                publicationStatus: 'PUBLISHED',
+                recoveryProtocolState: 'priority_spread_pending',
+                reasonCodes: ['priority_partitions_not_spread'],
+                priorityPartitionSummary: {
+                  satisfied: false,
+                  missingPartitionIds: ['replica_operations-p1'],
+                  blockedPartitions: [{
+                    partitionId: 'replica_operations-p1',
+                    requiredDistinctNodeCount: 3,
+                    readyDistinctNodeCount: 2,
+                    spreadGap: 1,
+                  }],
+                },
+                pendingAckNodeIds: [],
+                missingPublishedNodeIds: [],
+                prioritySpreadPending: true,
+                publicationPending: false,
+                ackPending: false,
+              },
+            },
+          }];
+        },
+      },
+    });
+    snapshot.buildPriorityRecoveryDecisionSnapshots = () => ({
+      closureWitness: {
+        state: 'closure_satisfied_stale_publication',
+        prioritySpreadPending: false,
+        publicationRefreshRequired: true,
+        closureRecordId: 'CL-003',
+        closureWitnessClass:
+          'publication_converged_priority_spread_pending',
+        refreshedPriorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount: 3,
+          readyEligibleNodeCount: 3,
+          totalPriorityPartitionCount: 1,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+          blockedPartitionCount: 0,
+          largestSpreadGap: 0,
+          totalSpreadGap: 0,
+        },
+      },
+      priorityPartitionSummary: {
+        satisfied: true,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 3,
+        totalPriorityPartitionCount: 1,
+        missingPartitionIds: [],
+        blockedPartitions: [],
+        blockedPartitionCount: 0,
+        largestSpreadGap: 0,
+        totalSpreadGap: 0,
+      },
+      partitionIdsBySemanticState: {},
+      snapshots: [],
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergenceGate,
+      {
+        ready: true,
+        prioritySpreadPending: false,
+        closureRecordId: 'CL-003',
+        closureWitnessClass: 'publication_converged_priority_spread_pending',
+        priorityPartitionSummary: {
+          satisfied: true,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+      },
+      'control snapshot should rebuild the convergence gate from the shared closure witness instead of stale per-node readiness state',
+    );
+    t.match(
+      result.controlPlaneDiagnostics.priorityRecoveryObservation,
+      {
+        prioritySpreadPending: false,
+        closureRecordId: 'CL-003',
+        closureWitnessClass: 'publication_converged_priority_spread_pending',
+        priorityRecoveryBlockedPartitionCount: 0,
+        priorityRecoveryUnresolvedPartitionCount: 0,
+      },
+      'control snapshot should expose the same closure witness in the top-level observation snapshot',
+    );
+  });
+
+test('AdminControlSnapshot does not leak runtime readiness blockers into the exported publication convergence gate',
+  async (t) => {
+    const snapshot = new AdminControlSnapshot({
+      nodeId: 'node-1',
+      nowFn: () => 1000,
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+            },
+            membershipPublication: {
+              publicationEpoch: 18,
+              status: 'PUBLISHED',
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+              requiredAckNodeIds: ['node-1', 'node-2', 'node-3'],
+              acknowledgedNodeIds: ['node-1', 'node-2', 'node-3'],
+              priorityPartitionSummary: {
+                satisfied: true,
+                missingPartitionIds: [],
+                blockedPartitions: [],
+              },
+            },
+            priorityControlPlaneRecovery: {
+              active: false,
+              state: 'runtime_blocked',
+              reasonCodes: ['control_plane_not_writable'],
+              publicationGateReasonCodes: [],
+              runtimeBlockerReasonCodes: ['control_plane_not_writable'],
+              publicationRecoveryGate: {
+                state: 'ready',
+                ready: true,
+                active: false,
+                publicationEpoch: 18,
+                publicationStatus: 'PUBLISHED',
+                reasonCodes: [],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  missingPartitionIds: [],
+                  blockedPartitions: [],
+                },
+                pendingAckNodeIds: [],
+                missingPublishedNodeIds: [],
+                prioritySpreadPending: false,
+                publicationPending: false,
+                ackPending: false,
+              },
+            },
+          }];
+        },
+      },
+    });
+
+    const result = await snapshot.buildLocalControlSnapshot();
+
+    t.match(
+      result.controlPlaneDiagnostics.publicationConvergenceGate,
+      {
+        ready: true,
+        prioritySpreadPending: false,
+        reasonCodes: [],
+      },
+      'control snapshot should keep runtime blocker reasons out of the canonical publication gate',
+    );
+    t.equal(
+      result.controlPlaneDiagnostics.publicationConvergence
+        ?.priorityRecoveryReasonCodes?.includes('control_plane_not_writable'),
+      false,
+      'top-level publication convergence should not inherit runtime-only blocker vocabulary',
+    );
+  });
+
 test('AdminControlSnapshot resolves active nodes from published membership only', async (t) => {
   const snapshot = new AdminControlSnapshot({
     nodeId: 'node-1',

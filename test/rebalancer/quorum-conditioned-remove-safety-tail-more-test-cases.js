@@ -24,7 +24,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests({
   createCriticalPartitionRow,
   installAuthoritativeServicesRead,
 }) {
-test('RebalanceCoordinator - not-found leader handoff evidence allows sql_transactions source removal while partition leadership row lags and source role is still unknown',
+test('RebalanceCoordinator - not-found leader handoff evidence waits for sql_transactions replacement leader ownership',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -215,23 +215,55 @@ test('RebalanceCoordinator - not-found leader handoff evidence allows sql_transa
 
       t.equal(
         retryResult.success,
+        false,
+        'fresh not-found handoff evidence should not allow source removal while the partition row still lags',
+      );
+      t.equal(
+        retryResult.skipped,
         true,
-        'fresh not-found handoff evidence should allow source removal even while the partition row still lags',
+        'replacement leader ownership should defer rather than fail terminally',
+      );
+      t.equal(
+        deliveries.length,
+        1,
+        'handoff evidence should not dispatch remove until replacement leader ownership is visible',
+      );
+      t.match(
+        retryResult.error,
+        /replacement leader ownership pending before safe removal/i,
+        'the retry should explain that replacement leader ownership is still pending',
+      );
+
+      coordinator.systemTableCache.merge(
+        TEST_PARTITIONS_TABLE_NAME,
+        testPartitionId,
+        createCriticalPartitionRow({
+          partitionId: testPartitionId,
+          leaderNodeId: testReplacementNodeId,
+        }),
+      );
+
+      const closureResult = await coordinator.executeOperation(operation);
+
+      t.equal(
+        closureResult.success,
+        true,
+        'fresh not-found handoff evidence should allow source removal once replacement leader ownership is visible',
       );
       t.equal(
         deliveries.length,
         2,
-        'the second dispatch should remove the old source replica',
+        'the third attempt should remove the old source replica',
       );
       t.equal(
         deliveries[1].payload.type,
         ReplicaOperationMessageType.REMOVE_REPLICA,
-        'remove should follow once the coordinator has explicit not-found handoff evidence',
+        'remove should follow after source handoff and replacement leader ownership both close',
       );
       t.equal(
         operation.workflowStep,
         WORKFLOW_STEP.STOPPING,
-        'the replace workflow should move into source removal after explicit not-found handoff evidence',
+        'the replace workflow should move into source removal after explicit not-found handoff evidence and replacement leader ownership',
       );
     } finally {
       await coordinator.shutdown();
@@ -403,13 +435,21 @@ test('RebalanceCoordinator - requests leader handoff before removing sql_write_o
       coordinator.systemTableCache.merge('services', 'sql_write_operations-p1-r1', {
         raft_role: 'follower',
       });
+      coordinator.systemTableCache.merge(
+        TEST_PARTITIONS_TABLE_NAME,
+        'sql_write_operations-p1',
+        createCriticalPartitionRow({
+          partitionId: 'sql_write_operations-p1',
+          leaderNodeId: 'node-b',
+        }),
+      );
 
       const retryResult = await coordinator.executeOperation(operation);
 
       t.equal(
         retryResult.success,
         true,
-        'source removal should dispatch after authority proves the source is follower',
+        'source removal should dispatch after replacement leader ownership is visible',
       );
       t.equal(
         deliveries.length,

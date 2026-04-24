@@ -1,7 +1,5 @@
 import { CONTROL_PLANE_READINESS_SERVICE_SHARED } from "./control-plane-readiness-service-shared.js";
 import { ControlPlaneReadinessServiceSegment3 } from "./control-plane-readiness-service-segment-3.js";
-import {buildPriorityRecoveryObservationSnapshot} from
-  "./priority-recovery-observation-snapshot.js";
 
 const {
   AUTHORITATIVE_READINESS_REPAIR,
@@ -59,6 +57,7 @@ const {
   TYPEOF,
   assertCritical,
   buildControlPlanePublicationStory,
+  buildCanonicalPublicationRecoveryEvidence,
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,
@@ -97,6 +96,12 @@ const {
   unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+const PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE = Object.freeze({
+  PUBLICATION_GATE_PENDING: 'publication_gate_pending',
+  READY: 'ready',
+  RUNTIME_BLOCKED: 'runtime_blocked',
+});
 
 class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceSegment3 {
   getLocalClusterIncarnationFence() {
@@ -295,25 +300,124 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       : null;
   }
 
+  filterPriorityRecoveryReasonCodesForPublicationGate(
+    reasonCodes = [],
+    publicationRecoveryGate = null,
+  ) {
+    const retainedReasonCodes = [];
+    const retainedReasonCodeSet = new Set();
+    for (const reasonCode of Array.isArray(reasonCodes) ? reasonCodes : []) {
+      if (
+        typeof reasonCode !== TYPEOF.STRING ||
+        reasonCode.length === NUM.ZERO
+      ) {
+        continue;
+      }
+      if (
+        reasonCode ===
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD &&
+        publicationRecoveryGate?.prioritySpreadPending !== true
+      ) {
+        continue;
+      }
+      if (!retainedReasonCodeSet.has(reasonCode)) {
+        retainedReasonCodes.push(reasonCode);
+        retainedReasonCodeSet.add(reasonCode);
+      }
+    }
+    return Object.freeze(retainedReasonCodes);
+  }
+
   buildPriorityRecoveryPlanningProjection(planningSnapshot = null) {
     if (!planningSnapshot || typeof planningSnapshot !== TYPEOF.OBJECT) {
       return null;
     }
     const localPlanningAdmission =
       this.resolveLocalPlanningAdmissionEvidence(planningSnapshot);
-    const publicationRecoveryGate =
-      this.getMembershipPublicationRecoveryGate(planningSnapshot) ||
-      buildPublicationRecoveryGateSnapshot(planningSnapshot);
-    const priorityRecoveryReasonCodes = Object.freeze([
-      ...new Set([
-        ...(Array.isArray(publicationRecoveryGate?.reasonCodes)
-          ? publicationRecoveryGate.reasonCodes
-          : []),
-        ...(Array.isArray(planningSnapshot.priorityRecoveryReasonCodes)
-          ? planningSnapshot.priorityRecoveryReasonCodes
-          : []),
-      ]),
-    ]);
+    const providedPublicationRecoveryGate =
+      this.getMembershipPublicationRecoveryGate(planningSnapshot);
+    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+      ...(providedPublicationRecoveryGate || {}),
+      publicationEpoch:
+        Number.isFinite(planningSnapshot.publicationEpoch) ?
+          Math.floor(planningSnapshot.publicationEpoch) :
+          providedPublicationRecoveryGate?.publicationEpoch ??
+          null,
+      publicationStatus:
+        typeof planningSnapshot.publicationStatus === TYPEOF.STRING &&
+          planningSnapshot.publicationStatus.length > NUM.ZERO ?
+          planningSnapshot.publicationStatus :
+          typeof planningSnapshot.status === TYPEOF.STRING &&
+            planningSnapshot.status.length > NUM.ZERO ?
+            planningSnapshot.status :
+            providedPublicationRecoveryGate?.publicationStatus ??
+            null,
+      publicationObservationState:
+        typeof planningSnapshot.publicationObservationState === TYPEOF.STRING &&
+          planningSnapshot.publicationObservationState.length > NUM.ZERO ?
+          planningSnapshot.publicationObservationState :
+          providedPublicationRecoveryGate?.publicationObservationState ??
+          null,
+      recoveryProtocolState:
+        typeof planningSnapshot.recoveryProtocolState === TYPEOF.STRING &&
+          planningSnapshot.recoveryProtocolState.length > NUM.ZERO ?
+          planningSnapshot.recoveryProtocolState :
+          providedPublicationRecoveryGate?.recoveryProtocolState ??
+          null,
+      priorityRecoveryReasonCodes:
+        Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+          planningSnapshot.priorityRecoveryReasonCodes :
+          providedPublicationRecoveryGate?.reasonCodes,
+      priorityPartitionSummary:
+        planningSnapshot.priorityPartitionSummary &&
+          typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT ?
+          planningSnapshot.priorityPartitionSummary :
+          providedPublicationRecoveryGate?.priorityPartitionSummary ??
+          null,
+      priorityRecoveryClosureWitness:
+        planningSnapshot.priorityRecoveryClosureWitness &&
+          typeof planningSnapshot.priorityRecoveryClosureWitness ===
+            TYPEOF.OBJECT ?
+          planningSnapshot.priorityRecoveryClosureWitness :
+          providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+          null,
+      requiredAckNodeIds:
+        Array.isArray(planningSnapshot.requiredAckNodeIds) ?
+          planningSnapshot.requiredAckNodeIds :
+          providedPublicationRecoveryGate?.requiredAckNodeIds ??
+          [],
+      acknowledgedNodeIds:
+        Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
+          planningSnapshot.acknowledgedNodeIds :
+          providedPublicationRecoveryGate?.acknowledgedNodeIds ??
+          [],
+      pendingAckNodeIds:
+        Array.isArray(planningSnapshot.pendingAckNodeIds) ?
+          planningSnapshot.pendingAckNodeIds :
+          providedPublicationRecoveryGate?.pendingAckNodeIds ??
+          [],
+      missingPublishedNodeIds:
+        Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
+          planningSnapshot.missingPublishedNodeIds :
+          Array.isArray(
+              planningSnapshot.missingPublishedRecoveryActiveNodeIds,
+            ) ?
+            planningSnapshot.missingPublishedRecoveryActiveNodeIds :
+            providedPublicationRecoveryGate?.missingPublishedNodeIds ??
+            [],
+    });
+    const priorityRecoveryReasonCodes =
+      this.filterPriorityRecoveryReasonCodesForPublicationGate(
+        [
+          ...(Array.isArray(publicationRecoveryGate?.reasonCodes)
+            ? publicationRecoveryGate.reasonCodes
+            : []),
+          ...(Array.isArray(planningSnapshot.priorityRecoveryReasonCodes)
+            ? planningSnapshot.priorityRecoveryReasonCodes
+            : []),
+        ],
+        publicationRecoveryGate,
+      );
     const priorityPartitionSummary =
       planningSnapshot.priorityPartitionSummary &&
       typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT
@@ -761,16 +865,91 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
   }
 
   resolveMembershipPublicationPlanningSnapshot(context = {}) {
-    if (
-      context?.membershipPublicationPlanningSnapshot &&
-      typeof context.membershipPublicationPlanningSnapshot === TYPEOF.OBJECT
-    ) {
-      return context.membershipPublicationPlanningSnapshot;
-    }
-    return this.buildMembershipPublicationPlanningSnapshot({
+    const directPlanningSnapshot = this.buildMembershipPublicationPlanningSnapshot({
       nodeId: context?.nodeId,
       observedAt: context?.observedAt,
       membershipPublication: context?.membershipPublication,
+    });
+    const providedPlanningSnapshot =
+      context?.membershipPublicationPlanningSnapshot &&
+      typeof context.membershipPublicationPlanningSnapshot === TYPEOF.OBJECT ?
+        context.membershipPublicationPlanningSnapshot :
+        null;
+    if (!providedPlanningSnapshot) {
+      return directPlanningSnapshot;
+    }
+    if (!directPlanningSnapshot) {
+      return providedPlanningSnapshot;
+    }
+    const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: directPlanningSnapshot,
+      publicationConvergenceGate:
+        directPlanningSnapshot.publicationRecoveryGate ||
+        providedPlanningSnapshot.publicationRecoveryGate ||
+        null,
+      priorityRecoveryObservation:
+        providedPlanningSnapshot.priorityRecoveryObservation || null,
+      priorityRecoveryDecisionSnapshots:
+        providedPlanningSnapshot.priorityRecoveryDecisionSnapshots || null,
+      priorityRecoveryClosureWitness:
+        providedPlanningSnapshot.priorityRecoveryClosureWitness ||
+        directPlanningSnapshot.priorityRecoveryClosureWitness ||
+        null,
+      priorityRecoveryInvariants:
+        providedPlanningSnapshot.priorityRecoveryInvariants || null,
+    });
+    const publicationConvergenceGate =
+      publicationEvidence.publicationConvergenceGate ||
+      directPlanningSnapshot.publicationRecoveryGate ||
+      providedPlanningSnapshot.publicationRecoveryGate ||
+      null;
+    const priorityRecoveryObservation =
+      publicationEvidence.priorityRecoveryObservation || null;
+    return this.buildPriorityRecoveryPlanningProjection({
+      ...providedPlanningSnapshot,
+      ...directPlanningSnapshot,
+      publicationEpoch:
+        publicationConvergenceGate?.publicationEpoch ??
+        directPlanningSnapshot.publicationEpoch ??
+        providedPlanningSnapshot.publicationEpoch ??
+        null,
+      publicationStatus:
+        publicationConvergenceGate?.publicationStatus ??
+        directPlanningSnapshot.publicationStatus ??
+        directPlanningSnapshot.status ??
+        providedPlanningSnapshot.publicationStatus ??
+        providedPlanningSnapshot.status ??
+        null,
+      publicationObservationState:
+        publicationConvergenceGate?.publicationObservationState ??
+        directPlanningSnapshot.publicationObservationState ??
+        providedPlanningSnapshot.publicationObservationState ??
+        null,
+      recoveryProtocolState:
+        priorityRecoveryObservation?.recoveryProtocolState ??
+        publicationConvergenceGate?.recoveryProtocolState ??
+        directPlanningSnapshot.recoveryProtocolState ??
+        providedPlanningSnapshot.recoveryProtocolState ??
+        null,
+      priorityRecoveryReasonCodes:
+        priorityRecoveryObservation?.priorityRecoveryReasonCodes ??
+        publicationConvergenceGate?.reasonCodes ??
+        directPlanningSnapshot.priorityRecoveryReasonCodes ??
+        providedPlanningSnapshot.priorityRecoveryReasonCodes ??
+        [],
+      priorityPartitionSummary:
+        priorityRecoveryObservation?.priorityPartitionSummary ??
+        publicationConvergenceGate?.priorityPartitionSummary ??
+        directPlanningSnapshot.priorityPartitionSummary ??
+        providedPlanningSnapshot.priorityPartitionSummary ??
+        null,
+      priorityRecoveryClosureWitness:
+        publicationConvergenceGate?.priorityRecoveryClosureWitness ??
+        directPlanningSnapshot.priorityRecoveryClosureWitness ??
+        providedPlanningSnapshot.priorityRecoveryClosureWitness ??
+        null,
+      publicationRecoveryGate: publicationConvergenceGate,
+      priorityRecoveryObservation,
     });
   }
 
@@ -1191,29 +1370,39 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       this.buildPriorityRecoveryPlanningProjection(
         this.resolveMembershipPublicationPlanningSnapshot(context),
       );
+    const publicationEvidence = buildCanonicalPublicationRecoveryEvidence({
+      publicationConvergence: planningSnapshot,
+    });
     const publicationRecoveryGate =
+      publicationEvidence.publicationConvergenceGate ||
       planningSnapshot?.publicationRecoveryGate ||
       buildPublicationRecoveryGateSnapshot(planningSnapshot || {});
+    const priorityRecoveryObservation =
+      publicationEvidence.priorityRecoveryObservation || null;
     const priorityPartitionSummary =
       publicationRecoveryGate.priorityPartitionSummary ||
+      priorityRecoveryObservation?.priorityPartitionSummary ||
       planningSnapshot?.priorityPartitionSummary ||
       null;
-    const reasonCodes = Array.isArray(planningSnapshot?.priorityRecoveryReasonCodes)
-      ? [...planningSnapshot.priorityRecoveryReasonCodes]
+    const gateReasonCodes = Array.isArray(
+      publicationRecoveryGate?.reasonCodes,
+    )
+      ? [...publicationRecoveryGate.reasonCodes]
       : [];
+    const runtimeBlockerReasonCodes = [];
     if (
       dimensions[
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE
       ] !== true
     ) {
-      reasonCodes.push(
+      runtimeBlockerReasonCodes.push(
         CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
       );
     }
-    const publicationPendingReasonCodePresent = reasonCodes.includes(
+    const publicationPendingReasonCodePresent = gateReasonCodes.includes(
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     );
-    const controlPlaneNotWritable = reasonCodes.includes(
+    const controlPlaneNotWritable = runtimeBlockerReasonCodes.includes(
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE,
     );
     if (
@@ -1223,23 +1412,36 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
       !publicationPendingReasonCodePresent &&
       !controlPlaneNotWritable
     ) {
-      reasonCodes.push(
+      runtimeBlockerReasonCodes.push(
         CONTROL_PLANE_PRIORITY_RECOVERY_REASON.RECOVERY_ELIGIBILITY_PENDING,
       );
     }
 
-    const dedupedReasonCodes = Object.freeze([...new Set(reasonCodes)]);
+    const dedupedReasonCodes = Object.freeze([
+      ...new Set([...gateReasonCodes, ...runtimeBlockerReasonCodes]),
+    ]);
     const enteredAt =
       membershipPublication?.createdAt ||
       membershipPublication?.updatedAt ||
       normalizeDiagnosticTimestampMs(context.observedAt) ||
       this.now();
+    const state =
+      publicationRecoveryGate.active === true ?
+        PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE
+          .PUBLICATION_GATE_PENDING :
+      runtimeBlockerReasonCodes.length > NUM.ZERO ?
+        PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE.RUNTIME_BLOCKED :
+        PRIORITY_CONTROL_PLANE_RECOVERY_PROJECTION_STATE.READY;
 
     return Object.freeze({
-      active:
-        publicationRecoveryGate.active === true ||
-        dedupedReasonCodes.length > NUM.ZERO,
+      active: publicationRecoveryGate.active === true,
+      publicationGateActive: publicationRecoveryGate.active === true,
+      state,
       reasonCodes: dedupedReasonCodes,
+      publicationGateReady: publicationRecoveryGate.ready === true,
+      runtimeBlocked: runtimeBlockerReasonCodes.length > NUM.ZERO,
+      publicationGateReasonCodes: Object.freeze([...gateReasonCodes]),
+      runtimeBlockerReasonCodes: Object.freeze([...runtimeBlockerReasonCodes]),
       publicationEpoch:
         publicationRecoveryGate.publicationEpoch ??
         planningSnapshot?.publicationEpoch ??
@@ -1250,10 +1452,7 @@ class ControlPlaneReadinessServiceSegment4 extends ControlPlaneReadinessServiceS
         planningSnapshot?.publicationStatus ??
         (membershipPublication?.status || null),
       publicationRecoveryGate,
-      priorityRecoveryObservation: buildPriorityRecoveryObservationSnapshot({
-        publicationConvergence: planningSnapshot,
-        publicationConvergenceGate: publicationRecoveryGate,
-      }),
+      priorityRecoveryObservation,
       priorityPartitionSummary,
       enteredAt,
     });

@@ -16,9 +16,16 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+
+const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-1';
+const TEST_ALREADY_ACTIVE_ENTITY_ID = 'sys-postgres-wire';
+const TEST_ALREADY_ACTIVE_REPLICA_ID = 'sys-postgres-wire-r1';
 
 function initEnv() {
   process.env.NODE_ENV = 'test';
@@ -108,6 +115,7 @@ function createHandler(overrides = {}) {
     systemTableCache: cache,
     cdcIntegrationService: cdc,
     serviceLifecycleManager: lifecycle,
+    executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
   });
   handler.initialize();
   return {handler, cache, cdc, lifecycle};
@@ -191,20 +199,45 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
   });
 
   it('returns ALREADY_EXISTS for active replica', async () => {
-    const {handler} = createHandler();
-    handler.localReplicas.set('sys-postgres-wire-r1', {
-      replicaId: 'sys-postgres-wire-r1',
-      entityId: 'sys-postgres-wire',
+    const emittedOutcomes = [];
+    const {handler} = createHandler({
+      executorOutcomeEmitter: {
+        emitOutcome(outcomeType, operationId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType,
+            operationId,
+            workflowStep,
+            options,
+          });
+        },
+      },
+    });
+    handler.localReplicas.set(TEST_ALREADY_ACTIVE_REPLICA_ID, {
+      replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+      entityId: TEST_ALREADY_ACTIVE_ENTITY_ID,
       status: ReplicaStatus.ACTIVE,
     });
     const response = await handler.handleCreateReplica({
-      [ReplicaOperationField.OPERATION_ID]: 'op-1',
-      [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
-      [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      [ReplicaOperationField.OPERATION_ID]: TEST_ALREADY_ACTIVE_OPERATION_ID,
+      [ReplicaOperationField.ENTITY_ID]: TEST_ALREADY_ACTIVE_ENTITY_ID,
+      [ReplicaOperationField.REPLICA_ID]: TEST_ALREADY_ACTIVE_REPLICA_ID,
     });
     assert.equal(
       response.status,
       ReplicaOperationResponseStatus.ALREADY_EXISTS,
+    );
+    assert.deepEqual(
+      emittedOutcomes,
+      [
+        {
+          outcomeType: EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE,
+          operationId: TEST_ALREADY_ACTIVE_OPERATION_ID,
+          workflowStep: WORKFLOW_STEP.ACTIVE,
+          options: {
+            replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+          },
+        },
+      ],
     );
   });
 

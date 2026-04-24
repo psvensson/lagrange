@@ -24,6 +24,9 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../../src/rebalancer/executor-outcome-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import LifeRaft from '../../src/raft/liferaft.js';
 import {registerReplicaHandlerTailTests} from './replica-handler-tail-test-cases.js';
@@ -56,6 +59,9 @@ const TEST_REMOVED_CLEANUP_PARTITION_ID = 'partition-1';
 const TEST_REMOVED_CLEANUP_REPLICA_ID = 'removed-cleanup-r1';
 const TEST_REMOVED_CLEANUP_REASON = 'replace_source_removal';
 const TEST_REMOVED_CLEANUP_DEFERRED_ERROR = 'cleanup needs retry';
+const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-already-active';
+const TEST_ALREADY_ACTIVE_PARTITION_ID = 'partition-1';
+const TEST_ALREADY_ACTIVE_REPLICA_ID = 'replica-1';
 
 /**
  * Create a mock CDC integration service.
@@ -1302,29 +1308,56 @@ test('ReplicaHandler', async (t) => {
       handler.initialize();
 
       // Pre-populate local replica
-      handler.localReplicas.set('replica-1', {
-        replicaId: 'replica-1',
-        partitionId: 'partition-1',
+      const emittedOutcomes = [];
+      handler.executorOutcomeEmitter = {
+        emitOutcome(outcomeType, operationId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType,
+            operationId,
+            workflowStep,
+            options,
+          });
+        },
+      };
+
+      handler.localReplicas.set(TEST_ALREADY_ACTIVE_REPLICA_ID, {
+        replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+        partitionId: TEST_ALREADY_ACTIVE_PARTITION_ID,
         status: ReplicaStatus.ACTIVE,
       });
-      handler.localServices.set('replica-1', {
-        replicaId: 'replica-1',
-        partitionId: 'partition-1',
+      handler.localServices.set(TEST_ALREADY_ACTIVE_REPLICA_ID, {
+        replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+        partitionId: TEST_ALREADY_ACTIVE_PARTITION_ID,
         async shutdown() {},
         async syncFromLeader() {},
       });
 
       const request = {
-        operationId: 'op-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
+        operationId: TEST_ALREADY_ACTIVE_OPERATION_ID,
+        partitionId: TEST_ALREADY_ACTIVE_PARTITION_ID,
+        replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
       };
 
       const response = await handler.handleCreateReplica(request);
 
       t.equal(response.status, ReplicaOperationResponseStatus.ALREADY_EXISTS,
         'already_exists');
-      t.equal(response.replicaId, 'replica-1', 'replicaId in response');
+      t.equal(response.replicaId, TEST_ALREADY_ACTIVE_REPLICA_ID,
+        'replicaId in response');
+      t.same(
+        emittedOutcomes,
+        [
+          {
+            outcomeType: EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+            operationId: TEST_ALREADY_ACTIVE_OPERATION_ID,
+            workflowStep: WORKFLOW_STEP.ACTIVE,
+            options: {
+              replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+            },
+          },
+        ],
+        'already-active create idempotency should emit canonical active workflow progress',
+      );
 
       handler.shutdown();
     });

@@ -43,6 +43,9 @@ const STARTUP_AUTHORITY_TRANSITIONAL_RECOVERY_GATE_STATE = new Set([
   PUBLICATION_RECOVERY_GATE_STATE.ACK_PENDING,
   PUBLICATION_RECOVERY_GATE_STATE.PRIORITY_SPREAD_PENDING,
 ]);
+const STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES = new Set(
+  Object.values(CONTROL_PLANE_PRIORITY_RECOVERY_REASON),
+);
 
 function normalizeCanonicalStartupNodeIds(values = []) {
   return Object.freeze(
@@ -61,6 +64,20 @@ function hasKnownStartupAuthorityString(value) {
 
 function hasStartupAuthorityTargetParticipationEvidence(targetParticipation) {
   return targetParticipation && typeof targetParticipation === TYPEOF.OBJECT;
+}
+
+function normalizeStartupAuthorityTargetParticipationRecoveryReasons(
+  targetParticipation,
+) {
+  return Object.freeze(
+    [...new Set(
+      (Array.isArray(targetParticipation?.reasons) ? targetParticipation.reasons : [])
+        .filter((reasonCode) =>
+          typeof reasonCode === TYPEOF.STRING &&
+          STARTUP_AUTHORITY_PRIORITY_RECOVERY_REASON_CODES.has(reasonCode),
+        ),
+    )],
+  );
 }
 
 function hasStartupAuthorityPriorityPartitionEvidence(priorityPartitionSummary) {
@@ -495,9 +512,10 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
       planningSnapshot.clusterIncarnationFence :
       null;
-  const targetParticipationReasons = Array.isArray(targetParticipation?.reasons) ?
-    [...targetParticipation.reasons] :
-    [];
+  const targetParticipationReasons =
+    normalizeStartupAuthorityTargetParticipationRecoveryReasons(
+      targetParticipation,
+    );
   const priorityRecoveryReasonCodes = [...new Set([
     ...publicationRecoveryGate.reasonCodes,
     ...targetParticipationReasons,

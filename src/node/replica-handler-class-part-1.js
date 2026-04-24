@@ -561,6 +561,12 @@ class ReplicaHandlerPart1 extends EventEmitter {
           replicaId: existingReplica.replicaId,
           nodeId: this.nodeId,
         });
+        this.emitExecutorOutcome(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+          operationId,
+          WORKFLOW_STEP.ACTIVE,
+          { replicaId: existingReplica.replicaId },
+        );
         return this.buildReplicaOperationResponse(
           ReplicaOperationResponseStatus.ALREADY_EXISTS,
           {

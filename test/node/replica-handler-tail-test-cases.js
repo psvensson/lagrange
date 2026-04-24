@@ -676,6 +676,61 @@ export async function registerReplicaHandlerTailTests({
       handler.shutdown();
     });
 
+  t.test('handleRemoveReplica cleans durable service truth for already removed cache miss',
+    async (t) => {
+      const TEST_CACHE_MISS_REMOVED_OPERATION_ID =
+        'removed-cache-miss-cleanup-op';
+      const TEST_CACHE_MISS_REMOVED_PARTITION_ID =
+        'removed-cache-miss-partition-1';
+      const TEST_CACHE_MISS_REMOVED_REPLICA_ID =
+        'removed-cache-miss-replica-1';
+      const TEST_CACHE_MISS_REMOVED_NODE_ID = 'test-node';
+      const TEST_CACHE_MISS_REMOVED_REASON = 'replace_source_removal';
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: TEST_CACHE_MISS_REMOVED_NODE_ID,
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+      handler.localReplicas.set(TEST_CACHE_MISS_REMOVED_REPLICA_ID, {
+        replicaId: TEST_CACHE_MISS_REMOVED_REPLICA_ID,
+        partitionId: TEST_CACHE_MISS_REMOVED_PARTITION_ID,
+        status: ReplicaStatus.REMOVED,
+      });
+
+      const response = await handler.handleRemoveReplica({
+        operationId: TEST_CACHE_MISS_REMOVED_OPERATION_ID,
+        partitionId: TEST_CACHE_MISS_REMOVED_PARTITION_ID,
+        replicaId: TEST_CACHE_MISS_REMOVED_REPLICA_ID,
+        reason: TEST_CACHE_MISS_REMOVED_REASON,
+      });
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.COMPLETED,
+        'already removed cache-miss replica should still complete idempotently',
+      );
+      t.ok(
+        mockCDC.operations.some((op) =>
+          op.type === 'delete' &&
+          op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+          op.whereClause?.service_id === TEST_CACHE_MISS_REMOVED_REPLICA_ID &&
+          op.whereClause?.service_type === 'partition' &&
+          op.whereClause?.partition_id === TEST_CACHE_MISS_REMOVED_PARTITION_ID &&
+          op.whereClause?.node_id === TEST_CACHE_MISS_REMOVED_NODE_ID,
+        ),
+        'cache miss must still route one authoritative services-row delete',
+      );
+
+      handler.shutdown();
+    });
+
   t.test('handleRemoveReplica reconciles stale service rows for removed replica',
     async (t) => {
       const cache = createSeededCache();

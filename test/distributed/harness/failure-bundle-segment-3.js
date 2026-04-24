@@ -1,5 +1,10 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots } from '../../../src/control-plane/priority-recovery-snapshot.js';
+import {
+  deriveLegacyPriorityRecoveryActiveGateFields,
+  normalizePriorityRecoveryActiveGateSnapshot,
+} from './active-gate-contract.js';
 import { FAILURE_BUNDLE_SEGMENT_2 } from "./failure-bundle-segment-2.js";
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -23,6 +28,7 @@ const {
   NODE_DIAGNOSTICS_TRACE_LIMIT,
   NODE_ID_ERROR_PATTERN,
   PLAYBACK_EVENTS_FILENAME,
+  PLAYBACK_SNAPSHOTS_FILENAME,
   PLAYBACK_EVENT_TYPE_CLUSTER_STAGE,
   PLAYBACK_EVENT_TYPE_LOAD_STARTED,
   PLAYBACK_EVENT_TYPE_LOAD_PROGRESS,
@@ -99,6 +105,7 @@ const {
   appendActiveGateReadinessDelaySignals,
   appendReadinessFailureSignals,
   normalizeReadinessFailure,
+  hasBlockingReadinessFailure,
   resolveReadinessFailure,
   resolveReadinessFailureGuidance,
   normalizeNonNegativeCount,
@@ -134,6 +141,14 @@ const {
   scorePlaybackActiveGateDetails,
 } = FAILURE_BUNDLE_SEGMENT_2;
 
+const PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD = Object.freeze({
+  REPLICA_OPERATIONS: 'replicaOperations',
+  ROWS: 'rows',
+  SERVICES: 'services',
+  TIMESTAMP: 'timestamp',
+});
+const PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+
 function buildPlaybackControlPlaneFallback(events) {
   const sortedEvents = [...(Array.isArray(events) ? events : [])]
     .filter((event) => isRecord(event))
@@ -155,7 +170,10 @@ function buildPlaybackControlPlaneFallback(events) {
         : null;
     if (
       !details ||
-      details.stage !== PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE
+      (
+        details.stage !== PLAYBACK_STAGE_SETUP_CLUSTER_WAITING_ACTIVE &&
+        details.stage !== PLAYBACK_STAGE_SETUP_CLUSTER_ACTIVE
+      )
     ) {
       continue;
     }
@@ -202,31 +220,12 @@ function buildPlaybackControlPlaneFallback(events) {
     typeof selectedActiveGateDetails.snapshotCoverage === "object"
       ? cloneJsonValue(selectedActiveGateDetails.snapshotCoverage)
       : null;
-  const activeGateProgress =
-    selectedActiveGateDetails.activeGateProgress &&
-    typeof selectedActiveGateDetails.activeGateProgress === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.activeGateProgress)
-      : null;
-  const activeGateBestProgress =
-    selectedActiveGateDetails.activeGateBestProgress &&
-    typeof selectedActiveGateDetails.activeGateBestProgress === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.activeGateBestProgress)
-      : null;
-  const activeGateAdmissionState = isRecord(
-    selectedActiveGateDetails.activeGateAdmissionState,
-  )
-    ? cloneJsonValue(selectedActiveGateDetails.activeGateAdmissionState)
-    : null;
-  const activeGateNoProgress =
-    selectedActiveGateDetails.activeGateNoProgress &&
-    typeof selectedActiveGateDetails.activeGateNoProgress === "object"
-      ? cloneJsonValue(selectedActiveGateDetails.activeGateNoProgress)
-      : null;
-  const activeGateBlockerHistory = Array.isArray(
-    selectedActiveGateDetails.activeGateBlockerHistory,
-  )
-    ? cloneJsonValue(selectedActiveGateDetails.activeGateBlockerHistory)
-    : null;
+  const activeGate = normalizePriorityRecoveryActiveGateSnapshot(
+    selectedActiveGateDetails,
+  );
+  const legacyActiveGateFields = deriveLegacyPriorityRecoveryActiveGateFields(
+    activeGate,
+  );
   const priorityRecoveryDecisionSnapshots =
     selectedActiveGateDetails?.snapshotCoverage &&
     typeof selectedActiveGateDetails.snapshotCoverage === "object" &&
@@ -272,11 +271,8 @@ function buildPlaybackControlPlaneFallback(events) {
     publicationConvergenceGate,
     publishedMembershipObservation,
     activeGateSnapshotCoverage: snapshotCoverage,
-    activeGateProgress,
-    activeGateBestProgress,
-    activeGateAdmissionState,
-    activeGateNoProgress,
-    activeGateBlockerHistory,
+    ...(activeGate ? {activeGate} : {}),
+    ...legacyActiveGateFields,
     priorityRecoveryDecisionSnapshots,
     priorityRecoveryInvariants,
     readinessByNodeId:
@@ -397,6 +393,114 @@ async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
       controlPlaneFallback: controlPlaneFallback?.controlPlaneFallback || null,
       controlSnapshotByNodeId:
         controlPlaneFallback?.controlSnapshotByNodeId || null,
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function parsePlaybackSnapshotStates(rawContent) {
+  return String(rawContent || '')
+    .split('\n')
+    .map((line) => String(line || '').trim())
+    .filter((line) => line.length > ZERO)
+    .map((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        return isRecord(parsed) ? parsed : null;
+      } catch (_error) {
+        return null;
+      }
+    })
+    .filter((snapshot) => snapshot !== null);
+}
+
+function selectLatestPlaybackSnapshot(snapshotStates = []) {
+  const snapshots = Array.isArray(snapshotStates) ? snapshotStates : [];
+  if (snapshots.length === ZERO) {
+    return null;
+  }
+  return snapshots.slice().sort((left, right) => {
+    return (
+      normalizeNonNegativeCount(
+        right?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.TIMESTAMP],
+      ) -
+      normalizeNonNegativeCount(
+        left?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.TIMESTAMP],
+      )
+    );
+  })[ZERO] || null;
+}
+
+function buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot) {
+  if (!isRecord(latestSnapshot)) {
+    return null;
+  }
+  const controlPlaneDiagnostics = resolveControlPlaneDiagnostics(entry);
+  const publicationConvergence = isRecord(
+    controlPlaneDiagnostics?.publicationConvergence,
+  ) ?
+    controlPlaneDiagnostics.publicationConvergence :
+    null;
+  if (!isRecord(publicationConvergence)) {
+    return null;
+  }
+  const replicaOperationRows = Array.isArray(
+    latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS],
+  ) ?
+    latestSnapshot[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.REPLICA_OPERATIONS] :
+    [];
+  const serviceRows = Array.isArray(
+    latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.SERVICES],
+  ) ?
+    latestSnapshot[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.SERVICES] :
+    [];
+  if (replicaOperationRows.length === ZERO && serviceRows.length === ZERO) {
+    return null;
+  }
+  return buildSharedPriorityRecoveryDecisionSnapshots({
+    capturedAt: normalizeNonNegativeCount(
+      latestSnapshot?.[PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.TIMESTAMP],
+    ),
+    publicationConvergence,
+    readinessByNodeId:
+      isRecord(controlPlaneDiagnostics?.readinessByNodeId) ?
+        controlPlaneDiagnostics.readinessByNodeId :
+        {},
+    workflowAdmissionsByWorkflowId:
+      isRecord(controlPlaneDiagnostics?.workflowAdmissionsByWorkflowId) ?
+        controlPlaneDiagnostics.workflowAdmissionsByWorkflowId :
+        {},
+    replicaOperationRows,
+    replicaOperations: {
+      [PLAYBACK_PRIORITY_RECOVERY_SNAPSHOT_FIELD.ROWS]: replicaOperationRows,
+    },
+    serviceRows,
+    logsTable: isRecord(controlPlaneDiagnostics?.logsTable) ?
+      controlPlaneDiagnostics.logsTable :
+      null,
+  });
+}
+
+async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
+  const playbackSnapshotsAbsolutePath = join(
+    scenarioDir,
+    PLAYBACK_SNAPSHOTS_FILENAME,
+  );
+  try {
+    const content = await readFile(playbackSnapshotsAbsolutePath, UTF8_ENCODING);
+    const latestSnapshot = selectLatestPlaybackSnapshot(
+      parsePlaybackSnapshotStates(content),
+    );
+    const priorityRecoveryDecisionSnapshots =
+      buildPlaybackPriorityRecoveryDecisionSnapshots(entry, latestSnapshot);
+    if (!priorityRecoveryDecisionSnapshots) {
+      return null;
+    }
+    return {
+      controlPlaneFallback: {
+        priorityRecoveryDecisionSnapshots,
+      },
     };
   } catch (_error) {
     return null;
@@ -1085,6 +1189,7 @@ async function collectScenarioLogArtifacts(
   scenarioDir,
   relevantNodeIds,
   workspaceRoot,
+  entry,
 ) {
   const result = {
     scenarioDirPath: toWorkspaceRelative(scenarioDir, workspaceRoot),
@@ -1175,6 +1280,22 @@ async function collectScenarioLogArtifacts(
     result.playbackControlPlane = playbackInsights.controlPlaneFallback || null;
     result.playbackControlSnapshotByNodeId =
       playbackInsights.controlSnapshotByNodeId || null;
+  }
+
+  const playbackSnapshotInsights = await collectPlaybackSnapshotInsights(
+    scenarioDir,
+    entry,
+  );
+  if (playbackSnapshotInsights?.controlPlaneFallback) {
+    const mergedPlaybackControlPlane = {
+      ...(isRecord(result.playbackControlPlane) ? result.playbackControlPlane : {}),
+      ...playbackSnapshotInsights.controlPlaneFallback,
+      priorityRecoveryDecisionSnapshots: mergePriorityRecoveryDecisionSnapshots(
+        playbackSnapshotInsights.controlPlaneFallback.priorityRecoveryDecisionSnapshots,
+        result.playbackControlPlane?.priorityRecoveryDecisionSnapshots || null,
+      ),
+    };
+    result.playbackControlPlane = mergedPlaybackControlPlane;
   }
 
   return result;
@@ -1290,6 +1411,7 @@ export const FAILURE_BUNDLE_SEGMENT_3 = {
   appendActiveGateReadinessDelaySignals,
   appendReadinessFailureSignals,
   normalizeReadinessFailure,
+  hasBlockingReadinessFailure,
   resolveReadinessFailure,
   resolveReadinessFailureGuidance,
   normalizeNonNegativeCount,

@@ -31,7 +31,7 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     StartupRecoveryCoordinator,
     attachAuthoritativeRepairDiagnostics,
     buildMembershipPublicationReadOptions,
-    buildPublicationRecoveryGateSnapshot,
+    buildCanonicalPublicationRecoveryEvidence,
     buildPriorityRecoveryAdmissionByPartitionId,
     buildPriorityRecoveryLearnerPromotionByPartitionId,
     buildPriorityRecoveryPlannerByPartitionId,
@@ -53,10 +53,17 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
     uniqueSorted,
   } = options;
   class AdminControlSnapshotReadinessDiagnosticsMethods {
-    resolvePublicationConvergenceGateDiagnostics(readinessEntries = []) {
-      for (const readiness of Array.isArray(readinessEntries)
-        ? readinessEntries
-        : []) {
+    resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+      readinessEntries = [],
+      publicationConvergence = null,
+      priorityRecoveryDecisionSnapshots = null,
+      options = {},
+    ) {
+      let readinessPublicationRecoveryGate = null;
+      let readinessPriorityControlPlaneRecovery = null;
+      for (const readiness of Array.isArray(readinessEntries) ?
+        readinessEntries :
+        []) {
         const priorityControlPlaneRecovery =
           readiness?.priorityControlPlaneRecovery;
         if (
@@ -73,27 +80,74 @@ function assignAdminControlSnapshotReadinessDiagnosticsMethods(
         ) {
           continue;
         }
-        return buildPublicationRecoveryGateSnapshot({
-          ...publicationRecoveryGate,
-          publicationEpoch:
-            publicationRecoveryGate.publicationEpoch ??
-            priorityControlPlaneRecovery.publicationEpoch ??
-            null,
-          publicationStatus:
-            publicationRecoveryGate.publicationStatus ??
-            priorityControlPlaneRecovery.publicationStatus ??
-            null,
-          priorityRecoveryReasonCodes:
-            publicationRecoveryGate.reasonCodes ??
-            priorityControlPlaneRecovery.reasonCodes ??
-            [],
-          priorityPartitionSummary:
-            publicationRecoveryGate.priorityPartitionSummary ??
-            priorityControlPlaneRecovery.priorityPartitionSummary ??
-            null,
+        readinessPublicationRecoveryGate = publicationRecoveryGate;
+        readinessPriorityControlPlaneRecovery = priorityControlPlaneRecovery;
+        break;
+      }
+      const normalizedPublicationConvergence =
+        publicationConvergence &&
+        typeof publicationConvergence === TYPEOF.OBJECT ?
+          publicationConvergence :
+          null;
+      if (
+        !readinessPublicationRecoveryGate &&
+        !normalizedPublicationConvergence &&
+        !priorityRecoveryDecisionSnapshots
+      ) {
+        return Object.freeze({
+          publicationConvergence: null,
+          publicationConvergenceGate: null,
+          priorityRecoveryObservation: null,
         });
       }
-      return null;
+      const gateScopedEvidence = buildCanonicalPublicationRecoveryEvidence({
+        publicationConvergence: normalizedPublicationConvergence,
+        publicationConvergenceGate: readinessPublicationRecoveryGate,
+        priorityRecoveryObservation:
+          readinessPriorityControlPlaneRecovery?.priorityRecoveryObservation ||
+          null,
+        priorityRecoveryDecisionSnapshots:
+          readinessPublicationRecoveryGate?.ready === true ?
+            null :
+            priorityRecoveryDecisionSnapshots,
+        logsTable: options.logsTable || null,
+      });
+      if (!priorityRecoveryDecisionSnapshots) {
+        return gateScopedEvidence;
+      }
+      return Object.freeze({
+        publicationConvergence:
+          gateScopedEvidence.publicationConvergence,
+        publicationConvergenceGate:
+          gateScopedEvidence.publicationConvergenceGate,
+        priorityRecoveryObservation:
+          buildCanonicalPublicationRecoveryEvidence({
+            publicationConvergence:
+              gateScopedEvidence.publicationConvergence ||
+              normalizedPublicationConvergence,
+            publicationConvergenceGate:
+              gateScopedEvidence.publicationConvergenceGate,
+            priorityRecoveryObservation:
+              readinessPriorityControlPlaneRecovery
+                ?.priorityRecoveryObservation ||
+              null,
+            priorityRecoveryDecisionSnapshots,
+            logsTable: options.logsTable || null,
+          }).priorityRecoveryObservation ||
+          gateScopedEvidence.priorityRecoveryObservation,
+      });
+    }
+
+    resolvePublicationConvergenceGateDiagnostics(
+      readinessEntries = [],
+      publicationConvergence = null,
+      priorityRecoveryDecisionSnapshots = null,
+    ) {
+      return this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+        readinessEntries,
+        publicationConvergence,
+        priorityRecoveryDecisionSnapshots,
+      ).publicationConvergenceGate;
     }
 
     resolvePublicationConvergenceDiagnostics(

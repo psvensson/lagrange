@@ -12,7 +12,6 @@ const {
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
   DEFAULT_MIN_REPLICA_COUNT,
-  DIRECT_TRANSITION_PERSIST_PARTITION_IDS,
   DISPATCH_RETRY_DELAY_MS,
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
@@ -940,19 +939,38 @@ class OperationWorkflowOwnerSegment2 extends OperationWorkflowOwnerSegment1 {
   }
 
   /**
-   * Transaction-control recovery partitions must not route their own
-   * replica_operations step transitions back through the distributed
-   * transaction tables they are still converging.
+   * Normalize the partition id from either in-memory operation objects or
+   * durable replica_operations rows before selecting the persistence lane.
+   * @param {Object|null} operation
+   * @return {string}
+   * @private
+   */
+  resolveTransitionOperationPartitionId(operation) {
+    const candidatePartitionIds = [
+      operation?.partitionId,
+      operation?.partition_id,
+      operation?.entityId,
+      operation?.entity_id,
+    ];
+    const partitionId = candidatePartitionIds.find((candidate) =>
+      typeof candidate === TYPEOF.STRING && candidate.length > NUM.ZERO,
+    );
+    return typeof partitionId === TYPEOF.STRING
+      ? partitionId
+      : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
+  }
+
+  /**
+   * Priority control-plane recovery partitions must not route their own
+   * replica_operations step transitions back through the control-plane
+   * tables they are still converging.
    * @param {Object|null} operation
    * @return {boolean}
    * @private
    */
   shouldBypassTransitionExecutionTransaction(operation) {
-    const partitionId =
-      typeof operation?.partitionId === TYPEOF.STRING
-        ? operation.partitionId
-        : OPERATION_WORKFLOW_OWNER_LITERAL.EMPTY_STRING;
-    return DIRECT_TRANSITION_PERSIST_PARTITION_IDS.has(partitionId);
+    const partitionId = this.resolveTransitionOperationPartitionId(operation);
+    return isPriorityControlPlanePartition({partitionId});
   }
 
   /**

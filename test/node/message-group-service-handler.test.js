@@ -11,11 +11,19 @@ import {
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   SERVICE_STATUS,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
+
+const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-message-group-already-active';
+const TEST_ALREADY_ACTIVE_GROUP_ID = 'mg-1';
+const TEST_ALREADY_ACTIVE_REPLICA_ID = 'mg-1-r4';
+const TEST_ALREADY_ACTIVE_NODE_ID = 'test-node';
 
 function initEnv() {
   process.env.NODE_ENV = 'test';
@@ -133,6 +141,7 @@ function createHandler(overrides = {}) {
     resolveLocalMessageGroupReplica:
       overrides.resolveLocalMessageGroupReplica || null,
     messageRouter: overrides.messageRouter || null,
+    executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
   });
   handler.initialize();
 
@@ -161,6 +170,53 @@ describe('MessageGroupServiceHandler', () => {
       registered.has('test-node/service/message-group-handler'),
     );
   });
+
+  it('emits active workflow progress when create is already active',
+    async () => {
+      const emittedOutcomes = [];
+      const {handler} = createHandler({
+        executorOutcomeEmitter: {
+          emitOutcome(outcomeType, operationId, workflowStep, options) {
+            emittedOutcomes.push({
+              outcomeType,
+              operationId,
+              workflowStep,
+              options,
+            });
+          },
+        },
+      });
+      handler.localReplicas.set(TEST_ALREADY_ACTIVE_REPLICA_ID, {
+        replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+        groupId: TEST_ALREADY_ACTIVE_GROUP_ID,
+        status: ReplicaStatus.ACTIVE,
+      });
+
+      const response = await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: TEST_ALREADY_ACTIVE_OPERATION_ID,
+        [ReplicaOperationField.ENTITY_ID]: TEST_ALREADY_ACTIVE_GROUP_ID,
+        [ReplicaOperationField.REPLICA_ID]: TEST_ALREADY_ACTIVE_REPLICA_ID,
+      });
+
+      assert.equal(
+        response.status,
+        ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      );
+      assert.deepEqual(
+        emittedOutcomes,
+        [
+          {
+            outcomeType: EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
+            operationId: TEST_ALREADY_ACTIVE_OPERATION_ID,
+            workflowStep: WORKFLOW_STEP.ACTIVE,
+            options: {
+              replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
+            },
+          },
+        ],
+      );
+      assert.equal(response.nodeId, TEST_ALREADY_ACTIVE_NODE_ID);
+    });
 
   it('creates a message-group replica from cache-derived peer topology',
     async () => {

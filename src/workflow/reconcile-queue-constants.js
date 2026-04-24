@@ -34,6 +34,7 @@ const RECONCILE_REASON = Object.freeze({
   NODE_FAILED: 'node_failed',
   BOOTSTRAP_NODE_READY: 'bootstrap_node_ready',
   LEADER_ELECTED: 'leader_elected',
+  PRIORITY_RECOVERY_PROGRESS: 'priority_recovery_progress',
 
   // Rebalance: operation execution reasons
   DISPATCH_EXECUTE: 'dispatch_execute',

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { FAILURE_BUNDLE_SEGMENT_6 } from "./failure-bundle-segment-6.js";
 const {
@@ -236,6 +236,20 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
     entry.failureClassification = bundleJson.summary.failureClassification;
   }
 
+  if (
+    typeof bundleJson.summary?.rootCauseClass === "string" &&
+    bundleJson.summary.rootCauseClass.length > ZERO
+  ) {
+    entry.rootCauseClass = bundleJson.summary.rootCauseClass;
+  }
+
+  if (
+    typeof bundleJson.summary?.dominantReason === "string" &&
+    bundleJson.summary.dominantReason.length > ZERO
+  ) {
+    entry.dominantReason = bundleJson.summary.dominantReason;
+  }
+
   if (isRecord(bundleJson.summary?.readinessFailure)) {
     diagnostics.readinessFailure = bundleJson.summary.readinessFailure;
     entry.readinessFailure = bundleJson.summary.readinessFailure;
@@ -319,6 +333,19 @@ function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
   }
 }
 
+const SCENARIO_FAILURE_ARTIFACT_FILENAMES = Object.freeze([
+  FAILURE_BUNDLE_JSON_FILENAME,
+  FAILURE_BUNDLE_MARKDOWN_FILENAME,
+  TRIAGE_SUMMARY_JSON_FILENAME,
+  TRIAGE_SUMMARY_MARKDOWN_FILENAME,
+]);
+
+async function removeScenarioFailureArtifacts(scenarioDir) {
+  for (const filename of SCENARIO_FAILURE_ARTIFACT_FILENAMES) {
+    await rm(join(scenarioDir, filename), { force: true });
+  }
+}
+
 async function writeFailureBundlesForReport({
   scenarios,
   reportOutputPath,
@@ -334,16 +361,22 @@ async function writeFailureBundlesForReport({
   const scenarioBundles = [];
 
   for (const entry of scenarioEntries) {
-    if (!entry || entry.passed === true) {
+    if (!entry) {
       continue;
     }
     const scenarioName = sanitizePathSegment(entry.scenario, "scenario");
     const scenarioDir = join(absoluteOutputDir, scenarioName);
+    if (entry.passed === true) {
+      await removeScenarioFailureArtifacts(scenarioDir);
+      delete entry.failureBundle;
+      continue;
+    }
     await mkdir(scenarioDir, { recursive: true });
     const logs = await collectScenarioLogArtifacts(
       scenarioDir,
       resolveRelevantNodeIds(entry),
       workspaceRoot,
+      entry,
     );
     const bundleJson = buildScenarioFailureBundle({
       entry,
@@ -412,6 +445,10 @@ async function writeFailureBundlesForReport({
   }
 
   if (scenarioBundles.length === ZERO) {
+    await rm(join(absoluteOutputDir, FAILURE_BUNDLE_RUN_DIRNAME), {
+      recursive: true,
+      force: true,
+    });
     return { runBundle: null, scenarioBundles: [] };
   }
 

@@ -42,6 +42,7 @@ import {
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
 } from "../control-plane/active-node-projection.js";
+import { buildCanonicalPublicationRecoveryEvidence } from "../control-plane/publication-recovery-evidence.js";
 import { buildPublicationRecoveryProtocolSnapshot } from "../control-plane/recovery-protocol-snapshot.js";
 import { buildPublicationRecoveryGateSnapshot } from "../control-plane/publication-recovery-gate.js";
 import { normalizeControlPlanePublicationRow } from "../control-plane/system-row-normalizers.js";
@@ -1010,6 +1011,7 @@ assignAdminControlSnapshotReadinessDiagnosticsMethods(AdminControlSnapshot, {
   StartupRecoveryCoordinator,
   attachAuthoritativeRepairDiagnostics,
   buildMembershipPublicationReadOptions,
+  buildCanonicalPublicationRecoveryEvidence,
   buildPublicationRecoveryGateSnapshot,
   buildPriorityRecoveryAdmissionByPartitionId,
   buildPriorityRecoveryLearnerPromotionByPartitionId,

@@ -25,7 +25,7 @@ import {registerQuorumConditionedRemoveSafetyTailTests} from './quorum-condition
 const OWNER_READ_PARTICIPATION_KIND =
   CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;
 const REMOVE_SAFETY_DECISION_DIMENSION =
-  CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+  CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 const TEST_PUBLICATION_STATUS_ACK_PENDING = 'ACK_PENDING';
 const TEST_PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
 const TEST_PARTITIONS_TABLE_NAME = 'partitions';
@@ -747,7 +747,7 @@ test('RebalanceCoordinator - defers over-replicated REMOVE until quorum is voter
     }
   });
 
-test('RebalanceCoordinator - defers critical REPLACE source removal until owner-read serve eligibility is ready',
+test('RebalanceCoordinator - defers critical REPLACE source removal until owner-read recovery eligibility is ready',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -846,7 +846,7 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
         blockedEvaluation.deferReason,
         REBALANCE_COORDINATOR_DEFER_REASON
           .REPLACE_REMOVE_SAFETY_BLOCKED,
-        'critical REPLACE remove should surface the canonical replace-remove defer reason while owner-read serve eligibility is still blocked on the target',
+        'critical REPLACE remove should surface the canonical replace-remove defer reason while owner-read recovery eligibility is still blocked on the target',
       );
       t.equal(
         blockedEvaluation.error !== null,
@@ -867,12 +867,181 @@ test('RebalanceCoordinator - defers critical REPLACE source removal until owner-
       t.equal(
         retryEvaluation.error,
         null,
-        'critical REPLACE remove should become safe once owner-read serve eligibility becomes ready',
+        'critical REPLACE remove should become safe once owner-read recovery eligibility becomes ready',
       );
       t.equal(
         retryEvaluation.deferReason,
         null,
         'no defer reason should remain once the owner-read gate opens',
+      );
+    } finally {
+      await coordinator.shutdown();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('RebalanceCoordinator - dispatches priority REPLACE source removal while external serve eligibility is closed',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    ConfigurationManager.getInstance().initialize({});
+    LoggingService.getInstance().initialize({level: 'error'});
+
+    const PARTITION_ID = 'replica_operations-p1';
+    const SOURCE_NODE_ID = 'node-a';
+    const SECONDARY_NODE_ID = 'node-b';
+    const TERTIARY_NODE_ID = 'node-c';
+    const TARGET_NODE_ID = 'node-d';
+    const SOURCE_REPLICA_ID = `${PARTITION_ID}-r1`;
+    const SECONDARY_REPLICA_ID = `${PARTITION_ID}-r2`;
+    const TERTIARY_REPLICA_ID = `${PARTITION_ID}-r3`;
+    const TARGET_REPLICA_ID = `${PARTITION_ID}-r4`;
+    const deliveries = [];
+
+    const coordinator = createTestCoordinator({
+      nodeId: TARGET_NODE_ID,
+      enableTimeouts: false,
+      messageRouter: {
+        deliver: async () => {
+          deliveries.push('deliver');
+          return {acknowledged: true, status: 'initiated'};
+        },
+        getConnectionState: () => 'connected',
+        pingNode: async () => true,
+        isOutboundQueueAvailable: () => true,
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+            },
+          };
+        },
+        getControlPlaneParticipationSync(nodeId, options = {}) {
+          if (nodeId !== TARGET_NODE_ID) {
+            return {
+              eligible: true,
+            };
+          }
+          return {
+            eligible:
+              options?.participationKind === OWNER_READ_PARTICIPATION_KIND &&
+              options?.decisionDimension === REMOVE_SAFETY_DECISION_DIMENSION,
+          };
+        },
+        async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
+          return this.getMembershipPublicationPlanningSnapshotSync(nodeId);
+        },
+        getMembershipPublicationPlanningSnapshotSync(nodeId) {
+          return {
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: Object.freeze([
+              SOURCE_NODE_ID,
+              SECONDARY_NODE_ID,
+              TERTIARY_NODE_ID,
+              TARGET_NODE_ID,
+            ]),
+            recoveryActiveNodeIds: Object.freeze([
+              SOURCE_NODE_ID,
+              SECONDARY_NODE_ID,
+              TERTIARY_NODE_ID,
+              TARGET_NODE_ID,
+            ]),
+            projectedServingNodeIds: Object.freeze([
+              SOURCE_NODE_ID,
+              SECONDARY_NODE_ID,
+              TERTIARY_NODE_ID,
+              TARGET_NODE_ID,
+            ]),
+            locallyEligibleNodeIds: Object.freeze([
+              SOURCE_NODE_ID,
+              SECONDARY_NODE_ID,
+              TERTIARY_NODE_ID,
+              TARGET_NODE_ID,
+            ]),
+            publishedMembershipIncludesTargetNode: nodeId === TARGET_NODE_ID,
+            priorityPartitionSummary: Object.freeze({
+              satisfied: true,
+              requiredDistinctNodeCount: 3,
+            }),
+          };
+        },
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({minReplicaCount: 3}),
+      },
+      cacheData: {
+        nodes: [
+          createReadyNode(SOURCE_NODE_ID),
+          createReadyNode(SECONDARY_NODE_ID),
+          createReadyNode(TERTIARY_NODE_ID),
+          createReadyNode(TARGET_NODE_ID),
+        ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: PARTITION_ID,
+            replicaId: SOURCE_REPLICA_ID,
+            nodeId: SOURCE_NODE_ID,
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: PARTITION_ID,
+            replicaId: SECONDARY_REPLICA_ID,
+            nodeId: SECONDARY_NODE_ID,
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: PARTITION_ID,
+            replicaId: TERTIARY_REPLICA_ID,
+            nodeId: TERTIARY_NODE_ID,
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: PARTITION_ID,
+            replicaId: TARGET_REPLICA_ID,
+            nodeId: TARGET_NODE_ID,
+            raftRole: 'follower',
+          }),
+        ],
+      },
+    });
+
+    coordinator.initialize();
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.REPLACE,
+        partitionId: PARTITION_ID,
+        nodeId: TARGET_NODE_ID,
+        sourceNodeId: SOURCE_NODE_ID,
+        replicaId: SOURCE_REPLICA_ID,
+      });
+
+      operation.replicaId = TARGET_REPLICA_ID;
+      operation.workflowStep = WORKFLOW_STEP.ACTIVE;
+      operation.status = 'active';
+
+      const result = await coordinator.executeOperation(operation);
+
+      t.equal(
+        result.success,
+        true,
+        'internal source removal should use recovery owner-read readiness instead of external serve admission',
+      );
+      t.equal(
+        deliveries.length,
+        1,
+        'source removal should dispatch while external serve readiness is closed by priority recovery',
+      );
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.STOPPING,
+        'the replace workflow should advance into source removal once the replacement is recovery-routable',
       );
     } finally {
       await coordinator.shutdown();

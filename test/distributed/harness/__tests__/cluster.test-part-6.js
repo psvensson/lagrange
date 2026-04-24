@@ -15,6 +15,7 @@ import {resolve as resolvePath} from 'node:path';
 import fc from 'fast-check';
 import {validate as uuidValidate} from 'uuid';
 import {WebSocketServer} from 'ws';
+import {CLUSTER_SEGMENT_2} from '../cluster-segment-2.js';
 import {
   ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS,
   ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
@@ -48,6 +49,66 @@ const REUSE_START_COMMAND =
   'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
   'rm -f /harness-control/reset-data-on-start; fi; ' +
   'exec node --max-old-space-size=1536 /app/src/index.js';
+const {
+  summarizePriorityRecoveryProgressClasses,
+} = CLUSTER_SEGMENT_2;
+
+test(
+  'Unit: summarizePriorityRecoveryProgressClasses uses the latest partition snapshot state',
+  async () => {
+    const summary = summarizePriorityRecoveryProgressClasses({
+      snapshots: [{
+        partitionId: 'replica_operations-p1',
+        epoch: 4,
+        correlationKey: 'replica_operations-p1|4|op-stale',
+        semanticState: 'recovering_in_flight',
+        blockerReasons: [],
+        planner: {
+          ready: false,
+        },
+        spreadCompletion: {
+          satisfied: false,
+        },
+        coordinator: {
+          operationCount: 1,
+          operation: {
+            operationId: 'op-stale',
+            updatedAtMs: 4000,
+          },
+        },
+      }, {
+        partitionId: 'replica_operations-p1',
+        epoch: 6,
+        correlationKey: 'replica_operations-p1|6|op-current',
+        semanticState: 'converged',
+        blockerReasons: [],
+        planner: {
+          ready: true,
+        },
+        spreadCompletion: {
+          satisfied: true,
+        },
+        coordinator: {
+          operationCount: 1,
+          operation: {
+            operationId: 'op-current',
+            updatedAtMs: 6000,
+          },
+        },
+      }],
+    });
+
+    assert.deepEqual(summary.unresolvedSemanticStateIds, []);
+    assert.deepEqual(
+      summary.partitionIdsBySemanticState.converged,
+      ['replica_operations-p1'],
+    );
+    assert.deepEqual(
+      summary.partitionIdsBySemanticState.recovering_in_flight,
+      [],
+    );
+  },
+);
 
 /**
  * Feature: distributed-testing-framework
@@ -687,6 +748,306 @@ test('Unit: _waitForAllActive load mode resets no-progress budget after progress
       'ACTIVE wait should allow progress updates to reset no-progress budget',
     );
   });
+
+test('Unit: _waitForAllActive returns a terminal activeGate with the ' +
+  'successful progress snapshot', async () => {
+  const cluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    timeouts: {
+      convergence: 200,
+      activeWaitNoProgressMaxAttempts: 30,
+    },
+  });
+
+  cluster._sleep = async () => {};
+  cluster._recordClusterStage = () => {};
+  cluster._probeClusterActiveState = (() => {
+    let callCount = 0;
+    return async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return {
+          allActive: false,
+          nodeDiagnostics: [
+            {nodeId: 'seed-1', active: true, state: 'active'},
+            {nodeId: 'joiner-1', active: false, state: 'inactive'},
+          ],
+          snapshotCoverage: {
+            completeCoverage: false,
+            expectedNodeCount: 2,
+            bestCoverageNodeCount: 1,
+          },
+          publicationConvergenceGate: {
+            ready: false,
+            reasons: ['publication_pending'],
+            publicationStatus: 'PUBLISHING',
+            pendingAckNodeIds: ['joiner-1'],
+            missingPublishedNodeIds: ['joiner-1'],
+          },
+          priorityRecoveryInvariants: {
+            invariants: [],
+            failingInvariantIds: [],
+            passed: true,
+          },
+        };
+      }
+      return {
+        allActive: true,
+        nodeDiagnostics: [
+          {nodeId: 'seed-1', active: true, state: 'active'},
+          {nodeId: 'joiner-1', active: true, state: 'active'},
+        ],
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: 2,
+          bestCoverageNodeCount: 2,
+          selectedNodeId: 'seed-1',
+          selectedAdminReady: true,
+          selectedReachableBy: 'admin_health',
+          selectedPublicationConvergence: {
+            publicationEpoch: 4,
+            publicationStatus: 'PUBLISHED',
+            pendingAckNodeIds: [],
+            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              blockedPartitionCount: 0,
+              totalSpreadGap: 0,
+            },
+          },
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            totalSpreadGap: 0,
+          },
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          passed: true,
+        },
+      };
+    };
+  })();
+
+  const activeGate = await cluster._waitForAllActive({mode: 'load'});
+
+  assert.equal(activeGate.state, 'ready');
+  assert.equal(activeGate.progress.activeNodeCount, 2);
+  assert.equal(activeGate.progress.inactiveNodeCount, 0);
+  assert.equal(activeGate.progress.snapshotCoverageComplete, true);
+  assert.equal(activeGate.progress.publicationStatus, 'PUBLISHED');
+});
+
+test(
+  'Unit: _extractControlSnapshotCoverageDiagnostics rebuilds stale embedded' +
+    ' publication evidence from the canonical gate and closure witness',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const CLOSURE_RECORD_ID = 'CL-003';
+    const CLOSURE_WITNESS_CLASS =
+      'publication_converged_priority_spread_pending';
+    const STALE_PRIORITY_RECOVERY_PROGRESS_CLASS =
+      'eligible_but_no_operation_created';
+    const STALE_PRIORITY_RECOVERY_BLOCKER =
+      'priority_recovery_progress_class=' +
+      STALE_PRIORITY_RECOVERY_PROGRESS_CLASS;
+
+    const snapshotDiagnostics = cluster._extractControlSnapshotCoverageDiagnostics({
+      rows: [{
+        controlPlaneDiagnostics: {
+          publicationConvergence: {
+            publicationEpoch: 23,
+            publicationStatus: 'PUBLISHED',
+            recoveryProtocolState: 'steady_published',
+            priorityRecoveryReasonCodes: [
+              'priority_partitions_not_spread',
+            ],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitionCount: 1,
+              blockedPartitions: [{
+                partitionId: 'replica_operations-p1',
+                spreadGap: 1,
+              }],
+            },
+            pendingAckNodeIds: [],
+            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+          },
+          publicationConvergenceGate: {
+            publicationEpoch: 23,
+            publicationStatus: 'PUBLISHED',
+            recoveryProtocolState: 'priority_spread_pending',
+            reasonCodes: ['priority_partitions_not_spread'],
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitionCount: 1,
+              blockedPartitions: [{
+                partitionId: 'replica_operations-p1',
+                spreadGap: 1,
+              }],
+            },
+            pendingAckNodeIds: [],
+            prioritySpreadPending: true,
+            ready: false,
+            active: true,
+          },
+          activeGateProgress: {
+            expectedNodeCount: 2,
+            activeNodeCount: 2,
+            inactiveNodeCount: 0,
+            snapshotCoverageNodeCount: 2,
+            snapshotCoverageComplete: true,
+            publicationStatus: 'PUBLISHED',
+            recoveryProtocolState: 'priority_spread_pending',
+            pendingAckCount: 0,
+            missingPublishedCount: 0,
+            gateReasonCount: 0,
+            gateReasons: [],
+            prioritySpreadSatisfied: false,
+            priorityBlockedPartitionCount: 1,
+            priorityRecoveryProgressClasses: {
+              partitionIdsByClass: {
+                [STALE_PRIORITY_RECOVERY_PROGRESS_CLASS]: [
+                  'replica_operations-p1',
+                ],
+              },
+              unresolvedClassIds: [
+                STALE_PRIORITY_RECOVERY_PROGRESS_CLASS,
+              ],
+              unresolvedClassCount: 1,
+              partitionIdsBySemanticState: {
+                needs_operation: ['replica_operations-p1'],
+              },
+              unresolvedSemanticStateIds: ['needs_operation'],
+              unresolvedSemanticStateCount: 1,
+              blockedPartitionIds: ['replica_operations-p1'],
+              blockedPartitionCount: 1,
+            },
+            priorityRecoveryUnresolvedClassCount: 1,
+            priorityRecoveryUnresolvedSemanticStateCount: 1,
+            priorityRecoveryBlockedPartitionCount: 1,
+            blockers: [STALE_PRIORITY_RECOVERY_BLOCKER],
+            blockerSignature: STALE_PRIORITY_RECOVERY_BLOCKER,
+          },
+          priorityRecoveryObservation: {
+            publicationEpoch: 23,
+            publicationStatus: 'PUBLISHED',
+            recoveryProtocolState: 'priority_spread_pending',
+            priorityRecoveryReasonCodes: [
+              'priority_partitions_not_spread',
+            ],
+            prioritySpreadPending: true,
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitionCount: 1,
+              blockedPartitions: [{
+                partitionId: 'replica_operations-p1',
+                spreadGap: 1,
+              }],
+            },
+            priorityRecoveryBlockedPartitionIds: ['replica_operations-p1'],
+            priorityRecoveryBlockedPartitionCount: 1,
+          },
+          priorityRecoveryDecisionSnapshots: {
+            schemaVersion: 1,
+            publicationEpoch: 23,
+            closureWitness: {
+              state: 'closure_satisfied_stale_publication',
+              prioritySpreadPending: false,
+              publicationRefreshRequired: true,
+              closureRecordId: CLOSURE_RECORD_ID,
+              closureWitnessClass: CLOSURE_WITNESS_CLASS,
+              refreshedPriorityPartitionSummary: {
+                satisfied: true,
+                requiredDistinctNodeCount: 3,
+                readyEligibleNodeCount: 3,
+                totalPriorityPartitionCount: 1,
+                missingPartitionIds: [],
+                blockedPartitions: [],
+                blockedPartitionCount: 0,
+                largestSpreadGap: 0,
+                totalSpreadGap: 0,
+              },
+            },
+            priorityPartitionSummary: {
+              satisfied: true,
+              requiredDistinctNodeCount: 3,
+              readyEligibleNodeCount: 3,
+              totalPriorityPartitionCount: 1,
+              missingPartitionIds: [],
+              blockedPartitions: [],
+              blockedPartitionCount: 0,
+              largestSpreadGap: 0,
+              totalSpreadGap: 0,
+            },
+            partitionIdsBySemanticState: {},
+            snapshots: [],
+          },
+          priorityRecoveryInvariants: {
+            invariants: [],
+            failingInvariantIds: [],
+            failingInvariantReasonCodes: [],
+            passed: true,
+          },
+        },
+      }],
+    });
+
+    assert.equal(
+      snapshotDiagnostics.publicationConvergence.prioritySpreadPending,
+      false,
+    );
+    assert.deepEqual(
+      snapshotDiagnostics.publicationConvergence.priorityRecoveryReasonCodes,
+      [],
+    );
+    assert.equal(
+      snapshotDiagnostics.publicationConvergence.closureRecordId,
+      CLOSURE_RECORD_ID,
+    );
+    assert.equal(
+      snapshotDiagnostics.publicationConvergenceGate.ready,
+      true,
+    );
+    assert.equal(
+      snapshotDiagnostics.priorityRecoveryObservation.prioritySpreadPending,
+      false,
+    );
+    assert.equal(
+      snapshotDiagnostics.priorityRecoveryObservation.closureRecordId,
+      CLOSURE_RECORD_ID,
+    );
+    assert.equal(
+      snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
+        .prioritySpreadSatisfied,
+      true,
+    );
+    assert.equal(
+      snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
+        .priorityRecoveryBlockedPartitionCount,
+      0,
+    );
+    assert.deepEqual(
+      snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
+        .blockers,
+      ['ready'],
+    );
+  },
+);
 
 test('Unit: _waitForAllActive load mode fails directly on priority-recovery' +
   ' invariant breaches', async () => {

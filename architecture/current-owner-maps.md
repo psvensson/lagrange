@@ -146,6 +146,11 @@ The current shared building blocks for control-plane work are:
      playback artifacts, and report generation so those consumers do not
      reconstruct priority-recovery meaning from partial snapshots or collapse
      deferred evidence into `null`, `[]`, or `0`
+   - live/runtime consumers must consume explicit
+     `semanticState` / `semanticStateId` or the decision-layer
+     `partitionIdsBySemanticState` index when that contract is present;
+     bounded semantic-state inference remains only for legacy retained
+     artifacts that predate the decision-layer contract
 13. `PriorityRecoveryDecisionSnapshot`
    - owned by `src/control-plane/priority-recovery-snapshot.js` and exposed at
      runtime through
@@ -283,6 +288,105 @@ The current shared building blocks for control-plane work are:
      owner handoff, blocked-next-progress, and timeout-reconcile-due workflow
      waits without rebuilding meaning from partial workflow, visibility, or
      planner evidence
+21. `SeedStartupCheckpointSnapshot`
+   - owned by `BootstrapService.buildSeedStartupCheckpointSnapshot()`
+   - derives one explicit seed-startup checkpoint snapshot from:
+     - local router/runtime handler wiring
+     - message-group and partition service creation
+     - cache hydration and local endpoint publication
+     - steady-state runtime handoff and background-writer activation
+   - emits one checkpoint satisfaction view keyed by
+     `SEED_STARTUP_CHECKPOINT`
+   - is shared by seed rerun guards and finalization checks so bootstrap no
+     longer infers checkpoint truth from raw object-existence branches or
+     `phase` alone
+22. `CanonicalJoinReadinessAttempt`
+   - owned by `JoinReadinessEvaluator.collectCanonicalJoinReadinessAttempt()`
+     with blocked-action resolution in
+     `resolveCanonicalJoinBlockedAction(...)`
+   - derives one join-readiness attempt contract from:
+     - the canonical readiness snapshot
+     - the evaluated readiness state and reasons
+     - one explicit blocked-action plan for the touched repair path
+     - timeout-shaping metadata
+   - emits one grouped attempt:
+     `{ snapshot, snapshotError, evaluation }`
+     plus blocked action
+     `none` or `repair_topology_visibility`
+   - is shared by the convergence wait loop, repair path, and timeout
+     diagnostics so join readiness does not merge snapshot, repair, waiter,
+     and timeout semantics back into one boundary
+23. `RebalancePlanningGateDecision`
+   - owned by `UnifiedRebalancerSegment5.resolveCheckRebalanceGateDecision()`
+   - derives one planning-gate decision from:
+     - cluster-readiness confirmation
+     - start-delay and stabilization cadence
+     - topology-settling and traffic/local-serve readiness
+     - local mutation readiness, priority spread, and transport backpressure
+   - emits one explicit planning result:
+     `decision=defer_planning`,
+     `nextAction=schedule_retry`,
+     `gate`,
+     `blocker`,
+     `logLevel`,
+     `scheduleMode`,
+     and `scheduleDelayMs`
+   - is shared by periodic checks and the legacy blocker facade so logging and
+     cadence reuse one gate contract instead of becoming a second implicit
+     admission grammar
+24. `LocalDispatchHandlerCapability`
+   - owned by
+     `ReplicaDispatchServiceSegment4.resolveLocalHandlerCapabilityAddress()`
+     and `hasHandlerOnTarget(...)`
+   - derives one same-node execution-capability contract from:
+     - canonical local router registration keyed by handler address
+     - `services` row visibility as the steady-state fallback
+   - emits one bounded local capability answer for partition,
+     message-group, and runtime-service dispatch
+   - is shared by same-node dispatch readiness and ready-node retry reuse so
+     local dispatch does not self-deadlock waiting for its own `services` row
+     to reach `ACTIVE`
+25. `MembershipPublicationPlanningEvidenceUnion`
+   - owned by `MembershipPublicationCoordinator.readTableRows(...)` when the
+     read profile is membership-publication planning
+   - derives one planning row set for key-stable topology tables from:
+     - authoritative owner-read rows
+     - cache-projected owner rows
+     - per-row freshness fields such as `updated_at`, heartbeat, lease, and
+       storage-budget timestamps
+   - emits one merged planning evidence snapshot for `nodes`,
+     `node_endpoints`, `partitions`, and `services`
+   - is shared by membership-publication candidate derivation and metadata-only
+     publication refresh, while diagnostics reads retain the explicit strict
+     authoritative owner-read contract
+   - prevents a successful but stale authoritative read from suppressing
+     fresher owner-owned projection rows during priority-spread recomputation
+26. `PriorityRecoveryVisibilityProgressWakeup`
+   - owned by
+     `UnifiedRebalancer.buildPriorityRecoveryVisibilityRebalanceDecision(...)`
+     and `handlePriorityRecoveryVisibilityEvent(...)`
+   - derives one visibility-progress decision from:
+     - CDC table identity
+     - priority-partition classification
+     - active partition-service row evidence
+     - local rebalancer leadership when enqueueing runtime work
+   - emits the canonical `priority_recovery_progress` reconcile reason for
+     both rebalancing and membership-publication reconciliation
+   - is shared by critical CDC event handling and publication refresh wakeup so
+     spread-changing service visibility no longer depends on a periodic timer
+     or on diagnostics repairing stale publication metadata
+27. `ReplicaRemovalDurableCleanup`
+   - owned by `ReplicaHandler.reconcileRemovedReplicaCleanup(...)`
+   - derives one idempotent removal cleanup contract from:
+     - local replica lifecycle state
+     - canonical partition `services` row ownership
+     - optional tracked local runtime service cleanup
+   - emits one durable cleanup action through
+     `PartitionServiceRowOwner.removeReplica(...)` before an already-removed
+     partition replica can complete a remove request
+   - is shared by REPLACE source-removal replay and priority control-plane
+     recovery so local `REMOVED` state does not bypass durable service truth
+     when the cache misses a stale service row
 
 New control-plane work should extend these shared owners before adding
 feature-local mechanics.
@@ -336,6 +440,32 @@ The current shared building blocks for distributed harness load work are:
      only `local_blocked` nodes may re-enter through the fallback path while
      `slot_stalled` is reserved for peers that have aged out at the borrowed
      dispatch ceiling, not merely at the steady contribution floor
+5. `PublicationScopedConsistencyComparison`
+   - owned by `assertConsistency(...)` and
+     `assertConsistencyFromSnapshots(...)` in
+     `test/distributed/harness/assertions-segment-3.js`
+   - derives one canonical final-consistency contract from:
+     - canonical control-snapshot `leaders`
+     - published membership / authoritative active-node view
+     - partition set
+     - publication-recovery gate readiness from control-plane diagnostics
+   - emits one explicit comparison grammar:
+     - membership/partition mismatch
+     - publication-recovery gate not ready
+     - publication epoch mismatch
+     - strict leader mismatch
+   - is shared by live node-query convergence waits and pre-collected snapshot
+     assertions so the harness does not compare observer-local leader maps
+     before the publication-recovery owner says strict agreement is ready
+6. `PublicationEvidenceReplay`
+   - owned by `test/distributed/harness/publication-evidence-replay.js`
+   - adapts `failure-bundle.json` plus the latest `snapshots.ndjson` topology
+     rows into the runtime
+     `deriveMembershipPublicationCandidate(...)` publication derivation
+   - emits a diagnostic-only durable-vs-replayed priority-spread comparison
+   - is shared by local failed-run triage and future work-package analysis so
+     the harness can identify stale publication summaries without inventing a
+     second publication-planning grammar or rerunning the scenario
 
 Harness load work should extend these shared admission, convergence, and
 availability contracts before adding more scheduler-local booleans or retry
@@ -345,16 +475,17 @@ heuristics.
 
 | Boundary | Semantic owner | Canonical evidence | Canonical vocabulary | Allowed consumers | Prohibited reinterpretation | Primary diagnostics |
 | --- | --- | --- | --- | --- | --- | --- |
-| Benchmark load admission | `Cluster.resolveBenchmarkLoadAdmissionSnapshot(...)` | table-local discovery readiness, load-lane admission result, local replica role/voter readiness, degradation evidence, retry hint | `local_ready`, `routed_ready`, `local_blocked`, `discovery_pressured`, `gate_blocked`, `unavailable` with `reasonCodes`, `discoveryReasonCodes`, `loadLaneReasonCodes`, `retryAfterMs` | `Cluster.resolveBenchmarkReadyLoadNodes(...)`, `BenchmarkPartitionConvergence`, harness diagnostics | callers must not treat routed admission as proof of local usability; callers must not collapse retryable pressure into plain exclusion | admission-ready node ids, readiness histogram, per-node reason codes and retry hints |
+| Benchmark load admission | `Cluster.resolveBenchmarkLoadAdmissionSnapshot(...)` | table-local discovery readiness, load-lane admission result, local replica role/voter readiness, degradation evidence, retry hint | `local_ready`, `routed_ready`, `local_blocked`, `discovery_pressured`, `gate_blocked`, `unavailable` with `reasonCodes`, `discoveryReasonCodes`, `loadLaneReasonCodes`, `retryAfterMs` | `Cluster.resolveBenchmarkReadyLoadNodes(...)`, `BenchmarkPartitionConvergence`, harness diagnostics | callers must not treat routed admission as proof of local usability; callers must not collapse retryable pressure into plain exclusion; hard load-lane serve admission must not reject from a reused cached ineligible readiness snapshot when authoritative refresh is available | admission-ready node ids, readiness histogram, per-node reason codes and retry hints |
 | Usable benchmark spread | `BenchmarkPartitionConvergence` | admission snapshot plus replica-bearing spread for the target table | `ready_replica`, `replica_blocked`, `routed_admission_only`, `absent` plus dispatch contribution `local_primary`, `local_blocked`, `routed_support`, `none` | partitioning planners, timeout diagnostics, triage summaries, failure bundles | raw replica spread count must not be treated as usable split-driving spread; routed support must not be promoted to local-ready contribution | ready-replica node ids, local-primary node ids, routed-support node ids, convergence evaluations |
 | Benchmark dispatch contribution | `resolveBenchmarkPartitionDispatchMode(...)` and `LoadNodeAvailability` | convergence snapshot, local cooldown, external admission, in-flight slot age/capacity | `local_ready_only`, `bootstrap_backfill_required`; node availability `ready`, `slot_borrowing`, `local_blocked`, `external_blocked`, `slot_saturated`, `slot_stalled` | `table-distribution-helpers`, `load-generator` | callers must not collapse to bootstrap quorum while the usable-spread target is still short; callers must not keep slot-stalled nodes in capacity budgets; borrowed healthy-node overflow must not be mistaken for fresh local readiness | selected node ids, dispatch contribution histogram, wait-reason counters, per-node availability state |
+| Publication-scoped consistency comparison | `assertConsistency(...)` and `assertConsistencyFromSnapshots(...)` | canonical control-snapshot `leaders`, authoritative published membership, partition set, publication-recovery gate readiness | membership mismatch, partition mismatch, `publication_recovery_gate_not_ready`, publication epoch mismatch, strict leader mismatch | `waitForConsistencyConvergence`, scenario final convergence gates, snapshot-based convergence assertions | callers must not synthesize strict leader truth from `replicaRoles` or `replicaRoleDiagnostics`, and must not enforce leader agreement before the publication-recovery gate is ready | consistency mismatch diagnostics, per-node publication-gate summaries, assert-consistency regressions, representative scenario reruns |
 | Control-plane write health | `ControlPlaneWriteHealth` | heartbeat publication failures, last publication mode, message-router pressure summary, contained background backlog evidence | `healthy`, `background_backlog_contained`, `critical_write_unhealthy` plus dependency classification `hard` or `soft` | bootstrap/startup readiness, diagnostics, probe consumers | callers must not equate background heartbeat failure churn with true critical control-plane write loss when critical reserve is still available | readiness snapshots, degraded reasons, heartbeat publication diagnostics, transport queue pressure summaries |
 | Membership publication authority view | `MembershipPublicationCoordinator` with `AuthoritativeControlPlaneView` as the shared read ingress | latest publication row, latest published row, projected serving membership, retained owner-only reconciliation state | explicit non-overlapping views: `published_authority`, `observed_projection`, `retained_owner_state` | routing, readiness, topology planning, operator diagnostics | callers must not treat observed projection or retained owner state as a second publishable authority surface | publication convergence snapshots, projection diagnostics, recovery-protocol snapshots, membership-publication regression tests |
 | Canonical peer endpoint authority | `src/transport/node-address-resolution.js` consumed by `MessageRouter` | canonical `node_endpoints` data, ingress-normalized bootstrap inputs, transport-observed endpoint evidence | `canonical_endpoint_authority`, `ingress_normalized_endpoint`, `observed_transport_endpoint` | bootstrap registration, heartbeat/publication routing, reconnect planning, diagnostics | raw `node_address` and observed transport addresses must not overwrite canonical peer identity once ingress normalization completes | endpoint-resolution diagnostics, reconnect traces, node-endpoint regression tests |
 | Replica-operation visibility read contract | `ReplicaOperationRepository.queryIncompleteOperations(...)` and `queryAuthoritativeOperationVisibilityObservation(...)` | cache-visible `replica_operations` rows, owner-RPC visibility reads, deferred retry hints, deferred owner-read completion state | visibility modes `cache_only`, `cache_preferred_sql_fallback`, `owner_rpc_required`; observation states `present`, `empty`, `deferred` | timeout recovery, priority recovery rediscovery, planner admission, operation diagnostics | callers must not rebuild these modes from boolean bags, treat cache-empty visibility as terminal absence when deferred visibility is active, or let cache-visible current-operation rows erase a deferred authoritative owner-read when priority-recovery completion/remove-safety consumes the snapshot | incomplete-operation observation state, retry-after hints, authoritative visibility sources, repository/recovery regression tests |
 | Rebalancer concurrent-budget read mode | `RebalanceCoordinator.resolveConcurrentBudgetReadMode(...)` | cache counts, priority-partition classification, saturation recheck evidence | `cache_only`, `owner_rpc_recheck_on_saturation` | add/replace/remove admission, priority recovery serial gates, planner diagnostics | callers must not reintroduce `preferAuthoritativeCount` or perform their own saturation fallback outside the coordinator contract | concurrent-budget admission traces, serial-gate diagnostics, coordinator/rebalancer regression tests |
 | Node-state recovery publication | `NodeJoiningService.sendControlPlaneNodeStateUpdate(...)`, `ReplicaDispatchService.deferNodeStateUpdateRetry(...)`, and `MessageRouter` pending replacement | latest heartbeat-only node-state payload per target/node owner key, deferred retry slot per node, retry-after budget, transport pending replacement evidence | deferred recovery publication plus heartbeat-only pending replacement on `node_state_update:<target>:<node>` | node-joining recovery publication, replica-dispatch retry replay, transport diagnostics | callers must not let repeated heartbeat-only `NODE_STATE_UPDATE` deliveries accumulate in the pending queue when one owner slot already represents the latest semantic update | node-state deferred retry maps, router pending replacement results, queue source summaries, retry-after diagnostics |
-| Priority-recovery observation snapshot | `buildPriorityRecoveryObservationSnapshot(...)` from readiness/admin emitters and retained harness diagnostics | publication convergence, recovery-gate state, `PriorityRecoveryDecisionSnapshot`, active-gate witness state, projection diagnostics, invariant summaries | canonical observation snapshot with publication/recovery protocol state, canonical reason codes, blocked and unresolved partition views, per-partition witness snapshots, blocker history, semantic-state history, closure witness, and invariant failures | readiness, admin/control snapshots, scenario retained diagnostics, cluster wait/error shaping, failure bundle, playback/report writers, triage consumers | consumers must not narrow the shared snapshot to scenario-local subsets, recompute semantic state from raw rows, or coerce deferred/unknown evidence into `null`, `[]`, `0`, or passed | readiness/admin contract tests, node-join scenario tests, failure-bundle/report-writer regressions, sprint-level harness confirmation |
+| Priority-recovery observation snapshot | `buildPriorityRecoveryObservationSnapshot(...)` from readiness/admin emitters and retained harness diagnostics | publication convergence, recovery-gate state, `PriorityRecoveryDecisionSnapshot`, tracked-priority current summary, active-gate witness state, projection diagnostics, invariant summaries | canonical observation snapshot with publication/recovery protocol state, canonical reason codes, tracked blocked and unresolved partition views, retained per-partition witness diagnostics, blocker history, semantic-state history, closure witness, and invariant failures | readiness, admin/control snapshots, scenario retained diagnostics, cluster wait/error shaping, failure bundle, playback/report writers, triage consumers | consumers must not narrow the shared snapshot to scenario-local subsets, recompute semantic state from raw rows, treat retained spread-satisfied witness diagnostics as reopened blocked progress once the current summary is empty, or let witness detail outrank an explicit active publication gate | readiness/admin contract tests, node-join scenario tests, failure-bundle/report-writer regressions, sprint-level harness confirmation |
 | Structured deferred owner outcomes | `OwnerContractOutcome` carried by `ControlPlaneMutationReadiness`, `ControlPlaneSystemTableGateway`, `PriorityRecoveryCompletion`, and deferred-preserving harness consumers | readiness snapshot runtime authority, recovery assessment/planner state, retry-after hints, visibility outcome, owner-specific reason/evidence fields | `contractState` (`ready`, `pending`, `deferred`, `blocked`, `failed`) plus `nextAction` (`proceed`, `wait`, `retry`, `stop`); owner-specific fields such as `outcome`, `completionState`, `reasonCodes`, `retryAfterMs`, `runtimeAuthority`, `visibilityState`, and `allowTemporaryOverflowPromotion` remain evidence | gateway ingress, SQL DML, admin adapters, harness preparation helpers, diagnostics/report consumers | callers must not branch on timeout-only silence, `[]`, `null`, or raw phase/evidence when the canonical contract already answers the next legal move | contract-state/next-action fields in admin replies, harness traces, failure bundles, triage summaries, and owner-path regression tests |
 | Strict CDC recovery ingress | `MessageGroupForwardingOwner.resolveCdcIngressDecision(...)` with `MessageGroupStrictCdcRecoveryRouting` | live raft leadership, strict-forward target selection, system-table recovery-routing snapshot, connected forward candidates, local system-table write availability | ingress decision states `local_raft_leader`, `forward_non_strict`, `forward_strict_target`, `forward_strict_recovery_target`, `local_strict_convergence_ingress`, `local_strict_recovery_ingress`, `defer_ingress_not_initialized`, `defer_strict_target_unknown` plus recovery-routing state `none`, `remote_targets_available`, `local_only` | `canAcceptCDCEvent`, metadata-ingress readiness, strict CDC apply/forward execution, bootstrap/join CDC propagation | callers must not treat strict leader-target loss as immediate dead-end when recovery-owned remote candidates or bounded local system-table ingress still exist; callers must not widen non-strict CDC or bypass the forwarding owner with ad hoc local writes | message-group service decision snapshots, deferred retry hints, recovery-routing diagnostics in focused strict-CDC regressions |
 | Startup workflow durability | `StartupPipelineRunner.runWorkflow(...)` with `JoinSessionStore` and `SeedStartupSessionStore` | durable workflow record, checkpoint sequence, retryability, failure details, terminal state, timestamps | workflow statuses `active`, `failed_retryable`, `failed_terminal`, `completed` plus checkpoint/phase identity | `JoinCoordinator`, `NodeJoiningService`, `BootstrapService`, cleanup/report consumers, focused startup tests | callers must not rebuild startup progress from local phase strings or hidden post-pipeline tail work when the durable workflow record already answers checkpoint, failure, and resume state | join/seed session store tests, startup pipeline runner tests, bootstrap/join checkpoint characterization |

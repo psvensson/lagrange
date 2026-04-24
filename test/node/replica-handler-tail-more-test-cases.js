@@ -1131,6 +1131,7 @@ export async function registerReplicaHandlerTailMoreTests({
 
       let cancelCount = 0;
       let clearTimerCount = 0;
+      let electionTimerStartCount = 0;
       let raftChangePayload = null;
       const trackedService = {
         role: RAFT_ROLE.LEADER,
@@ -1153,6 +1154,14 @@ export async function registerReplicaHandlerTailMoreTests({
               raft,
               trackedService.raft,
               'timer clearing should target the demoted raft instance',
+            );
+          },
+          startElectionTimer(raft) {
+            electionTimerStartCount += 1;
+            t.equal(
+              raft,
+              trackedService.raft,
+              'election rearm should target the demoted raft instance',
             );
           },
         },
@@ -1208,8 +1217,13 @@ export async function registerReplicaHandlerTailMoreTests({
         );
         t.equal(
           clearTimerCount,
+          0,
+          'handoff should not clear the follower election timer after demotion',
+        );
+        t.equal(
+          electionTimerStartCount,
           1,
-          'leader timers should be cleared after demotion',
+          'follower election progress should be rearmed after demotion',
         );
       } finally {
         await handler.shutdown();

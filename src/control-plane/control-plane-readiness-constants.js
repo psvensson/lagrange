@@ -51,6 +51,8 @@ const CONTROL_PLANE_READINESS_REASON = Object.freeze({
   STORAGE_PRESSURE_EXHAUSTED: 'storage_pressure_exhausted',
   CONTROL_PLANE_WRITE_UNHEALTHY: 'control_plane_write_unhealthy',
   CONTROL_PLANE_PUBLICATION_PENDING: 'control_plane_publication_pending',
+  PRIORITY_CONTROL_PLANE_RECOVERY_PENDING:
+    'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING',
   METADATA_PUBLICATION_DEGRADED: 'metadata_publication_degraded',
   METADATA_PUBLICATION_REPAIR_ONLY: 'metadata_publication_repair_only',
 });

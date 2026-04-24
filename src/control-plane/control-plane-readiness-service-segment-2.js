@@ -97,6 +97,12 @@ const {
   wasNodeRecordReadyWhenWritten,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
+const SERVE_ADMISSION_STATE = Object.freeze({
+  ADMITTED: "admitted",
+  BLOCKED_PRIORITY_RECOVERY: "blocked_priority_recovery",
+  BLOCKED_RUNTIME: "blocked_runtime",
+});
+
 class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceSegment1 {
   recordParticipationDecision(participation) {
     if (!participation || !this.participationDecisionLedger) {
@@ -847,6 +853,63 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
   }
 
   /**
+   * Build the single external-serve admission decision from normalized
+   * runtime, transport, load, service, and priority-recovery evidence.
+   * Recovery admission remains owned by runtime authority; this gate only
+   * controls externally routed traffic readiness.
+   * @param {Object} context
+   * @return {Object}
+   * @private
+   */
+  buildServeAdmissionSnapshot(context = {}) {
+    const runtimeAuthority =
+      context?.runtimeAuthority &&
+      typeof context.runtimeAuthority === TYPEOF.OBJECT
+        ? context.runtimeAuthority
+        : this.buildRuntimeAuthoritySnapshot(context);
+    const membershipPublicationPlanningSnapshot =
+      this.resolveMembershipPublicationPlanningSnapshot(context);
+    const priorityRecoveryActive =
+      runtimeAuthority.visibility?.priorityRecoveryActive === true ||
+      this.isPriorityControlPlaneRecoveryActive(
+        membershipPublicationPlanningSnapshot,
+      );
+    const evidence = Object.freeze({
+      repairEligible: runtimeAuthority.repairEligible === true,
+      loadReady: context.loadReady === true,
+      transportNotExplicitlyNegative:
+        context.transportNotExplicitlyNegative === true,
+      serveEligibleControlPlaneService:
+        context.serveEligibleControlPlaneService === true,
+      priorityRecoveryActive,
+    });
+    const runtimeServeEligible =
+      evidence.repairEligible &&
+      evidence.loadReady &&
+      evidence.transportNotExplicitlyNegative &&
+      evidence.serveEligibleControlPlaneService;
+    const state = priorityRecoveryActive
+      ? SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY
+      : runtimeServeEligible
+        ? SERVE_ADMISSION_STATE.ADMITTED
+        : SERVE_ADMISSION_STATE.BLOCKED_RUNTIME;
+    const reasonCodes =
+      state === SERVE_ADMISSION_STATE.BLOCKED_PRIORITY_RECOVERY
+        ? Object.freeze([
+            CONTROL_PLANE_READINESS_REASON
+              .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+          ])
+        : Object.freeze([]);
+
+    return Object.freeze({
+      state,
+      eligible: state === SERVE_ADMISSION_STATE.ADMITTED,
+      evidence,
+      reasonCodes,
+    });
+  }
+
+  /**
    * Build the readiness dimensions.
    * @param {Object} context
    * @return {Object}
@@ -871,11 +934,13 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     );
     const transportNotExplicitlyNegative =
       transportState.routerState !== STATE.DISCONNECTED;
-    const serveEligible =
-      runtimeAuthority.repairEligible === true &&
-      loadReady &&
-      transportNotExplicitlyNegative &&
-      serveEligibleControlPlaneService;
+    const serveAdmission = this.buildServeAdmissionSnapshot({
+      ...context,
+      runtimeAuthority,
+      loadReady,
+      transportNotExplicitlyNegative,
+      serveEligibleControlPlaneService,
+    });
 
     return Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]:
@@ -898,7 +963,8 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
         runtimeAuthority.publication?.healthy === true,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
         runtimeAuthority.repairEligible === true,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: serveEligible,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+        serveAdmission.eligible,
     });
   }
 
@@ -947,14 +1013,64 @@ class ControlPlaneReadinessServiceSegment2 extends ControlPlaneReadinessServiceS
     ) {
       return false;
     }
-    const publicationRecoveryGate =
+    const providedPublicationRecoveryGate =
       membershipPublicationPlanningSnapshot.publicationRecoveryGate &&
       typeof membershipPublicationPlanningSnapshot.publicationRecoveryGate ===
         TYPEOF.OBJECT
         ? membershipPublicationPlanningSnapshot.publicationRecoveryGate
-        : buildPublicationRecoveryGateSnapshot(
-            membershipPublicationPlanningSnapshot,
-          );
+        : null;
+    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+      ...(providedPublicationRecoveryGate || {}),
+      publicationEpoch:
+        membershipPublicationPlanningSnapshot.publicationEpoch ??
+        providedPublicationRecoveryGate?.publicationEpoch ??
+        null,
+      publicationStatus:
+        membershipPublicationPlanningSnapshot.publicationStatus ??
+        membershipPublicationPlanningSnapshot.status ??
+        providedPublicationRecoveryGate?.publicationStatus ??
+        null,
+      publicationObservationState:
+        membershipPublicationPlanningSnapshot.publicationObservationState ??
+        providedPublicationRecoveryGate?.publicationObservationState ??
+        null,
+      recoveryProtocolState:
+        membershipPublicationPlanningSnapshot.recoveryProtocolState ??
+        providedPublicationRecoveryGate?.recoveryProtocolState ??
+        null,
+      priorityRecoveryReasonCodes:
+        Array.isArray(
+          membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes,
+        )
+          ? membershipPublicationPlanningSnapshot.priorityRecoveryReasonCodes
+          : providedPublicationRecoveryGate?.reasonCodes,
+      priorityPartitionSummary:
+        membershipPublicationPlanningSnapshot.priorityPartitionSummary ??
+        providedPublicationRecoveryGate?.priorityPartitionSummary ??
+        null,
+      priorityRecoveryClosureWitness:
+        membershipPublicationPlanningSnapshot.priorityRecoveryClosureWitness ??
+        providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+        null,
+      requiredAckNodeIds:
+        membershipPublicationPlanningSnapshot.requiredAckNodeIds ??
+        providedPublicationRecoveryGate?.requiredAckNodeIds ??
+        [],
+      acknowledgedNodeIds:
+        membershipPublicationPlanningSnapshot.acknowledgedNodeIds ??
+        providedPublicationRecoveryGate?.acknowledgedNodeIds ??
+        [],
+      pendingAckNodeIds:
+        membershipPublicationPlanningSnapshot.pendingAckNodeIds ??
+        providedPublicationRecoveryGate?.pendingAckNodeIds ??
+        [],
+      missingPublishedNodeIds:
+        membershipPublicationPlanningSnapshot.missingPublishedNodeIds ??
+        membershipPublicationPlanningSnapshot
+          .missingPublishedRecoveryActiveNodeIds ??
+        providedPublicationRecoveryGate?.missingPublishedNodeIds ??
+        [],
+    });
     return publicationRecoveryGate.active === true;
   }
 

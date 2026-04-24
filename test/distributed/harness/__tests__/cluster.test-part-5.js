@@ -508,8 +508,38 @@ test('Unit: _probeControlSnapshotCoverage surfaces publication diagnostics from 
     );
 
     assert.strictEqual(coverage.completeCoverage, false);
+    const selectedPublicationConvergence =
+      coverage.selectedPublicationConvergence;
     assert.deepStrictEqual(
-      coverage.selectedPublicationConvergence,
+      {
+        publicationEpoch: selectedPublicationConvergence.publicationEpoch,
+        publicationStatus: selectedPublicationConvergence.publicationStatus,
+        publishedActiveNodeIds:
+          selectedPublicationConvergence.publishedActiveNodeIds,
+        pendingAckNodeIds: selectedPublicationConvergence.pendingAckNodeIds,
+        acknowledgedNodeIds:
+          selectedPublicationConvergence.acknowledgedNodeIds,
+        recoveryActiveNodeIds:
+          selectedPublicationConvergence.recoveryActiveNodeIds,
+        recoveryActiveNodeSource:
+          selectedPublicationConvergence.recoveryActiveNodeSource,
+        missingPublishedRecoveryActiveNodeIds:
+          selectedPublicationConvergence.missingPublishedRecoveryActiveNodeIds,
+        recoveryProtocolState:
+          selectedPublicationConvergence.recoveryProtocolState,
+        priorityRecoveryReasonCodes:
+          selectedPublicationConvergence.priorityRecoveryReasonCodes,
+        participationByNodeId:
+          selectedPublicationConvergence.participationByNodeId,
+        participationStateCounts:
+          selectedPublicationConvergence.participationStateCounts,
+        priorityPartitionSummary:
+          selectedPublicationConvergence.priorityPartitionSummary,
+        membershipLifecycleSummary:
+          selectedPublicationConvergence.membershipLifecycleSummary,
+        projectionDiagnostics:
+          selectedPublicationConvergence.projectionDiagnostics,
+      },
       {
         publicationEpoch: 18,
         publicationStatus: 'OPEN',
@@ -1165,6 +1195,233 @@ test('Unit: _waitForAllActive treats CL-003 witness as load-mode soft success',
       'soft-success closure should not trigger failure log collection',
     );
   });
+
+test('Unit: _waitForAllActive respects an existing CL-003 gate witness in load mode',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        convergence: 200,
+        activeWaitNoProgressMaxAttempts: 2,
+      },
+    });
+
+    const CL_003 = 'CL-003';
+    const CL_003_WITNESS_CLASS =
+      'publication_converged_priority_spread_pending';
+
+    cluster._sleep = async () => {};
+    let collectedFailureLogs = false;
+    cluster._collectFailureLogs = async () => {
+      collectedFailureLogs = true;
+    };
+
+    const recordedStages = [];
+    cluster._recordClusterStage = (stage, details = {}) => {
+      recordedStages.push({stage, details});
+    };
+
+    cluster._probeClusterActiveState = async () => {
+      return {
+        allActive: false,
+        nodeDiagnostics: [{
+          nodeId: 'seed-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }, {
+          nodeId: 'joiner-1',
+          active: true,
+          state: 'active',
+          reasons: [],
+        }],
+        snapshotCoverage: {
+          completeCoverage: true,
+          expectedNodeCount: 2,
+          bestCoverageNodeCount: 2,
+          selectedNodeId: 'seed-1',
+          selectedAdminReady: true,
+          selectedReachableBy: 'admin_health',
+          selectedPublicationConvergence: {
+            publicationEpoch: 15,
+            publicationStatus: 'PUBLISHED',
+            publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+            pendingAckNodeIds: [],
+            priorityPartitionSummary: {
+              satisfied: true,
+              blockedPartitionCount: 0,
+              totalSpreadGap: 0,
+            },
+          },
+          selectedPublishedActiveNodeIds: ['seed-1', 'joiner-1'],
+          selectedMissingPublishedNodeIds: [],
+          selectedError: null,
+        },
+        publicationConvergenceGate: {
+          ready: true,
+          reasons: [],
+          publicationStatus: 'PUBLISHED',
+          pendingAckNodeIds: [],
+          missingPublishedNodeIds: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            totalSpreadGap: 0,
+          },
+          closureRecordId: CL_003,
+          closureWitnessClass: CL_003_WITNESS_CLASS,
+        },
+        priorityRecoveryInvariants: {
+          invariants: [],
+          failingInvariantIds: [],
+          failingInvariantReasonCodes: [],
+          passed: true,
+        },
+      };
+    };
+
+    await cluster._waitForAllActive({mode: 'load'});
+
+    const waitingStage = recordedStages.find((entry) => {
+      return entry.stage === 'setup.cluster.waiting-active' &&
+        entry.details?.activeGateNoProgress?.stalled === true;
+    });
+    assert.equal(
+      waitingStage,
+      undefined,
+      'an explicit CL-003 witness should complete load-mode ACTIVE wait without a no-progress stall',
+    );
+    assert.equal(
+      collectedFailureLogs,
+      false,
+      'an explicit CL-003 witness should not trigger failure log collection',
+    );
+  });
+
+test('Unit: _waitForAllActive derives CL-003 load-mode soft success from ' +
+  'selected priority-recovery decision snapshots', async () => {
+  const cluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    timeouts: {
+      convergence: 200,
+      activeWaitNoProgressMaxAttempts: 2,
+    },
+  });
+
+  const CL_003 = 'CL-003';
+  const CL_003_WITNESS_CLASS =
+    'publication_converged_priority_spread_pending';
+
+  cluster._sleep = async () => {};
+  let collectedFailureLogs = false;
+  cluster._collectFailureLogs = async () => {
+    collectedFailureLogs = true;
+  };
+
+  const recordedStages = [];
+  cluster._recordClusterStage = (stage, details = {}) => {
+    recordedStages.push({stage, details});
+  };
+
+  for (const [index, nodeId] of ['seed-1', 'joiner-1'].entries()) {
+    cluster._nodes.set(nodeId, {
+      id: nodeId,
+      role: index === 0 ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async probeTrafficReadiness() {
+        return {
+          status: 503,
+          state: 'traffic_blocked',
+          reasons: ['PRIORITY_CONTROL_PLANE_RECOVERY_PENDING'],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          reachable: true,
+          adminReady: true,
+          reachableBy: 'admin_health',
+          lastError: null,
+        };
+      },
+    });
+  }
+
+  cluster._probeControlSnapshotCoverage = async () => {
+    return {
+      completeCoverage: true,
+      expectedNodeCount: 2,
+      bestCoverageNodeCount: 2,
+      selectedNodeId: 'seed-1',
+      selectedAdminReady: true,
+      selectedReachableBy: 'admin_health',
+      selectedPublicationConvergence: {
+        publicationEpoch: 16,
+        publicationStatus: 'PUBLISHED',
+        publishedActiveNodeIds: ['seed-1', 'joiner-1'],
+        pendingAckNodeIds: [],
+        recoveryProtocolState: 'steady_published',
+        priorityRecoveryReasonCodes: [],
+        priorityPartitionSummary: {
+          satisfied: true,
+          blockedPartitionCount: 0,
+          totalSpreadGap: 0,
+        },
+      },
+      selectedPublicationConvergenceGate: {
+        publicationStatus: 'PUBLISHED',
+        pendingAckNodeIds: [],
+        missingPublishedNodeIds: [],
+        recoveryProtocolState: 'steady_published',
+        priorityPartitionSummary: {
+          satisfied: true,
+          blockedPartitionCount: 0,
+          totalSpreadGap: 0,
+        },
+      },
+      selectedPriorityRecoveryDecisionSnapshots: {
+        closureWitness: {
+          closureRecordId: CL_003,
+          closureWitnessClass: CL_003_WITNESS_CLASS,
+          prioritySpreadPending: false,
+          blockedPartitionIds: [],
+          blockedPartitionCount: 0,
+          unresolvedSemanticStateIds: [],
+          satisfiedPartitionIds: ['control_plane_publications-p1'],
+          decisionPartitionIds: ['control_plane_publications-p1'],
+          refreshedPriorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            totalSpreadGap: 0,
+          },
+        },
+        snapshots: [],
+      },
+      selectedPublishedActiveNodeIds: ['seed-1', 'joiner-1'],
+      selectedMissingPublishedNodeIds: [],
+      selectedError: null,
+    };
+  };
+
+  await cluster._waitForAllActive({mode: 'load'});
+
+  const waitingStage = recordedStages.find((entry) => {
+    return entry.stage === 'setup.cluster.waiting-active' &&
+      entry.details?.activeGateNoProgress?.stalled === true;
+  });
+  assert.equal(
+    waitingStage,
+    undefined,
+    'selected decision-snapshot closure evidence should complete load-mode ACTIVE wait without a no-progress stall',
+  );
+  assert.equal(
+    collectedFailureLogs,
+    false,
+    'selected decision-snapshot closure evidence should not trigger failure log collection',
+  );
+});
 
 test('Unit: _waitForAllActive rejects CL-004 witness without strong admission',
   async () => {

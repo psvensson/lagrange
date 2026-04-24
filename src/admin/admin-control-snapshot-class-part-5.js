@@ -42,11 +42,10 @@ import {
   isCanonicalWebSocketEndpointRow,
   isCanonicallyActiveNode,
 } from "../control-plane/active-node-projection.js";
+import { buildCanonicalPublicationRecoveryEvidence } from "../control-plane/publication-recovery-evidence.js";
 import { buildPublicationRecoveryProtocolSnapshot } from "../control-plane/recovery-protocol-snapshot.js";
 import { normalizeControlPlanePublicationRow } from "../control-plane/system-row-normalizers.js";
 import { buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots } from "../control-plane/priority-recovery-snapshot.js";
-import {buildPriorityRecoveryObservationSnapshot} from
-  "../control-plane/priority-recovery-observation-snapshot.js";
 import {
   PRIORITY_RECOVERY_BLOCKER_REASON,
   PRIORITY_RECOVERY_BLOCKER_REASON_PRECEDENCE,
@@ -1100,8 +1099,6 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         readinessEntries,
         observedMembershipPublication,
       );
-    const publicationConvergenceGate =
-      this.resolvePublicationConvergenceGateDiagnostics(readinessEntries);
     const readinessTransitionsByNodeId =
       this.resolveReadinessTransitionHistory();
     const priorityControlPlaneRecoveryByNodeId =
@@ -1146,13 +1143,25 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
         serviceRows,
         logsTable,
       });
-    const priorityRecoveryObservation =
-      buildPriorityRecoveryObservationSnapshot({
+    const publicationEvidence =
+      this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+        readinessEntries,
         publicationConvergence,
+        priorityRecoveryDecisionSnapshots,
+        {logsTable},
+      );
+    const publicationConvergenceGate =
+      publicationEvidence.publicationConvergenceGate;
+    const resolvedPublicationConvergence =
+      publicationEvidence.publicationConvergence || publicationConvergence;
+    const priorityRecoveryObservation =
+      publicationEvidence.priorityRecoveryObservation ||
+      buildCanonicalPublicationRecoveryEvidence({
+        publicationConvergence: resolvedPublicationConvergence,
         publicationConvergenceGate,
         priorityRecoveryDecisionSnapshots,
         logsTable,
-      });
+      }).priorityRecoveryObservation;
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
     const partitionServices =
       this.resolveLocalPartitionServices &&
@@ -1165,7 +1174,7 @@ class AdminControlSnapshotPart5 extends AdminControlSnapshotPart4 {
       nodeId: this.nodeId,
       capturedAt,
       publicationMode,
-      publicationConvergence,
+      publicationConvergence: resolvedPublicationConvergence,
       publicationConvergenceGate,
       publishedMembershipObservation:
         this.resolvePublicationConvergenceDiagnostics(

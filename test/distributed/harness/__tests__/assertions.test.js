@@ -25,6 +25,8 @@ const DEFAULT_CONVERGED_PARTITION_IDS = ['p1'];
 const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID = 'control_plane_publications-p1';
 const CACHE_VISIBLE_PRIORITY_RECOVERY_OPERATION_ID =
   'op-cache-visible-spread-satisfied';
+const CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_FALLBACK_OPERATION_ID =
+  'op-cache-visible-spread-satisfied-partition-fallback';
 const CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID = 'node-d';
 
 /**
@@ -984,6 +986,118 @@ test(
       }),
       /Convergence timeout/,
       'cache-visible spread-satisfied operations should still gate convergence by default',
+    );
+
+    const result = await waitForConvergence([node], {
+      settleTimeoutMs: 80,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 80,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  },
+);
+
+test(
+  'waitForConvergence — can ignore spread-satisfied priority recovery partitions without explicit operation ids',
+  async () => {
+    const node = {
+      id: 'mock-cache-visible-priority-recovery-partition-fallback-node',
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({
+        rows: [buildControlSnapshotRecord({
+          nodeId:
+            'mock-cache-visible-priority-recovery-partition-fallback-node',
+          partitionIds: [CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID],
+          servicesRows: [
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'leader',
+              address:
+                'mock-cache-visible-priority-recovery-partition-fallback-node/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r0',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-b/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r1',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                'node-c/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r2',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+            {
+              service_type: 'partition',
+              status: 'ACTIVE',
+              raft_role: 'follower',
+              address:
+                CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID +
+                '/' +
+                CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID +
+                '/r4',
+              partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            },
+          ],
+          operationRows: [{
+            operation_id:
+              CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_FALLBACK_OPERATION_ID,
+            type: 'REPLACE',
+            partition_id: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+            source_node_id: 'node-a',
+            target_node_id: CACHE_VISIBLE_PRIORITY_RECOVERY_TARGET_NODE_ID,
+            replica_id:
+              CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID + '-r4',
+            status: 'syncing',
+            workflow_step: 'SYNCING',
+            updated_at: Date.now() - 1000,
+          }],
+          controlPlaneDiagnostics: {
+            replicaOperations: {
+              staleInFlightCount: 0,
+            },
+            publicationConvergence: {
+              priorityRecoveryPartitionIdsBySemanticState: {
+                spread_satisfied_in_flight: [
+                  CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+                ],
+              },
+              priorityRecoveryPartitionSemanticStateHistory: [{
+                partitionId: CACHE_VISIBLE_PRIORITY_RECOVERY_PARTITION_ID,
+                semanticStateIds: ['spread_satisfied_in_flight'],
+              }],
+            },
+          },
+        })],
+      }),
+    };
+
+    await assert.rejects(
+      waitForConvergence([node], {
+        settleTimeoutMs: 80,
+        quietWindowMs: 0,
+        maxSustainedOverTargetMs: 80,
+        sampleIntervalMs: 10,
+        targetVoterCount: 3,
+      }),
+      /Convergence timeout/,
+      'spread-satisfied partitions should still gate convergence by default',
     );
 
     const result = await waitForConvergence([node], {

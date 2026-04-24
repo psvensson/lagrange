@@ -233,6 +233,9 @@ async function queryNodeConsistencyState(node, options = {}) {
             ? Array.from(snapshotState.authoritativeActiveNodeIds).sort()
             : null,
         observationSource: "control_snapshot",
+        controlPlaneDiagnostics: cloneDiagnostics(
+          snapshotState.controlPlaneDiagnostics,
+        ),
         controlSnapshotError: null,
       };
     } catch (error) {
@@ -546,6 +549,64 @@ function buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
   }
   return operationIds;
 }
+
+function buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
+  controlPlaneDiagnostics = null,
+) {
+  const publicationConvergence =
+    controlPlaneDiagnostics?.publicationConvergence &&
+    typeof controlPlaneDiagnostics.publicationConvergence === "object"
+      ? controlPlaneDiagnostics.publicationConvergence
+      : null;
+  const partitionIds = new Set();
+  const partitionIdsBySemanticState =
+    publicationConvergence?.priorityRecoveryPartitionIdsBySemanticState &&
+    typeof publicationConvergence.priorityRecoveryPartitionIdsBySemanticState ===
+      "object"
+      ? publicationConvergence.priorityRecoveryPartitionIdsBySemanticState
+      : null;
+  for (const partitionId of Array.isArray(
+    partitionIdsBySemanticState
+      ? partitionIdsBySemanticState[
+          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+        ]
+      : null,
+  )
+    ? partitionIdsBySemanticState[
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+      ]
+    : []) {
+    const normalizedPartitionId = String(partitionId || "").trim();
+    if (normalizedPartitionId.length === 0) {
+      continue;
+    }
+    partitionIds.add(normalizedPartitionId);
+  }
+  const semanticStateHistory = Array.isArray(
+    publicationConvergence?.priorityRecoveryPartitionSemanticStateHistory,
+  )
+    ? publicationConvergence.priorityRecoveryPartitionSemanticStateHistory
+    : [];
+  for (const historyEntry of semanticStateHistory) {
+    const semanticStateIds = Array.isArray(historyEntry?.semanticStateIds)
+      ? historyEntry.semanticStateIds
+      : [];
+    if (
+      !semanticStateIds.includes(
+        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      )
+    ) {
+      continue;
+    }
+    const normalizedPartitionId = String(historyEntry?.partitionId || "").trim();
+    if (normalizedPartitionId.length === 0) {
+      continue;
+    }
+    partitionIds.add(normalizedPartitionId);
+  }
+  return partitionIds;
+}
+
 function countCacheVisibleSatisfiedPriorityRecoveryOperations(
   controlPlaneDiagnostics = null,
   operationRows = [],
@@ -554,15 +615,23 @@ function countCacheVisibleSatisfiedPriorityRecoveryOperations(
     buildCacheVisibleSatisfiedPriorityRecoveryOperationIdSet(
       controlPlaneDiagnostics,
     );
-  if (operationIds.size === 0) {
+  const partitionIds =
+    buildCacheVisibleSatisfiedPriorityRecoveryPartitionIdSet(
+      controlPlaneDiagnostics,
+    );
+  if (operationIds.size === 0 && partitionIds.size === 0) {
     return 0;
   }
   let matchingOperationCount = 0;
   for (const operationRow of Array.isArray(operationRows) ? operationRows : []) {
-    const operationId = String(
-      normalizeReplicaOperationRecord(operationRow).operationId || "",
-    ).trim();
-    if (operationId.length === 0 || !operationIds.has(operationId)) {
+    const normalizedOperation = normalizeReplicaOperationRecord(operationRow);
+    const operationId = String(normalizedOperation.operationId || "").trim();
+    const partitionId = String(normalizedOperation.partitionId || "").trim();
+    const matchesByOperationId =
+      operationId.length > 0 && operationIds.has(operationId);
+    const matchesByPartitionId =
+      partitionId.length > 0 && partitionIds.has(partitionId);
+    if (!matchesByOperationId && !matchesByPartitionId) {
       continue;
     }
     matchingOperationCount += 1;
@@ -1198,6 +1267,7 @@ function buildPublicationConvergenceFromState(state) {
 }
 
 export const ASSERTIONS_SEGMENT_2 = {
+  TIMEOUTS,
   SERVICES_QUERY,
   NODES_QUERY,
   PARTITIONS_QUERY,

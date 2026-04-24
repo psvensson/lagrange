@@ -112,6 +112,19 @@ function normalizeReasonCodes(readiness, failedDimensions) {
   return Object.freeze(codes);
 }
 
+function isPublishedConvergencePending(readiness = null) {
+  const publicationRecoveryGate =
+    readiness?.priorityControlPlaneRecovery?.publicationRecoveryGate &&
+    typeof readiness.priorityControlPlaneRecovery.publicationRecoveryGate ===
+      TYPEOF.OBJECT
+      ? readiness.priorityControlPlaneRecovery.publicationRecoveryGate
+      : null;
+  if (publicationRecoveryGate) {
+    return publicationRecoveryGate.ready !== true;
+  }
+  return readiness?.priorityControlPlaneRecovery?.active === true;
+}
+
 function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   const nodeId = String(options.nodeId || '');
   const controlPlaneReadinessService =
@@ -138,9 +151,7 @@ function getLocalControlPlaneMutationReadinessBlocker(options = {}) {
   });
   const requirePublishedConvergence =
     options.requirePublishedConvergence === true;
-  const priorityRecoveryActive =
-    readiness?.priorityControlPlaneRecovery?.active === true;
-  if (requirePublishedConvergence && priorityRecoveryActive) {
+  if (requirePublishedConvergence && isPublishedConvergencePending(readiness)) {
     failedDimensions.push(CONTROL_PLANE_MUTATION_PUBLISHED_CONVERGENCE_PENDING);
   }
   if (failedDimensions.length === NUM.ZERO) {

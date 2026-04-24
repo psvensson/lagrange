@@ -153,9 +153,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
   /**
    * Dispatch an operation record to its target node.
    * @param {Object} row - Replica operation row.
+   * @param {Object} [options={}] - Optional dispatch evidence context.
    * @private
    */
-  async dispatchOperationRow(row) {
+  async dispatchOperationRow(row, options = {}) {
     if (!row || !row.operation_id) {
       return;
     }
@@ -179,7 +180,10 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
 
     const targetNodeId = row.target_node_id;
     const rowOperation = this.buildOperationFromRow(row);
-    const dispatchReadiness = await this.captureDispatchReadiness(rowOperation);
+    const dispatchReadiness = await this.captureDispatchReadiness(
+      rowOperation,
+      options,
+    );
     if (dispatchReadiness.error) {
       const readinessError = this.buildDispatchReadinessRefreshFailureError(
         targetNodeId,
@@ -533,7 +537,7 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
    * @return {Promise<void>}
    * @private
    */
-  async retryPendingDispatchesForNode(nodeId) {
+  async retryPendingDispatchesForNode(nodeId, options = {}) {
     if (!nodeId || this.retryInFlightNodes.has(nodeId)) {
       return;
     }
@@ -557,7 +561,14 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         this.operationDispatchQueue.enqueue(
           row.operation_id,
           RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
-          { row },
+          {
+            row,
+            readyNodeId: nodeId,
+            readyNodeRow:
+              options?.readyNodeRow && typeof options.readyNodeRow === TYPEOF.OBJECT
+                ? { ...options.readyNodeRow }
+                : null,
+          },
         );
       }
     } finally {
@@ -884,7 +895,9 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
       return false;
     }
 
-    await this.retryPendingDispatchesForNode(nodeId);
+    await this.retryPendingDispatchesForNode(nodeId, {
+      readyNodeRow: nodeRow,
+    });
     return true;
   }
 
@@ -940,7 +953,17 @@ class ReplicaDispatchServiceSegment2 extends ReplicaDispatchServiceSegment1 {
         return;
       }
 
-      await this.dispatchOperationRow(row);
+      await this.dispatchOperationRow(row, {
+        readyNodeId:
+          typeof context?.readyNodeId === TYPEOF.STRING &&
+          context.readyNodeId.length > NUM.ZERO
+            ? context.readyNodeId
+            : null,
+        readyNodeRow:
+          context?.readyNodeRow && typeof context.readyNodeRow === TYPEOF.OBJECT
+            ? context.readyNodeRow
+            : null,
+      });
     } catch (error) {
       if (this.deferOperationDispatchRetry(operationId, error, row)) {
         return;

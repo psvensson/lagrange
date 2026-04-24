@@ -19,6 +19,12 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {
+  BOOTSTRAP_PHASE,
+} from '../../src/bootstrap/bootstrap-constants.js';
+import {
+  SEED_STARTUP_CHECKPOINT,
+} from '../../src/bootstrap/seed-startup-session-store.js';
 
 const ports = createPortAllocator(import.meta.url);
 const BOOTSTRAP_SEQUENCE_TEST_TIMEOUT_MS = 90000;
@@ -111,6 +117,149 @@ function disablePostPartitionBootstrapWork(bootstrap) {
   bootstrap.startLatencyTopologyLifecycle = NOOP_SYNC;
   bootstrap.openExternalTransportAdmission = NOOP_SYNC;
 }
+
+function createSeedPlanPhases() {
+  return [{
+    name: 'infrastructure',
+    run: NOOP_ASYNC,
+  }, {
+    name: 'message_groups',
+    run: NOOP_ASYNC,
+  }, {
+    name: 'partitions',
+    run: NOOP_ASYNC,
+  }, {
+    name: 'registration',
+    run: NOOP_ASYNC,
+  }, {
+    name: 'cache_hydration',
+    run: NOOP_ASYNC,
+  }];
+}
+
+test('BootstrapService - seed checkpoint snapshot resolves explicit readiness states',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const bootstrap = new BootstrapService({
+      nodeId: 'seed-checkpoint-snapshot-node',
+      nodeAddress: 'ws://localhost:12003',
+      wsPort: 12003,
+    });
+
+    bootstrap.messageRouter = {
+      isExternalAdmissionEnabled: () => true,
+      unregister: NOOP_SYNC,
+    };
+    bootstrap.messageGroupServices = new Map([['mg-1', {}]]);
+    bootstrap.partitionServices = new Map([['services-p1', {}]]);
+    bootstrap.cdcIntegrationService = {};
+    bootstrap.systemTableCache = createLocalServiceEndpointCache(
+      bootstrap.nodeId,
+    );
+    bootstrap.replicaHandler = EMPTY_SERVICE_HANDLE;
+    bootstrap.messageGroupServiceHandler = {};
+    bootstrap.heartbeatService = EMPTY_SERVICE_HANDLE;
+    bootstrap.localAdminRuntimeReadyNotified = true;
+    bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
+    bootstrap.phase = BOOTSTRAP_PHASE.COMPLETE;
+    bootstrap.hasActiveControlPlaneBackgroundWriters = () => true;
+
+    const checkpointSnapshot = bootstrap.buildSeedStartupCheckpointSnapshot();
+
+    t.match(checkpointSnapshot, {
+      infrastructureReady: true,
+      messageGroupsReady: true,
+      partitionsReady: true,
+      registrationReady: true,
+      cacheHydrated: true,
+      controlPlaneReady: true,
+      runtimeReady: true,
+      finalized: true,
+    });
+
+    await bootstrap.shutdown();
+  });
+
+test('BootstrapService - seed checkpoint rerun guards consume the checkpoint snapshot',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const bootstrap = new BootstrapService({
+      nodeId: 'seed-checkpoint-rerun-node',
+      nodeAddress: 'ws://localhost:12004',
+      wsPort: 12004,
+    });
+    const steps = bootstrap.buildSeedCheckpointSteps(
+      {run: NOOP_ASYNC},
+      {phases: createSeedPlanPhases()},
+    );
+    const stepByCheckpoint = new Map(
+      steps.map((step) => [step.checkpoint, step]),
+    );
+
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY)
+        .shouldRerun(),
+      true,
+      'infrastructure should rerun until the checkpoint snapshot reports routing infrastructure ready',
+    );
+
+    bootstrap.messageRouter = {
+      isExternalAdmissionEnabled: () => false,
+      unregister: NOOP_SYNC,
+    };
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.INFRASTRUCTURE_READY)
+        .shouldRerun(),
+      false,
+      'infrastructure should stop rerunning once the snapshot marks the router ready',
+    );
+
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY)
+        .shouldRerun(),
+      true,
+      'control-plane setup should rerun while the checkpoint snapshot is still incomplete',
+    );
+
+    bootstrap.replicaHandler = EMPTY_SERVICE_HANDLE;
+    bootstrap.messageGroupServiceHandler = {};
+    bootstrap.heartbeatService = EMPTY_SERVICE_HANDLE;
+    bootstrap.localAdminRuntimeReadyNotified = true;
+    bootstrap.systemTableCache = createLocalServiceEndpointCache(
+      bootstrap.nodeId,
+    );
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.CONTROL_PLANE_READY)
+        .shouldRerun(),
+      false,
+      'control-plane setup should stop rerunning once the checkpoint snapshot reports the full owner contract ready',
+    );
+
+    bootstrap.runtimeServiceHandler = EMPTY_SERVICE_HANDLE;
+    bootstrap.messageRouter = {
+      isExternalAdmissionEnabled: () => true,
+      unregister: NOOP_SYNC,
+    };
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.RUNTIME_READY)
+        .shouldRerun(),
+      false,
+      'runtime setup should stop rerunning when the checkpoint snapshot reports handler and admission readiness together',
+    );
+
+    bootstrap.phase = BOOTSTRAP_PHASE.COMPLETE;
+    bootstrap.hasActiveControlPlaneBackgroundWriters = () => true;
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.FINALIZED)
+        .shouldRerun(),
+      false,
+      'finalization should stop rerunning only when the checkpoint snapshot reports both completion and background-writer activation',
+    );
+
+    await bootstrap.shutdown();
+  });
 
 test('Bootstrap sequence - server starts before services', async (t) => {
   initializeTestEnvironment();

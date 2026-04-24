@@ -891,6 +891,36 @@ class MovePlanner {
     const isTopologyCleanupReason = reason => {
       return reason === MOVE_REASON.NODE_NOT_IN_TARGET || reason === MOVE_REASON.SPREAD_REPLICAS;
     };
+    const buildPriorityStandaloneRemoveSafety = replicaId => {
+      if (!this.isControlPlanePriorityPartition()) {
+        return {
+          priorityPartition: false,
+          safe: true,
+          spread: null
+        };
+      }
+      const remainingActiveReplicas = activePlacementReplicas.filter(candidate => {
+        const candidateReplicaId = candidate?.replica_id || candidate?.service_id;
+        return candidateReplicaId !== replicaId;
+      });
+      const spread = this.analyzePrioritySpread(
+        remainingActiveReplicas,
+        prioritySpreadPolicy,
+        this.moveStateProvider.getAvailableNodes()
+      );
+      return {
+        priorityPartition: true,
+        safe: !(spread.requiresSpread === true && spread.satisfied !== true),
+        spread
+      };
+    };
+    const toExecutableRemove = move => {
+      const {
+        prioritySpreadStandaloneSafe: _prioritySpreadStandaloneSafe,
+        ...executableMove
+      } = move;
+      return executableMove;
+    };
     const prioritySpreadPolicy = {
       placementConstraints: {
         spreadAcrossNodes: true
@@ -1070,13 +1100,12 @@ class MovePlanner {
           });
           continue;
         }
-        if (addMoves.length === NUM.ZERO && this.isControlPlanePriorityPartition() && (reason === MOVE_REASON.NODE_NOT_IN_TARGET || reason === MOVE_REASON.SPREAD_REPLICAS)) {
-          const remainingActiveReplicas = activePlacementReplicas.filter(candidate => {
-            const candidateReplicaId = candidate?.replica_id || candidate?.service_id;
-            return candidateReplicaId !== replicaId;
-          });
-          const prioritySpreadAfterRemove = this.analyzePrioritySpread(remainingActiveReplicas, prioritySpreadPolicy, this.moveStateProvider.getAvailableNodes());
-          if (prioritySpreadAfterRemove.requiresSpread === true && prioritySpreadAfterRemove.satisfied !== true) {
+        const priorityRemoveSafety = isTopologyCleanupReason(reason) ?
+          buildPriorityStandaloneRemoveSafety(replicaId) :
+          {priorityPartition: false, safe: true, spread: null};
+        if (priorityRemoveSafety.priorityPartition && priorityRemoveSafety.safe !== true && addMoves.length === NUM.ZERO) {
+          const prioritySpreadAfterRemove = priorityRemoveSafety.spread;
+          if (prioritySpreadAfterRemove) {
             this.logger.debug(REBALANCER_LOG_MSG.DEFER_REMOVE_DETAIL, {
               entityId: this.entityId,
               replicaId,
@@ -1085,8 +1114,8 @@ class MovePlanner {
               requiredDistinctNodeCount: prioritySpreadAfterRemove.requiredDistinctNodeCount,
               remainingDistinctNodeCount: prioritySpreadAfterRemove.actualDistinctNodeCount
             });
-            continue;
           }
+          continue;
         }
         if (reason === MOVE_REASON.SPREAD_REPLICAS) {
           const existingRemoves = candidateRemoves.filter(m => m.reason === MOVE_REASON.SPREAD_REPLICAS).length;
@@ -1107,6 +1136,7 @@ class MovePlanner {
           replicaId,
           nodeId: nodeId,
           reason,
+          prioritySpreadStandaloneSafe: priorityRemoveSafety.safe,
           standaloneSafe: activePlacementReplicas.length - candidateRemoves.length > targetReplicaCount
         });
       }
@@ -1143,8 +1173,8 @@ class MovePlanner {
       }
       if (!isDegradedPlacement) {
         moves.push(...candidateRemoves.filter(move => {
-          return !consumedRemoveReplicaIds.has(move.replicaId);
-        }));
+          return !consumedRemoveReplicaIds.has(move.replicaId) && move.prioritySpreadStandaloneSafe !== false;
+        }).map(toExecutableRemove));
       } else {
         const deferredAddCount = addMoves.length;
         if (deferredAddCount > NUM.ZERO) {
@@ -1161,7 +1191,7 @@ class MovePlanner {
         addMoves.length = NUM.ZERO;
       }
     } else {
-      moves.push(...candidateRemoves);
+      moves.push(...candidateRemoves.map(toExecutableRemove));
     }
 
     // Add the ADD moves to the moves array

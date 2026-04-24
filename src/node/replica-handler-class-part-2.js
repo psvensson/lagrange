@@ -205,7 +205,8 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       !raft ||
       typeof raft.change !== REPLICA_HANDLER_TYPEOF.FUNCTION ||
       !raftProvider ||
-      typeof raftProvider.clearTimers !== REPLICA_HANDLER_TYPEOF.FUNCTION
+      typeof raftProvider.startElectionTimer !==
+        REPLICA_HANDLER_TYPEOF.FUNCTION
     ) {
       return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
     }
@@ -219,7 +220,7 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
       state: LifeRaft.FOLLOWER,
       leader: REPLICA_HANDLER_LEADER_HANDOFF_LITERAL.EMPTY_LEADER_ID,
     });
-    raftProvider.clearTimers(raft);
+    raftProvider.startElectionTimer(raft);
     return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
   }
   /**
@@ -288,17 +289,12 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
    * @private
    */
   async reconcileRemovedReplicaCleanup(replicaId, partitionId) {
-    const cachedServiceRow =
-      this.systemTableCache?.get?.(SYSTEM_TABLE_NAME.SERVICES, replicaId) ||
-      null;
     const trackedService = this.getTrackedService(replicaId);
-    if (cachedServiceRow) {
-      await this.getPartitionServiceRowOwner().removeReplica({
-        partitionId,
-        replicaId,
-        nodeId: this.nodeId,
-      });
-    }
+    await this.getPartitionServiceRowOwner().removeReplica({
+      partitionId,
+      replicaId,
+      nodeId: this.nodeId,
+    });
     if (trackedService) {
       await this.cleanupRemovedReplicaLocalRuntime(
         replicaId,
@@ -306,7 +302,7 @@ class ReplicaHandler extends ReplicaHandlerPart1 {
         trackedService,
       );
     }
-    if (!cachedServiceRow && !trackedService) {
+    if (!trackedService) {
       this.localServices.delete(replicaId);
       this.setLocalReplica(replicaId, {
         replicaId,

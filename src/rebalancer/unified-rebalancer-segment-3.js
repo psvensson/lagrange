@@ -292,11 +292,65 @@ class UnifiedRebalancerSegment3 extends UnifiedRebalancerSegment2 {
       return null;
     }
 
-    const publicationRecoveryGate =
+    const providedPublicationRecoveryGate =
       planningSnapshot?.publicationRecoveryGate &&
       typeof planningSnapshot.publicationRecoveryGate === TYPEOF.OBJECT
         ? planningSnapshot.publicationRecoveryGate
-        : buildPublicationRecoveryGateSnapshot(planningSnapshot || {});
+        : null;
+    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+      ...(providedPublicationRecoveryGate || {}),
+      publicationEpoch:
+        Number.isFinite(planningSnapshot?.publicationEpoch)
+          ? planningSnapshot.publicationEpoch
+          : providedPublicationRecoveryGate?.publicationEpoch ?? null,
+      publicationStatus:
+        typeof planningSnapshot?.publicationStatus === TYPEOF.STRING &&
+        planningSnapshot.publicationStatus.length > NUM.ZERO
+          ? planningSnapshot.publicationStatus
+          : typeof planningSnapshot?.status === TYPEOF.STRING &&
+              planningSnapshot.status.length > NUM.ZERO
+            ? planningSnapshot.status
+            : providedPublicationRecoveryGate?.publicationStatus ?? null,
+      publicationObservationState:
+        typeof planningSnapshot?.publicationObservationState === TYPEOF.STRING &&
+        planningSnapshot.publicationObservationState.length > NUM.ZERO
+          ? planningSnapshot.publicationObservationState
+          : providedPublicationRecoveryGate?.publicationObservationState ??
+            null,
+      recoveryProtocolState:
+        typeof planningSnapshot?.recoveryProtocolState === TYPEOF.STRING &&
+        planningSnapshot.recoveryProtocolState.length > NUM.ZERO
+          ? planningSnapshot.recoveryProtocolState
+          : providedPublicationRecoveryGate?.recoveryProtocolState ?? null,
+      priorityRecoveryReasonCodes:
+        Array.isArray(planningSnapshot?.priorityRecoveryReasonCodes)
+          ? planningSnapshot.priorityRecoveryReasonCodes
+          : providedPublicationRecoveryGate?.reasonCodes,
+      priorityPartitionSummary:
+        planningSnapshot?.priorityPartitionSummary &&
+        typeof planningSnapshot.priorityPartitionSummary === TYPEOF.OBJECT
+          ? planningSnapshot.priorityPartitionSummary
+          : providedPublicationRecoveryGate?.priorityPartitionSummary ?? null,
+      priorityRecoveryClosureWitness:
+        planningSnapshot?.priorityRecoveryClosureWitness &&
+        typeof planningSnapshot.priorityRecoveryClosureWitness ===
+          TYPEOF.OBJECT
+          ? planningSnapshot.priorityRecoveryClosureWitness
+          : providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+            null,
+      pendingAckNodeIds:
+        Array.isArray(planningSnapshot?.pendingAckNodeIds)
+          ? planningSnapshot.pendingAckNodeIds
+          : providedPublicationRecoveryGate?.pendingAckNodeIds ?? [],
+      missingPublishedNodeIds:
+        Array.isArray(planningSnapshot?.missingPublishedNodeIds)
+          ? planningSnapshot.missingPublishedNodeIds
+          : Array.isArray(
+                planningSnapshot?.missingPublishedRecoveryActiveNodeIds,
+              )
+            ? planningSnapshot.missingPublishedRecoveryActiveNodeIds
+            : providedPublicationRecoveryGate?.missingPublishedNodeIds ?? [],
+    });
     const priorityPartitionSummary =
       publicationRecoveryGate.priorityPartitionSummary;
     if (

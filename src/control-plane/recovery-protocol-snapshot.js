@@ -13,6 +13,7 @@ import {
   normalizeNodeParticipationAdmissionState,
 } from './membership-lifecycle-constants.js';
 import {
+  buildPriorityRecoveryClosureWitness,
   hasPriorityRecoverySpreadGap,
 } from './priority-recovery-snapshot.js';
 import {
@@ -217,6 +218,14 @@ function buildContext(options = {}) {
   const clusterIncarnationFence = normalizeClusterIncarnationFence(
     options.clusterIncarnationFence ?? targetParticipation?.clusterIncarnationFence,
   );
+  const priorityRecoveryClosureWitness =
+    options.priorityRecoveryClosureWitness &&
+      typeof options.priorityRecoveryClosureWitness === TYPEOF.OBJECT ?
+      options.priorityRecoveryClosureWitness :
+      buildPriorityRecoveryClosureWitness({
+        decisionSnapshots: options.priorityRecoveryDecisionSnapshots,
+        priorityPartitionSummary: options.priorityPartitionSummary,
+      });
   return {
     publicationEpoch: Number.isFinite(options.publicationEpoch) ?
       Math.trunc(options.publicationEpoch) :
@@ -239,6 +248,7 @@ function buildContext(options = {}) {
         typeof options.priorityPartitionSummary === TYPEOF.OBJECT ?
         options.priorityPartitionSummary :
         null,
+    priorityRecoveryClosureWitness,
     membershipLifecycleSummary,
     projectionDiagnostics,
     projectedServingNodeIds,
@@ -260,13 +270,39 @@ function buildContext(options = {}) {
   };
 }
 
-function buildPriorityRecoveryReasonCodes(context) {
-  const publicationExcludesTargetNode =
-    context.publicationStatusNormalized ===
+function resolvePriorityRecoverySpreadPending(context) {
+  if (
+    typeof context?.priorityRecoveryClosureWitness?.prioritySpreadPending ===
+    TYPEOF.BOOLEAN
+  ) {
+    return context.priorityRecoveryClosureWitness.prioritySpreadPending;
+  }
+  return hasPriorityRecoverySpreadGap(context?.priorityPartitionSummary);
+}
+
+function isTargetNodeExcludedFromPublishedMembership(context = {}) {
+  return context.publicationStatusNormalized ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
     context.publishedActiveNodeIdsPresent === true &&
     context.targetNodeId &&
     !context.durablePublishedActiveNodeIds.includes(context.targetNodeId);
+}
+
+function resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context = {}) {
+  return normalizeNodeIdList([
+    ...(Array.isArray(context.missingPublishedRecoveryActiveNodeIds) ?
+      context.missingPublishedRecoveryActiveNodeIds :
+      []),
+    ...(isTargetNodeExcludedFromPublishedMembership(context) &&
+      typeof context.targetNodeId === TYPEOF.STRING ?
+      [context.targetNodeId] :
+      []),
+  ]);
+}
+
+function buildPriorityRecoveryReasonCodes(context) {
+  const publicationExcludesTargetNode =
+    isTargetNodeExcludedFromPublishedMembership(context);
   const unpublishedObservation =
     context.publicationStatusNormalized.length === NUM.ZERO &&
     (
@@ -285,7 +321,7 @@ function buildPriorityRecoveryReasonCodes(context) {
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING,
     );
   }
-  if (hasPriorityRecoverySpreadGap(context.priorityPartitionSummary)) {
+  if (resolvePriorityRecoverySpreadPending(context)) {
     reasonCodes.push(
       CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
     );
@@ -299,13 +335,17 @@ function resolveRecoveryProtocolState(context) {
       context.publishedActiveNodeIds.length === NUM.ZERO) {
     return RECOVERY_PROTOCOL_STATE.UNPUBLISHED_OBSERVATION;
   }
+  if (isTargetNodeExcludedFromPublishedMembership(context)) {
+    return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
+  }
   if (context.publicationStatusNormalized.length > NUM.ZERO &&
       context.publicationStatusNormalized !==
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED) {
     return RECOVERY_PROTOCOL_STATE.PUBLICATION_PENDING;
   }
-  if (hasPriorityRecoverySpreadGap(context.priorityPartitionSummary) ||
-      context.missingPublishedRecoveryActiveNodeIds.length > NUM.ZERO) {
+  if (resolvePriorityRecoverySpreadPending(context) ||
+      resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context).length >
+        NUM.ZERO) {
     return RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING;
   }
   if (context.publishedActiveNodeIdsPresent === true ||
@@ -504,6 +544,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
   const publishedMembershipIncludesTargetNode = context.targetNodeId ?
     context.durablePublishedActiveNodeIds.includes(context.targetNodeId) :
     null;
+  const effectiveMissingPublishedRecoveryActiveNodeIds =
+    resolveEffectiveMissingPublishedRecoveryActiveNodeIds(context);
   const publicationPending = context.publicationStatusNormalized.length > NUM.ZERO &&
     context.publicationStatusNormalized !==
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
@@ -529,10 +571,11 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     recoveryProtocolState,
     priorityRecoveryReasonCodes: buildPriorityRecoveryReasonCodes(context),
     priorityPartitionSummary: context.priorityPartitionSummary,
+    priorityRecoveryClosureWitness: context.priorityRecoveryClosureWitness,
     requiredAckNodeIds: context.requiredAckNodeIds,
     acknowledgedNodeIds: context.acknowledgedNodeIds,
     missingPublishedRecoveryActiveNodeIds:
-      context.missingPublishedRecoveryActiveNodeIds,
+      effectiveMissingPublishedRecoveryActiveNodeIds,
   });
 
   return Object.freeze({
@@ -546,6 +589,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     requiredAckNodeIds: Object.freeze([...context.requiredAckNodeIds]),
     acknowledgedNodeIds: Object.freeze([...context.acknowledgedNodeIds]),
     priorityPartitionSummary: freezeRecord(context.priorityPartitionSummary),
+    priorityRecoveryClosureWitness:
+      freezeRecord(context.priorityRecoveryClosureWitness),
     membershipLifecycleSummary: freezeRecord(context.membershipLifecycleSummary),
     projectionDiagnostics: freezeRecord(context.projectionDiagnostics),
     projectedServingNodeIds: Object.freeze([...context.projectedServingNodeIds]),
@@ -556,7 +601,7 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     recoveryActiveNodeIds: Object.freeze([...context.recoveryActiveNodeIds]),
     recoveryActiveNodeSource: context.recoveryActiveNodeSource,
     missingPublishedRecoveryActiveNodeIds: Object.freeze([
-      ...context.missingPublishedRecoveryActiveNodeIds,
+      ...effectiveMissingPublishedRecoveryActiveNodeIds,
     ]),
     participationByNodeId,
     participationStateCounts: buildParticipationStateCounts(
@@ -571,6 +616,8 @@ function buildRecoveryProtocolSnapshot(options = {}) {
     publicationPending: publicationRecoveryGate.publicationPending,
     publicationExcludesTargetNode,
     publishedMembershipIncludesTargetNode,
+    closureRecordId: publicationRecoveryGate.closureRecordId || null,
+    closureWitnessClass: publicationRecoveryGate.closureWitnessClass || null,
     publishedPlanningEpoch:
       context.publicationStatusNormalized ===
         CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&

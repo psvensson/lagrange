@@ -1,5 +1,10 @@
 import { CLUSTER_SEGMENT_6 } from "./cluster-segment-6.js";
 import { Cluster5 } from "./cluster-segment-7-class-5.js";
+import {
+  buildPriorityRecoveryActiveGateSnapshot,
+  deriveLegacyPriorityRecoveryActiveGateFields,
+  PRIORITY_RECOVERY_ACTIVE_GATE_STATE,
+} from "./active-gate-contract.js";
 
 const {
   ACTIVE_POLL_INTERVAL_MS,
@@ -216,6 +221,73 @@ class Cluster extends Cluster5 {
       };
     };
 
+    const buildActiveGateDetails = ({
+      state = PRIORITY_RECOVERY_ACTIVE_GATE_STATE.WAITING,
+      attempts = ZERO,
+      elapsedMs = ZERO,
+      progressSnapshot = null,
+      noProgress = null,
+      readinessFailure = null,
+      reasonCode = null,
+      stalledReason = null,
+      failedNoProgress = null,
+      lastMeaningfulChange = null,
+      lastProgressEvent = null,
+      blockerHistory = [],
+      admissionState = null,
+      waitPolicy = null,
+    } = {}) => {
+      const attemptsSinceProgress = Math.max(
+        ZERO,
+        attempts - (lastMeaningfulProgressAttempt || ZERO),
+      );
+      const maxAttempts =
+        Number.isInteger(noProgress?.maxAttempts) &&
+        noProgress.maxAttempts > ZERO
+          ? Math.max(ZERO, noProgress.maxAttempts)
+          : Number.isInteger(noProgressMaxAttempts) &&
+              noProgressMaxAttempts > ZERO
+            ? Math.max(ZERO, noProgressMaxAttempts)
+            : null;
+      const activeGate = buildPriorityRecoveryActiveGateSnapshot({
+        mode: readinessMode,
+        state,
+        attempts,
+        elapsedMs,
+        maxAttempts,
+        maxCoordinatorCycles: maxAttempts,
+        attemptsSinceProgress,
+        coordinatorCyclesSinceProgress: attemptsSinceProgress,
+        lastMeaningfulProgressAttempt: lastMeaningfulProgressAttempt || null,
+        lastMeaningfulProgressElapsedMs:
+          lastMeaningfulProgressElapsedMs || null,
+        closureRecordId: progressSnapshot?.closureRecordId || null,
+        closureWitnessClass: progressSnapshot?.closureWitnessClass || null,
+        reasonCode,
+        stalledReason,
+        progress: progressSnapshot,
+        bestProgress: bestProgressSnapshot || null,
+        blockerHistory,
+        admissionState,
+        waitPolicy,
+        readinessDelay:
+          noProgress?.readinessDelay || progressSnapshot?.readinessDelay || null,
+        readinessFailure,
+        lastMeaningfulProgress: lastMeaningfulProgressSnapshot || null,
+        lastMeaningfulChange,
+        lastProgressEvent,
+        failedNoProgress,
+        invariantBreached:
+          state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.INVARIANT_BREACHED,
+        stalled: state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
+        timedOut: state === PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
+      });
+      return {
+        activeGate,
+        ...deriveLegacyPriorityRecoveryActiveGateFields(activeGate),
+      };
+    };
+
     const buildWaitingDetails = (attempts, elapsedMs, lastResult) => {
       const progressSnapshot = buildActiveWaitProgressSnapshot(
         lastResult,
@@ -252,6 +324,21 @@ class Cluster extends Cluster5 {
       const blockerHistory = summarizeActiveWaitBlockerHistory(
         blockerHistoryBySignature,
       );
+      const noProgress = buildNoProgressDetails(
+        attempts,
+        elapsedMs,
+        false,
+        progressSnapshot,
+      );
+      const activeGateDetails = buildActiveGateDetails({
+        attempts,
+        elapsedMs,
+        progressSnapshot,
+        noProgress,
+        blockerHistory,
+        admissionState: summarizeAdmissionState(lastResult?.nodeDiagnostics || []),
+        waitPolicy: resolveActiveGateWaitPolicy(lastResult),
+      });
       const waitingDetails = {
         nodeDiagnostics: lastResult?.nodeDiagnostics || [],
         snapshotCoverage: lastResult?.snapshotCoverage || null,
@@ -260,18 +347,7 @@ class Cluster extends Cluster5 {
         priorityRecoveryInvariants:
           lastResult?.priorityRecoveryInvariants || null,
         invariantBreaches,
-        activeGateProgress: progressSnapshot,
-        activeGateBestProgress: bestProgressSnapshot || null,
-        activeGateNoProgress: buildNoProgressDetails(
-          attempts,
-          elapsedMs,
-          false,
-          progressSnapshot,
-        ),
-        activeGateAdmissionState: summarizeAdmissionState(
-          lastResult?.nodeDiagnostics || [],
-        ),
-        activeGateBlockerHistory: blockerHistory,
+        ...activeGateDetails,
       };
 
       return {
@@ -384,16 +460,35 @@ class Cluster extends Cluster5 {
               false,
               waitingProgress.progressSnapshot,
             );
+            const invariantActiveGateDetails = buildActiveGateDetails({
+              state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.INVARIANT_BREACHED,
+              attempts,
+              elapsedMs,
+              progressSnapshot: waitingProgress.progressSnapshot,
+              noProgress: invariantProgressSnapshot,
+              readinessFailure: buildActiveWaitReadinessFailure({
+                mode: readinessMode,
+                noProgress: invariantProgressSnapshot,
+                attemptsSinceProgress:
+                  waitingProgress.attemptsSinceProgress,
+                maxAttempts: noProgressMaxAttempts,
+              }),
+              reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
+              blockerHistory: waitingProgress.blockerHistory,
+              admissionState: waitingProgress.waitingDetails.activeGateAdmissionState,
+              waitPolicy: resolveActiveGateWaitPolicy(lastResult),
+            });
             invariantError.diagnostics = {
               reasonCode: ACTIVE_WAIT_INVARIANT_BREACH_REASON_CODE,
               invariantBreaches: waitingProgress.invariantBreaches,
               priorityRecoveryInvariants:
                 lastResult?.priorityRecoveryInvariants || null,
+              activeGate: invariantActiveGateDetails.activeGate,
               noProgress: invariantProgressSnapshot
                 ? {
-                    ...invariantProgressSnapshot,
-                    readinessFailure: buildActiveWaitReadinessFailure({
-                      mode: readinessMode,
+                  ...invariantProgressSnapshot,
+                  readinessFailure: buildActiveWaitReadinessFailure({
+                    mode: readinessMode,
                       noProgress: invariantProgressSnapshot,
                       attemptsSinceProgress:
                         waitingProgress.attemptsSinceProgress,
@@ -468,6 +563,22 @@ class Cluster extends Cluster5 {
                   : null,
               activeGateBlockerHistory: waitingProgress.blockerHistory,
             };
+            const stalledActiveGateDetails = buildActiveGateDetails({
+              state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.STALLED,
+              attempts,
+              elapsedMs,
+              progressSnapshot: waitingProgress.progressSnapshot,
+              noProgress: stalledNoProgress,
+              readinessFailure: stalledNoProgress.readinessFailure,
+              reasonCode: stalledNoProgress.reasonCode,
+              stalledReason: stalledNoProgress.stalledReason,
+              failedNoProgress: stalledNoProgress.failedNoProgress,
+              lastMeaningfulChange: stalledNoProgress.lastMeaningfulChange,
+              lastProgressEvent: stalledNoProgress.lastProgressEvent,
+              blockerHistory: waitingProgress.blockerHistory,
+              admissionState: waitingProgress.waitingDetails.activeGateAdmissionState,
+              waitPolicy: resolveActiveGateWaitPolicy(lastResult),
+            });
             this._recordClusterStage(
               CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE,
               {
@@ -490,6 +601,7 @@ class Cluster extends Cluster5 {
                 ")",
             );
             stalledError.diagnostics = {
+              activeGate: stalledActiveGateDetails.activeGate,
               noProgress: stalledNoProgress,
               invariantBreaches: waitingProgress.invariantBreaches,
               priorityRecoveryInvariants:
@@ -509,7 +621,55 @@ class Cluster extends Cluster5 {
     }
 
     if (pollResult.success) {
-      return;
+      const successProgressSnapshot =
+        buildActiveWaitProgressSnapshot(
+          pollResult.lastResult || {},
+          this._nodes.size,
+          {readinessMode},
+        ) ||
+        lastObservedProgressSnapshot;
+      const successBlockerHistory = summarizeActiveWaitBlockerHistory(
+        blockerHistoryBySignature,
+      );
+      const successNoProgress = buildNoProgressDetails(
+        pollResult.attempts,
+        pollResult.elapsedMs,
+        false,
+        successProgressSnapshot,
+      );
+      const successWaitPolicy = resolveActiveGateWaitPolicy(
+        pollResult.lastResult,
+      );
+      const successActiveGateDetails = buildActiveGateDetails({
+        state:
+          pollResult.lastResult?.allActive === true ?
+            PRIORITY_RECOVERY_ACTIVE_GATE_STATE.READY :
+            PRIORITY_RECOVERY_ACTIVE_GATE_STATE.SOFT_READY,
+        attempts: pollResult.attempts,
+        elapsedMs: pollResult.elapsedMs,
+        progressSnapshot: successProgressSnapshot,
+        noProgress: successNoProgress,
+        blockerHistory: successBlockerHistory,
+        admissionState: summarizeAdmissionState(
+          pollResult.lastResult?.nodeDiagnostics || [],
+        ),
+        waitPolicy: successWaitPolicy,
+      });
+      this._recordClusterStage(CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE, {
+        attempts: pollResult.attempts,
+        elapsedMs: pollResult.elapsedMs,
+        nodeDiagnostics: pollResult.lastResult?.nodeDiagnostics || [],
+        snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+        publicationConvergenceGate:
+          pollResult.lastResult?.publicationConvergenceGate || null,
+        priorityRecoveryInvariants:
+          pollResult.lastResult?.priorityRecoveryInvariants || null,
+        invariantBreaches: summarizeInvariantBreaches(
+          pollResult.lastResult?.priorityRecoveryInvariants?.invariants,
+        ),
+        ...successActiveGateDetails,
+      });
+      return successActiveGateDetails.activeGate;
     }
 
     await this._collectFailureLogs();
@@ -567,6 +727,47 @@ class Cluster extends Cluster5 {
       finalNoProgress.activeGateBlockerHistory =
         summarizeActiveWaitBlockerHistory(blockerHistoryBySignature);
     }
+    const timeoutActiveGateDetails = buildActiveGateDetails({
+      state: PRIORITY_RECOVERY_ACTIVE_GATE_STATE.TIMED_OUT,
+      attempts: pollResult.attempts,
+      elapsedMs: pollResult.elapsedMs,
+      progressSnapshot: finalProgressSnapshot,
+      noProgress: finalNoProgressWithReasonCode,
+      readinessFailure: finalReadinessFailure,
+      reasonCode: ACTIVE_WAIT_NO_PROGRESS_REASON_CODE,
+      stalledReason:
+        ACTIVE_WAIT_NO_PROGRESS_REASON_CYCLES_PREFIX +
+        String(finalAttemptsSinceProgress),
+      failedNoProgress:
+        finalNoProgressWithReasonCode?.failedNoProgress || null,
+      lastMeaningfulChange:
+        lastMeaningfulProgressSnapshot &&
+        typeof lastMeaningfulProgressSnapshot === "object"
+          ? {
+              attempt: lastMeaningfulProgressAttempt,
+              elapsedMs: lastMeaningfulProgressElapsedMs,
+              message: formatActiveWaitProgressSnapshot(
+                lastMeaningfulProgressSnapshot,
+              ),
+            }
+          : null,
+      lastProgressEvent:
+        lastObservedProgressSnapshot &&
+        typeof lastObservedProgressSnapshot === "object"
+          ? {
+              attempt: lastObservedAttempt,
+              elapsedMs: lastObservedElapsedMs,
+              message: formatActiveWaitProgressSnapshot(
+                lastObservedProgressSnapshot,
+              ),
+            }
+          : null,
+      blockerHistory: summarizeActiveWaitBlockerHistory(blockerHistoryBySignature),
+      admissionState: summarizeAdmissionState(
+        pollResult.lastResult?.nodeDiagnostics || [],
+      ),
+      waitPolicy: resolveActiveGateWaitPolicy(pollResult.lastResult),
+    });
     this._recordClusterStage(CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE, {
       attempts: pollResult.attempts,
       elapsedMs: pollResult.elapsedMs,
@@ -577,15 +778,9 @@ class Cluster extends Cluster5 {
       priorityRecoveryInvariants:
         pollResult.lastResult?.priorityRecoveryInvariants || null,
       invariantBreaches: priorityRecoveryInvariantBreaches,
-      activeGateProgress: finalProgressSnapshot,
-      activeGateBestProgress: bestProgressSnapshot || null,
-      activeGateAdmissionState: summarizeAdmissionState(
-        pollResult.lastResult?.nodeDiagnostics || [],
-      ),
+      activeGate: timeoutActiveGateDetails.activeGate,
+      ...timeoutActiveGateDetails,
       activeGateNoProgress: finalNoProgress,
-      activeGateBlockerHistory: summarizeActiveWaitBlockerHistory(
-        blockerHistoryBySignature,
-      ),
     });
     const timeoutError = new Error(
       "Not all nodes reached " +
@@ -620,6 +815,7 @@ class Cluster extends Cluster5 {
         ")",
     );
     timeoutError.diagnostics = {
+      activeGate: timeoutActiveGateDetails.activeGate,
       noProgress: finalNoProgressWithReasonCode
         ? {
             ...finalNoProgressWithReasonCode,

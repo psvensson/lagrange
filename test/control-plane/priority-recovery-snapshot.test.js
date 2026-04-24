@@ -10,10 +10,14 @@ import {
   PRIORITY_RECOVERY_ADMISSION_PARTITION_CLASS,
   PRIORITY_RECOVERY_ADMISSION_SOURCE,
   buildPriorityRecoveryAdmissionPlan,
+  buildPriorityRecoveryClosureWitness,
   buildPriorityRecoveryDecisionSnapshot,
   buildPriorityRecoveryDecisionSnapshots,
   buildPriorityRecoveryPublicationContext,
   isPriorityRecoveryEmergencyPartition,
+  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
+  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   resolvePriorityRecoveryAdmissionPlanFromPublication,
   resolveTrackedPriorityRecoveryAdmissionPlan,
 } from '../../src/control-plane/priority-recovery-snapshot.js';
@@ -112,11 +116,16 @@ const PRIORITY_RECOVERY_ACTUATION_STATE_PERSIST_BLOCKED_BY_PRESSURE =
   'persist_blocked_by_pressure';
 const PRIORITY_RECOVERY_PRESSURE_STATE_NONE = 'none';
 const PRIORITY_RECOVERY_PRESSURE_STATE_WRITE_BACKLOG = 'write_backlog';
+const PRIORITY_RECOVERY_PRESSURE_STATE_BACKPRESSURED = 'backpressured';
 const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_OPERATION_CONTEXT =
   'operation_context';
 const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_WORKFLOW_STATE = 'workflow_state';
 const PRIORITY_RECOVERY_PROGRESS_EVIDENCE_LAST_PROGRESS =
   'last_progress_timestamp';
+const PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS =
+  'operation_created_but_no_step_transitions';
+const PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY =
+  'op-visible-from-operation-object';
 const PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT = Object.freeze({
   partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
   operationId: PRIORITY_RECOVERY_OPERATION_ID_TERMINAL_REPLACE,
@@ -1085,7 +1094,7 @@ test('priority recovery decision snapshot emits one visibility-owned deferred pr
     });
   });
 
-test('priority recovery observation snapshots preserve the rebalancer-owned stalled handoff contract after a terminal replace with no follow-up operation',
+test('priority recovery observation snapshots preserve the rebalancer-owned actionable handoff contract after a terminal replace with no follow-up operation',
   async (t) => {
     const decisionSnapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
@@ -1110,13 +1119,13 @@ test('priority recovery observation snapshots preserve the rebalancer-owned stal
     });
 
     t.match(decisionSnapshot?.progress, {
-      contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
-      nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
+      contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+      nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
       nextRequiredAction:
         PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
       blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
-      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
+      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
       lastProgressAtMs: 1500,
     });
     t.match(decisionSnapshot?.actuation, {
@@ -1144,18 +1153,557 @@ test('priority recovery observation snapshots preserve the rebalancer-owned stal
 
     t.match(partitionSnapshot, {
       progressContractState:
-        PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
-      progressNextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
+        PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+      progressNextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
       nextRequiredAction:
         PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
       blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
-      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
+      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
       lastProgressAtMs: 1500,
     });
   });
 
-test('priority recovery terminal follow-up stays pressure-blocked instead of completed when logs-table backlog blocks the next operation',
+test('priority recovery observation snapshots preserve operation ids from ' +
+  'normalized operation objects',
+  async (t) => {
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 2000,
+        publicationEpoch: 9,
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          semanticState: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            spreadGap: 1,
+          },
+          admission: {
+            effectiveEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_B,
+              PRIORITY_RECOVERY_NODE_ID_C,
+            ],
+          },
+          coordinator: {
+            operationCount: 1,
+            operation: {
+              operationId: PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
+              workflowStep: PRIORITY_RECOVERY_WORKFLOW_STEP_CREATING,
+              status: PRIORITY_RECOVERY_STATUS_CREATING,
+              updatedAtMs: 1500,
+            },
+          },
+          progress: {
+            contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_WORKFLOW,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_WAIT_FOR_PROGRESS,
+            blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_WORKFLOW,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+            lastProgressAtMs: 1500,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+          },
+        }],
+      },
+    });
+    const partitionSnapshot =
+      observationSnapshot.priorityRecoveryPartitionSnapshots[0];
+    const partitionWitness =
+      observationSnapshot.priorityRecoveryPartitionWitnesses[0];
+
+    t.same(
+      partitionSnapshot.operationIds,
+      [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
+      'partition snapshots should retain operation id evidence from the ' +
+        'normalized operation object',
+    );
+    t.same(
+      partitionWitness.operationIds,
+      [PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY],
+      'partition witnesses should not report operation absence when operation evidence exists',
+    );
+    t.ok(
+      partitionWitness.witnessIds.includes(
+        PRIORITY_RECOVERY_OPERATION_ID_OBJECT_ONLY,
+      ),
+      'operation ids should remain part of the witness id set for harness diagnostics',
+    );
+  });
+
+test('priority recovery observation snapshots prefer explicit semantic-state indexes over local fallback inference',
+  async (t) => {
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 2000,
+        publicationEpoch: 9,
+        partitionIdsBySemanticState: {
+          converged: [],
+          spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+          needs_operation: [],
+          operation_stalled: [],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: [],
+          blocked_unclassified: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            ready: false,
+          },
+          spreadCompletion: {
+            satisfied: false,
+          },
+          completion: {
+            state:
+              PRIORITY_RECOVERY_COMPLETION_STATE
+                .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: 'terminal',
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converging',
+            provenance: {
+              capturedAt: 2000,
+            },
+          },
+          progress: {
+            contractState: 'ready',
+            nextAction: 'proceed',
+            currentOwner: 'none',
+            nextRequiredAction: 'none',
+            blockingBoundary: 'none',
+            waitMode: 'none',
+            evidenceSourceIds: [],
+          },
+          coordinator: {
+            operationCount: 0,
+          },
+        }],
+      },
+    });
+    const partitionSnapshot =
+      observationSnapshot.priorityRecoveryPartitionSnapshots[0];
+
+    t.equal(
+      partitionSnapshot.semanticStateId,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'observation snapshots should consume the explicit decision-layer semantic-state mapping before any local inference',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'semantic-state indexes should preserve the explicit authoritative mapping',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryUnresolvedPartitionIds,
+      [],
+      'explicit spread-satisfied mapping should keep the partition out of the unresolved set',
+    );
+  });
+
+test('priority recovery observation snapshots summarize the current partition state from the latest snapshot instead of historical unions',
+  async (t) => {
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 3000,
+        publicationEpoch: 9,
+        priorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount: 3,
+          readyEligibleNodeCount: 3,
+          totalPriorityPartitionCount: 1,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            ready: false,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 1,
+          },
+          completion: {
+            state: PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converging',
+            provenance: {
+              capturedAt: 1000,
+            },
+          },
+        }, {
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [],
+          planner: {
+            ready: true,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 0,
+          },
+          completion: {
+            state:
+              PRIORITY_RECOVERY_COMPLETION_STATE
+                .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: 'remove_phase',
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converged',
+            provenance: {
+              capturedAt: 2000,
+            },
+          },
+        }],
+      },
+    });
+
+    t.same(
+      observationSnapshot.priorityRecoverySemanticStateIds,
+      [],
+      'historical blocked semantic states should not remain unresolved once the latest snapshot is spread-satisfied',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryBlockedPartitionIds,
+      [],
+      'current blocked partition ids should follow the latest partition snapshot instead of historical unions',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'the latest spread-satisfied snapshot should own the current semantic-state summary',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .recovering_in_flight,
+      [],
+      'the old recovering-in-flight snapshot should remain history only',
+    );
+    t.equal(
+      observationSnapshot.priorityRecoveryPartitionSnapshots[0].semanticStateId,
+      PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
+      'partition witnesses should align with the current spread-satisfied snapshot',
+    );
+  });
+
+test('priority recovery observation snapshots scope the current summary to tracked priority partitions',
+  async (t) => {
+    const nonPriorityPartitionId =
+      'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 3000,
+        publicationEpoch: 9,
+        priorityPartitionSummary: {
+          satisfied: true,
+          requiredDistinctNodeCount: 3,
+          readyEligibleNodeCount: 3,
+          totalPriorityPartitionCount: 1,
+          missingPartitionIds: [],
+          blockedPartitions: [],
+        },
+        partitionIdsBySemanticState: {
+          converged: [],
+          spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+          needs_operation: [],
+          operation_stalled: [nonPriorityPartitionId],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: [],
+          blocked_unclassified: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [],
+          planner: {
+            ready: true,
+            requiredDistinctNodeCount: 3,
+            spreadGap: 0,
+          },
+          completion: {
+            state:
+              PRIORITY_RECOVERY_COMPLETION_STATE
+                .SPREAD_SATISFIED_IN_FLIGHT,
+          },
+          observation: {
+            workflowState: 'remove_phase',
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converged',
+            provenance: {
+              capturedAt: 2000,
+            },
+          },
+        }, {
+          partitionId: nonPriorityPartitionId,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            ready: false,
+          },
+          completion: {
+            state: 'operation_stalled',
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState: PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converging',
+            provenance: {
+              capturedAt: 3000,
+            },
+          },
+        }],
+      },
+    });
+
+    t.same(
+      observationSnapshot.priorityRecoveryProgressClassIds,
+      [],
+      'non-priority workflow blockers must not survive as current priority-recovery progress classes',
+    );
+    t.same(
+      observationSnapshot.priorityRecoverySemanticStateIds,
+      [],
+      'non-priority semantic blockers must not survive as current priority-recovery semantic states',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryBlockedPartitionIds,
+      [],
+      'non-priority stalled partitions must not remain current priority-recovery blocked partitions',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'tracked priority partitions should continue to own the current semantic-state summary',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .operation_stalled,
+      [],
+      'non-priority partitions should be cut out of the current priority-recovery semantic-state summary',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionWitnesses.map(
+        (partitionWitness) => partitionWitness.partitionId,
+      ),
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+      'partition witnesses should follow the tracked priority-recovery scope',
+    );
+  });
+
+test('priority recovery observation snapshots do not invent semantic state when the decision-layer semantic-state contract is present but omits the partition',
+  async (t) => {
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      priorityRecoveryDecisionSnapshots: {
+        capturedAt: 2000,
+        publicationEpoch: 9,
+        partitionIdsBySemanticState: {
+          converged: [],
+          spread_satisfied_in_flight: [],
+          needs_operation: [],
+          operation_stalled: [],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: [],
+          blocked_unclassified: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          blockerReasons: [
+            PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
+          ],
+          planner: {
+            ready: false,
+          },
+          spreadCompletion: {
+            satisfied: false,
+          },
+          observation: {
+            workflowState: PRIORITY_RECOVERY_WORKFLOW_STATE_IN_FLIGHT,
+            visibilityState:
+              PRIORITY_RECOVERY_VISIBILITY_STATE_CACHE_VISIBLE,
+            convergenceState: 'converging',
+            provenance: {
+              capturedAt: 2000,
+            },
+          },
+          progress: {
+            contractState:
+              PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_BLOCKED,
+            nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_STOP,
+            currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+            nextRequiredAction:
+              PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
+            blockingBoundary:
+              PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
+            waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
+            evidenceSourceIds: [],
+          },
+          coordinator: {
+            operationCount: 1,
+          },
+        }],
+      },
+    });
+    const partitionSnapshot =
+      observationSnapshot.priorityRecoveryPartitionSnapshots[0];
+
+    t.equal(
+      partitionSnapshot.semanticStateId,
+      null,
+      'observation snapshots should leave semantic state unset instead of re-inferring it when the decision layer already published the semantic-state contract',
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .operation_stalled,
+      [],
+      'the semantic-state index should remain authoritative rather than being backfilled from local inference',
+    );
+    t.same(
+      partitionSnapshot.progressClassIds,
+      [PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS],
+      'blocked progress evidence should remain available even when semantic state is intentionally unset',
+    );
+  });
+
+test('priority recovery observation snapshots prefer the closure witness over stale publication spread metadata',
+  async (t) => {
+    const OBSERVATION_STALE_REASON_CODE = 'priority_partitions_not_spread';
+    const OBSERVATION_RECOVERY_PROTOCOL_STATE = 'priority_spread_pending';
+    const stalePriorityPartitionSummary = {
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+      blockedPartitions: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        requiredDistinctNodeCount: 3,
+        readyDistinctNodeCount: 2,
+        spreadGap: 1,
+      }],
+      blockedPartitionCount: 1,
+      largestSpreadGap: 1,
+      totalSpreadGap: 1,
+    };
+    const decisionSnapshots = {
+      capturedAt: 2000,
+      publicationEpoch: 9,
+      priorityPartitionSummary: stalePriorityPartitionSummary,
+      partitionIdsBySemanticState: {
+        converged: [],
+        spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+        needs_operation: [],
+        operation_stalled: [],
+        learner_promotion_blocked: [],
+        coordination_mismatch: [],
+        recovering_in_flight: [],
+        blocked_unclassified: [],
+      },
+      snapshots: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        publication: {
+          concreteEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      }],
+    };
+    const stalePublicationConvergenceGate = {
+      state: 'priority_spread_pending',
+      ready: false,
+      active: true,
+      publicationEpoch: 9,
+      publicationStatus: 'PUBLISHED',
+      recoveryProtocolState: OBSERVATION_RECOVERY_PROTOCOL_STATE,
+      reasonCodes: [OBSERVATION_STALE_REASON_CODE],
+      priorityPartitionSummary: stalePriorityPartitionSummary,
+      pendingAckNodeIds: [],
+      missingPublishedNodeIds: [],
+      publicationPending: false,
+      prioritySpreadPending: true,
+    };
+    const observationSnapshot = buildPriorityRecoveryObservationSnapshot({
+      publicationConvergence: {
+        publicationEpoch: 9,
+        publicationStatus: 'PUBLISHED',
+        recoveryProtocolState: OBSERVATION_RECOVERY_PROTOCOL_STATE,
+        publishedActiveNodeIds: [
+          PRIORITY_RECOVERY_NODE_ID_A,
+          PRIORITY_RECOVERY_NODE_ID_B,
+          PRIORITY_RECOVERY_NODE_ID_C,
+        ],
+        pendingAckNodeIds: [],
+        priorityRecoveryReasonCodes: [OBSERVATION_STALE_REASON_CODE],
+        priorityPartitionSummary: stalePriorityPartitionSummary,
+      },
+      publicationConvergenceGate: stalePublicationConvergenceGate,
+      priorityRecoveryDecisionSnapshots: decisionSnapshots,
+    });
+
+    t.equal(
+      observationSnapshot.prioritySpreadPending,
+      false,
+      'a satisfied closure witness should keep stale spread metadata from reopening the observation gate',
+    );
+    t.equal(
+      observationSnapshot.priorityRecoveryClosureState,
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
+    );
+    t.equal(
+      observationSnapshot.closureRecordId,
+      PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
+    );
+    t.equal(
+      observationSnapshot.closureWitnessClass,
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
+        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
+    );
+    t.same(
+      observationSnapshot.priorityRecoveryReasonCodes,
+      [],
+      'stale publication reason codes should be dropped once the closure witness says spread is satisfied',
+    );
+    t.same(
+      observationSnapshot.publicationConvergenceGateReasons,
+      [],
+      'the synthesized observation gate should stay ready after applying the closure witness',
+    );
+    t.match(observationSnapshot.priorityPartitionSummary, {
+      satisfied: true,
+      blockedPartitionCount: 0,
+      largestSpreadGap: 0,
+      totalSpreadGap: 0,
+    });
+    t.same(observationSnapshot.priorityRecoveryBlockedPartitionIds, []);
+    t.equal(observationSnapshot.priorityRecoveryBlockedPartitionCount, 0);
+    t.same(observationSnapshot.priorityRecoveryUnresolvedPartitionIds, []);
+    t.equal(observationSnapshot.priorityRecoveryUnresolvedPartitionCount, 0);
+    t.same(
+      observationSnapshot.priorityRecoveryPartitionIdsBySemanticState
+        .spread_satisfied_in_flight,
+      [PUBLICATION_PRIORITY_PARTITION_ID],
+    );
+  });
+
+test('priority recovery terminal follow-up stays actionable when logs-table backlog does not hard-block critical recovery',
   async (t) => {
     const snapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
@@ -1183,20 +1731,26 @@ test('priority recovery terminal follow-up stays pressure-blocked instead of com
       operationContexts: [PRIORITY_RECOVERY_TERMINAL_REPLACE_OPERATION_CONTEXT],
     });
 
+    t.match(snapshot?.conditions, {
+      pressure: {
+        pressureState: PRIORITY_RECOVERY_PRESSURE_STATE_WRITE_BACKLOG,
+        blocksCriticalRecoveryActuation: false,
+      },
+    });
     t.match(snapshot?.actuation, {
-      state: PRIORITY_RECOVERY_ACTUATION_STATE_PERSIST_BLOCKED_BY_PRESSURE,
+      state: PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED,
       owner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
       lastProgressAtMs: 1500,
       timeoutReconcileDue: false,
     });
     t.match(snapshot?.progress, {
       contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
-      nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_RETRY,
+      nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
       currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
       nextRequiredAction:
         PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
       blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
-      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_STALLED,
+      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
       lastProgressAtMs: 1500,
     });
   });
@@ -1321,7 +1875,7 @@ test('priority recovery decision snapshot emits one actuation-required contract 
     });
   });
 
-test('priority recovery decision snapshot classifies missing follow-up work under logs-table backlog as pressure-blocked persistence',
+test('priority recovery decision snapshot keeps missing follow-up work actionable under logs-table backlog',
   async (t) => {
     const snapshot = buildPriorityRecoveryDecisionSnapshot({
       partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
@@ -1348,8 +1902,58 @@ test('priority recovery decision snapshot classifies missing follow-up work unde
     t.match(snapshot?.conditions, {
       pressure: {
         pressureState: PRIORITY_RECOVERY_PRESSURE_STATE_WRITE_BACKLOG,
+        blocksCriticalRecoveryActuation: false,
         pendingWrites: 9,
         pendingWriteGrowthCount: 3,
+      },
+    });
+    t.match(snapshot?.actuation, {
+      state: PRIORITY_RECOVERY_ACTUATION_STATE_ACTION_REQUIRED,
+      owner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+      operationCount: 0,
+      timeoutReconcileDue: false,
+    });
+    t.match(snapshot?.progress, {
+      contractState: PRIORITY_RECOVERY_PROGRESS_CONTRACT_STATE_PENDING,
+      nextAction: PRIORITY_RECOVERY_PROGRESS_NEXT_ACTION_WAIT,
+      currentOwner: PRIORITY_RECOVERY_PROGRESS_OWNER_REBALANCER,
+      nextRequiredAction:
+        PRIORITY_RECOVERY_PROGRESS_ACTION_CREATE_OPERATION,
+      blockingBoundary: PRIORITY_RECOVERY_PROGRESS_BOUNDARY_SCHEDULING,
+      waitMode: PRIORITY_RECOVERY_PROGRESS_WAIT_EVENT_DRIVEN,
+    });
+  });
+
+test('priority recovery decision snapshot blocks missing follow-up persistence only under hard control-plane pressure',
+  async (t) => {
+    const snapshot = buildPriorityRecoveryDecisionSnapshot({
+      partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+      priorityPartitionSummary: {
+        blockedPartitions: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+        }],
+      },
+      admission: {
+        effectiveEligibleNodeIds: [PRIORITY_RECOVERY_NODE_ID_B],
+        effectiveEligibleNodeCount: 1,
+        ineligibleNodes: [],
+      },
+      logsTable: {
+        pendingWrites: 9,
+        sharedPressureBackpressured: true,
+      },
+      operationContexts: [],
+    });
+
+    t.match(snapshot?.conditions, {
+      pressure: {
+        pressureState: PRIORITY_RECOVERY_PRESSURE_STATE_BACKPRESSURED,
+        blocksCriticalRecoveryActuation: true,
+        pendingWrites: 9,
+        sharedPressureBackpressured: true,
       },
     });
     t.match(snapshot?.actuation, {
@@ -2015,6 +2619,148 @@ test('priority recovery decision snapshots do not report completed child ' +
     'completed child add rows should not stay in the synthetic needs-operation state',
   );
 });
+
+test('priority recovery closure witness reports stale durable spread once decision snapshots satisfy publication closure',
+  async (t) => {
+    const decisionSnapshots = {
+      publicationEpoch: 9,
+      priorityPartitionSummary: {
+        satisfied: false,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 3,
+        totalPriorityPartitionCount: 1,
+        missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+        blockedPartitions: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+        }],
+      },
+      partitionIdsBySemanticState: {
+        converged: [],
+        spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+        needs_operation: [],
+        operation_stalled: [],
+        learner_promotion_blocked: [],
+        coordination_mismatch: [],
+        recovering_in_flight: [],
+        blocked_unclassified: [],
+      },
+      unresolvedSemanticStateIds: [],
+      unresolvedSemanticBlockedPartitionIds: [],
+      snapshots: [{
+        partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+        publication: {
+          concreteEligibleNodeIds: [
+            PRIORITY_RECOVERY_NODE_ID_A,
+            PRIORITY_RECOVERY_NODE_ID_B,
+            PRIORITY_RECOVERY_NODE_ID_C,
+          ],
+        },
+      }],
+    };
+
+    const closureWitness = buildPriorityRecoveryClosureWitness({
+      decisionSnapshots,
+      priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
+    });
+
+    t.match(closureWitness, {
+      state:
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
+          .SATISFIED_STALE_PUBLICATION,
+      prioritySpreadPending: false,
+      publicationRefreshRequired: true,
+      closureRecordId:
+        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
+      closureWitnessClass:
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
+          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
+    });
+    t.same(
+      closureWitness.blockedPartitionIds,
+      [],
+      'closure satisfaction should clear the stale blocked-partition view',
+    );
+    t.match(closureWitness.refreshedPriorityPartitionSummary, {
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: [],
+      blockedPartitions: [],
+    });
+  });
+
+test('priority recovery closure witness ignores unresolved non-priority partitions when priority publication closure is already satisfied',
+  async (t) => {
+    const nonPriorityPartitionId =
+      'tbl-b932fa03-3835-4a50-87b4-bd158daed0ea-p1';
+    const closureWitness = buildPriorityRecoveryClosureWitness({
+      decisionSnapshots: {
+        publicationEpoch: 9,
+        priorityPartitionSummary: {
+          satisfied: false,
+          requiredDistinctNodeCount: 3,
+          readyEligibleNodeCount: 3,
+          totalPriorityPartitionCount: 1,
+          missingPartitionIds: [PUBLICATION_PRIORITY_PARTITION_ID],
+          blockedPartitions: [{
+            partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+            requiredDistinctNodeCount: 3,
+            readyDistinctNodeCount: 2,
+            spreadGap: 1,
+          }],
+        },
+        partitionIdsBySemanticState: {
+          converged: [],
+          spread_satisfied_in_flight: [PUBLICATION_PRIORITY_PARTITION_ID],
+          needs_operation: [],
+          operation_stalled: [nonPriorityPartitionId],
+          learner_promotion_blocked: [],
+          coordination_mismatch: [],
+          recovering_in_flight: [],
+          blocked_unclassified: [],
+        },
+        snapshots: [{
+          partitionId: PUBLICATION_PRIORITY_PARTITION_ID,
+          publication: {
+            concreteEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+              PRIORITY_RECOVERY_NODE_ID_C,
+            ],
+          },
+        }, {
+          partitionId: nonPriorityPartitionId,
+          publication: {
+            concreteEligibleNodeIds: [
+              PRIORITY_RECOVERY_NODE_ID_A,
+              PRIORITY_RECOVERY_NODE_ID_B,
+              PRIORITY_RECOVERY_NODE_ID_C,
+            ],
+          },
+        }],
+      },
+    });
+
+    t.match(closureWitness, {
+      state:
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
+          .SATISFIED_STALE_PUBLICATION,
+      prioritySpreadPending: false,
+    });
+    t.same(
+      closureWitness.blockedPartitionIds,
+      [],
+      'non-priority stalls must not block the priority publication closure witness',
+    );
+    t.notOk(
+      closureWitness.decisionPartitionIds.includes(nonPriorityPartitionId),
+      'the closure witness should scope itself to tracked priority partitions',
+    );
+  });
 
 test('priority recovery decision snapshots treat completed ADD follow-up handoff on an eligible operational target as spread-satisfied',
   async (t) => {

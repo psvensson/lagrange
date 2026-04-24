@@ -52,6 +52,7 @@ import { unwrapRowReadResult } from "./owners/system-metadata-owner-base.js";
 import { buildPublicationRecoveryProtocolSnapshot } from "./recovery-protocol-snapshot.js";
 import { buildControlPlanePublicationStory } from "./control-plane-publication-story.js";
 import { buildPublicationRecoveryGateSnapshot } from "./publication-recovery-gate.js";
+import { buildCanonicalPublicationRecoveryEvidence } from "./publication-recovery-evidence.js";
 import { RECOVERY_PROTOCOL_STATE } from "./membership-lifecycle-constants.js";
 import { ControlPlaneDiagnosticsLedger } from "./control-plane-diagnostics-ledger.js";
 import { DurableWorkflowCoordinator } from "../workflow/durable-workflow-coordinator.js";
@@ -411,6 +412,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,
+  buildCanonicalPublicationRecoveryEvidence,
   buildPublicationRecoveryProtocolSnapshot,
   buildReadinessTransitionOwnerState,
   buildReason,

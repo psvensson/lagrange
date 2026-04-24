@@ -105,13 +105,14 @@ class StartupGate {
         startupGateState: this._state,
       },
     );
-    await this._cluster._waitForAllActive({
+    const activeGate = await this._cluster._waitForAllActive({
       mode: CLUSTER_READINESS_MODE_STARTUP,
     });
     this._state = STARTUP_GATE_STATE.CLUSTER_ACTIVE;
     this._cluster._recordClusterStage(CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE, {
       nodeCount: this._cluster._nodes.size,
       startupGateState: this._state,
+      ...(activeGate ? {activeGate} : {}),
     });
   }
 }

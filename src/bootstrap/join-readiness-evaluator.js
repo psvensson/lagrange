@@ -92,6 +92,16 @@ const CANONICAL_JOIN_DISCOVERY_CRITICAL_TABLES = new Set(
     String(tableName || '').trim().toLowerCase(),
   ).filter((tableName) => tableName.length > NUM.ZERO),
 );
+const JOIN_READINESS_BLOCKED_ACTION = Object.freeze({
+  NONE: 'none',
+  REPAIR_TOPOLOGY_VISIBILITY: 'repair_topology_visibility',
+});
+const JOIN_READINESS_TIMEOUT_FALLBACK_SNAPSHOT = Object.freeze({
+  routingReady: false,
+  topologyReady: false,
+  requiredSchemaVersion: null,
+  appliedSchemaVersion: null,
+});
 
 /**
  * Evaluates join readiness convergence for a joining node.
@@ -151,7 +161,6 @@ class JoinReadinessEvaluator {
     }
 
     const pollIntervalMs = this.resolveJoinReadinessPollIntervalMs();
-    let lastSnapshotError = null;
     const result = await waitForStartupConvergence({
       timeoutMs,
       now: this.now,
@@ -166,215 +175,33 @@ class JoinReadinessEvaluator {
         ),
       ],
       evaluate: async ({attempt, elapsedMs}) => {
-        const snapshotResult =
-          await this.collectCanonicalJoinReadinessSnapshot();
-        if (snapshotResult.error) {
-          lastSnapshotError = snapshotResult.error;
-        }
-        const evaluation = this.evaluateCanonicalJoinReadinessSnapshot(
-          snapshotResult.snapshot,
-        );
+        const attemptResult =
+          await this.collectCanonicalJoinReadinessAttempt();
         return {
-          ready: evaluation.ready,
-          evaluation,
+          ready: attemptResult.evaluation.ready,
+          evaluation: attemptResult.evaluation,
+          snapshotError: attemptResult.snapshotError,
           attempts: attempt,
           elapsedMs,
         };
       },
-      buildProgressSignature: (result) => {
-        const evaluation = result?.evaluation || null;
-        return JSON.stringify({
-          reasons: [...(evaluation?.reasons || [])].sort(),
-          requiredSchemaVersion:
-            evaluation?.requiredSchemaVersion || null,
-          appliedSchemaVersion:
-            evaluation?.appliedSchemaVersion || null,
-          missingLeaders: evaluation?.missingLeaders || {},
-          inFlightReplicaOperations:
-            evaluation?.inFlightReplicaOperations || NUM.ZERO,
-          excludedRemotePriorityControlPlaneCount:
-            evaluation?.excludedRemotePriorityControlPlaneCount || NUM.ZERO,
-          missingNodeEndpointNodeIds:
-            evaluation?.missingNodeEndpointNodeIds || [],
-          missingPostgresWireNodeIds:
-            evaluation?.missingPostgresWireNodeIds || [],
-          snapshotError: lastSnapshotError?.message || null,
-          controlPlaneTargetAddress:
-            evaluation?.controlPlaneTargetAddress || null,
-          controlPlaneTargetCandidates:
-            evaluation?.controlPlaneTargetCandidates || [],
-          controlPlaneTargetConnectionStates:
-            evaluation?.controlPlaneTargetConnectionStates || null,
-          topologySnapshotEpoch:
-            evaluation?.topologySnapshotEpoch ?? null,
-          appliedTopologyEpoch:
-            evaluation?.appliedTopologyEpoch ?? null,
-          promotionState:
-            evaluation?.promotionState || null,
-          snapshotRevision:
-            evaluation?.snapshotRevision ?? null,
-          snapshotRevisionState:
-            evaluation?.snapshotRevisionState || null,
-          snapshotRevisionGap:
-            evaluation?.snapshotRevisionGap ?? null,
-        });
-      },
+      buildProgressSignature: (attemptResult) =>
+        this.buildCanonicalJoinReadinessProgressSignature(
+          attemptResult,
+        ),
       onBlocked: async (result, context) => {
-        const evaluation = result?.evaluation || null;
-        if (!evaluation) {
-          return;
-        }
-        this.logCanonicalJoinReadinessBlocked(evaluation, {
-          attempts: result?.attempts || context.attempt,
-          elapsedMs: context.elapsedMs,
-          snapshotError: lastSnapshotError,
-          force: context.progressChanged,
-        });
-        return this.repairCanonicalJoinReadinessIfNeeded(
-          evaluation,
+        return this.handleCanonicalJoinReadinessBlockedAttempt(
+          result,
+          context,
           pollIntervalMs,
         );
       },
       createTimeoutError: (result, context) => {
-        const fallbackEvaluation =
-          this.evaluateCanonicalJoinReadinessSnapshot({
-            routingReady: false,
-            topologyReady: false,
-            requiredSchemaVersion: null,
-            appliedSchemaVersion: null,
-          });
-        const terminalEvaluation =
-          result?.evaluation || fallbackEvaluation;
-        const attempts =
-          result?.attempts || context.attempt || NUM.ONE;
-        const error = new Error(
-          'join_readiness_timeout: ' +
-          `${terminalEvaluation.reasons.join(', ')} ` +
-          `after ${timeoutMs}ms`,
+        return this.buildCanonicalJoinReadinessTimeoutError(
+          result,
+          context,
+          timeoutMs,
         );
-        error.code = 'JOIN_READINESS_TIMEOUT';
-        error.joinReadiness = {
-          reasons: terminalEvaluation.reasons,
-          requiredSchemaVersion:
-            terminalEvaluation.requiredSchemaVersion,
-          appliedSchemaVersion:
-            terminalEvaluation.appliedSchemaVersion,
-          requiredVsObservedByNode:
-            this.buildJoinSchemaDiagnosticsByNode(
-              terminalEvaluation,
-            ),
-          missingLeaders: terminalEvaluation.missingLeaders,
-          inFlightReplicaOperations:
-            terminalEvaluation.inFlightReplicaOperations,
-          inFlightReplicaOperationDetails:
-            terminalEvaluation.inFlightReplicaOperationDetails,
-          excludedSelfTargetedCount:
-            terminalEvaluation.excludedSelfTargetedCount,
-          excludedWarmingTargetCount:
-            terminalEvaluation.excludedWarmingTargetCount,
-          excludedNonDiscoveryPartitionCount:
-            terminalEvaluation.excludedNonDiscoveryPartitionCount,
-          excludedRemotePriorityControlPlaneCount:
-            terminalEvaluation.excludedRemotePriorityControlPlaneCount,
-          excludedRemotePriorityControlPlaneOperationDetails:
-            terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
-          missingNodeEndpointNodeIds:
-            terminalEvaluation.missingNodeEndpointNodeIds,
-          missingPostgresWireNodeIds:
-            terminalEvaluation.missingPostgresWireNodeIds,
-          controlPlaneTargetAddress:
-            terminalEvaluation.controlPlaneTargetAddress,
-          controlPlaneTargetCandidates:
-            terminalEvaluation.controlPlaneTargetCandidates,
-          controlPlaneTargetConnectionStates:
-            terminalEvaluation.controlPlaneTargetConnectionStates,
-          topologySnapshotEpoch:
-            terminalEvaluation.topologySnapshotEpoch,
-          appliedTopologyEpoch:
-            terminalEvaluation.appliedTopologyEpoch,
-          promotionState:
-            terminalEvaluation.promotionState,
-          promotionReasons:
-            terminalEvaluation.promotionReasons,
-          snapshotRevision:
-            terminalEvaluation.snapshotRevision,
-          snapshotRevisionState:
-            terminalEvaluation.snapshotRevisionState,
-          snapshotExpectedMinimumRevision:
-            terminalEvaluation.snapshotExpectedMinimumRevision,
-          snapshotRevisionGap:
-            terminalEvaluation.snapshotRevisionGap,
-          snapshotResumeToken:
-            terminalEvaluation.snapshotResumeToken,
-          elapsedMs: context.elapsedMs,
-          attempts,
-          snapshotError: lastSnapshotError?.message || null,
-          timeoutKind: context.timeoutKind,
-          lastProgressElapsedMs:
-            context.lastProgressElapsedMs,
-        };
-
-        this.delegates.getLogger().error(
-          'Join canonical readiness timed out',
-          {
-            nodeId: this.nodeId,
-            timeoutMs,
-            attempts,
-            reasons: terminalEvaluation.reasons,
-            requiredSchemaVersion:
-              terminalEvaluation.requiredSchemaVersion,
-            appliedSchemaVersion:
-              terminalEvaluation.appliedSchemaVersion,
-            missingLeaders: terminalEvaluation.missingLeaders,
-            inFlightReplicaOperations:
-              terminalEvaluation.inFlightReplicaOperations,
-            inFlightReplicaOperationDetails:
-              terminalEvaluation.inFlightReplicaOperationDetails,
-            excludedSelfTargetedCount:
-              terminalEvaluation.excludedSelfTargetedCount,
-            excludedWarmingTargetCount:
-              terminalEvaluation.excludedWarmingTargetCount,
-            excludedNonDiscoveryPartitionCount:
-              terminalEvaluation.excludedNonDiscoveryPartitionCount,
-            excludedRemotePriorityControlPlaneCount:
-              terminalEvaluation.excludedRemotePriorityControlPlaneCount,
-            excludedRemotePriorityControlPlaneOperationDetails:
-              terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
-            missingNodeEndpointNodeIds:
-              terminalEvaluation.missingNodeEndpointNodeIds,
-            missingPostgresWireNodeIds:
-              terminalEvaluation.missingPostgresWireNodeIds,
-            controlPlaneTargetAddress:
-              terminalEvaluation.controlPlaneTargetAddress,
-            controlPlaneTargetCandidates:
-              terminalEvaluation.controlPlaneTargetCandidates,
-            controlPlaneTargetConnectionStates:
-              terminalEvaluation.controlPlaneTargetConnectionStates,
-            topologySnapshotEpoch:
-              terminalEvaluation.topologySnapshotEpoch,
-            appliedTopologyEpoch:
-              terminalEvaluation.appliedTopologyEpoch,
-            promotionState:
-              terminalEvaluation.promotionState,
-            promotionReasons:
-              terminalEvaluation.promotionReasons,
-            snapshotRevision:
-              terminalEvaluation.snapshotRevision,
-            snapshotRevisionState:
-              terminalEvaluation.snapshotRevisionState,
-            snapshotExpectedMinimumRevision:
-              terminalEvaluation.snapshotExpectedMinimumRevision,
-            snapshotRevisionGap:
-              terminalEvaluation.snapshotRevisionGap,
-            snapshotResumeToken:
-              terminalEvaluation.snapshotResumeToken,
-            snapshotError: lastSnapshotError?.message || null,
-            timeoutKind: context.timeoutKind,
-            lastProgressElapsedMs:
-              context.lastProgressElapsedMs,
-          },
-        );
-        return error;
       },
     });
 
@@ -395,6 +222,295 @@ class JoinReadinessEvaluator {
           finalEvaluation?.snapshotRevision ?? null,
       },
     );
+  }
+
+  /**
+   * Collect one explicit join-readiness attempt with snapshot, error, and
+   * evaluation grouped under one owner result.
+   * @return {Promise<Object>}
+   */
+  async collectCanonicalJoinReadinessAttempt() {
+    const snapshotResult =
+      await this.collectCanonicalJoinReadinessSnapshot();
+    const evaluation = this.evaluateCanonicalJoinReadinessSnapshot(
+      snapshotResult.snapshot,
+    );
+    return Object.freeze({
+      snapshot: snapshotResult.snapshot,
+      snapshotError: snapshotResult.error,
+      evaluation,
+    });
+  }
+
+  /**
+   * Build one stable progress signature for convergence waiting.
+   * @param {Object|null} attemptResult
+   * @return {string}
+   */
+  buildCanonicalJoinReadinessProgressSignature(attemptResult = null) {
+    const evaluation = attemptResult?.evaluation || null;
+    return JSON.stringify({
+      reasons: [...(evaluation?.reasons || [])].sort(),
+      requiredSchemaVersion:
+        evaluation?.requiredSchemaVersion || null,
+      appliedSchemaVersion:
+        evaluation?.appliedSchemaVersion || null,
+      missingLeaders: evaluation?.missingLeaders || {},
+      inFlightReplicaOperations:
+        evaluation?.inFlightReplicaOperations || NUM.ZERO,
+      excludedRemotePriorityControlPlaneCount:
+        evaluation?.excludedRemotePriorityControlPlaneCount || NUM.ZERO,
+      missingNodeEndpointNodeIds:
+        evaluation?.missingNodeEndpointNodeIds || [],
+      missingPostgresWireNodeIds:
+        evaluation?.missingPostgresWireNodeIds || [],
+      snapshotError:
+        attemptResult?.snapshotError?.message || null,
+      controlPlaneTargetAddress:
+        evaluation?.controlPlaneTargetAddress || null,
+      controlPlaneTargetCandidates:
+        evaluation?.controlPlaneTargetCandidates || [],
+      controlPlaneTargetConnectionStates:
+        evaluation?.controlPlaneTargetConnectionStates || null,
+      topologySnapshotEpoch:
+        evaluation?.topologySnapshotEpoch ?? null,
+      appliedTopologyEpoch:
+        evaluation?.appliedTopologyEpoch ?? null,
+      promotionState:
+        evaluation?.promotionState || null,
+      snapshotRevision:
+        evaluation?.snapshotRevision ?? null,
+      snapshotRevisionState:
+        evaluation?.snapshotRevisionState || null,
+      snapshotRevisionGap:
+        evaluation?.snapshotRevisionGap ?? null,
+    });
+  }
+
+  /**
+   * Resolve one blocked-action plan from the evaluated readiness state.
+   * @param {Object|null} evaluation
+   * @param {number} pollIntervalMs
+   * @return {Object}
+   */
+  resolveCanonicalJoinBlockedAction(evaluation, pollIntervalMs) {
+    const reasons = Array.isArray(evaluation?.reasons) ?
+      evaluation.reasons :
+      [];
+    if (!reasons.includes(JOIN_READINESS_REASON.TOPOLOGY_NOT_READY)) {
+      return Object.freeze({
+        actionId: JOIN_READINESS_BLOCKED_ACTION.NONE,
+        pollIntervalMs: null,
+      });
+    }
+    const normalizedPollIntervalMs = Number.isFinite(pollIntervalMs) ?
+      Math.max(NUM.ZERO, Math.floor(pollIntervalMs)) :
+      null;
+    return Object.freeze({
+      actionId:
+        JOIN_READINESS_BLOCKED_ACTION.REPAIR_TOPOLOGY_VISIBILITY,
+      pollIntervalMs: normalizedPollIntervalMs,
+    });
+  }
+
+  /**
+   * Log and execute one blocked join-readiness attempt.
+   * @param {Object|null} attemptResult
+   * @param {Object} context
+   * @param {number} pollIntervalMs
+   * @return {Promise<boolean>}
+   */
+  async handleCanonicalJoinReadinessBlockedAttempt(
+    attemptResult,
+    context = {},
+    pollIntervalMs,
+  ) {
+    const evaluation = attemptResult?.evaluation || null;
+    if (!evaluation) {
+      return false;
+    }
+    this.logCanonicalJoinReadinessBlocked(evaluation, {
+      attempts: attemptResult?.attempts || context.attempt,
+      elapsedMs: context.elapsedMs,
+      snapshotError: attemptResult?.snapshotError || null,
+      force: context.progressChanged,
+    });
+    const action = this.resolveCanonicalJoinBlockedAction(
+      evaluation,
+      pollIntervalMs,
+    );
+    return this.executeCanonicalJoinBlockedAction(action, evaluation);
+  }
+
+  /**
+   * Execute one blocked join-readiness action plan.
+   * @param {Object|null} action
+   * @param {Object|null} evaluation
+   * @return {Promise<boolean>}
+   */
+  async executeCanonicalJoinBlockedAction(action, evaluation) {
+    switch (action?.actionId) {
+      case JOIN_READINESS_BLOCKED_ACTION
+        .REPAIR_TOPOLOGY_VISIBILITY:
+        return this.repairCanonicalJoinReadinessIfNeeded(
+          evaluation,
+          action.pollIntervalMs,
+        );
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Build one canonical timeout error from the final attempt result.
+   * @param {Object|null} attemptResult
+   * @param {Object} context
+   * @param {number} timeoutMs
+   * @return {Error}
+   */
+  buildCanonicalJoinReadinessTimeoutError(
+    attemptResult,
+    context = {},
+    timeoutMs,
+  ) {
+    const fallbackEvaluation =
+      this.evaluateCanonicalJoinReadinessSnapshot(
+        JOIN_READINESS_TIMEOUT_FALLBACK_SNAPSHOT,
+      );
+    const terminalEvaluation =
+      attemptResult?.evaluation || fallbackEvaluation;
+    const attempts =
+      attemptResult?.attempts || context.attempt || NUM.ONE;
+    const snapshotErrorMessage =
+      attemptResult?.snapshotError?.message || null;
+    const error = new Error(
+      'join_readiness_timeout: ' +
+      `${terminalEvaluation.reasons.join(', ')} ` +
+      `after ${timeoutMs}ms`,
+    );
+    error.code = 'JOIN_READINESS_TIMEOUT';
+    error.joinReadiness = {
+      reasons: terminalEvaluation.reasons,
+      requiredSchemaVersion:
+        terminalEvaluation.requiredSchemaVersion,
+      appliedSchemaVersion:
+        terminalEvaluation.appliedSchemaVersion,
+      requiredVsObservedByNode:
+        this.buildJoinSchemaDiagnosticsByNode(
+          terminalEvaluation,
+        ),
+      missingLeaders: terminalEvaluation.missingLeaders,
+      inFlightReplicaOperations:
+        terminalEvaluation.inFlightReplicaOperations,
+      inFlightReplicaOperationDetails:
+        terminalEvaluation.inFlightReplicaOperationDetails,
+      excludedSelfTargetedCount:
+        terminalEvaluation.excludedSelfTargetedCount,
+      excludedWarmingTargetCount:
+        terminalEvaluation.excludedWarmingTargetCount,
+      excludedNonDiscoveryPartitionCount:
+        terminalEvaluation.excludedNonDiscoveryPartitionCount,
+      excludedRemotePriorityControlPlaneCount:
+        terminalEvaluation.excludedRemotePriorityControlPlaneCount,
+      excludedRemotePriorityControlPlaneOperationDetails:
+        terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
+      missingNodeEndpointNodeIds:
+        terminalEvaluation.missingNodeEndpointNodeIds,
+      missingPostgresWireNodeIds:
+        terminalEvaluation.missingPostgresWireNodeIds,
+      controlPlaneTargetAddress:
+        terminalEvaluation.controlPlaneTargetAddress,
+      controlPlaneTargetCandidates:
+        terminalEvaluation.controlPlaneTargetCandidates,
+      controlPlaneTargetConnectionStates:
+        terminalEvaluation.controlPlaneTargetConnectionStates,
+      topologySnapshotEpoch:
+        terminalEvaluation.topologySnapshotEpoch,
+      appliedTopologyEpoch:
+        terminalEvaluation.appliedTopologyEpoch,
+      promotionState:
+        terminalEvaluation.promotionState,
+      promotionReasons:
+        terminalEvaluation.promotionReasons,
+      snapshotRevision:
+        terminalEvaluation.snapshotRevision,
+      snapshotRevisionState:
+        terminalEvaluation.snapshotRevisionState,
+      snapshotExpectedMinimumRevision:
+        terminalEvaluation.snapshotExpectedMinimumRevision,
+      snapshotRevisionGap:
+        terminalEvaluation.snapshotRevisionGap,
+      snapshotResumeToken:
+        terminalEvaluation.snapshotResumeToken,
+      elapsedMs: context.elapsedMs,
+      attempts,
+      snapshotError: snapshotErrorMessage,
+      timeoutKind: context.timeoutKind,
+      lastProgressElapsedMs:
+        context.lastProgressElapsedMs,
+    };
+
+    this.delegates.getLogger().error(
+      'Join canonical readiness timed out',
+      {
+        nodeId: this.nodeId,
+        timeoutMs,
+        attempts,
+        reasons: terminalEvaluation.reasons,
+        requiredSchemaVersion:
+          terminalEvaluation.requiredSchemaVersion,
+        appliedSchemaVersion:
+          terminalEvaluation.appliedSchemaVersion,
+        missingLeaders: terminalEvaluation.missingLeaders,
+        inFlightReplicaOperations:
+          terminalEvaluation.inFlightReplicaOperations,
+        inFlightReplicaOperationDetails:
+          terminalEvaluation.inFlightReplicaOperationDetails,
+        excludedSelfTargetedCount:
+          terminalEvaluation.excludedSelfTargetedCount,
+        excludedWarmingTargetCount:
+          terminalEvaluation.excludedWarmingTargetCount,
+        excludedNonDiscoveryPartitionCount:
+          terminalEvaluation.excludedNonDiscoveryPartitionCount,
+        excludedRemotePriorityControlPlaneCount:
+          terminalEvaluation.excludedRemotePriorityControlPlaneCount,
+        excludedRemotePriorityControlPlaneOperationDetails:
+          terminalEvaluation.excludedRemotePriorityControlPlaneOperationDetails,
+        missingNodeEndpointNodeIds:
+          terminalEvaluation.missingNodeEndpointNodeIds,
+        missingPostgresWireNodeIds:
+          terminalEvaluation.missingPostgresWireNodeIds,
+        controlPlaneTargetAddress:
+          terminalEvaluation.controlPlaneTargetAddress,
+        controlPlaneTargetCandidates:
+          terminalEvaluation.controlPlaneTargetCandidates,
+        controlPlaneTargetConnectionStates:
+          terminalEvaluation.controlPlaneTargetConnectionStates,
+        topologySnapshotEpoch:
+          terminalEvaluation.topologySnapshotEpoch,
+        appliedTopologyEpoch:
+          terminalEvaluation.appliedTopologyEpoch,
+        promotionState:
+          terminalEvaluation.promotionState,
+        promotionReasons:
+          terminalEvaluation.promotionReasons,
+        snapshotRevision:
+          terminalEvaluation.snapshotRevision,
+        snapshotRevisionState:
+          terminalEvaluation.snapshotRevisionState,
+        snapshotExpectedMinimumRevision:
+          terminalEvaluation.snapshotExpectedMinimumRevision,
+        snapshotRevisionGap:
+          terminalEvaluation.snapshotRevisionGap,
+        snapshotResumeToken:
+          terminalEvaluation.snapshotResumeToken,
+        snapshotError: snapshotErrorMessage,
+        timeoutKind: context.timeoutKind,
+        lastProgressElapsedMs:
+          context.lastProgressElapsedMs,
+      },
+    );
+    return error;
   }
 
   /**
@@ -1053,10 +1169,19 @@ class JoinReadinessEvaluator {
       this.delegates.getControlPlaneReadinessService?.() || null;
     const startupAuthorityNodeIds =
       this.getStartupAuthorityActiveNodeIds(readinessService);
+    const cacheActiveNodeIds =
+      systemTableCache &&
+      typeof systemTableCache.getAll === TYPEOF.FUNCTION ?
+        this.getCacheActiveNodeIds(
+          systemTableCache.getAll(TABLES.NODES) || [],
+        ) :
+        [];
     if (!readinessService ||
         !systemTableCache ||
         typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return startupAuthorityNodeIds;
+      return cacheActiveNodeIds.length > NUM.ZERO ?
+        cacheActiveNodeIds :
+        startupAuthorityNodeIds;
     }
 
     const readinessActiveNodeIds =
@@ -1067,7 +1192,25 @@ class JoinReadinessEvaluator {
     if (readinessActiveNodeIds.length > NUM.ZERO) {
       return readinessActiveNodeIds;
     }
+    if (cacheActiveNodeIds.length > NUM.ZERO) {
+      return cacheActiveNodeIds;
+    }
     return startupAuthorityNodeIds;
+  }
+
+  getCacheActiveNodeIds(nodeRows) {
+    const activeNodeIds = [];
+    for (const row of Array.isArray(nodeRows) ? nodeRows : []) {
+      const normalizedRow = normalizeNodeRow(row);
+      const {nodeId, status} = normalizedRow;
+      if (nodeId.length === NUM.ZERO) {
+        continue;
+      }
+      if (status === String(NODE_STATE.ACTIVE).toLowerCase()) {
+        activeNodeIds.push(nodeId);
+      }
+    }
+    return [...new Set(activeNodeIds)];
   }
 
   getReadinessActiveNodeIds(readinessService, nodeRows) {

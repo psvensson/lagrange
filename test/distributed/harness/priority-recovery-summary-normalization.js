@@ -449,7 +449,7 @@ function resolvePrecedenceRank(value, precedence) {
   return index >= ZERO ? index : precedence.length;
 }
 
-function hasMeaningfulProgressContract(witness) {
+function hasMeaningfulPriorityRecoveryProgressWitness(witness) {
   const progressFields = [
     witness?.progressContractState,
     witness?.actuationState,
@@ -521,7 +521,7 @@ function selectDominantPriorityRecoveryPartitionWitness(witnesses) {
   const normalizedWitnesses =
     normalizePriorityRecoveryPartitionWitnessesForDiagnostics(witnesses);
   const meaningfulWitnesses = normalizedWitnesses.filter(
-    hasMeaningfulProgressContract,
+    hasMeaningfulPriorityRecoveryProgressWitness,
   );
   const candidateWitnesses =
     meaningfulWitnesses.length > ZERO ? meaningfulWitnesses : normalizedWitnesses;
@@ -665,6 +665,7 @@ function normalizePriorityPartitionSummaryForDiagnostics(summary) {
 
 export {
   buildPriorityRecoveryProgressSummary,
+  hasMeaningfulPriorityRecoveryProgressWitness,
   normalizePriorityPartitionSummaryForDiagnostics,
   normalizePriorityRecoveryPartitionWitnessesForDiagnostics,
   selectDominantPriorityRecoveryPartitionWitness,

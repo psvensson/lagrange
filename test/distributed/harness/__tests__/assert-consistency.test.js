@@ -889,25 +889,30 @@ test('waitForConsistencyConvergence tolerates transient empty leader maps',
     });
   });
 
-test('assertConsistency derives leaders from ' +
-  'replicaRoles when partitions table leaders are ' +
-  'empty — uses services-derived leader identity ' +
-  'during cache hydration', async () => {
-  // Simulates post-seed-restart state: partitions table
-  // not yet hydrated so leaders={}, but services rows
-  // report raft_role leaders via replicaRoles.
-  const snapshotPayload = {
+test('assertConsistency defers strict leader comparison until the ' +
+  'publication recovery gate is ready', async () => {
+  const snapshotPayloadA = {
     nodes: ['node-1', 'node-2', 'node-3'],
+    publishedNodes: ['node-1', 'node-2', 'node-3'],
     partitions: ['p1'],
-    leaders: {},
-    voterCounts: {p1: 3},
-    replicaRoles: {
-      p1: {
-        'replica-1': 'leader',
-        'replica-2': 'follower',
-        'replica-3': 'follower',
+    leaders: {p1: TEST_LEADER_ADDRESS},
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+      },
+      publicationConvergenceGate: {
+        ready: false,
+        state: 'publication_pending',
+        publicationEpoch: 15,
+        publicationStatus: 'OPEN',
+        reasonCodes: ['publication_epoch_pending'],
       },
     },
+  };
+  const snapshotPayloadB = {
+    ...snapshotPayloadA,
+    leaders: {p1: TEST_WS_ADDRESS},
   };
 
   const nodeA = {
@@ -916,7 +921,7 @@ test('assertConsistency derives leaders from ' +
       return true;
     },
     async getControlSnapshot() {
-      return {rows: [snapshotPayload]};
+      return {rows: [snapshotPayloadA]};
     },
     async query() {
       throw new Error('should not be called');
@@ -928,7 +933,291 @@ test('assertConsistency derives leaders from ' +
       return true;
     },
     async getControlSnapshot() {
-      return {rows: [snapshotPayload]};
+      return {rows: [snapshotPayloadB]};
+    },
+    async query() {
+      throw new Error('should not be called');
+    },
+  };
+
+  await assert.rejects(
+    assertConsistency([nodeA, nodeB]),
+    /Publication-scoped consistency not ready/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots defers strict leader comparison until the ' +
+  'publication recovery gate is ready', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+      },
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_WS_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+      },
+    },
+  ];
+
+  assert.throws(
+    () => assertConsistencyFromSnapshots(snapshots),
+    /Publication-scoped consistency not ready/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots rebuilds a same-epoch stale publication ' +
+  'gate from canonical convergence evidence', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'steady_published',
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            largestSpreadGap: 0,
+            totalSpreadGap: 0,
+          },
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+      },
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'steady_published',
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            largestSpreadGap: 0,
+            totalSpreadGap: 0,
+          },
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+      },
+    },
+  ];
+
+  assert.doesNotThrow(() => assertConsistencyFromSnapshots(snapshots));
+});
+
+test('assertConsistencyFromSnapshots prefers canonical priority-recovery ' +
+  'observation over a conflicting stale publication gate', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'priority_spread_pending',
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitionCount: 1,
+            largestSpreadGap: 1,
+            totalSpreadGap: 1,
+          },
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'steady_published',
+          prioritySpreadPending: false,
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            largestSpreadGap: 0,
+            totalSpreadGap: 0,
+          },
+          closureRecordId: 'CL-003',
+          closureWitnessClass:
+            'publication_converged_priority_spread_pending',
+          priorityRecoveryClosureState: 'closure_satisfied_stale_publication',
+        },
+      },
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      publishedNodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+      controlPlaneDiagnostics: {
+        publicationConvergence: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'priority_spread_pending',
+          publishedActiveNodeIds: ['node-1', 'node-2'],
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitionCount: 1,
+            largestSpreadGap: 1,
+            totalSpreadGap: 1,
+          },
+        },
+        publicationConvergenceGate: {
+          ready: false,
+          state: 'priority_spread_pending',
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          reasonCodes: ['priority_partitions_not_spread'],
+        },
+        priorityRecoveryObservation: {
+          publicationEpoch: 14,
+          publicationStatus: 'PUBLISHED',
+          recoveryProtocolState: 'steady_published',
+          prioritySpreadPending: false,
+          pendingAckNodeIds: [],
+          priorityRecoveryReasonCodes: [],
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitionCount: 0,
+            largestSpreadGap: 0,
+            totalSpreadGap: 0,
+          },
+          closureRecordId: 'CL-003',
+          closureWitnessClass:
+            'publication_converged_priority_spread_pending',
+          priorityRecoveryClosureState: 'closure_satisfied_stale_publication',
+        },
+      },
+    },
+  ];
+
+  assert.doesNotThrow(() => assertConsistencyFromSnapshots(snapshots));
+});
+
+test('waitForConsistencyConvergence retries until the publication recovery ' +
+  'gate is ready before enforcing leaders', async () => {
+  let callCount = 0;
+  const convergenceThreshold = 3;
+  const nodeA = buildControlSnapshotNode('node-a', {
+    publishedNodes: ['node-1', 'node-2', 'node-3'],
+    controlPlaneDiagnostics: {
+      publicationConvergence: {
+        publicationEpoch: 14,
+        publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+      },
+      publicationConvergenceGate: {
+        ready: true,
+        state: 'ready',
+        publicationEpoch: 14,
+        publicationStatus: 'PUBLISHED',
+        reasonCodes: [],
+      },
+    },
+  });
+  const nodeB = {
+    id: 'node-b',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      callCount += 1;
+      const ready = callCount >= convergenceThreshold;
+      return {
+        rows: [{
+          nodes: ['node-1', 'node-2', 'node-3'],
+          publishedNodes: ['node-1', 'node-2', 'node-3'],
+          partitions: ['p1'],
+          leaders: {p1: ready ? TEST_LEADER_ADDRESS : TEST_WS_ADDRESS},
+          controlPlaneDiagnostics: {
+            publicationConvergence: {
+              publicationEpoch: 14,
+              publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            },
+            publicationConvergenceGate: {
+              ready,
+              state: ready ? 'ready' : 'publication_pending',
+              publicationEpoch: 14,
+              publicationStatus: ready ? 'PUBLISHED' : 'OPEN',
+              reasonCodes: ready ? [] : ['publication_epoch_pending'],
+            },
+          },
+        }],
+      };
     },
     async query() {
       throw new Error('should not be called');
@@ -936,6 +1225,14 @@ test('assertConsistency derives leaders from ' +
   };
 
   await assert.doesNotReject(async () => {
-    await assertConsistency([nodeA, nodeB]);
+    await waitForConsistencyConvergence(
+      [nodeA, nodeB],
+      {timeoutMs: 5000, pollIntervalMs: 50},
+    );
   });
+  assert.ok(
+    callCount >= convergenceThreshold,
+    'Expected at least ' + convergenceThreshold +
+    ' probes, got ' + callCount,
+  );
 });

@@ -684,6 +684,72 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       );
     });
 
+  await t.test('rebuilds stale embedded publication gates from the current sync planning answer',
+    async (t) => {
+      const readinessService = {
+        ...createMockReadinessService(createMockCache([
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ])),
+        getMembershipPublicationPlanningAnswerSync() {
+          return {
+            publicationEpoch: 9,
+            publicationStatus: 'PUBLISHED',
+            recoveryProtocolState: 'steady_published',
+            publishedActiveNodeIdsPresent: true,
+            publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+            priorityRecoveryReasonCodes: ['priority_partitions_not_spread'],
+            priorityPartitionSummary: {
+              satisfied: true,
+              missingPartitionIds: [],
+              blockedPartitions: [],
+            },
+            publicationRecoveryGate: {
+              state: 'priority_spread_pending',
+              ready: false,
+              active: true,
+              publicationEpoch: 9,
+              publicationStatus: 'PUBLISHED',
+              recoveryProtocolState: 'priority_spread_pending',
+              reasonCodes: ['priority_partitions_not_spread'],
+              priorityPartitionSummary: {
+                satisfied: false,
+                missingPartitionIds: ['replica_operations-p1'],
+                blockedPartitions: [{
+                  partitionId: 'replica_operations-p1',
+                  readyDistinctNodeCount: 2,
+                  spreadGap: 1,
+                }],
+              },
+              prioritySpreadPending: true,
+              pendingAckNodeIds: [],
+              missingPublishedNodeIds: [],
+            },
+          };
+        },
+      };
+
+      const rebalancer = createTestRebalancer({
+        entityId: 'user-partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        services: [],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      t.equal(
+        rebalancer.getControlPlanePrioritySpreadBlocker(),
+        null,
+        'priority spread gating should follow the current planning evidence instead of a stale embedded gate',
+      );
+    });
+
   await t.test('treats priority spread repair moves as critical', async (t) => {
     const rebalancer = createTestRebalancer({
       entityId: 'replica_operations-p1',
@@ -752,6 +818,105 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
         moves,
         [],
         'planner should not evict a priority recovery replica when removal would drop spread below the required distinct-node count',
+      );
+    },
+  );
+
+  await t.test(
+    'filters priority standalone removes when concurrent adds are present',
+    async (t) => {
+      const PARTITION_ID = 'sql_transactions-p1';
+      const TABLE_ID = 'sql_transactions';
+      const SOURCE_NODE_ID = 'node-1';
+      const SPREAD_NODE_ID = 'node-2';
+      const SYNCING_NODE_ID = 'node-3';
+      const NEXT_NODE_ID = 'node-4';
+      const SOURCE_REPLICA_ONE = 'sql_transactions-p1-r1';
+      const SOURCE_REPLICA_TWO = 'sql_transactions-p1-r2';
+      const SOURCE_REPLICA_THREE = 'sql_transactions-p1-r3';
+      const SPREAD_REPLICA_ID = 'sql_transactions-p1-r4';
+      const SYNCING_REPLICA_ID = 'sql_transactions-p1-r5';
+      const FOLLOWER_ROLE = 'follower';
+
+      const rebalancer = createTestRebalancer({
+        entityId: PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: SOURCE_NODE_ID,
+        nodes: [
+          {node_id: SOURCE_NODE_ID, status: NodeStatus.ACTIVE},
+          {node_id: SPREAD_NODE_ID, status: NodeStatus.ACTIVE},
+          {node_id: SYNCING_NODE_ID, status: NodeStatus.ACTIVE},
+          {node_id: NEXT_NODE_ID, status: NodeStatus.ACTIVE},
+        ],
+        partitions: [
+          {
+            partition_id: PARTITION_ID,
+            table_id: TABLE_ID,
+            replica_count: 3,
+          },
+        ],
+      });
+
+      const currentReplicas = [
+        {
+          replica_id: SOURCE_REPLICA_ONE,
+          node_id: SOURCE_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: FOLLOWER_ROLE,
+          address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_ONE}`,
+        },
+        {
+          replica_id: SOURCE_REPLICA_TWO,
+          node_id: SOURCE_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: FOLLOWER_ROLE,
+          address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_TWO}`,
+        },
+        {
+          replica_id: SOURCE_REPLICA_THREE,
+          node_id: SOURCE_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: FOLLOWER_ROLE,
+          address: `${SOURCE_NODE_ID}/partition/${SOURCE_REPLICA_THREE}`,
+        },
+        {
+          replica_id: SPREAD_REPLICA_ID,
+          node_id: SPREAD_NODE_ID,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: FOLLOWER_ROLE,
+          address: `${SPREAD_NODE_ID}/partition/${SPREAD_REPLICA_ID}`,
+        },
+        {
+          replica_id: SYNCING_REPLICA_ID,
+          node_id: SYNCING_NODE_ID,
+          status: ReplicaStatus.SYNCING,
+          raft_role: FOLLOWER_ROLE,
+          address: `${SYNCING_NODE_ID}/partition/${SYNCING_REPLICA_ID}`,
+        },
+      ];
+
+      const moves = rebalancer.calculateMoves(currentReplicas, {
+        targetReplicaCount: 3,
+        targetNodes: [
+          SOURCE_NODE_ID,
+          SYNCING_NODE_ID,
+          NEXT_NODE_ID,
+        ],
+        degraded: false,
+        availableNodeCount: 4,
+      });
+
+      t.equal(
+        moves.some((move) =>
+          move.type === MoveType.REMOVE &&
+          move.replicaId === SPREAD_REPLICA_ID),
+        false,
+        'spread-contributing replicas must not be emitted as standalone removes while a priority add is still pending',
+      );
+      t.equal(
+        moves.some((move) => move.type === MoveType.REPLACE),
+        true,
+        'the planner may still tie one removal to a compensating replacement',
       );
     },
   );

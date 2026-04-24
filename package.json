@@ -72,6 +72,7 @@
     "audit:guideline:literals": "node scripts/check-guideline-literals.js",
     "audit:guideline:decision-boundaries": "node scripts/check-guideline-decision-boundaries.js",
     "audit:guideline:boundary-mode-contracts": "node scripts/check-guideline-boundary-mode-contracts.js",
+    "audit:runtime-grammar": "node scripts/check-runtime-grammar-contracts.js",
     "steering:llm:pack": "node scripts/generate-steering-llm-pack.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",
     "guard:guidelines:staged": "node scripts/check-guidelines-staged.js",

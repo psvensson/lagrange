@@ -133,8 +133,12 @@ function buildPriorityRecoveryPressureConditions(logsTable = null) {
     pressureState = PRIORITY_RECOVERY_PRESSURE_STATE.WRITE_BACKLOG;
   }
 
+  const blocksCriticalRecoveryActuation =
+    pressureState === PRIORITY_RECOVERY_PRESSURE_STATE.BACKPRESSURED;
+
   return Object.freeze({
     pressureState,
+    blocksCriticalRecoveryActuation,
     ...(Number.isFinite(pendingWrites) ? {pendingWrites} : {}),
     ...(Number.isFinite(pendingWriteGrowthCount) ?
       {pendingWriteGrowthCount} :

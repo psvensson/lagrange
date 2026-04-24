@@ -28,6 +28,7 @@ import {
   REPLICA_OPERATION_SEMANTIC_PHASE,
 } from '../../src/rebalancer/replica-status.js';
 import {
+  REBALANCE_COORDINATOR_EVENT,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
   REBALANCER_LOG_MSG,
   REBALANCER_SKIP_REASON,
@@ -48,6 +49,7 @@ import {
   PRESSURE_BEHAVIOR_DECISION,
   PRESSURE_STATE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
 import {
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -58,6 +60,29 @@ import {
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
+
+const BACKPRESSURE_PENDING_COUNT = 2;
+const BACKPRESSURE_MAX_PENDING = 2;
+const PRIORITY_RECOVERY_PUBLICATION_EPOCH = 7;
+const PRIORITY_RECOVERY_READY_REPLICA_COUNT = 2;
+const PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT = 1;
+const PRIORITY_RECOVERY_SPREAD_GAP = 1;
+const REBALANCER_TEST_NODE_ID_A = 'node-1';
+const REBALANCER_TEST_NODE_ID_B = 'node-2';
+const REPLICA_OPERATION_PRIORITY_PARTITION_ID = 'replica_operations-p1';
+const REPLICA_OPERATION_PRIORITY_REPLICA_ID = 'replica_operations-p1-r1';
+const PRIORITY_PROGRESS_PARTITION_ID = 'control_plane_publications-p1';
+const PRIORITY_PROGRESS_NODE_ID = 'node-1';
+const PRIORITY_PROGRESS_OPERATION_ID = 'op-priority-progress';
+const PRIORITY_VISIBILITY_SERVICE_ID = 'control-plane-publications-r4';
+const PRIORITY_VISIBILITY_TARGET_NODE_ID = 'node-4';
+const PRIORITY_VISIBILITY_CDC_OPERATION = 'update';
+const PRIORITY_VISIBILITY_SERVICE_STATUS_ACTIVE = 'active';
+const ORDINARY_PROGRESS_PARTITION_ID = 'tables-p1';
+const NO_PROGRESS_LISTENERS = 0;
+const ONE_PROGRESS_LISTENER = 1;
+const NO_MEMBERSHIP_PUBLICATION_RECONCILE_CALLS = 0;
+const ONE_MEMBERSHIP_PUBLICATION_RECONCILE_CALL = 1;
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -161,6 +186,22 @@ function createMockMessageRouter(
   };
 }
 
+function createBackpressuredMessageRouter() {
+  return {
+    ...createMockMessageRouter(),
+    getStats() {
+      return {
+        outboundQueues: {
+          [REBALANCER_TEST_NODE_ID_B]: {
+            pending: BACKPRESSURE_PENDING_COUNT,
+            maxPending: BACKPRESSURE_MAX_PENDING,
+          },
+        },
+      };
+    },
+  };
+}
+
 function createNodeEndpoint(nodeId) {
   return {
     node_id: nodeId,
@@ -211,6 +252,35 @@ function createMockCoordinator() {
     storageAccountingService,
     storageAdmissionService,
   };
+}
+
+function createEventedMockCoordinator() {
+  const coordinator = createMockCoordinator();
+  const listenersByEvent = new Map();
+  coordinator.on = (eventName, listener) => {
+    const listeners = listenersByEvent.get(eventName) || new Set();
+    listeners.add(listener);
+    listenersByEvent.set(eventName, listeners);
+  };
+  coordinator.off = (eventName, listener) => {
+    const listeners = listenersByEvent.get(eventName);
+    if (!listeners) {
+      return;
+    }
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      listenersByEvent.delete(eventName);
+    }
+  };
+  coordinator.emit = (eventName, payload) => {
+    const listeners = listenersByEvent.get(eventName) || new Set();
+    for (const listener of listeners) {
+      listener(payload);
+    }
+  };
+  coordinator.listenerCount = (eventName) =>
+    (listenersByEvent.get(eventName) || new Set()).size;
+  return coordinator;
 }
 
 // Create mock readiness service backed by the same cache
@@ -307,6 +377,7 @@ function createTestRebalancer(options = {}) {
     sqlQueryEngine = null,
     controlPlaneSystemTableGateway = null,
     cdcIntegrationService = null,
+    systemTableCache = null,
     messageRouter = null,
     rebalanceCoordinator = null,
     controlPlaneReadinessService = null,
@@ -315,7 +386,7 @@ function createTestRebalancer(options = {}) {
     priorityRecoveryActivityStaleGraceMs = null,
   } = options;
 
-  const mockCache = createMockCache(
+  const mockCache = systemTableCache || createMockCache(
     nodes,
     services,
     partitions,
@@ -356,6 +427,25 @@ function createTestRebalancer(options = {}) {
     priorityRecoveryActivityStaleGraceMs,
   });
 }
+
+const TEST_REBALANCE_PLANNING_GATE = Object.freeze({
+  LOCAL_MUTATION_READINESS: 'local_mutation_readiness',
+  CONTROL_PLANE_PRIORITY_SPREAD: 'control_plane_priority_spread',
+  TRANSPORT_BACKPRESSURE: 'transport_backpressure',
+});
+
+const TEST_REBALANCE_PLANNING_GATE_DECISION = Object.freeze({
+  DEFER_PLANNING: 'defer_planning',
+});
+
+const TEST_REBALANCE_PLANNING_GATE_ACTION = Object.freeze({
+  SCHEDULE_RETRY: 'schedule_retry',
+});
+
+const TEST_REBALANCE_PLANNING_GATE_SCHEDULE_MODE = Object.freeze({
+  NEXT: 'next',
+  PRIORITY_AWARE: 'priority_aware',
+});
 
 test('UnifiedRebalancer - Basic Initialization', async (t) => {
   initializeTestEnvironment();
@@ -610,6 +700,319 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
     rebalancer.shutdown();
   });
 
+  await t.test(
+    'priority recovery coordinator progress re-enters partition planning',
+    async (t) => {
+      const coordinator = createEventedMockCoordinator();
+      const rebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        rebalanceCoordinator: coordinator,
+      });
+      const enqueuedReasons = [];
+      rebalancer.isLeader = true;
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        enqueuedReasons.push(reason);
+        return true;
+      };
+
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, {
+        operation: {
+          operationId: PRIORITY_PROGRESS_OPERATION_ID,
+          entityType: EntityType.PARTITION,
+          entityId: PRIORITY_PROGRESS_PARTITION_ID,
+          partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+        },
+        newStep: WORKFLOW_STEP.ACTIVE,
+      });
+
+      t.same(
+        enqueuedReasons,
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'spread-changing coordinator progress should enqueue one priority planning pass',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
+
+  await t.test(
+    'priority recovery terminal progress re-enters membership publication planning',
+    async (t) => {
+      const coordinator = createEventedMockCoordinator();
+      const membershipPublicationReconcileCalls = [];
+      const controlPlaneReadinessService = {
+        ...createMockReadinessService(createMockCache()),
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile(reason, context) {
+            membershipPublicationReconcileCalls.push({reason, context});
+            return true;
+          },
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        rebalanceCoordinator: coordinator,
+        controlPlaneReadinessService,
+      });
+      rebalancer.isLeader = true;
+      rebalancer.enqueueRebalanceCheck = () => true;
+
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: PRIORITY_PROGRESS_OPERATION_ID,
+          entityType: EntityType.PARTITION,
+          entityId: PRIORITY_PROGRESS_PARTITION_ID,
+          partitionId: PRIORITY_PROGRESS_PARTITION_ID,
+        },
+      });
+
+      t.equal(
+        membershipPublicationReconcileCalls.length,
+        ONE_MEMBERSHIP_PUBLICATION_RECONCILE_CALL,
+        'terminal priority progress should wake the publication owner once',
+      );
+      t.equal(
+        membershipPublicationReconcileCalls[0].reason,
+        RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
+        'publication planning should use the canonical priority progress reason',
+      );
+
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: PRIORITY_PROGRESS_OPERATION_ID,
+          entityType: EntityType.PARTITION,
+          entityId: ORDINARY_PROGRESS_PARTITION_ID,
+          partitionId: ORDINARY_PROGRESS_PARTITION_ID,
+        },
+      });
+
+      t.equal(
+        membershipPublicationReconcileCalls.length,
+        ONE_MEMBERSHIP_PUBLICATION_RECONCILE_CALL,
+        'non-matching progress should not wake publication planning',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
+
+  await t.test(
+    'sibling priority recovery progress re-enters partition planning',
+    async (t) => {
+      const coordinator = createEventedMockCoordinator();
+      const rebalanceReasons = [];
+      const rebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        rebalanceCoordinator: coordinator,
+      });
+      rebalancer.isLeader = true;
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        rebalanceReasons.push(reason);
+        return true;
+      };
+
+      coordinator.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED, {
+        operation: {
+          operationId: PRIORITY_PROGRESS_OPERATION_ID,
+          entityType: EntityType.PARTITION,
+          entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+          partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        },
+      });
+
+      t.same(
+        rebalanceReasons,
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'terminal sibling priority progress should rearm blocked priority partitions',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
+
+  await t.test(
+    'priority recovery active service visibility wakes membership publication planning',
+    async (t) => {
+      const membershipPublicationReconcileCalls = [];
+      const rebalanceReasons = [];
+      const controlPlaneReadinessService = {
+        ...createMockReadinessService(createMockCache()),
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile(reason, context) {
+            membershipPublicationReconcileCalls.push({reason, context});
+            return true;
+          },
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        controlPlaneReadinessService,
+      });
+      rebalancer.isLeader = true;
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        rebalanceReasons.push(reason);
+        return true;
+      };
+
+      const handled = rebalancer.handlePriorityRecoveryVisibilityEvent({
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        operation: PRIORITY_VISIBILITY_CDC_OPERATION,
+        data: {
+          service_id: PRIORITY_VISIBILITY_SERVICE_ID,
+          node_id: PRIORITY_VISIBILITY_TARGET_NODE_ID,
+          partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+          service_type: SERVICE_TYPE.PARTITION,
+          status: PRIORITY_VISIBILITY_SERVICE_STATUS_ACTIVE,
+        },
+      });
+
+      t.equal(
+        handled,
+        true,
+        'active priority service visibility should be handled as recovery progress',
+      );
+      t.same(
+        rebalanceReasons,
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'visibility progress should wake the priority partition rebalance queue',
+      );
+      t.same(
+        membershipPublicationReconcileCalls.map((call) => call.reason),
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'visibility progress should wake the publication owner through the canonical reason',
+      );
+
+      rebalancer.shutdown();
+    },
+  );
+
+  await t.test(
+    'priority recovery service cache visibility is wired to publication planning',
+    async (t) => {
+      const cacheChangeListeners = new Set();
+      const systemTableCache = {
+        ...createMockCache(),
+        onCacheChange(listener) {
+          cacheChangeListeners.add(listener);
+        },
+        offCacheChange(listener) {
+          cacheChangeListeners.delete(listener);
+        },
+      };
+      const membershipPublicationReconcileCalls = [];
+      const rebalanceReasons = [];
+      const controlPlaneReadinessService = {
+        ...createMockReadinessService(systemTableCache),
+        membershipPublicationService: {
+          enqueueClusterMembershipReconcile(reason, context) {
+            membershipPublicationReconcileCalls.push({reason, context});
+            return true;
+          },
+        },
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        systemTableCache,
+        controlPlaneReadinessService,
+      });
+      rebalancer.isLeader = true;
+      rebalancer.enqueueRebalanceCheck = (reason) => {
+        rebalanceReasons.push(reason);
+        return true;
+      };
+
+      t.equal(
+        cacheChangeListeners.size,
+        ONE_PROGRESS_LISTENER,
+        'priority partition rebalancers should subscribe to service visibility',
+      );
+
+      for (const listener of cacheChangeListeners) {
+        listener(
+          SYSTEM_TABLE_NAME.SERVICES,
+          PRIORITY_VISIBILITY_CDC_OPERATION,
+          {
+            service_id: PRIORITY_VISIBILITY_SERVICE_ID,
+            node_id: PRIORITY_VISIBILITY_TARGET_NODE_ID,
+            partition_id: PRIORITY_PROGRESS_PARTITION_ID,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: PRIORITY_VISIBILITY_SERVICE_STATUS_ACTIVE,
+          },
+        );
+      }
+
+      t.same(
+        rebalanceReasons,
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'cache visibility progress should wake the priority partition queue',
+      );
+      t.same(
+        membershipPublicationReconcileCalls.map((call) => call.reason),
+        [RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS],
+        'cache visibility progress should wake the publication owner',
+      );
+
+      rebalancer.shutdown();
+
+      t.equal(
+        cacheChangeListeners.size,
+        NO_PROGRESS_LISTENERS,
+        'shutdown should release priority visibility cache subscriptions',
+      );
+    },
+  );
+
+  await t.test(
+    'coordinator progress listeners are scoped to priority partitions',
+    async (t) => {
+      const coordinator = createEventedMockCoordinator();
+      const ordinaryRebalancer = createTestRebalancer({
+        entityId: ORDINARY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        rebalanceCoordinator: coordinator,
+      });
+
+      t.equal(
+        coordinator.listenerCount(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED),
+        NO_PROGRESS_LISTENERS,
+        'ordinary partition rebalancers should not subscribe to priority progress events',
+      );
+
+      const priorityRebalancer = createTestRebalancer({
+        entityId: PRIORITY_PROGRESS_PARTITION_ID,
+        entityType: EntityType.PARTITION,
+        nodeId: PRIORITY_PROGRESS_NODE_ID,
+        rebalanceCoordinator: coordinator,
+      });
+
+      t.equal(
+        coordinator.listenerCount(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED),
+        ONE_PROGRESS_LISTENER,
+        'priority partition rebalancers should own the progress trigger subscription',
+      );
+
+      priorityRebalancer.shutdown();
+      ordinaryRebalancer.shutdown();
+
+      t.equal(
+        coordinator.listenerCount(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED),
+        NO_PROGRESS_LISTENERS,
+        'shutdown should release priority progress event listeners',
+      );
+    },
+  );
+
   await t.test('returns budget_exceeded when coordinator create gate blocks scheduling',
     async (t) => {
       const mockCache = createMockCache([
@@ -830,6 +1233,295 @@ test('UnifiedRebalancer defers background planning when local control-plane muta
           'metadata_publication_degraded',
         ],
         'defer diagnostic should preserve readiness reason codes',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+test('UnifiedRebalancer exposes one explicit local mutation planning gate decision',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      ],
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [
+              {code: 'control_plane_write_unhealthy'},
+              {code: 'metadata_publication_degraded'},
+            ],
+          };
+        },
+      },
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.currentInterval = 100;
+    rebalancer.maxInterval = 1000;
+
+    try {
+      const decision = await rebalancer.resolveCheckRebalanceGateDecision();
+
+      t.equal(
+        decision?.decision,
+        TEST_REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
+        'gate resolution should emit the canonical defer-planning decision',
+      );
+      t.equal(
+        decision?.nextAction,
+        TEST_REBALANCE_PLANNING_GATE_ACTION.SCHEDULE_RETRY,
+        'gate resolution should preserve the canonical retry action',
+      );
+      t.equal(
+        decision?.gate,
+        TEST_REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS,
+        'gate resolution should name the local mutation blocker explicitly',
+      );
+      t.equal(
+        decision?.scheduleMode,
+        TEST_REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+        'local mutation defers should keep the priority-aware retry cadence contract',
+      );
+      t.equal(
+        decision?.scheduleDelayMs,
+        125,
+        'local mutation defers should carry the normalized retry delay explicitly',
+      );
+      t.same(
+        decision?.blocker?.reasonCodes,
+        [
+          'control_plane_write_unhealthy',
+          'metadata_publication_degraded',
+        ],
+        'gate resolution should preserve canonical blocker evidence',
+      );
+      t.equal(
+        decision?.logMessage,
+        REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS,
+        'gate resolution should preserve the matched diagnostic vocabulary',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+test('UnifiedRebalancer exposes one explicit priority spread planning gate decision',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessService = {
+      ...createMockReadinessService(createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ])),
+      getMembershipPublicationPlanningAnswerSync() {
+        return {
+          publishedActiveNodeIds: ['node-1', 'node-2', 'node-3'],
+          publicationRecoveryGate: {
+            prioritySpreadPending: true,
+            priorityPartitionSummary: {
+              satisfied: false,
+              blockedPartitions: [{
+                partitionId: 'replica_operations-p1',
+                readyReplicaCount: 2,
+                readyDistinctNodeCount: 1,
+                spreadGap: 1,
+              }],
+            },
+          },
+        };
+      },
+    };
+
+    const rebalancer = createTestRebalancer({
+      entityId: 'mg-node-1',
+      entityType: EntityType.MESSAGE_GROUP,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        {node_id: 'node-3', status: NodeStatus.ACTIVE},
+      ],
+      controlPlaneReadinessService: readinessService,
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+
+    try {
+      const decision = await rebalancer.resolveCheckRebalanceGateDecision();
+
+      t.equal(
+        decision?.decision,
+        TEST_REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
+        'priority spread waits should use the same canonical defer-planning decision',
+      );
+      t.equal(
+        decision?.gate,
+        TEST_REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+        'priority spread waits should expose a distinct planning gate name',
+      );
+      t.equal(
+        decision?.scheduleMode,
+        TEST_REBALANCE_PLANNING_GATE_SCHEDULE_MODE.NEXT,
+        'non-priority work should schedule priority spread waits through the ordinary scheduler',
+      );
+      t.equal(
+        decision?.scheduleDelayMs,
+        rebalancer.getPriorityRetryDelayMs(),
+        'priority spread waits should carry the bounded retry delay explicitly',
+      );
+      t.equal(
+        decision?.logMessage,
+        REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY,
+        'priority spread waits should preserve the existing diagnostic message',
+      );
+      t.equal(
+        decision?.blocker?.blockedPartitions?.length,
+        1,
+        'priority spread waits should preserve the blocked-partition evidence',
+      );
+      t.equal(
+        decision?.blocker?.blockedPartitions?.[0]?.partitionId,
+        'replica_operations-p1',
+        'priority spread waits should retain the canonical blocked partition id',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+test('UnifiedRebalancer lets blocked priority recovery partitions plan through transport backpressure',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessService = {
+      ...createMockReadinessService(createMockCache([
+        {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      ])),
+      membershipPublicationService: createMockMembershipPublicationService(
+        [REBALANCER_TEST_NODE_ID_A, REBALANCER_TEST_NODE_ID_B],
+        PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        {
+          priorityPartitionSummary: {
+            satisfied: false,
+            blockedPartitions: [{
+              partitionId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+              readyReplicaCount: PRIORITY_RECOVERY_READY_REPLICA_COUNT,
+              readyDistinctNodeCount:
+                PRIORITY_RECOVERY_READY_DISTINCT_NODE_COUNT,
+              spreadGap: PRIORITY_RECOVERY_SPREAD_GAP,
+            }],
+          },
+        },
+      ),
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: REBALANCER_TEST_NODE_ID_A,
+      nodes: [
+        {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      ],
+      partitions: [{
+        partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      }],
+      services: [{
+        service_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID,
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: REBALANCER_TEST_NODE_ID_A,
+        partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        replica_id: REPLICA_OPERATION_PRIORITY_REPLICA_ID,
+        status: ReplicaStatus.ACTIVE,
+      }],
+      controlPlaneReadinessService: readinessService,
+      messageRouter: createBackpressuredMessageRouter(),
+    });
+
+    try {
+      t.equal(
+        rebalancer.resolveTransportBackpressurePlanningGateDecision(),
+        null,
+        'the partition named by priority recovery should not park behind ordinary transport backpressure',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
+
+test('UnifiedRebalancer keeps transport backpressure gating for priority partitions outside the blocked recovery set',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessService = {
+      ...createMockReadinessService(createMockCache([
+        {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      ])),
+      membershipPublicationService: createMockMembershipPublicationService(
+        [REBALANCER_TEST_NODE_ID_A, REBALANCER_TEST_NODE_ID_B],
+        PRIORITY_RECOVERY_PUBLICATION_EPOCH,
+        {
+          priorityPartitionSummary: {
+            satisfied: true,
+            blockedPartitions: [],
+          },
+        },
+      ),
+    };
+    const rebalancer = createTestRebalancer({
+      entityId: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+      entityType: EntityType.PARTITION,
+      nodeId: REBALANCER_TEST_NODE_ID_A,
+      nodes: [
+        {node_id: REBALANCER_TEST_NODE_ID_A, status: NodeStatus.ACTIVE},
+        {node_id: REBALANCER_TEST_NODE_ID_B, status: NodeStatus.ACTIVE},
+      ],
+      partitions: [{
+        partition_id: REPLICA_OPERATION_PRIORITY_PARTITION_ID,
+        table_id: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      }],
+      controlPlaneReadinessService: readinessService,
+      messageRouter: createBackpressuredMessageRouter(),
+    });
+
+    try {
+      const decision =
+        rebalancer.resolveTransportBackpressurePlanningGateDecision();
+      t.equal(
+        decision?.gate,
+        TEST_REBALANCE_PLANNING_GATE.TRANSPORT_BACKPRESSURE,
+        'priority partitions should only bypass backpressure when they own the active recovery gap',
       );
     } finally {
       rebalancer.shutdown();

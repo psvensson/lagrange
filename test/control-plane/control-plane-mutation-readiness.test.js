@@ -69,6 +69,47 @@ test('control-plane mutation readiness does not block when published convergence
   t.equal(blocker, null);
 });
 
+test('control-plane mutation readiness does not treat runtime blockers as published convergence pending once the publication gate is ready', async (t) => {
+  const blocker = getLocalControlPlaneMutationReadinessBlocker({
+    nodeId: 'node-1',
+    requirePublishedConvergence: true,
+    controlPlaneReadinessService: {
+      getNodeReadinessSync() {
+        return {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]:
+              true,
+          },
+          reasons: [],
+          priorityControlPlaneRecovery: {
+            active: false,
+            reasonCodes: ['control_plane_not_writable'],
+            publicationRecoveryGate: {
+              ready: true,
+            },
+          },
+        };
+      },
+    },
+  });
+
+  t.ok(
+    blocker,
+    'runtime blockers should still produce a blocker snapshot',
+  );
+  t.same(
+    blocker.failedDimensions,
+    [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE],
+    'the blocker should report only the runtime readiness failure once publication convergence is closed',
+  );
+  t.same(
+    blocker.reasonCodes,
+    ['control_plane_write_unhealthy', 'control_plane_not_writable'],
+    'the blocker should preserve both the readiness-owned runtime reason and the runtime recovery blocker vocabulary',
+  );
+});
+
 test('control-plane mutation readiness builds one canonical deferred failure ' +
   'from the blocker snapshot', async (t) => {
   const blocker = getLocalControlPlaneMutationReadinessBlocker({

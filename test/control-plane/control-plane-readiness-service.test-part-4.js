@@ -18,8 +18,17 @@ import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from '../../src/control-plane/control-plane-publication-merge.js';
+import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {
+  RECOVERY_PROTOCOL_STATE,
+} from '../../src/control-plane/membership-lifecycle-constants.js';
+import {
+  PRESSURE_STATE,
+} from '../../src/rebalancer/storage-capacity-constants.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -59,6 +68,17 @@ const TEST_RUNTIME_AUTHORITY_VISIBILITY_STATE = Object.freeze({
 const TEST_STARTUP_ADMISSION_STATE_BLOCKED = 'blocked';
 const TEST_STARTUP_ADMISSION_REASON_CLUSTER_INTEGRITY =
   'cluster_incarnation_identity_mismatch';
+const TEST_PRIORITY_RECOVERY_PENDING_REASON =
+  'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+const TEST_PRIORITY_SERVE_NODE_ID = 'node-priority-recovery-serve';
+const TEST_PRIORITY_SERVE_PARTITION_ID = 'replica_operations-p1';
+const TEST_PRIORITY_SERVE_EPOCH = 44;
+const TEST_PRIORITY_SERVE_OBSERVED_AT = '2026-04-23T09:05:00.000Z';
+const TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT =
+  '2026-04-23T09:04:00.000Z';
+const TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT = 2000;
+const TEST_PRIORITY_SERVE_LAST_HEARTBEAT = 1000;
+const TEST_PRIORITY_SERVE_BUDGET_BYTES = 1000;
 const TEST_LOCAL_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   state: 'identity_mismatch',
   allowed: false,
@@ -517,8 +537,11 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
     );
     t.same(
       retainedAnswer?.priorityRecoveryReasonCodes,
-      activeAnswer?.priorityRecoveryReasonCodes,
-      'retained sync planning answer should preserve the last active recovery reasons',
+      [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+          .PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      'retained sync planning answer should preserve only the still-active publication-gate reasons from the current planning evidence',
     );
     t.equal(
       retainedAnswer?.publicationRecoveryGate?.active,
@@ -527,8 +550,11 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
     );
     t.same(
       retainedAnswer?.publicationRecoveryGate?.reasonCodes,
-      activeAnswer?.publicationRecoveryGate?.reasonCodes,
-      'retained sync planning answer should preserve the shared gate reasons',
+      [
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON
+          .PRIORITY_PARTITIONS_NOT_SPREAD,
+      ],
+      'retained sync planning answer should preserve only the still-active shared gate reasons',
     );
 
     publicationRow = {
@@ -789,8 +815,18 @@ test('ControlPlaneReadinessService projects control-plane writable blockers thro
     );
     t.equal(
       projection.active,
+      false,
+      'runtime blockers must not reopen publication-gate recovery once the gate is ready',
+    );
+    t.equal(
+      projection.publicationGateReady,
       true,
-      'readiness-side blockers should keep the recovery projection active',
+      'the projection should expose the canonical gate as ready',
+    );
+    t.same(
+      projection.runtimeBlockerReasonCodes,
+      [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.CONTROL_PLANE_NOT_WRITABLE],
+      'runtime blockers should stay separate from the publication gate reasons',
     );
     t.end();
   });
@@ -856,6 +892,467 @@ test('ControlPlaneReadinessService projects recovery eligibility blockers withou
       pendingProjection.reasonCodes,
       [CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PUBLICATION_EPOCH_PENDING],
       'publication-gate blockers should remain canonical without an extra recovery-eligibility shadow blocker',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService clears stale priority-spread reasons once the publication gate is ready',
+  (t) => {
+    const TEST_NODE_ID = 'node-priority-spread-stale-ready';
+    const TEST_OBSERVED_AT = 1800;
+    const TEST_PUBLICATION_CREATED_AT = 1500;
+    const TEST_PUBLICATION_EPOCH = 31;
+    const TEST_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+    });
+    const TEST_STALE_PRIORITY_RECOVERY_REASONS = Object.freeze([
+      CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+    ]);
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_OBSERVED_AT,
+    });
+
+    const projection = readinessService.getPriorityControlPlaneRecoveryState({
+      observedAt: TEST_OBSERVED_AT,
+      membershipPublication: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: TEST_PUBLICATION_CREATED_AT,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        priorityPartitionSummary: TEST_PRIORITY_PARTITION_SUMMARY,
+        priorityRecoveryReasonCodes: TEST_STALE_PRIORITY_RECOVERY_REASONS,
+      },
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+      },
+    });
+
+    t.equal(
+      projection.publicationRecoveryGate.active,
+      false,
+      'summary-satisfied publication gate should stay ready',
+    );
+    t.same(
+      projection.reasonCodes,
+      [],
+      'readiness projection should not reintroduce a stale priority-spread blocker',
+    );
+    t.equal(
+      projection.active,
+      false,
+      'stale priority-spread reason alone should not keep recovery active',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService rebuilds stale embedded publication gates from the planning snapshot',
+  (t) => {
+    const TEST_NODE_ID = 'node-priority-embedded-gate-stale';
+    const TEST_OBSERVED_AT = 1850;
+    const TEST_PUBLICATION_EPOCH = 32;
+    const TEST_READY_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    });
+    const TEST_STALE_EMBEDDED_GATE = Object.freeze({
+      state: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      ready: false,
+      active: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      reasonCodes: Object.freeze([
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ]),
+      priorityPartitionSummary: Object.freeze({
+        satisfied: false,
+        missingPartitionIds: Object.freeze([TEST_PRIORITY_SERVE_PARTITION_ID]),
+      }),
+      pendingAckNodeIds: Object.freeze([]),
+      missingPublishedNodeIds: Object.freeze([]),
+      prioritySpreadPending: true,
+      publicationPending: false,
+      ackPending: false,
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_OBSERVED_AT,
+    });
+
+    const projection = readinessService.getPriorityControlPlaneRecoveryState({
+      observedAt: TEST_OBSERVED_AT,
+      membershipPublication: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: 1500,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        publicationRecoveryGate: TEST_STALE_EMBEDDED_GATE,
+      },
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE]:
+          true,
+      },
+    });
+
+    t.equal(
+      projection.publicationRecoveryGate.ready,
+      true,
+      'the projection should canonicalize the embedded gate from the current planning snapshot',
+    );
+    t.equal(
+      projection.active,
+      false,
+      'the projection should not keep a stale embedded priority-spread gate active',
+    );
+    t.same(
+      projection.reasonCodes,
+      [],
+      'stale embedded spread reasons should clear once the current planning snapshot is satisfied',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService reopens serve readiness when the current planning snapshot closes a stale embedded priority gate',
+  (t) => {
+    const TEST_NODE_ID = 'node-priority-serve-stale-gate';
+    const TEST_OBSERVED_AT = '2026-04-23T09:10:00.000Z';
+    const TEST_PUBLICATION_EPOCH = 45;
+    const TEST_READY_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    });
+    const TEST_STALE_EMBEDDED_GATE = Object.freeze({
+      state: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      ready: false,
+      active: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      reasonCodes: Object.freeze([
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ]),
+      priorityPartitionSummary: Object.freeze({
+        satisfied: false,
+        blockedPartitions: Object.freeze([
+          Object.freeze({
+            partitionId: TEST_PRIORITY_SERVE_PARTITION_ID,
+          }),
+        ]),
+      }),
+      pendingAckNodeIds: Object.freeze([]),
+      missingPublishedNodeIds: Object.freeze([]),
+      prioritySpreadPending: true,
+      publicationPending: false,
+      ackPending: false,
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    });
+    const nodeRow = {
+      ...createActiveNode(TEST_NODE_ID),
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT,
+      [COLUMN.LAST_HEARTBEAT]: TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    };
+
+    const readiness = readinessService.buildEvaluatedNodeReadinessSnapshot({
+      nodeId: TEST_NODE_ID,
+      lifecycleState: SERVICE_STATUS.ACTIVE,
+      membershipPublication: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.STEADY_PUBLISHED,
+        priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        publicationRecoveryGate: TEST_STALE_EMBEDDED_GATE,
+      },
+      nodeEvidence: readinessService.buildNodeEvidence(
+        TEST_NODE_ID,
+        nodeRow,
+      ),
+      nodeRow,
+      observedAt: TEST_OBSERVED_AT,
+      publication: {
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+      },
+      serviceRows: [createMessageGroupService(TEST_NODE_ID)],
+      capacity: {
+        nodeId: TEST_NODE_ID,
+        budgetBytes: TEST_PRIORITY_SERVE_BUDGET_BYTES,
+        pressureState: PRESSURE_STATE.NORMAL,
+      },
+    });
+
+    t.equal(
+      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+      true,
+      'serve readiness should follow the canonical rebuilt publication gate instead of a stale embedded gate',
+    );
+    t.equal(
+      readiness.priorityControlPlaneRecovery.active,
+      false,
+      'the readiness projection should treat the rebuilt publication gate as settled',
+    );
+    t.equal(
+      readiness.reasons.some((reason) =>
+        reason.code ===
+        CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING),
+      false,
+      'serve admission should not emit the priority-recovery pending reason once the rebuilt gate is ready',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService prefers the direct membership publication row when a retained planning snapshot keeps an older recovery gate open',
+  (t) => {
+    const TEST_NODE_ID = 'node-priority-serve-retained-planning';
+    const TEST_OBSERVED_AT = '2026-04-23T09:11:00.000Z';
+    const TEST_PUBLICATION_EPOCH = 46;
+    const TEST_READY_PRIORITY_PARTITION_SUMMARY = Object.freeze({
+      satisfied: true,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: 1,
+      missingPartitionIds: Object.freeze([]),
+      blockedPartitions: Object.freeze([]),
+    });
+    const TEST_STALE_RETAINED_GATE = Object.freeze({
+      state: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      ready: false,
+      active: true,
+      publicationEpoch: TEST_PUBLICATION_EPOCH,
+      publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+      publicationObservationState: 'authoritative',
+      recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+      reasonCodes: Object.freeze([
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ]),
+      priorityPartitionSummary: Object.freeze({
+        satisfied: false,
+        requiredDistinctNodeCount: 3,
+        readyEligibleNodeCount: 3,
+        totalPriorityPartitionCount: 1,
+        missingPartitionIds: Object.freeze([TEST_PRIORITY_SERVE_PARTITION_ID]),
+        blockedPartitions: Object.freeze([Object.freeze({
+          partitionId: TEST_PRIORITY_SERVE_PARTITION_ID,
+          requiredDistinctNodeCount: 3,
+          readyDistinctNodeCount: 2,
+          spreadGap: 1,
+        })]),
+      }),
+      pendingAckNodeIds: Object.freeze([]),
+      missingPublishedNodeIds: Object.freeze([]),
+      prioritySpreadPending: true,
+      publicationPending: false,
+      ackPending: false,
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    });
+    const nodeRow = {
+      ...createActiveNode(TEST_NODE_ID),
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT,
+      [COLUMN.LAST_HEARTBEAT]: TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    };
+
+    const readiness = readinessService.buildEvaluatedNodeReadinessSnapshot({
+      nodeId: TEST_NODE_ID,
+      lifecycleState: SERVICE_STATUS.ACTIVE,
+      membershipPublication: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+        publishedActiveNodeIds: [TEST_NODE_ID],
+        requiredAckNodeIds: [TEST_NODE_ID],
+        acknowledgedNodeIds: [TEST_NODE_ID],
+        priorityPartitionSummary: TEST_READY_PRIORITY_PARTITION_SUMMARY,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: TEST_PUBLICATION_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        publicationObservationState: 'authoritative',
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        priorityPartitionSummary:
+          TEST_STALE_RETAINED_GATE.priorityPartitionSummary,
+        publicationRecoveryGate: TEST_STALE_RETAINED_GATE,
+      },
+      nodeEvidence: readinessService.buildNodeEvidence(
+        TEST_NODE_ID,
+        nodeRow,
+      ),
+      nodeRow,
+      observedAt: TEST_OBSERVED_AT,
+      publication: {
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+      },
+      serviceRows: [createMessageGroupService(TEST_NODE_ID)],
+      capacity: {
+        nodeId: TEST_NODE_ID,
+        budgetBytes: TEST_PRIORITY_SERVE_BUDGET_BYTES,
+        pressureState: PRESSURE_STATE.NORMAL,
+      },
+    });
+
+    t.equal(
+      readiness.priorityControlPlaneRecovery.active,
+      false,
+      'the direct current membership publication row should retire the older retained planning gate',
+    );
+    t.same(
+      readiness.priorityControlPlaneRecovery.reasonCodes,
+      [],
+      'no recovery-pending reason should remain once the current direct row closes the canonical gate',
+    );
+    t.equal(
+      readiness.runtimeAuthority.visibility?.priorityRecoveryActive,
+      false,
+      'runtime authority should stop carrying the stale recovery-active state',
+    );
+    t.equal(
+      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+      true,
+      'serve readiness should follow the current direct row rather than the retained stale planning answer',
+    );
+    t.equal(
+      readiness.reasons.some((reason) =>
+        reason.code ===
+        CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING),
+      false,
+      'serve readiness should not emit the recovery-pending reason once the direct row is ready',
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService closes external serve readiness during priority recovery while keeping recovery admission open',
+  (t) => {
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: TEST_PRIORITY_SERVE_NODE_ID,
+      systemTableCache: createCache(),
+      now: () => TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    });
+    const nodeRow = {
+      ...createActiveNode(TEST_PRIORITY_SERVE_NODE_ID),
+      [COLUMN.READY_LEASE_EXPIRES_AT]:
+        TEST_PRIORITY_SERVE_READY_LEASE_EXPIRES_AT,
+      [COLUMN.LAST_HEARTBEAT]: TEST_PRIORITY_SERVE_LAST_HEARTBEAT,
+    };
+
+    const readiness = readinessService.buildEvaluatedNodeReadinessSnapshot({
+      nodeId: TEST_PRIORITY_SERVE_NODE_ID,
+      lifecycleState: SERVICE_STATUS.ACTIVE,
+      membershipPublication: {
+        publicationEpoch: TEST_PRIORITY_SERVE_EPOCH,
+        status: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        createdAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+      },
+      membershipPublicationPlanningSnapshot: {
+        publicationEpoch: TEST_PRIORITY_SERVE_EPOCH,
+        publicationStatus: CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED,
+        recoveryProtocolState: RECOVERY_PROTOCOL_STATE.PRIORITY_SPREAD_PENDING,
+        priorityRecoveryReasonCodes: [
+          CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+        ],
+        priorityPartitionSummary: {
+          satisfied: false,
+          blockedPartitions: [
+            {
+              partitionId: TEST_PRIORITY_SERVE_PARTITION_ID,
+            },
+          ],
+        },
+      },
+      nodeEvidence: readinessService.buildNodeEvidence(
+        TEST_PRIORITY_SERVE_NODE_ID,
+        nodeRow,
+      ),
+      nodeRow,
+      observedAt: TEST_PRIORITY_SERVE_OBSERVED_AT,
+      publication: {
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: TEST_PRIORITY_SERVE_PUBLICATION_CREATED_AT,
+      },
+      serviceRows: [createMessageGroupService(TEST_PRIORITY_SERVE_NODE_ID)],
+      capacity: {
+        nodeId: TEST_PRIORITY_SERVE_NODE_ID,
+        budgetBytes: TEST_PRIORITY_SERVE_BUDGET_BYTES,
+        pressureState: PRESSURE_STATE.NORMAL,
+      },
+    });
+
+    t.equal(
+      CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      TEST_PRIORITY_RECOVERY_PENDING_REASON,
+      'priority recovery pending must be an owned readiness reason code',
+    );
+    t.equal(
+      readiness.dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE
+      ],
+      true,
+      'internal recovery admission should remain open during priority recovery',
+    );
+    t.equal(
+      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],
+      true,
+      'repair admission should stay open for the converging control-plane path',
+    );
+    t.equal(
+      readiness.dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE],
+      false,
+      'external serve readiness must close until publication recovery is ready',
+    );
+    t.match(
+      readiness.reasons.find((reason) =>
+        reason.code ===
+        CONTROL_PLANE_READINESS_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+      ),
+      {
+        dimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      },
+      'serve closure should expose the canonical priority recovery reason',
     );
     t.end();
   });

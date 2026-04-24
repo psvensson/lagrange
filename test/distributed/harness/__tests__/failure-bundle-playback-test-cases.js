@@ -1261,4 +1261,206 @@ export function registerFailureBundlePlaybackTests({
       "publication_converged_priority_spread_pending",
     );
   });
+
+  it("prefers a later terminal active-gate playback state over earlier stalled waiting-active details", async () => {
+    const scenarioDir = join(state.outputDir, "node-join-under-load");
+    await mkdir(scenarioDir, {recursive: true});
+    await writeFile(
+      join(scenarioDir, "events.ndjson"),
+      [
+        JSON.stringify({
+          timestamp: 5000,
+          type: "cluster.stage",
+          scope: "cluster",
+          entityId: "cluster",
+          details: {
+            stage: "setup.cluster.waiting-active",
+            nodeDiagnostics: [
+              {
+                nodeId: "node-1",
+                active: false,
+                state: "inactive",
+              },
+              {
+                nodeId: "node-2",
+                active: false,
+                state: "inactive",
+              },
+            ],
+            snapshotCoverage: {
+              completeCoverage: true,
+              bestCoverageNodeCount: 2,
+              expectedNodeCount: 2,
+              selectedNodeId: "node-1",
+              selectedCapturedAtMs: 4990,
+              selectedObservedNodeIds: ["node-1", "node-2"],
+              selectedControlPlaneDiagnosticsAvailable: true,
+              selectedPublicationConvergence: {
+                publicationEpoch: 4,
+                publicationStatus: "PUBLISHED",
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: ["node-1", "node-2"],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  blockedPartitionCount: 0,
+                  totalSpreadGap: 0,
+                },
+              },
+            },
+            publicationConvergenceGate: {
+              ready: true,
+              reasons: [],
+              publicationStatus: "PUBLISHED",
+              pendingAckNodeIds: [],
+              missingPublishedNodeIds: [],
+              priorityPartitionSummary: {
+                satisfied: true,
+                blockedPartitionCount: 0,
+                totalSpreadGap: 0,
+              },
+            },
+            activeGateProgress: {
+              expectedNodeCount: 2,
+              activeNodeCount: 0,
+              inactiveNodeCount: 2,
+              snapshotCoverageNodeCount: 2,
+              snapshotCoverageComplete: true,
+              publicationStatus: "PUBLISHED",
+              pendingAckCount: 0,
+              missingPublishedCount: 0,
+              gateReasons: [],
+              blockers: ["inactive_nodes=2"],
+              blockerSignature: "inactive_nodes=2",
+            },
+            activeGateNoProgress: {
+              enabled: true,
+              mode: "load",
+              maxAttempts: 30,
+              attemptsSinceProgress: 30,
+              stalled: true,
+              reasonCode: "stalled_no_progress",
+              stalledReason: "active_wait_no_progress_coordinator_cycles=30",
+              currentProgress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 0,
+                inactiveNodeCount: 2,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: "PUBLISHED",
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasons: [],
+                blockers: ["inactive_nodes=2"],
+                blockerSignature: "inactive_nodes=2",
+              },
+            },
+          },
+        }),
+        JSON.stringify({
+          timestamp: 7000,
+          type: "cluster.stage",
+          scope: "cluster",
+          entityId: "cluster",
+          details: {
+            stage: "setup.cluster.active",
+            nodeCount: 2,
+            snapshotCoverage: {
+              completeCoverage: true,
+              bestCoverageNodeCount: 2,
+              expectedNodeCount: 2,
+              selectedNodeId: "node-1",
+              selectedCapturedAtMs: 6990,
+              selectedObservedNodeIds: ["node-1", "node-2"],
+              selectedControlPlaneDiagnosticsAvailable: true,
+              selectedPublicationConvergence: {
+                publicationEpoch: 4,
+                publicationStatus: "PUBLISHED",
+                pendingAckNodeIds: [],
+                publishedActiveNodeIds: ["node-1", "node-2"],
+                priorityPartitionSummary: {
+                  satisfied: true,
+                  blockedPartitionCount: 0,
+                  totalSpreadGap: 0,
+                },
+              },
+            },
+            publicationConvergenceGate: {
+              ready: true,
+              reasons: [],
+              publicationStatus: "PUBLISHED",
+              pendingAckNodeIds: [],
+              missingPublishedNodeIds: [],
+              priorityPartitionSummary: {
+                satisfied: true,
+                blockedPartitionCount: 0,
+                totalSpreadGap: 0,
+              },
+            },
+            activeGate: {
+              mode: "load",
+              state: "ready",
+              ready: true,
+              softSuccess: false,
+              attempts: 31,
+              elapsedMs: 42000,
+              attemptsSinceProgress: 0,
+              progress: {
+                expectedNodeCount: 2,
+                activeNodeCount: 2,
+                inactiveNodeCount: 0,
+                snapshotCoverageNodeCount: 2,
+                snapshotCoverageComplete: true,
+                publicationStatus: "PUBLISHED",
+                pendingAckCount: 0,
+                missingPublishedCount: 0,
+                gateReasons: [],
+                blockers: ["ready"],
+                blockerSignature: "ready",
+              },
+            },
+          },
+        }),
+      ].join("\n") + "\n",
+    );
+
+    const writer = new ReportWriter(state.reportPath);
+    writer.addResult(
+      "node-join-under-load",
+      buildPlaybackDerivedFailureResult(),
+    );
+
+    const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+      scenarios: writer.scenarios,
+      reportOutputPath: state.reportPath,
+      outputDir: state.outputDir,
+      reportSummary: {total: 1, fail: 1, pass: 0},
+      standardSummary: {scenarios: []},
+      benchmarkRegressionGate: {status: "skipped"},
+      workspaceRoot: state.tempDir,
+    });
+    await writer.write({failureBundle: runBundle});
+
+    const scenarioBundle = JSON.parse(
+      await readFile(
+        resolve(state.tempDir, scenarioBundles[0].links.jsonPath),
+        UTF8_ENCODING,
+      ),
+    );
+    const reportJson = JSON.parse(
+      await readFile(state.reportPath, UTF8_ENCODING),
+    );
+
+    assert.equal(
+      scenarioBundle.publicationConvergence.activeGate.state,
+      "ready",
+    );
+    assert.equal(
+      scenarioBundle.controlPlane.activeGate.state,
+      "ready",
+    );
+    assert.equal(
+      reportJson.scenarios[0].publicationConvergence.activeGate.state,
+      "ready",
+    );
+  });
 }

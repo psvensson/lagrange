@@ -1,5 +1,7 @@
+import { buildPublicationRecoveryGateSnapshot } from "../../../src/control-plane/publication-recovery-gate.js";
 import { ASSERTIONS_SEGMENT_2 } from "./assertions-segment-2.js";
 const {
+  TIMEOUTS,
   SERVICES_QUERY,
   NODES_QUERY,
   PARTITIONS_QUERY,
@@ -116,6 +118,712 @@ const {
   cloneDiagnostics,
   buildPublicationConvergenceFromState,
 } = ASSERTIONS_SEGMENT_2;
+const OBSERVATION_SOURCE_CONTROL_SNAPSHOT = "control_snapshot";
+const CONSISTENCY_REASON_CODE_ACTIVE_NODES_DISAGREE =
+  "active_nodes_disagree";
+const CONSISTENCY_REASON_CODE_PARTITION_ASSIGNMENTS_DISAGREE =
+  "partition_assignments_disagree";
+const CONSISTENCY_REASON_CODE_PUBLISHED_ACTIVE_NODES_DISAGREE =
+  "published_active_nodes_disagree";
+const CONSISTENCY_REASON_CODE_LEADER_IDENTITIES_DISAGREE =
+  "leader_identities_disagree";
+const CONSISTENCY_REASON_CODE_PUBLICATION_EPOCHS_DISAGREE =
+  "publication_epochs_disagree";
+const CONSISTENCY_REASON_CODE_PUBLICATION_RECOVERY_GATE_NOT_READY =
+  "publication_recovery_gate_not_ready";
+const PUBLICATION_RECOVERY_GATE_STATE_PUBLICATION_PENDING =
+  "publication_pending";
+const PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING =
+  "priority_spread_pending";
+const PUBLICATION_RECOVERY_GATE_STATE_READY = "ready";
+const PUBLICATION_RECOVERY_GATE_REASON_SEPARATOR = "|";
+const CONSISTENCY_GATE_SUMMARY_PREFIX = "[";
+const CONSISTENCY_GATE_SUMMARY_SUFFIX = "]";
+const CONSISTENCY_GATE_SUMMARY_SEPARATOR = "; ";
+const BOOLEAN_TRUE = "true";
+const BOOLEAN_FALSE = "false";
+
+function isConsistencyRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeConsistencyStringList(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .map((value) => String(value || "").trim())
+    .filter((value) => value.length > 0)
+    .sort();
+}
+
+function normalizeConsistencyNodeIdList(values) {
+  if (!Array.isArray(values)) {
+    return null;
+  }
+  return normalizeConsistencyStringList(values);
+}
+
+function hasCanonicalPublicationRecoveryGateEvidence(publicationConvergence) {
+  if (!isConsistencyRecord(publicationConvergence)) {
+    return false;
+  }
+  return (
+    (typeof publicationConvergence.publicationStatus === "string" &&
+      publicationConvergence.publicationStatus.length > 0) ||
+    (typeof publicationConvergence.recoveryProtocolState === "string" &&
+      publicationConvergence.recoveryProtocolState.length > 0) ||
+    isConsistencyRecord(publicationConvergence.priorityPartitionSummary) ||
+    isConsistencyRecord(publicationConvergence.priorityRecoveryClosureWitness) ||
+    isConsistencyRecord(publicationConvergence.publicationRecoveryGate) ||
+    Array.isArray(publicationConvergence.priorityRecoveryReasonCodes) ||
+    Array.isArray(publicationConvergence.pendingAckNodeIds) ||
+    Array.isArray(publicationConvergence.requiredAckNodeIds) ||
+    Array.isArray(publicationConvergence.acknowledgedNodeIds) ||
+    Array.isArray(publicationConvergence.missingPublishedNodeIds) ||
+    Array.isArray(publicationConvergence.missingPublishedRecoveryActiveNodeIds)
+  );
+}
+
+function buildPriorityRecoveryClosureWitnessFromObservation(
+  priorityRecoveryObservation,
+) {
+  if (!isConsistencyRecord(priorityRecoveryObservation)) {
+    return null;
+  }
+  const priorityPartitionSummary = isConsistencyRecord(
+    priorityRecoveryObservation.priorityPartitionSummary,
+  )
+    ? priorityRecoveryObservation.priorityPartitionSummary
+    : null;
+  const hasPrioritySpreadPending =
+    typeof priorityRecoveryObservation.prioritySpreadPending === "boolean";
+  const closureState =
+    typeof priorityRecoveryObservation.priorityRecoveryClosureState ===
+      "string" &&
+    priorityRecoveryObservation.priorityRecoveryClosureState.length > 0
+      ? priorityRecoveryObservation.priorityRecoveryClosureState
+      : null;
+  const closureRecordId =
+    typeof priorityRecoveryObservation.closureRecordId === "string" &&
+    priorityRecoveryObservation.closureRecordId.length > 0
+      ? priorityRecoveryObservation.closureRecordId
+      : null;
+  const closureWitnessClass =
+    typeof priorityRecoveryObservation.closureWitnessClass === "string" &&
+    priorityRecoveryObservation.closureWitnessClass.length > 0
+      ? priorityRecoveryObservation.closureWitnessClass
+      : null;
+  if (
+    !priorityPartitionSummary &&
+    !hasPrioritySpreadPending &&
+    closureState === null &&
+    closureRecordId === null &&
+    closureWitnessClass === null
+  ) {
+    return null;
+  }
+  return {
+    ...(closureState ? {state: closureState} : {}),
+    ...(hasPrioritySpreadPending
+      ? {
+          prioritySpreadPending:
+            priorityRecoveryObservation.prioritySpreadPending === true,
+        }
+      : {}),
+    ...(priorityPartitionSummary
+      ? {refreshedPriorityPartitionSummary: priorityPartitionSummary}
+      : {}),
+    ...(closureRecordId ? {closureRecordId} : {}),
+    ...(closureWitnessClass ? {closureWitnessClass} : {}),
+  };
+}
+
+function buildCanonicalPublicationRecoveryGateFromObservation(
+  controlPlaneDiagnostics,
+) {
+  const diagnostics = isConsistencyRecord(controlPlaneDiagnostics)
+    ? controlPlaneDiagnostics
+    : null;
+  if (!diagnostics) {
+    return null;
+  }
+  const priorityRecoveryObservation = isConsistencyRecord(
+    diagnostics.priorityRecoveryObservation,
+  )
+    ? diagnostics.priorityRecoveryObservation
+    : null;
+  if (!priorityRecoveryObservation) {
+    return null;
+  }
+  const hasObservationEvidence =
+    (typeof priorityRecoveryObservation.publicationStatus === "string" &&
+      priorityRecoveryObservation.publicationStatus.length > 0) ||
+    (typeof priorityRecoveryObservation.recoveryProtocolState === "string" &&
+      priorityRecoveryObservation.recoveryProtocolState.length > 0) ||
+    isConsistencyRecord(priorityRecoveryObservation.priorityPartitionSummary) ||
+    Array.isArray(priorityRecoveryObservation.priorityRecoveryReasonCodes) ||
+    Array.isArray(priorityRecoveryObservation.pendingAckNodeIds) ||
+    typeof priorityRecoveryObservation.prioritySpreadPending === "boolean" ||
+    typeof priorityRecoveryObservation.closureRecordId === "string" ||
+    typeof priorityRecoveryObservation.closureWitnessClass === "string";
+  if (!hasObservationEvidence) {
+    return null;
+  }
+  return buildPublicationRecoveryGateSnapshot({
+    publicationEpoch: Number.isInteger(priorityRecoveryObservation.publicationEpoch)
+      ? priorityRecoveryObservation.publicationEpoch
+      : null,
+    publicationStatus:
+      typeof priorityRecoveryObservation.publicationStatus === "string" &&
+      priorityRecoveryObservation.publicationStatus.length > 0
+        ? priorityRecoveryObservation.publicationStatus
+        : null,
+    recoveryProtocolState:
+      typeof priorityRecoveryObservation.recoveryProtocolState === "string" &&
+      priorityRecoveryObservation.recoveryProtocolState.length > 0
+        ? priorityRecoveryObservation.recoveryProtocolState
+        : null,
+    priorityRecoveryReasonCodes: Array.isArray(
+      priorityRecoveryObservation.priorityRecoveryReasonCodes,
+    )
+      ? priorityRecoveryObservation.priorityRecoveryReasonCodes
+      : [],
+    priorityPartitionSummary: isConsistencyRecord(
+      priorityRecoveryObservation.priorityPartitionSummary,
+    )
+      ? priorityRecoveryObservation.priorityPartitionSummary
+      : null,
+    priorityRecoveryClosureWitness:
+      buildPriorityRecoveryClosureWitnessFromObservation(
+        priorityRecoveryObservation,
+      ),
+    pendingAckNodeIds: Array.isArray(priorityRecoveryObservation.pendingAckNodeIds)
+      ? priorityRecoveryObservation.pendingAckNodeIds
+      : [],
+  });
+}
+
+function normalizePublicationRecoveryGateEpoch(value) {
+  return Number.isInteger(value) ? value : null;
+}
+
+function buildCanonicalPublicationRecoveryGate(controlPlaneDiagnostics) {
+  const diagnostics = isConsistencyRecord(controlPlaneDiagnostics)
+    ? controlPlaneDiagnostics
+    : null;
+  if (!diagnostics) {
+    return null;
+  }
+  const canonicalObservationGate =
+    buildCanonicalPublicationRecoveryGateFromObservation(diagnostics);
+  if (canonicalObservationGate) {
+    return canonicalObservationGate;
+  }
+  const publicationConvergence = isConsistencyRecord(
+    diagnostics.publicationConvergence,
+  )
+    ? diagnostics.publicationConvergence
+    : null;
+  const explicitPublicationRecoveryGate = isConsistencyRecord(
+    diagnostics.publicationConvergenceGate,
+  )
+    ? diagnostics.publicationConvergenceGate
+    : isConsistencyRecord(publicationConvergence?.publicationRecoveryGate)
+      ? publicationConvergence.publicationRecoveryGate
+      : null;
+  if (!hasCanonicalPublicationRecoveryGateEvidence(publicationConvergence)) {
+    return explicitPublicationRecoveryGate;
+  }
+  const canonicalPublicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+    publicationEpoch:
+      publicationConvergence?.publicationEpoch ??
+      explicitPublicationRecoveryGate?.publicationEpoch,
+    publicationStatus:
+      publicationConvergence?.publicationStatus ??
+      explicitPublicationRecoveryGate?.publicationStatus,
+    publicationObservationState:
+      publicationConvergence?.publicationObservationState ??
+      explicitPublicationRecoveryGate?.publicationObservationState,
+    recoveryProtocolState:
+      publicationConvergence?.recoveryProtocolState ??
+      publicationConvergence?.membershipLifecycleSummary?.recoveryProtocolState ??
+      explicitPublicationRecoveryGate?.recoveryProtocolState,
+    priorityRecoveryReasonCodes:
+      publicationConvergence?.priorityRecoveryReasonCodes ??
+      publicationConvergence?.membershipLifecycleSummary
+        ?.priorityRecoveryReasonCodes ??
+      explicitPublicationRecoveryGate?.reasonCodes ??
+      explicitPublicationRecoveryGate?.reasons,
+    priorityPartitionSummary:
+      publicationConvergence?.priorityPartitionSummary ??
+      explicitPublicationRecoveryGate?.priorityPartitionSummary,
+    priorityRecoveryClosureWitness:
+      publicationConvergence?.priorityRecoveryClosureWitness ??
+      explicitPublicationRecoveryGate?.priorityRecoveryClosureWitness,
+    priorityRecoveryDecisionSnapshots:
+      diagnostics.priorityRecoveryDecisionSnapshots ??
+      publicationConvergence?.priorityRecoveryDecisionSnapshots ??
+      explicitPublicationRecoveryGate?.priorityRecoveryDecisionSnapshots,
+    requiredAckNodeIds:
+      publicationConvergence?.requiredAckNodeIds ??
+      explicitPublicationRecoveryGate?.requiredAckNodeIds,
+    acknowledgedNodeIds:
+      publicationConvergence?.acknowledgedNodeIds ??
+      explicitPublicationRecoveryGate?.acknowledgedNodeIds,
+    pendingAckNodeIds:
+      publicationConvergence?.pendingAckNodeIds ??
+      explicitPublicationRecoveryGate?.pendingAckNodeIds,
+    missingPublishedNodeIds:
+      publicationConvergence?.missingPublishedNodeIds ??
+      publicationConvergence?.missingPublishedRecoveryActiveNodeIds ??
+      explicitPublicationRecoveryGate?.missingPublishedNodeIds,
+  });
+  if (!explicitPublicationRecoveryGate) {
+    return canonicalPublicationRecoveryGate;
+  }
+  const canonicalEpoch = normalizePublicationRecoveryGateEpoch(
+    canonicalPublicationRecoveryGate.publicationEpoch,
+  );
+  const explicitEpoch = normalizePublicationRecoveryGateEpoch(
+    explicitPublicationRecoveryGate.publicationEpoch,
+  );
+  if (
+    canonicalEpoch !== null &&
+    explicitEpoch !== null &&
+    explicitEpoch > canonicalEpoch
+  ) {
+    return explicitPublicationRecoveryGate;
+  }
+  return canonicalPublicationRecoveryGate;
+}
+
+function extractPublicationRecoveryGateContract(controlPlaneDiagnostics) {
+  const gate = buildCanonicalPublicationRecoveryGate(controlPlaneDiagnostics);
+  if (!gate) {
+    return {
+      contractPresent: false,
+      ready: null,
+      state: null,
+      publicationEpoch: null,
+      publicationStatus: null,
+      reasonCodes: [],
+    };
+  }
+  const normalizedReasonCodes = normalizeConsistencyStringList(
+    Array.isArray(gate?.reasonCodes) ? gate.reasonCodes : gate?.reasons,
+  );
+  const state =
+    typeof gate?.recoveryProtocolState === "string" &&
+    gate.recoveryProtocolState.length > 0
+      ? gate.recoveryProtocolState
+      : typeof gate?.state === "string" && gate.state.length > 0
+        ? gate.state
+        : gate?.ready === true
+          ? PUBLICATION_RECOVERY_GATE_STATE_READY
+          : gate?.publicationPending === true
+            ? PUBLICATION_RECOVERY_GATE_STATE_PUBLICATION_PENDING
+            : gate?.prioritySpreadPending === true
+              ? PUBLICATION_RECOVERY_GATE_STATE_PRIORITY_SPREAD_PENDING
+              : VALUE_UNKNOWN;
+  return {
+    contractPresent: true,
+    ready: gate?.ready === true,
+    state,
+    publicationEpoch: Number.isInteger(gate?.publicationEpoch)
+      ? gate.publicationEpoch
+      : null,
+    publicationStatus:
+      typeof gate?.publicationStatus === "string" &&
+      gate.publicationStatus.length > 0
+        ? gate.publicationStatus
+        : typeof gate?.publicationStatusNormalized === "string" &&
+            gate.publicationStatusNormalized.length > 0
+          ? gate.publicationStatusNormalized
+          : null,
+    reasonCodes: normalizedReasonCodes,
+  };
+}
+
+function formatPublicationRecoveryGateContract(contract) {
+  const normalizedContract =
+    contract && typeof contract === "object"
+      ? contract
+      : extractPublicationRecoveryGateContract(null);
+  const reasonCodes =
+    normalizedContract.reasonCodes.length > 0
+      ? normalizedContract.reasonCodes.join(
+          PUBLICATION_RECOVERY_GATE_REASON_SEPARATOR,
+        )
+      : VALUE_NONE;
+  return (
+    CONSISTENCY_GATE_SUMMARY_PREFIX +
+    "ready=" +
+    (normalizedContract.ready === true ? BOOLEAN_TRUE : BOOLEAN_FALSE) +
+    ",state=" +
+    String(normalizedContract.state || VALUE_UNKNOWN) +
+    ",epoch=" +
+    String(
+      Number.isInteger(normalizedContract.publicationEpoch)
+        ? normalizedContract.publicationEpoch
+        : VALUE_UNKNOWN,
+    ) +
+    ",status=" +
+    String(normalizedContract.publicationStatus || VALUE_UNKNOWN) +
+    ",reasons=" +
+    reasonCodes +
+    CONSISTENCY_GATE_SUMMARY_SUFFIX
+  );
+}
+
+function buildConsistencyComparisonRecordFromState(state) {
+  const controlPlaneDiagnostics = cloneDiagnostics(state?.controlPlaneDiagnostics);
+  return {
+    nodeId: String(state?.nodeId || VALUE_UNKNOWN),
+    activeNodes: normalizeConsistencyNodeIdList(state?.activeNodes) || [],
+    authoritativeActiveNodes: normalizeConsistencyNodeIdList(
+      state?.authoritativeActiveNodes,
+    ),
+    partitions: normalizeConsistencyStringList(state?.partitions),
+    leaders: sortObjectKeys(normalizeLeaders(state?.leaders || {})),
+    publicationEpoch: Number.isInteger(state?.publicationEpoch)
+      ? state.publicationEpoch
+      : null,
+    publishedActiveNodeIds:
+      normalizeConsistencyNodeIdList(state?.publishedActiveNodeIds),
+    observationSource: String(state?.observationSource || VALUE_UNKNOWN),
+    controlPlaneDiagnostics,
+    publicationRecoveryGate: extractPublicationRecoveryGateContract(
+      controlPlaneDiagnostics,
+    ),
+  };
+}
+
+function buildConsistencyComparisonRecordFromSnapshot(snapshot) {
+  const publishedActiveNodeIdsSet = extractControlSnapshotPublishedNodeIds(
+    snapshot,
+  );
+  const controlPlaneDiagnostics = cloneDiagnostics(
+    snapshot?.controlPlaneDiagnostics,
+  );
+  return {
+    nodeId: String(snapshot?.nodeId || VALUE_UNKNOWN),
+    activeNodes: normalizeConsistencyNodeIdList(snapshot?.nodes) || [],
+    authoritativeActiveNodes:
+      publishedActiveNodeIdsSet instanceof Set
+        ? normalizeConsistencyNodeIdList(Array.from(publishedActiveNodeIdsSet))
+        : null,
+    partitions: normalizeConsistencyStringList(snapshot?.partitions),
+    leaders: sortObjectKeys(normalizeLeaders(snapshot?.leaders || {})),
+    publicationEpoch: Number.isInteger(
+      snapshot?.controlPlaneDiagnostics?.publicationConvergence
+        ?.publicationEpoch,
+    )
+      ? snapshot.controlPlaneDiagnostics.publicationConvergence.publicationEpoch
+      : Number.isInteger(snapshot?.publicationEpoch)
+        ? snapshot.publicationEpoch
+        : null,
+    publishedActiveNodeIds: normalizeConsistencyNodeIdList(
+      Array.isArray(
+        snapshot?.controlPlaneDiagnostics?.publicationConvergence
+          ?.publishedActiveNodeIds,
+      )
+        ? snapshot.controlPlaneDiagnostics.publicationConvergence
+            .publishedActiveNodeIds
+        : Array.isArray(snapshot?.publishedActiveNodeIds)
+          ? snapshot.publishedActiveNodeIds
+          : Array.isArray(snapshot?.publishedNodes)
+            ? snapshot.publishedNodes
+            : null,
+    ),
+    observationSource: OBSERVATION_SOURCE_CONTROL_SNAPSHOT,
+    controlPlaneDiagnostics,
+    publicationRecoveryGate: extractPublicationRecoveryGateContract(
+      controlPlaneDiagnostics,
+    ),
+  };
+}
+
+function resolvePublicationScopedLeaderComparison(records) {
+  const contractRecords = records.filter(
+    (record) => record?.publicationRecoveryGate?.contractPresent === true,
+  );
+  if (contractRecords.length === 0) {
+    return {
+      hasContract: false,
+      ready: true,
+      blockedRecords: [],
+    };
+  }
+  const blockedRecords = contractRecords.filter(
+    (record) => record.publicationRecoveryGate.ready !== true,
+  );
+  return {
+    hasContract: true,
+    ready: blockedRecords.length === 0,
+    blockedRecords,
+  };
+}
+
+function buildPublicationRecoveryGateNotReadyMessage(records) {
+  const summaries = records.map(
+    (record) =>
+      String(record?.nodeId || VALUE_UNKNOWN) +
+      "=" +
+      formatPublicationRecoveryGateContract(record?.publicationRecoveryGate),
+  );
+  return (
+    "Publication-scoped consistency not ready. Node gates: " +
+    summaries.join(CONSISTENCY_GATE_SUMMARY_SEPARATOR)
+  );
+}
+
+function buildConsistencyMismatch(message, reasonCode, referenceNodeId, otherNodeId) {
+  return {
+    message,
+    reasonCode,
+    referenceNodeId,
+    otherNodeId,
+  };
+}
+
+function findConsistencyMismatch(records, options = {}) {
+  if (!Array.isArray(records) || records.length < 2) {
+    return null;
+  }
+  const tolerateEmptyLeaders = options.tolerateEmptyLeaders === true;
+  const tolerateActiveNodeSkew = options.tolerateActiveNodeSkew === true;
+  const maxActiveNodeSkew = Number.isFinite(options.maxActiveNodeSkew)
+    ? Math.max(0, Math.floor(options.maxActiveNodeSkew))
+    : 1;
+  const toleratePartitionSkew = options.toleratePartitionSkew === true;
+  const maxPartitionSkew = Number.isFinite(options.maxPartitionSkew)
+    ? Math.max(0, Math.floor(options.maxPartitionSkew))
+    : 2;
+  const publicationScopedLeaderComparison =
+    resolvePublicationScopedLeaderComparison(records);
+  const reference = records[0];
+  const refActiveStr = JSON.stringify(reference.activeNodes);
+  const refHasAuthoritativeActiveNodes = Array.isArray(
+    reference.authoritativeActiveNodes,
+  );
+  const refAuthoritativeActiveStr = refHasAuthoritativeActiveNodes
+    ? JSON.stringify(reference.authoritativeActiveNodes)
+    : null;
+  const refPartStr = JSON.stringify(reference.partitions);
+
+  for (let i = 1; i < records.length; i++) {
+    const other = records[i];
+    const otherActiveStr = JSON.stringify(other.activeNodes);
+    const otherHasAuthoritativeActiveNodes = Array.isArray(
+      other.authoritativeActiveNodes,
+    );
+    const canCompareAuthoritativeActiveNodes =
+      refHasAuthoritativeActiveNodes && otherHasAuthoritativeActiveNodes;
+
+    if (canCompareAuthoritativeActiveNodes) {
+      const otherAuthoritativeActiveStr = JSON.stringify(
+        other.authoritativeActiveNodes,
+      );
+      if (otherAuthoritativeActiveStr !== refAuthoritativeActiveStr) {
+        return buildConsistencyMismatch(
+          "Published active-node sets disagree between " +
+            reference.nodeId +
+            " and " +
+            other.nodeId +
+            ". " +
+            reference.nodeId +
+            ": " +
+            refAuthoritativeActiveStr +
+            ". " +
+            other.nodeId +
+            ": " +
+            otherAuthoritativeActiveStr,
+          CONSISTENCY_REASON_CODE_PUBLISHED_ACTIVE_NODES_DISAGREE,
+          reference.nodeId,
+          other.nodeId,
+        );
+      }
+    } else if (otherActiveStr !== refActiveStr) {
+      if (
+        tolerateActiveNodeSkew &&
+        isTolerableActiveNodeSkew(
+          reference.activeNodes,
+          other.activeNodes,
+          maxActiveNodeSkew,
+        )
+      ) {
+        continue;
+      }
+      return buildConsistencyMismatch(
+        "Active nodes disagree between " +
+          reference.nodeId +
+          " and " +
+          other.nodeId +
+          ". " +
+          reference.nodeId +
+          ": " +
+          refActiveStr +
+          ". " +
+          other.nodeId +
+          ": " +
+          otherActiveStr,
+        CONSISTENCY_REASON_CODE_ACTIVE_NODES_DISAGREE,
+        reference.nodeId,
+        other.nodeId,
+      );
+    }
+
+    const otherPartStr = JSON.stringify(other.partitions);
+    if (otherPartStr !== refPartStr) {
+      if (
+        toleratePartitionSkew &&
+        isTolerablePartitionSkew(
+          reference.partitions,
+          other.partitions,
+          maxPartitionSkew,
+        )
+      ) {
+        continue;
+      }
+      return buildConsistencyMismatch(
+        "Partition assignments disagree between " +
+          reference.nodeId +
+          " and " +
+          other.nodeId +
+          ". " +
+          reference.nodeId +
+          ": " +
+          refPartStr +
+          ". " +
+          other.nodeId +
+          ": " +
+          otherPartStr,
+        CONSISTENCY_REASON_CODE_PARTITION_ASSIGNMENTS_DISAGREE,
+        reference.nodeId,
+        other.nodeId,
+      );
+    }
+  }
+
+  if (publicationScopedLeaderComparison.ready !== true) {
+    const blockedRecords = publicationScopedLeaderComparison.blockedRecords;
+    const otherNodeId =
+      blockedRecords.length > 0
+        ? blockedRecords[0].nodeId
+        : records.length > 1
+          ? records[1].nodeId
+          : reference.nodeId;
+    return buildConsistencyMismatch(
+      buildPublicationRecoveryGateNotReadyMessage(
+        records,
+      ),
+      CONSISTENCY_REASON_CODE_PUBLICATION_RECOVERY_GATE_NOT_READY,
+      reference.nodeId,
+      otherNodeId,
+    );
+  }
+
+  const refLeaders = reference.leaders;
+  const refLeaderStr = JSON.stringify(refLeaders);
+  const refPublicationEpoch = Number.isInteger(reference.publicationEpoch)
+    ? reference.publicationEpoch
+    : null;
+  const refPublishedActiveStr = JSON.stringify(
+    Array.isArray(reference.publishedActiveNodeIds)
+      ? reference.publishedActiveNodeIds
+      : [],
+  );
+
+  for (let i = 1; i < records.length; i++) {
+    const other = records[i];
+    const otherHasAuthoritativeActiveNodes = Array.isArray(
+      other.authoritativeActiveNodes,
+    );
+    const canCompareAuthoritativeActiveNodes =
+      refHasAuthoritativeActiveNodes && otherHasAuthoritativeActiveNodes;
+
+    if (canCompareAuthoritativeActiveNodes) {
+      const otherPublicationEpoch = Number.isInteger(other.publicationEpoch)
+        ? other.publicationEpoch
+        : null;
+      if (otherPublicationEpoch !== refPublicationEpoch) {
+        return buildConsistencyMismatch(
+          "Publication epochs disagree between " +
+            reference.nodeId +
+            " and " +
+            other.nodeId +
+            ". " +
+            reference.nodeId +
+            ": " +
+            String(refPublicationEpoch) +
+            ". " +
+            other.nodeId +
+            ": " +
+            String(otherPublicationEpoch),
+          CONSISTENCY_REASON_CODE_PUBLICATION_EPOCHS_DISAGREE,
+          reference.nodeId,
+          other.nodeId,
+        );
+      }
+
+      const otherPublishedActiveStr = JSON.stringify(
+        Array.isArray(other.publishedActiveNodeIds)
+          ? other.publishedActiveNodeIds
+          : [],
+      );
+      if (otherPublishedActiveStr !== refPublishedActiveStr) {
+        return buildConsistencyMismatch(
+          "Published active-node sets disagree between " +
+            reference.nodeId +
+            " and " +
+            other.nodeId +
+            ". " +
+            reference.nodeId +
+            ": " +
+            refPublishedActiveStr +
+            ". " +
+            other.nodeId +
+            ": " +
+            otherPublishedActiveStr,
+          CONSISTENCY_REASON_CODE_PUBLISHED_ACTIVE_NODES_DISAGREE,
+          reference.nodeId,
+          other.nodeId,
+        );
+      }
+    }
+
+    const otherLeaders = other.leaders;
+    const otherLeaderStr = JSON.stringify(otherLeaders);
+    if (otherLeaderStr !== refLeaderStr) {
+      if (
+        tolerateEmptyLeaders &&
+        !hasConflictingLeaders(refLeaders, otherLeaders)
+      ) {
+        continue;
+      }
+      return buildConsistencyMismatch(
+        "Leader identities disagree between " +
+          reference.nodeId +
+          " and " +
+          other.nodeId +
+          ". " +
+          reference.nodeId +
+          ": " +
+          refLeaderStr +
+          ". " +
+          other.nodeId +
+          ": " +
+          otherLeaderStr,
+        CONSISTENCY_REASON_CODE_LEADER_IDENTITIES_DISAGREE,
+        reference.nodeId,
+        other.nodeId,
+      );
+    }
+  }
+
+  return null;
+}
 
 function buildConsistencyStateByNodeId(nodeStates) {
   const stateByNodeId = {};
@@ -146,6 +854,9 @@ function buildConsistencyStateByNodeId(nodeStates) {
         state.controlSnapshotError.length > 0
           ? state.controlSnapshotError
           : null,
+      publicationRecoveryGate: extractPublicationRecoveryGateContract(
+        state?.controlPlaneDiagnostics,
+      ),
     };
   }
   return stateByNodeId;
@@ -366,228 +1077,25 @@ async function assertConsistency(nodes, options = {}) {
   const comparableNodeStates =
     controlSnapshotStates.length >= 1 ? controlSnapshotStates : nodeStates;
 
-  // Compare all states against the first canonical node set.
-  const reference = comparableNodeStates[0];
-  const refActiveStr = JSON.stringify(reference.activeNodes);
-  const refHasAuthoritativeActiveNodes = Array.isArray(
-    reference.authoritativeActiveNodes,
+  const comparisonRecords = comparableNodeStates.map(
+    buildConsistencyComparisonRecordFromState,
   );
-  const refAuthoritativeActiveStr = refHasAuthoritativeActiveNodes
-    ? JSON.stringify(reference.authoritativeActiveNodes)
-    : null;
-  const refPartStr = JSON.stringify(reference.partitions);
-  const refLeaders = sortObjectKeys(normalizeLeaders(reference.leaders));
-  const refLeaderStr = JSON.stringify(refLeaders);
-  const refPublicationEpoch = Number.isInteger(reference.publicationEpoch)
-    ? reference.publicationEpoch
-    : null;
-  const refPublishedActiveStr = JSON.stringify(
-    Array.isArray(reference.publishedActiveNodeIds)
-      ? [...reference.publishedActiveNodeIds].sort()
-      : [],
-  );
-
-  for (let i = 1; i < comparableNodeStates.length; i++) {
-    const other = comparableNodeStates[i];
-
-    const otherActiveStr = JSON.stringify(other.activeNodes);
-    const otherHasAuthoritativeActiveNodes = Array.isArray(
-      other.authoritativeActiveNodes,
-    );
-    const canCompareAuthoritativeActiveNodes =
-      refHasAuthoritativeActiveNodes && otherHasAuthoritativeActiveNodes;
-
-    if (canCompareAuthoritativeActiveNodes) {
-      const otherAuthoritativeActiveStr = JSON.stringify(
-        other.authoritativeActiveNodes,
-      );
-      if (otherAuthoritativeActiveStr !== refAuthoritativeActiveStr) {
-        throw createConsistencyMismatchError(
-          "Published active-node sets disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            refAuthoritativeActiveStr +
-            ". " +
-            other.nodeId +
-            ": " +
-            otherAuthoritativeActiveStr,
-          {
-            nodeStates,
-            mismatch: {
-              reasonCode: "published_active_nodes_disagree",
-              referenceNodeId: reference.nodeId,
-              otherNodeId: other.nodeId,
-            },
-          },
-        );
-      }
-    } else if (otherActiveStr !== refActiveStr) {
-      if (
-        tolerateActiveNodeSkew &&
-        isTolerableActiveNodeSkew(
-          reference.activeNodes,
-          other.activeNodes,
-          maxActiveNodeSkew,
-        )
-      ) {
-        continue;
-      }
-      throw createConsistencyMismatchError(
-        "Active nodes disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refActiveStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherActiveStr,
-        {
-          nodeStates,
-          mismatch: {
-            reasonCode: "active_nodes_disagree",
-            referenceNodeId: reference.nodeId,
-            otherNodeId: other.nodeId,
-          },
-        },
-      );
-    }
-
-    const otherPartStr = JSON.stringify(other.partitions);
-    if (otherPartStr !== refPartStr) {
-      if (
-        toleratePartitionSkew &&
-        isTolerablePartitionSkew(
-          reference.partitions,
-          other.partitions,
-          maxPartitionSkew,
-        )
-      ) {
-        continue;
-      }
-      throw createConsistencyMismatchError(
-        "Partition assignments disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refPartStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherPartStr,
-        {
-          nodeStates,
-          mismatch: {
-            reasonCode: "partition_assignments_disagree",
-            referenceNodeId: reference.nodeId,
-            otherNodeId: other.nodeId,
-          },
-        },
-      );
-    }
-
-    const otherLeaders = sortObjectKeys(normalizeLeaders(other.leaders));
-    const otherLeaderStr = JSON.stringify(otherLeaders);
-    if (otherLeaderStr !== refLeaderStr) {
-      if (
-        tolerateEmptyLeaders &&
-        !hasConflictingLeaders(refLeaders, otherLeaders)
-      ) {
-        continue;
-      }
-      throw createConsistencyMismatchError(
-        "Leader identities disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refLeaderStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherLeaderStr,
-        {
-          nodeStates,
-          mismatch: {
-            reasonCode: "leader_identities_disagree",
-            referenceNodeId: reference.nodeId,
-            otherNodeId: other.nodeId,
-          },
-        },
-      );
-    }
-
-    if (canCompareAuthoritativeActiveNodes) {
-      const otherPublicationEpoch = Number.isInteger(other.publicationEpoch)
-        ? other.publicationEpoch
-        : null;
-      if (otherPublicationEpoch !== refPublicationEpoch) {
-        throw createConsistencyMismatchError(
-          "Publication epochs disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            String(refPublicationEpoch) +
-            ". " +
-            other.nodeId +
-            ": " +
-            String(otherPublicationEpoch),
-          {
-            nodeStates,
-            mismatch: {
-              reasonCode: "publication_epochs_disagree",
-              referenceNodeId: reference.nodeId,
-              otherNodeId: other.nodeId,
-            },
-          },
-        );
-      }
-
-      const otherPublishedActiveStr = JSON.stringify(
-        Array.isArray(other.publishedActiveNodeIds)
-          ? [...other.publishedActiveNodeIds].sort()
-          : [],
-      );
-      if (otherPublishedActiveStr !== refPublishedActiveStr) {
-        throw createConsistencyMismatchError(
-          "Published active-node sets disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            refPublishedActiveStr +
-            ". " +
-            other.nodeId +
-            ": " +
-            otherPublishedActiveStr,
-          {
-            nodeStates,
-            mismatch: {
-              reasonCode: "published_active_nodes_disagree",
-              referenceNodeId: reference.nodeId,
-              otherNodeId: other.nodeId,
-            },
-          },
-        );
-      }
-    }
+  const mismatch = findConsistencyMismatch(comparisonRecords, {
+    tolerateEmptyLeaders,
+    tolerateActiveNodeSkew,
+    maxActiveNodeSkew,
+    toleratePartitionSkew,
+    maxPartitionSkew,
+  });
+  if (mismatch) {
+    throw createConsistencyMismatchError(mismatch.message, {
+      nodeStates,
+      mismatch: {
+        reasonCode: mismatch.reasonCode,
+        referenceNodeId: mismatch.referenceNodeId,
+        otherNodeId: mismatch.otherNodeId,
+      },
+    });
   }
 }
 
@@ -677,185 +1185,10 @@ function assertConsistencyFromSnapshots(snapshots) {
   if (valid.length < 2) {
     return;
   }
-
-  const normalized = valid.map((snapshot) => ({
-    nodeId: String(snapshot?.nodeId || VALUE_UNKNOWN),
-    activeNodes: Array.isArray(snapshot?.nodes)
-      ? [...snapshot.nodes].sort()
-      : [],
-    authoritativeActiveNodes:
-      extractControlSnapshotPublishedNodeIds(snapshot) instanceof Set
-        ? Array.from(extractControlSnapshotPublishedNodeIds(snapshot)).sort()
-        : null,
-    projectedActiveNodes: Array.from(
-      extractControlSnapshotProjectedNodeIds(snapshot),
-    ).sort(),
-    partitions: Array.isArray(snapshot?.partitions)
-      ? [...snapshot.partitions].sort()
-      : [],
-    leaders:
-      snapshot?.leaders && typeof snapshot.leaders === "object"
-        ? sortObjectKeys(normalizeLeaders(snapshot.leaders))
-        : {},
-    publicationEpoch: Number.isInteger(
-      snapshot?.controlPlaneDiagnostics?.publicationConvergence
-        ?.publicationEpoch,
-    )
-      ? snapshot.controlPlaneDiagnostics.publicationConvergence.publicationEpoch
-      : Number.isInteger(snapshot?.publicationEpoch)
-        ? snapshot.publicationEpoch
-        : null,
-    publishedActiveNodeIds: Array.isArray(
-      snapshot?.controlPlaneDiagnostics?.publicationConvergence
-        ?.publishedActiveNodeIds,
-    )
-      ? [
-          ...snapshot.controlPlaneDiagnostics.publicationConvergence
-            .publishedActiveNodeIds,
-        ].sort()
-      : Array.isArray(snapshot?.publishedActiveNodeIds)
-        ? [...snapshot.publishedActiveNodeIds].sort()
-        : [],
-  }));
-
-  const reference = normalized[0];
-  const refActiveStr = JSON.stringify(reference.activeNodes);
-  const refHasAuthoritativeActiveNodes = Array.isArray(
-    reference.authoritativeActiveNodes,
-  );
-  const refAuthoritativeActiveStr = refHasAuthoritativeActiveNodes
-    ? JSON.stringify(reference.authoritativeActiveNodes)
-    : null;
-  const refPartStr = JSON.stringify(reference.partitions);
-  const refLeaderStr = JSON.stringify(reference.leaders);
-  const refPublicationEpoch = Number.isInteger(reference.publicationEpoch)
-    ? reference.publicationEpoch
-    : null;
-  const refPublishedActiveStr = JSON.stringify(
-    reference.publishedActiveNodeIds,
-  );
-
-  for (let i = 1; i < normalized.length; i++) {
-    const other = normalized[i];
-
-    const otherActiveStr = JSON.stringify(other.activeNodes);
-    const otherHasAuthoritativeActiveNodes = Array.isArray(
-      other.authoritativeActiveNodes,
-    );
-    const canCompareAuthoritativeActiveNodes =
-      refHasAuthoritativeActiveNodes && otherHasAuthoritativeActiveNodes;
-
-    if (canCompareAuthoritativeActiveNodes) {
-      const otherAuthoritativeActiveStr = JSON.stringify(
-        other.authoritativeActiveNodes,
-      );
-      if (otherAuthoritativeActiveStr !== refAuthoritativeActiveStr) {
-        throw new Error(
-          "Published active-node sets disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            refAuthoritativeActiveStr +
-            ". " +
-            other.nodeId +
-            ": " +
-            otherAuthoritativeActiveStr,
-        );
-      }
-    } else if (otherActiveStr !== refActiveStr) {
-      throw new Error(
-        "Active nodes disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refActiveStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherActiveStr,
-      );
-    }
-
-    const otherPartStr = JSON.stringify(other.partitions);
-    if (otherPartStr !== refPartStr) {
-      throw new Error(
-        "Partition assignments disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refPartStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherPartStr,
-      );
-    }
-
-    const otherLeaderStr = JSON.stringify(other.leaders);
-    if (otherLeaderStr !== refLeaderStr) {
-      throw new Error(
-        "Leader identities disagree between " +
-          reference.nodeId +
-          " and " +
-          other.nodeId +
-          ". " +
-          reference.nodeId +
-          ": " +
-          refLeaderStr +
-          ". " +
-          other.nodeId +
-          ": " +
-          otherLeaderStr,
-      );
-    }
-
-    if (canCompareAuthoritativeActiveNodes) {
-      if (other.publicationEpoch !== refPublicationEpoch) {
-        throw new Error(
-          "Publication epochs disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            String(refPublicationEpoch) +
-            ". " +
-            other.nodeId +
-            ": " +
-            String(other.publicationEpoch),
-        );
-      }
-
-      const otherPublishedActiveStr = JSON.stringify(
-        other.publishedActiveNodeIds,
-      );
-      if (otherPublishedActiveStr !== refPublishedActiveStr) {
-        throw new Error(
-          "Published active-node sets disagree between " +
-            reference.nodeId +
-            " and " +
-            other.nodeId +
-            ". " +
-            reference.nodeId +
-            ": " +
-            refPublishedActiveStr +
-            ". " +
-            other.nodeId +
-            ": " +
-            otherPublishedActiveStr,
-        );
-      }
-    }
+  const normalized = valid.map(buildConsistencyComparisonRecordFromSnapshot);
+  const mismatch = findConsistencyMismatch(normalized);
+  if (mismatch) {
+    throw new Error(mismatch.message);
   }
 }
 

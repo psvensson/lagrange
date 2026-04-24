@@ -12,6 +12,9 @@ import {
 import {ControlPlaneReadinessService} from
   '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -31,6 +34,14 @@ const MEMBERSHIP_PUBLICATION_BLOCKED_FENCE = Object.freeze({
     MEMBERSHIP_PUBLICATION_ADMISSION_REASON_CLUSTER_INTEGRITY,
   ]),
 });
+const MEMBERSHIP_PUBLICATION_PRIORITY_PARTITION_ID =
+  'control_plane_publications-p1';
+const MEMBERSHIP_PUBLICATION_CLOSURE_RECORD_ID_PRIORITY_SPREAD =
+  'CL-003';
+const MEMBERSHIP_PUBLICATION_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD =
+  'publication_converged_priority_spread_pending';
+const MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED =
+  'steady_published';
 
 test('membership lifecycle model encodes the hard-cutover publication transitions',
   async (t) => {
@@ -333,6 +344,201 @@ test('deriveMembershipPublicationCandidate ignores stale published membership wh
       candidate.publishedActiveNodeIds,
       ['node-1', 'node-2'],
       'the next publication candidate should be derived from current active members instead of the stale published set',
+    );
+  });
+
+test('deriveMembershipPublicationCandidate refreshes stale priority spread metadata from in-flight replace evidence',
+  async (t) => {
+    const priorityTableIds = [
+      'control_plane_publications',
+      'replica_operations',
+      'sql_transaction_participants',
+      'sql_transactions',
+      'sql_write_operations',
+    ];
+    const stalePriorityPartitionSummary = {
+      satisfied: false,
+      requiredDistinctNodeCount: 3,
+      readyEligibleNodeCount: 3,
+      totalPriorityPartitionCount: priorityTableIds.length,
+      missingPartitionIds: priorityTableIds.map((tableId) => `${tableId}-p1`),
+      blockedPartitions: priorityTableIds.map((tableId) => ({
+        partitionId: `${tableId}-p1`,
+        requiredDistinctNodeCount: 3,
+        readyDistinctNodeCount: 2,
+        spreadGap: 1,
+      })),
+    };
+    const partitionRows = priorityTableIds.map((tableId) => ({
+      table_id: tableId,
+      table_name: tableId,
+      partition_id: `${tableId}-p1`,
+      state: 'NORMAL',
+    }));
+    const serviceRows = priorityTableIds.flatMap((tableId, index) => {
+      const partitionId = `${tableId}-p1`;
+      return [{
+        service_id: `${tableId}-r${index + 1}-a`,
+        node_id: 'node-1',
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: 'active',
+        raft_role: 'leader',
+        address: `node-1/partition/${partitionId}-r1`,
+      }, {
+        service_id: `${tableId}-r${index + 1}-b`,
+        node_id: 'node-2',
+        partition_id: partitionId,
+        service_type: 'partition',
+        status: 'active',
+        raft_role: 'follower',
+        address: `node-2/partition/${partitionId}-r2`,
+      }];
+    });
+    const replicaOperationRows = priorityTableIds.map((tableId) => ({
+      operation_id: `op-refresh-${tableId}`,
+      partition_id: `${tableId}-p1`,
+      entity_type: 'partition',
+      operation_type: 'REPLACE',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      source_node_id: 'node-2',
+      target_node_id: 'node-3',
+      replica_id: `${tableId}-p1-r3`,
+      created_at: 1000,
+      updated_at: 2000,
+    }));
+    const candidate = deriveMembershipPublicationCandidate({
+      publisherNodeId: 'seed-node',
+      latestPublicationRow: {
+        publication_epoch: 12,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        priority_partition_summary: stalePriorityPartitionSummary,
+      },
+      latestPublishedPublicationRow: {
+        publication_epoch: 12,
+        status: 'PUBLISHED',
+        published_active_node_ids: ['node-1', 'node-2', 'node-3'],
+        required_ack_node_ids: ['node-1', 'node-2', 'node-3'],
+        acknowledged_node_ids: ['node-1', 'node-2', 'node-3'],
+        priority_partition_summary: stalePriorityPartitionSummary,
+      },
+      nodeRows: [
+        {
+          node_id: 'node-1',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+        {
+          node_id: 'node-2',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+        {
+          node_id: 'node-3',
+          status: 'active',
+          connection_state: 'ready',
+          ready_lease_expires_at: 5000,
+        },
+      ],
+      readinessEntries: [
+        {
+          nodeId: 'node-1',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+        {
+          nodeId: 'node-2',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+        {
+          nodeId: 'node-3',
+          dimensions: {
+            clusterMemberHealthy: true,
+            controlPlanePublished: true,
+            controlPlaneWritable: true,
+            repairEligible: true,
+            serveEligible: true,
+          },
+        },
+      ],
+      nodeEndpointRows: [
+        {
+          endpoint_id: 'node-1-ws',
+          node_id: 'node-1',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-1:8082',
+        },
+        {
+          endpoint_id: 'node-2-ws',
+          node_id: 'node-2',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-2:8082',
+        },
+        {
+          endpoint_id: 'node-3-ws',
+          node_id: 'node-3',
+          transport_type: 'ws',
+          status: 'active',
+          address: 'ws://node-3:8082',
+        },
+      ],
+      partitionRows,
+      serviceRows,
+      replicaOperationRows,
+      nowMs: 3000,
+    });
+
+    t.equal(
+      candidate.changed,
+      false,
+      'the active membership can stay stable while metadata still needs refresh',
+    );
+    t.match(candidate.priorityRecoveryClosureWitness, {
+      state: 'closure_satisfied_stale_publication',
+      closureRecordId:
+        MEMBERSHIP_PUBLICATION_CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+      closureWitnessClass:
+        MEMBERSHIP_PUBLICATION_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+    });
+    t.match(candidate.priorityPartitionSummary, {
+      satisfied: true,
+      missingPartitionIds: [],
+      blockedPartitions: [],
+    });
+    t.equal(
+      candidate.priorityPartitionSummaryChanged,
+      true,
+      'the coordinator should mark stale durable spread metadata for refresh',
+    );
+    t.equal(
+      candidate.recoveryProtocolState,
+      MEMBERSHIP_PUBLICATION_RECOVERY_PROTOCOL_STATE_STEADY_PUBLISHED,
+      'priority spread closure should return the protocol to steady published state',
+    );
+    t.notOk(
+      candidate.priorityRecoveryReasonCodes.includes(
+        CONTROL_PLANE_PRIORITY_RECOVERY_REASON.PRIORITY_PARTITIONS_NOT_SPREAD,
+      ),
+      'stale durable spread reasons should clear once the closure witness satisfies publication refresh',
     );
   });
 

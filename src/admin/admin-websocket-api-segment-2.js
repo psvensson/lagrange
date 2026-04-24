@@ -133,7 +133,7 @@ class AdminWebSocketAPISegment2 extends AdminWebSocketAPISegment1 {
     ) {
       return this.controlPlaneReadinessService.getNodeReadiness(this.nodeId, {
         allowAuthoritativeRefresh: true,
-        preferBackgroundRefreshOnIneligible: true,
+        requireFreshOnIneligible: true,
         decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
         maxCachedAgeMs: this.loadLaneReadinessCacheMaxAgeMs,
       });

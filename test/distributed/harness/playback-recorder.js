@@ -56,6 +56,7 @@ const WARNING_CODE_SERVICE_QUERY_FAILED = 'service-query-failed';
 const WARNING_CODE_STATS_CAPTURE_FAILED = 'stats-capture-failed';
 const WARNING_CODE_STATS_API_MISSING = 'stats-api-missing';
 const SNAPSHOT_QUERY_LANE = 'snapshot';
+const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
 
 const CAPTURE_ERROR_MESSAGE = 'capture-error';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -779,6 +780,7 @@ class PlaybackRecorder {
     this._started = false;
     this._adminReadinessObserved = false;
     this._topologySnapshotObserved = false;
+    this._clusterActiveObserved = false;
   }
 
   async start(context = {}) {
@@ -834,6 +836,7 @@ class PlaybackRecorder {
     this._started = true;
     this._adminReadinessObserved = false;
     this._topologySnapshotObserved = false;
+    this._clusterActiveObserved = false;
     this._shutdownStartedAt = null;
 
     this.recordEvent({
@@ -972,6 +975,18 @@ class PlaybackRecorder {
       entityId: event?.entityId || null,
       details: event?.details || {},
     };
+    if (
+      normalized.type === PLAYBACK_EVENT_TYPE.CLUSTER_STAGE &&
+      normalized.details &&
+      typeof normalized.details === 'object'
+    ) {
+      if (
+        normalized.details.stage === CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE ||
+        normalized.details?.activeGate?.ready === true
+      ) {
+        this._clusterActiveObserved = true;
+      }
+    }
     this._appendNdjson(this._eventsStream, normalized);
     this._eventsCount++;
   }
@@ -1027,7 +1042,8 @@ class PlaybackRecorder {
       this._adminReadinessObserved = true;
     }
     if (snapshotNodes.length === 0) {
-      if (!this._adminReadinessObserved ||
+      if (!this._clusterActiveObserved ||
+          !this._adminReadinessObserved ||
           !this._topologySnapshotObserved) {
         return;
       }

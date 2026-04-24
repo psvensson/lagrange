@@ -629,6 +629,206 @@ test(
 );
 
 test(
+  'checkTimeouts advances stale CREATING REPLACE from cache-visible active ' +
+    'target evidence when authoritative reads miss',
+  async (t) => {
+    const TEST_OPERATION_ID = 'op-cache-visible-replace-active';
+    const TEST_OPERATION_TYPE = 'REPLACE';
+    const TEST_PARTITION_ID = 'replica_operations-p1';
+    const TEST_TARGET_REPLICA_ID = 'replica_operations-p1-r5';
+    const TEST_SOURCE_REPLICA_ID = 'replica_operations-p1-r2';
+    const TEST_SOURCE_NODE_ID = 'node-1';
+    const TEST_TARGET_NODE_ID = 'node-2';
+    const TEST_ENTITY_TYPE = 'partition';
+    const TEST_REPLICA_OPERATIONS_TABLE = 'replica_operations';
+    const TEST_SERVICES_TABLE = 'services';
+    const TEST_UPDATE_REPLICA_OPERATIONS_SQL =
+      'UPDATE replica_operations SET';
+    const TEST_SELECT_REPLICA_OPERATIONS_SQL = 'FROM replica_operations';
+    const TEST_PENDING_STEP = 'PENDING';
+    const TEST_SENDING_STEP = 'SENDING';
+    const TEST_CREATING_STEP = 'CREATING';
+    const TEST_STOPPING_STEP = 'STOPPING';
+    const TEST_RAFT_ROLE = 'follower';
+    const TEST_DISPATCH_STATUS = 'initiated';
+    const TEST_STALE_OPERATION_AGE_MS = 70000;
+    const TEST_OPERATION_CREATED_OFFSET_MS = 5000;
+    const TEST_PENDING_STEP_OFFSET_MS = 1000;
+    const TEST_SENDING_STEP_OFFSET_MS = 900;
+    const TEST_CREATING_STEP_OFFSET_MS = 800;
+    const TEST_UPDATE_AFFECTED_ROWS = 1;
+    const TEST_READ_AFFECTED_ROWS = 0;
+    const TEST_MIN_REPLICA_COUNT = 3;
+    const TEST_EXPECTED_MIN_GATEWAY_CALLS = 2;
+
+    const nowMs = Date.now();
+    const staleUpdatedAtMs = nowMs - TEST_STALE_OPERATION_AGE_MS;
+    const observedServiceRow = {
+      service_id: TEST_TARGET_REPLICA_ID,
+      replica_id: TEST_TARGET_REPLICA_ID,
+      partition_id: TEST_PARTITION_ID,
+      node_id: TEST_TARGET_NODE_ID,
+      service_type: TEST_ENTITY_TYPE,
+      status: ReplicaStatus.ACTIVE,
+      raft_role: TEST_RAFT_ROLE,
+    };
+    const operationRow = {
+      operation_id: TEST_OPERATION_ID,
+      type: TEST_OPERATION_TYPE,
+      partition_id: TEST_PARTITION_ID,
+      replica_id: TEST_TARGET_REPLICA_ID,
+      source_node_id: TEST_SOURCE_NODE_ID,
+      target_node_id: TEST_TARGET_NODE_ID,
+      status: ReplicaStatus.CREATING,
+      workflow_step: TEST_CREATING_STEP,
+      created_at: staleUpdatedAtMs - TEST_OPERATION_CREATED_OFFSET_MS,
+      updated_at: staleUpdatedAtMs,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([
+        {
+          step: TEST_PENDING_STEP,
+          timestamp: staleUpdatedAtMs - TEST_PENDING_STEP_OFFSET_MS,
+          sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+        },
+        {
+          step: TEST_SENDING_STEP,
+          timestamp: staleUpdatedAtMs - TEST_SENDING_STEP_OFFSET_MS,
+        },
+        {
+          step: TEST_CREATING_STEP,
+          timestamp: staleUpdatedAtMs - TEST_CREATING_STEP_OFFSET_MS,
+        },
+      ]),
+      entity_type: TEST_ENTITY_TYPE,
+      entity_id: TEST_PARTITION_ID,
+    };
+    const gatewayCalls = [];
+
+    const sqlQueryEngine = {
+      async executeQuery(sql, params) {
+        if (sql.includes(TEST_UPDATE_REPLICA_OPERATIONS_SQL)) {
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
+          operationRow.completed_at = params[3];
+          operationRow.error_message = params[4];
+          operationRow.steps_history = params[5];
+          operationRow.replica_id = params[6];
+          return {
+            success: true,
+            affectedRows: TEST_UPDATE_AFFECTED_ROWS,
+          };
+        }
+        if (sql.includes(TEST_SELECT_REPLICA_OPERATIONS_SQL)) {
+          return {
+            success: true,
+            rows: [{...operationRow}],
+            affectedRows: TEST_READ_AFFECTED_ROWS,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: TEST_READ_AFFECTED_ROWS,
+        };
+      },
+    };
+
+    const coordinator = createCoordinator({
+      nodeId: TEST_TARGET_NODE_ID,
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return key === operationRow.operation_id ? operationRow : null;
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return key === observedServiceRow.service_id ?
+              observedServiceRow :
+              null;
+          }
+          return null;
+        },
+        getAll(tableName) {
+          if (tableName === TEST_REPLICA_OPERATIONS_TABLE) {
+            return [operationRow];
+          }
+          if (tableName === TEST_SERVICES_TABLE) {
+            return [observedServiceRow];
+          }
+          return [];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async readRows(tableName, sql, params, options) {
+          gatewayCalls.push({
+            tableName,
+            sql: String(sql),
+            params: [...(Array.isArray(params) ? params : [])],
+            options,
+          });
+          return {
+            success: true,
+            rows: [],
+            affectedRows: TEST_READ_AFFECTED_ROWS,
+          };
+        },
+        async executeQuery(sql, params) {
+          return sqlQueryEngine.executeQuery(sql, params);
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: TEST_DISPATCH_STATUS};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: TEST_MIN_REPLICA_COUNT};
+        },
+      },
+      sqlQueryEngine,
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      await coordinator.checkTimeouts();
+
+      t.equal(
+        operationRow.workflow_step,
+        TEST_STOPPING_STEP,
+        'timeout reconciliation should move stale REPLACE target creation through active target evidence into source removal',
+      );
+      t.equal(
+        operationRow.status,
+        ReplicaStatus.REMOVING,
+        'REPLACE target creation should continue into canonical source-removal state from observed target activation',
+      );
+      t.equal(
+        operationRow.error_message,
+        null,
+        'cache-visible target activation should avoid timeout failure metadata',
+      );
+      t.equal(
+        gatewayCalls.length >= TEST_EXPECTED_MIN_GATEWAY_CALLS,
+        true,
+        'timeout reconciliation should attempt authoritative reads before using observed cache state',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
   'checkTimeouts completes sending operations from exact cache-visible ' +
     'services rows when authoritative reads miss',
   async (t) => {

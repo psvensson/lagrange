@@ -15,7 +15,11 @@ import {
   normalizeServiceRow,
 } from './system-row-normalizers.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
-import {hasPriorityRecoverySpreadGap} from './priority-recovery-snapshot.js';
+import {
+  buildPriorityRecoveryClosureWitness,
+  buildPriorityRecoveryDecisionSnapshots,
+  hasPriorityRecoverySpreadGap,
+} from './priority-recovery-snapshot.js';
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {buildRecoveryProtocolSnapshot} from './recovery-protocol-snapshot.js';
 import {
@@ -221,6 +225,87 @@ function areMembershipLifecycleSummariesEqual(leftSummary, rightSummary) {
     return left === right;
   }
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function normalizePriorityRecoveryClosureWitness(value) {
+  return value && typeof value === TYPEOF.OBJECT ?
+    value :
+    null;
+}
+
+function buildPriorityRecoveryDecisionPublicationConvergence(options = {}, helperFns = {}) {
+  const latestPublicationRow = helperFns.normalizeLatestPublicationRow(
+    options.latestPublicationRow,
+  );
+  const latestPublishedPublicationRow = helperFns.normalizeLatestPublicationRow(
+    options.latestPublishedPublicationRow,
+  );
+  const publicationEpoch = helperFns.normalizePositiveInteger(
+    latestPublicationRow?.publicationEpoch ??
+      latestPublishedPublicationRow?.publicationEpoch,
+    null,
+  );
+  const publicationStatus =
+    typeof latestPublicationRow?.status === TYPEOF.STRING &&
+      latestPublicationRow.status.length > NUM.ZERO ?
+      latestPublicationRow.status :
+      typeof latestPublishedPublicationRow?.status === TYPEOF.STRING &&
+        latestPublishedPublicationRow.status.length > NUM.ZERO ?
+        latestPublishedPublicationRow.status :
+        MEMBERSHIP_PUBLICATION_STATUS.PUBLISHED;
+  return {
+    publicationEpoch,
+    publicationStatus,
+    publishedActiveNodeIds: options.publishedActiveNodeIds,
+    pendingAckNodeIds: options.pendingAckNodeIds,
+    priorityPartitionSummary: options.priorityPartitionSummary,
+    membershipLifecycleSummary: options.membershipLifecycleSummary,
+    recoveryActiveNodeIds: options.recoveryActiveNodeIds,
+    recoveryActiveNodeSource: options.recoveryActiveNodeSource,
+    missingPublishedRecoveryActiveNodeIds:
+      options.missingPublishedRecoveryActiveNodeIds,
+  };
+}
+
+function buildPriorityRecoveryClosureEvidence(options = {}, helperFns = {}) {
+  const retainedPriorityRecoveryClosureWitness =
+    normalizePriorityRecoveryClosureWitness(
+      options.priorityRecoveryPlanningSnapshot?.priorityRecoveryClosureWitness,
+    );
+  if (retainedPriorityRecoveryClosureWitness) {
+    return {
+      priorityRecoveryClosureWitness: retainedPriorityRecoveryClosureWitness,
+      priorityRecoveryDecisionSnapshots: null,
+    };
+  }
+  const replicaOperationRows = Array.isArray(options.replicaOperationRows) ?
+    options.replicaOperationRows :
+    [];
+  if (replicaOperationRows.length === NUM.ZERO) {
+    return {
+      priorityRecoveryClosureWitness: null,
+      priorityRecoveryDecisionSnapshots: null,
+    };
+  }
+  const priorityRecoveryDecisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
+    capturedAt: helperFns.normalizePositiveInteger(options.nowMs, null),
+    publicationConvergence:
+      buildPriorityRecoveryDecisionPublicationConvergence(options, helperFns),
+    readinessByNodeId: options.readinessByNodeId,
+    workflowAdmissionsByWorkflowId: {},
+    replicaOperationRows,
+    serviceRows: options.serviceRows,
+  });
+  return {
+    priorityRecoveryDecisionSnapshots,
+    priorityRecoveryClosureWitness:
+      normalizePriorityRecoveryClosureWitness(
+        priorityRecoveryDecisionSnapshots?.closureWitness,
+      ) || buildPriorityRecoveryClosureWitness({
+        decisionSnapshots: priorityRecoveryDecisionSnapshots,
+        priorityPartitionSummary: options.priorityPartitionSummary,
+      }),
+  };
 }
 
 function isReadinessPromotable(readinessEntry = null) {
@@ -784,7 +869,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     },
     helperFns,
   );
-  const priorityPartitionSummary = chooseMoreAdvancedPriorityPartitionSummary(
+  const priorityPartitionSummaryBase = chooseMoreAdvancedPriorityPartitionSummary(
     normalizedPriorityPartitionSummary,
     derivedPriorityPartitionSummary,
     helperFns,
@@ -827,6 +912,39 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         missingPublishedRecoveryActiveNodeIds:
           priorityRecoveryPublicationContext.missingPublishedRecoveryActiveNodeIds,
       });
+  const pendingAckNodeIds = requiredAckNodeIds.filter(
+    (nodeId) => !acknowledgedNodeIds.includes(nodeId),
+  );
+  const {
+    priorityRecoveryClosureWitness,
+  } = buildPriorityRecoveryClosureEvidence(
+    {
+      latestPublicationRow,
+      latestPublishedPublicationRow,
+      publishedActiveNodeIds,
+      pendingAckNodeIds,
+      priorityPartitionSummary: priorityPartitionSummaryBase,
+      membershipLifecycleSummary: membershipLifecycleSummaryBase,
+      recoveryActiveNodeIds:
+        priorityRecoveryPublicationContext.recoveryActiveNodeIds,
+      recoveryActiveNodeSource:
+        priorityRecoveryPublicationContext.recoveryActiveNodeSource,
+      missingPublishedRecoveryActiveNodeIds:
+        priorityRecoveryPublicationContext.missingPublishedRecoveryActiveNodeIds,
+      readinessByNodeId,
+      replicaOperationRows: planningSnapshot.replicaOperationRows,
+      serviceRows: planningSnapshot.serviceRows,
+      priorityRecoveryPlanningSnapshot:
+        planningSnapshot.priorityRecoveryPlanningSnapshot,
+      nowMs: options.nowMs,
+    },
+    helperFns,
+  );
+  const priorityPartitionSummary = chooseMoreAdvancedPriorityPartitionSummary(
+    priorityPartitionSummaryBase,
+    priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
+    helperFns,
+  );
   const baselineEpoch = helperFns.normalizePositiveInteger(
     latestPublicationRow?.publicationEpoch,
     NUM.ZERO,
@@ -872,6 +990,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
     sourceTopologyEpoch,
     sourceSnapshotVersion,
     priorityPartitionSummary,
+    priorityRecoveryClosureWitness,
     membershipLifecycleSummary: membershipLifecycleSummaryBase,
     projectionDiagnostics,
   });
@@ -920,6 +1039,7 @@ function deriveMembershipPublicationCandidate(options = {}, helperFns = {}) {
         typeof planningSnapshot.clusterIncarnationFence === TYPEOF.OBJECT ?
         planningSnapshot.clusterIncarnationFence :
         null,
+    priorityRecoveryClosureWitness,
     projectionDiagnostics,
     reasonCode,
     changed,

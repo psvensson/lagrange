@@ -731,6 +731,205 @@ test('ReplicaDispatchService dispatches same-node operations through the ' +
   }
 });
 
+test('ReplicaDispatchService trusts router-registered same-node handler ' +
+  'capability before service-row activation', async (t) => {
+  initEnv();
+
+  const LOCAL_NODE_ID = 'node-1';
+  const LOCAL_PARTITION_ID = 'split-child-p2';
+  const LOCAL_REPLICA_ID = 'split-child-p2-r1';
+  const LOCAL_OPERATION_ID = 'op-local-handler-router-ready-1';
+  const LOCAL_ENTITY_TYPE = 'partition';
+  const LOCAL_HANDLER_ADDRESS = 'node-1/service/replica-handler';
+  const LOCAL_READY_REASON = 'control_plane_publication_pending';
+
+  const authoritativeCalls = [];
+  const routerRegistrationChecks = [];
+  let dispatchCalls = 0;
+  const operationRow = {
+    operation_id: LOCAL_OPERATION_ID,
+    type: OperationType.ADD,
+    partition_id: LOCAL_PARTITION_ID,
+    replica_id: LOCAL_REPLICA_ID,
+    source_node_id: LOCAL_NODE_ID,
+    target_node_id: LOCAL_NODE_ID,
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.SENDING,
+    entity_type: LOCAL_ENTITY_TYPE,
+    entity_id: LOCAL_PARTITION_ID,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: '[]',
+  };
+
+  const service = createService({
+    messageRouter: {
+      isRegistered(address) {
+        routerRegistrationChecks.push(address);
+        return address === LOCAL_HANDLER_ADDRESS;
+      },
+    },
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+          },
+          reasons: [{code: LOCAL_READY_REASON}],
+        };
+      },
+      async getNodeReadiness(nodeId, options) {
+        authoritativeCalls.push({nodeId, options});
+        return {
+          nodeId,
+          retryAfterMs: 321,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+          },
+          reasons: [{code: LOCAL_READY_REASON}],
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        dispatchCalls += 1;
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+
+  try {
+    await service.dispatchOperationRow(operationRow);
+
+    t.equal(
+      dispatchCalls,
+      1,
+      'same-node dispatch should proceed when the router already owns the local handler capability',
+    );
+    t.same(
+      routerRegistrationChecks,
+      [LOCAL_HANDLER_ADDRESS],
+      'same-node dispatch should consult the canonical local handler address once',
+    );
+    t.equal(
+      authoritativeCalls.length,
+      0,
+      'router-registered local capability should bypass authoritative readiness refreshes',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      'router-registered local capability should not leave the operation parked for retry',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
+test('ReplicaDispatchService ready-node retries reuse ready sync evidence ' +
+  'instead of forcing a second authoritative refresh', async (t) => {
+  initEnv();
+
+  const readyNode = {
+    node_id: 'node-2',
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    last_heartbeat: Date.now(),
+    ready_lease_expires_at: Date.now() + 60000,
+  };
+  const authoritativeCalls = [];
+  let dispatchCalls = 0;
+  const operationRow = {
+    operation_id: 'op-ready-trigger-sync-reuse-1',
+    type: OperationType.REPLACE,
+    partition_id: 'replica_operations-p1',
+    replica_id: 'replica_operations-p1-r8',
+    source_node_id: 'node-1',
+    target_node_id: 'node-2',
+    status: 'pending',
+    workflow_step: WORKFLOW_STEP.PENDING,
+    created_at: Date.now(),
+    updated_at: Date.now(),
+    steps_history: '[]',
+  };
+
+  const service = createService({
+    cdcIntegrationService: {
+      upsertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        return {
+          nodeId,
+          observedAt: new Date().toISOString(),
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: true,
+          },
+          reasons: [],
+        };
+      },
+      async getNodeReadiness(nodeId, options) {
+        authoritativeCalls.push({nodeId, options});
+        return {
+          nodeId,
+          observedAt: new Date().toISOString(),
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_RECOVERY_ELIGIBLE]: false,
+          },
+          reasons: [{code: 'should_not_run'}],
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      async dispatchOperation() {
+        dispatchCalls += 1;
+        return {success: true};
+      },
+      isOperationLocallyOwned() {
+        return true;
+      },
+    },
+  });
+
+  try {
+    await service.dispatchOperationRow(operationRow, {
+      readyNodeId: 'node-2',
+      readyNodeRow: readyNode,
+    });
+
+    t.equal(
+      dispatchCalls,
+      1,
+      'ready-node retries should proceed from the already-observed ready sync evidence',
+    );
+    t.equal(
+      authoritativeCalls.length,
+      0,
+      'ready-node retries should not force a second authoritative readiness refresh for the same target',
+    );
+    t.equal(
+      service.operationDispatchDeferredRetries.size,
+      NUM.ZERO,
+      'ready-node sync reuse should not leave the operation parked for another dispatch retry',
+    );
+  } finally {
+    service.stop();
+  }
+});
+
 test('ReplicaDispatchService falls back to ready sync recovery evidence ' +
   'when authoritative refresh times out', async (t) => {
   initEnv();

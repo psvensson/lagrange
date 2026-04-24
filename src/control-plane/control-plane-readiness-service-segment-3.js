@@ -208,6 +208,21 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
         ),
       );
     }
+    if (
+      dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== true &&
+      context.priorityControlPlaneRecovery?.active === true
+    ) {
+      reasons.push(
+        buildReason(
+          CONTROL_PLANE_READINESS_REASON
+            .PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+          CONTROL_PLANE_READINESS_OWNER.MEMBERSHIP_PUBLICATION,
+          context.observedAt,
+          context.priorityControlPlaneRecovery,
+        ),
+      );
+    }
     if (!this.isCapacityPlacementEligible(context.capacity)) {
       const code = this.getCapacityReasonCode(context.capacity);
       if (code) {
@@ -482,8 +497,10 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
     const controlPlanePublished = this.isControlPlanePublished(
       context.membershipPublication,
     );
+    const membershipPublicationPlanningSnapshot =
+      this.resolveMembershipPublicationPlanningSnapshot(context);
     const priorityRecoveryActive = this.isPriorityControlPlaneRecoveryActive(
-      context.membershipPublicationPlanningSnapshot,
+      membershipPublicationPlanningSnapshot,
     );
     const publication = this.buildRuntimeAuthorityPublicationDescriptor(
       context.publication,
@@ -514,12 +531,11 @@ class ControlPlaneReadinessServiceSegment3 extends ControlPlaneReadinessServiceS
       missingNodeReadinessState,
       priorityRecoveryActive,
       publicationObservationState:
-        context.membershipPublicationPlanningSnapshot
-          ?.publicationObservationState ||
+        membershipPublicationPlanningSnapshot?.publicationObservationState ||
         context.membershipPublication?.publicationObservationState ||
         null,
       publicationStatus:
-        context.membershipPublicationPlanningSnapshot?.publicationStatus ||
+        membershipPublicationPlanningSnapshot?.publicationStatus ||
         context.membershipPublication?.status ||
         null,
       recoveryEligible,

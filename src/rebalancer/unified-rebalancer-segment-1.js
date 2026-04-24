@@ -37,6 +37,7 @@ const {
   READINESS_SKIP_DETAIL,
   REBALANCER_BUDGET_READ_OPTIONS,
   REBALANCER_CONCURRENT_BUDGET_READ_MODE,
+  REBALANCE_COORDINATOR_EVENT,
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
   REBALANCER_DEFAULT_POLICY,
@@ -114,6 +115,27 @@ const {
   shouldPriorityRecoveryOperationBlockPlanning,
   wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
+
+const PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET = new Set([
+  WORKFLOW_STEP.ACTIVE,
+  WORKFLOW_STEP.REMOVED,
+]);
+const PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET = new Set([
+  REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+  REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+]);
+const PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD = Object.freeze({
+  ENTITY_ID: "entityId",
+  ENTITY_ID_SNAKE: "entity_id",
+  PARTITION_ID: "partitionId",
+  PARTITION_ID_SNAKE: "partition_id",
+  SERVICE_TYPE: "serviceType",
+  SERVICE_TYPE_SNAKE: "service_type",
+  STATUS: "status",
+});
+const PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE = Object.freeze({
+  PARTITION: "partition",
+});
 
 class UnifiedRebalancerSegment1 extends EventEmitter {
   constructor(options = {}) {
@@ -348,6 +370,10 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
       reconcileFn: (_ownerKey, reasons) =>
         this.reconcileRebalanceCheck(reasons),
     });
+    this.priorityRecoveryVisibilityCacheListener = null;
+    this.bindPriorityRecoveryVisibilityCacheListener(this.systemTableCache);
+    this.coordinatorProgressListenerBindings = null;
+    this.bindCoordinatorProgressListeners(this.rebalanceCoordinator);
   }
 
   /**
@@ -375,8 +401,10 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
    * @param {Object} coordinator - RebalanceCoordinator instance.
    */
   setRebalanceCoordinator(coordinator) {
+    this.unbindCoordinatorProgressListeners();
     this.rebalanceCoordinator = coordinator;
     this.syncOwnerDependenciesFromCoordinator(coordinator);
+    this.bindCoordinatorProgressListeners(coordinator);
 
     this.logger.info(REBALANCER_LOG_MSG.COORDINATOR_SET, {
       entityId: this.entityId,
@@ -385,11 +413,260 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
     });
   }
 
+  bindCoordinatorProgressListeners(coordinator) {
+    if (
+      !coordinator ||
+      typeof coordinator.on !== TYPEOF.FUNCTION ||
+      this.isControlPlanePriorityPartition() !== true ||
+      this.coordinatorProgressListenerBindings
+    ) {
+      return;
+    }
+    const stepChangedListener = (event = {}) =>
+      this.handleCoordinatorProgressEvent(
+        REBALANCE_COORDINATOR_EVENT.STEP_CHANGED,
+        event,
+      );
+    const operationCompletedListener = (event = {}) =>
+      this.handleCoordinatorProgressEvent(
+        REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+        event,
+      );
+    const operationFailedListener = (event = {}) =>
+      this.handleCoordinatorProgressEvent(
+        REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+        event,
+      );
+    coordinator.on(REBALANCE_COORDINATOR_EVENT.STEP_CHANGED, stepChangedListener);
+    coordinator.on(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+      operationCompletedListener,
+    );
+    coordinator.on(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+      operationFailedListener,
+    );
+    this.coordinatorProgressListenerBindings = {
+      coordinator,
+      stepChangedListener,
+      operationCompletedListener,
+      operationFailedListener,
+    };
+  }
+
+  unbindCoordinatorProgressListeners() {
+    const bindings = this.coordinatorProgressListenerBindings;
+    if (!bindings?.coordinator) {
+      this.coordinatorProgressListenerBindings = null;
+      return;
+    }
+    const unsubscribe =
+      typeof bindings.coordinator.off === TYPEOF.FUNCTION
+        ? bindings.coordinator.off.bind(bindings.coordinator)
+        : typeof bindings.coordinator.removeListener === TYPEOF.FUNCTION
+          ? bindings.coordinator.removeListener.bind(bindings.coordinator)
+          : null;
+    if (unsubscribe) {
+      unsubscribe(
+        REBALANCE_COORDINATOR_EVENT.STEP_CHANGED,
+        bindings.stepChangedListener,
+      );
+      unsubscribe(
+        REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+        bindings.operationCompletedListener,
+      );
+      unsubscribe(
+        REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+        bindings.operationFailedListener,
+      );
+    }
+    this.coordinatorProgressListenerBindings = null;
+  }
+
+  bindPriorityRecoveryVisibilityCacheListener(
+    systemTableCache = this.systemTableCache,
+  ) {
+    if (
+      !systemTableCache ||
+      typeof systemTableCache.onCacheChange !== TYPEOF.FUNCTION ||
+      this.isControlPlanePriorityPartition() !== true ||
+      this.priorityRecoveryVisibilityCacheListener
+    ) {
+      return;
+    }
+    this.priorityRecoveryVisibilityCacheListener =
+      (tableName, operation, record) => {
+        this.handlePriorityRecoveryVisibilityEvent({
+          tableName,
+          operation,
+          data: record,
+        });
+      };
+    systemTableCache.onCacheChange(this.priorityRecoveryVisibilityCacheListener);
+  }
+
+  unbindPriorityRecoveryVisibilityCacheListener(
+    systemTableCache = this.systemTableCache,
+  ) {
+    if (
+      !this.priorityRecoveryVisibilityCacheListener ||
+      !systemTableCache ||
+      typeof systemTableCache.offCacheChange !== TYPEOF.FUNCTION
+    ) {
+      this.priorityRecoveryVisibilityCacheListener = null;
+      return;
+    }
+    systemTableCache.offCacheChange(this.priorityRecoveryVisibilityCacheListener);
+    this.priorityRecoveryVisibilityCacheListener = null;
+  }
+
+  buildCoordinatorProgressRebalanceDecision(eventName, payload = {}) {
+    const operation =
+      payload?.operation && typeof payload.operation === TYPEOF.OBJECT
+        ? payload.operation
+        : {};
+    const operationPartitionId = String(
+      operation.partitionId ||
+        operation.partition_id ||
+        operation.entityId ||
+        operation.entity_id ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const normalizedNewStep = String(
+      payload?.newStep ||
+        payload?.new_step ||
+        operation.workflowStep ||
+        operation.workflow_step ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toUpperCase();
+    const operationPriorityPartition =
+      operationPartitionId.length > UNIFIED_REBALANCER_LITERAL.ZERO &&
+      isPriorityControlPlanePartition({
+        partitionId: operationPartitionId,
+        partitionRow: getPartitionRowFromCache(
+          this.systemTableCache,
+          operationPartitionId,
+        ),
+      });
+    const stepProgress =
+      eventName === REBALANCE_COORDINATOR_EVENT.STEP_CHANGED &&
+      PRIORITY_RECOVERY_COORDINATOR_STEP_PROGRESS_SET.has(normalizedNewStep);
+    const terminalProgress =
+      PRIORITY_RECOVERY_COORDINATOR_TERMINAL_EVENT_SET.has(eventName);
+    const evidence = {
+      isLeader: this.isLeader === true,
+      priorityPartition: this.isControlPlanePriorityPartition() === true,
+      partitionMatches: operationPartitionId === this.entityId,
+      operationPriorityPartition,
+      stepProgress,
+      terminalProgress,
+    };
+    return {
+      shouldEnqueue:
+        evidence.isLeader &&
+        evidence.priorityPartition &&
+        (evidence.partitionMatches || evidence.operationPriorityPartition) &&
+        (evidence.stepProgress || evidence.terminalProgress),
+      reconcileReason: RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
+      evidence,
+    };
+  }
+
+  handleCoordinatorProgressEvent(eventName, payload = {}) {
+    const decision = this.buildCoordinatorProgressRebalanceDecision(
+      eventName,
+      payload,
+    );
+    if (decision.shouldEnqueue !== true) {
+      return false;
+    }
+    this.enqueueRebalanceCheck(decision.reconcileReason);
+    this.enqueueMembershipPublicationReconcile(decision.reconcileReason);
+    return true;
+  }
+
+  buildPriorityRecoveryVisibilityRebalanceDecision(event = {}, options = {}) {
+    const serviceRow =
+      event?.data && typeof event.data === TYPEOF.OBJECT ? event.data : {};
+    const servicePartitionId = String(
+      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID] ||
+        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.PARTITION_ID_SNAKE] ||
+        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID] ||
+        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.ENTITY_ID_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).trim();
+    const serviceType = String(
+      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE] ||
+        serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.SERVICE_TYPE_SNAKE] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    const serviceStatus = String(
+      serviceRow[PRIORITY_RECOVERY_VISIBILITY_SERVICE_FIELD.STATUS] ||
+        UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+    ).toLowerCase();
+    const evidence = {
+      isLeader: this.isLeader === true,
+      priorityPartition: this.isControlPlanePriorityPartition() === true,
+      tableMatches: event?.tableName === UNIFIED_REBALANCER_LITERAL.SERVICES,
+      partitionMatches: servicePartitionId === this.entityId,
+      activePartitionService:
+        serviceType === PRIORITY_RECOVERY_VISIBILITY_SERVICE_TYPE.PARTITION &&
+        serviceStatus === SERVICE_STATUS.ACTIVE,
+    };
+    const visibilityProgress =
+      evidence.priorityPartition &&
+      evidence.tableMatches &&
+      evidence.partitionMatches &&
+      evidence.activePartitionService;
+    return {
+      shouldEnqueue:
+        visibilityProgress &&
+        (options.requireLeader === false || evidence.isLeader),
+      visibilityProgress,
+      reconcileReason: RECONCILE_REASON.PRIORITY_RECOVERY_PROGRESS,
+      evidence,
+    };
+  }
+
+  handlePriorityRecoveryVisibilityEvent(event = {}) {
+    const decision = this.buildPriorityRecoveryVisibilityRebalanceDecision(
+      event,
+    );
+    if (decision.shouldEnqueue !== true) {
+      return false;
+    }
+    this.enqueueRebalanceCheck(decision.reconcileReason);
+    this.enqueueMembershipPublicationReconcile(decision.reconcileReason);
+    return true;
+  }
+
+  /**
+   * Priority recovery progress must wake the canonical publication owner so
+   * durable spread summaries converge from fresh service rows.
+   *
+   * @param {string} reason
+   * @return {boolean}
+   * @private
+   */
+  enqueueMembershipPublicationReconcile(reason) {
+    const publicationService =
+      this.controlPlaneReadinessService?.membershipPublicationService;
+    if (
+      !publicationService ||
+      typeof publicationService.enqueueClusterMembershipReconcile !==
+        TYPEOF.FUNCTION
+    ) {
+      return false;
+    }
+    return publicationService.enqueueClusterMembershipReconcile(reason);
+  }
+
   /**
    * Synchronize mutable runtime dependencies after construction.
    * @param {Object} [options={}]
    */
   syncOwnerDependencies(options = {}) {
+    const previousSystemTableCache = this.systemTableCache;
     if (Object.hasOwn(options, UNIFIED_REBALANCER_LITERAL.SYSTEMTABLECACHE)) {
       this.systemTableCache = options.systemTableCache || null;
     }
@@ -442,6 +719,16 @@ class UnifiedRebalancerSegment1 extends EventEmitter {
         messageRouter: this.messageRouter,
         cdcIntegrationService: this.cdcIntegrationService,
       });
+    }
+
+    if (
+      Object.hasOwn(options, UNIFIED_REBALANCER_LITERAL.SYSTEMTABLECACHE) &&
+      previousSystemTableCache !== this.systemTableCache
+    ) {
+      this.unbindPriorityRecoveryVisibilityCacheListener(
+        previousSystemTableCache,
+      );
+      this.bindPriorityRecoveryVisibilityCacheListener(this.systemTableCache);
     }
 
     if (

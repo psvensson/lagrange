@@ -310,6 +310,12 @@ function evaluateLoadPublishedConvergence(
 ) {
   const expectedPublishedNodeIds =
     normalizeDistinctStringArray(expectedNodeIds);
+  const selectedPriorityRecoveryDecisionSnapshots =
+    snapshotCoverage?.selectedPriorityRecoveryDecisionSnapshots &&
+    typeof snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots ===
+      "object"
+      ? snapshotCoverage.selectedPriorityRecoveryDecisionSnapshots
+      : null;
   const selectedPublicationConvergenceGate =
     snapshotCoverage?.selectedPublicationConvergenceGate &&
     typeof snapshotCoverage.selectedPublicationConvergenceGate === "object"
@@ -334,6 +340,10 @@ function evaluateLoadPublishedConvergence(
         selectedPublicationConvergenceGate.reasonCodes,
       priorityPartitionSummary:
         selectedPublicationConvergenceGate.priorityPartitionSummary,
+      priorityRecoveryDecisionSnapshots:
+        selectedPriorityRecoveryDecisionSnapshots,
+      priorityRecoveryClosureWitness:
+        selectedPriorityRecoveryDecisionSnapshots?.closureWitness || null,
       pendingAckNodeIds:
         selectedPublicationConvergenceGate.pendingAckNodeIds,
       missingPublishedNodeIds:
@@ -348,6 +358,10 @@ function evaluateLoadPublishedConvergence(
         publicationConvergence?.priorityRecoveryReasonCodes,
       priorityPartitionSummary:
         publicationConvergence?.priorityPartitionSummary,
+      priorityRecoveryDecisionSnapshots:
+        selectedPriorityRecoveryDecisionSnapshots,
+      priorityRecoveryClosureWitness:
+        selectedPriorityRecoveryDecisionSnapshots?.closureWitness || null,
       pendingAckNodeIds: publicationConvergence?.pendingAckNodeIds,
     });
   const publicationStatus =
@@ -441,9 +455,12 @@ function evaluateLoadPublishedConvergence(
     ready: reasons.length === ZERO,
     reasons: Object.freeze(reasons),
     publicationStatus,
+    closureRecordId: publicationRecoveryGate?.closureRecordId || null,
+    closureWitnessClass: publicationRecoveryGate?.closureWitnessClass || null,
     publicationRecoveryGate,
     recoveryProtocolState,
     priorityRecoveryReasonCodes,
+    priorityRecoveryDecisionSnapshots: selectedPriorityRecoveryDecisionSnapshots,
     recoveryActiveNodeIds,
     recoveryActiveNodeSource:
       typeof publicationConvergence?.recoveryActiveNodeSource === "string" &&
@@ -932,8 +949,13 @@ function buildActiveWaitProgressSnapshot(
       missingPublishedCount: missingPublishedNodeIds.length,
       gateReasons,
       prioritySpreadSatisfied,
+      priorityRecoveryDecisionSnapshots,
+      priorityRecoveryClosureWitness:
+        priorityRecoveryDecisionSnapshots?.closureWitness || null,
       publicationRecoveryGate:
-        publicationConvergenceGate?.publicationRecoveryGate || null,
+        publicationConvergenceGate?.publicationRecoveryGate ||
+        publicationConvergenceGate ||
+        null,
       selectedSnapshotAdminReady,
       selectedSnapshotReachableBy,
       selectedSnapshotError,
@@ -943,6 +965,28 @@ function buildActiveWaitProgressSnapshot(
     publicationConvergenceGate,
     readinessMode,
   });
+  const closureRecordId =
+    (typeof publicationConvergenceGate?.closureRecordId === "string" &&
+    publicationConvergenceGate.closureRecordId.length > ZERO
+      ? publicationConvergenceGate.closureRecordId
+      : null) ||
+    (typeof publicationConvergence?.closureRecordId === "string" &&
+    publicationConvergence.closureRecordId.length > ZERO
+      ? publicationConvergence.closureRecordId
+      : null) ||
+    closureWitness?.closureRecordId ||
+    null;
+  const closureWitnessClass =
+    (typeof publicationConvergenceGate?.closureWitnessClass === "string" &&
+    publicationConvergenceGate.closureWitnessClass.length > ZERO
+      ? publicationConvergenceGate.closureWitnessClass
+      : null) ||
+    (typeof publicationConvergence?.closureWitnessClass === "string" &&
+    publicationConvergence.closureWitnessClass.length > ZERO
+      ? publicationConvergence.closureWitnessClass
+      : null) ||
+    closureWitness?.closureWitnessClass ||
+    null;
 
   return {
     expectedNodeCount: normalizedExpectedNodeCount,
@@ -977,8 +1021,8 @@ function buildActiveWaitProgressSnapshot(
     priorityRecoveryUnresolvedClassCount,
     priorityRecoveryUnresolvedSemanticStateCount,
     priorityRecoveryBlockedPartitionCount,
-    closureRecordId: closureWitness?.closureRecordId || null,
-    closureWitnessClass: closureWitness?.closureWitnessClass || null,
+    closureRecordId,
+    closureWitnessClass,
     readinessDelay: classifyActiveGateReadinessDelay({
       readinessMode,
       selectedSnapshotError,
@@ -1025,12 +1069,118 @@ function inferPriorityRecoverySemanticState(snapshot, blockerReasons = []) {
   return PRIORITY_RECOVERY_SEMANTIC_STATE.BLOCKED_UNCLASSIFIED;
 }
 
+function buildPriorityRecoveryExplicitSemanticStateByPartitionId(
+  partitionIdsBySemanticState,
+) {
+  const explicitSemanticStateByPartitionId = new Map();
+  if (
+    !partitionIdsBySemanticState ||
+    typeof partitionIdsBySemanticState !== "object" ||
+    Array.isArray(partitionIdsBySemanticState)
+  ) {
+    return explicitSemanticStateByPartitionId;
+  }
+  for (const [semanticState, partitionIds] of Object.entries(
+    partitionIdsBySemanticState,
+  )) {
+    const normalizedSemanticState =
+      normalizePriorityRecoverySemanticStateId(semanticState);
+    if (!normalizedSemanticState) {
+      continue;
+    }
+    for (const partitionId of normalizeDistinctStringArray(partitionIds)) {
+      if (!explicitSemanticStateByPartitionId.has(partitionId)) {
+        explicitSemanticStateByPartitionId.set(
+          partitionId,
+          normalizedSemanticState,
+        );
+      }
+    }
+  }
+  return explicitSemanticStateByPartitionId;
+}
+
+function resolvePriorityRecoveryExplicitSemanticState(
+  snapshot,
+  explicitSemanticStateByPartitionId,
+) {
+  const explicitSemanticState =
+    normalizePriorityRecoverySemanticStateId(snapshot?.semanticStateId) ||
+    normalizePriorityRecoverySemanticStateId(snapshot?.semanticState);
+  if (explicitSemanticState) {
+    return explicitSemanticState;
+  }
+  const partitionId = String(snapshot?.partitionId || "").trim();
+  if (
+    partitionId.length === ZERO ||
+    !(explicitSemanticStateByPartitionId instanceof Map)
+  ) {
+    return null;
+  }
+  return explicitSemanticStateByPartitionId.get(partitionId) || null;
+}
+
+function resolvePriorityRecoveryDecisionSnapshotSortTimestamp(snapshot) {
+  const updatedAtMs = Number(
+    snapshot?.coordinator?.operation?.updatedAtMs ??
+      snapshot?.observation?.provenance?.capturedAt ??
+      ZERO,
+  );
+  return Number.isFinite(updatedAtMs) ? updatedAtMs : ZERO;
+}
+
+function comparePriorityRecoveryDecisionSummarySnapshots(left, right) {
+  const leftEpoch = Number.isFinite(left?.epoch) ? left.epoch : -1;
+  const rightEpoch = Number.isFinite(right?.epoch) ? right.epoch : -1;
+  if (leftEpoch !== rightEpoch) {
+    return leftEpoch - rightEpoch;
+  }
+  const leftTimestamp = resolvePriorityRecoveryDecisionSnapshotSortTimestamp(
+    left,
+  );
+  const rightTimestamp = resolvePriorityRecoveryDecisionSnapshotSortTimestamp(
+    right,
+  );
+  if (leftTimestamp !== rightTimestamp) {
+    return leftTimestamp - rightTimestamp;
+  }
+  return String(left?.correlationKey || "").localeCompare(
+    String(right?.correlationKey || ""),
+  );
+}
+
+function selectPriorityRecoveryDecisionSummarySnapshots(snapshots) {
+  const latestSnapshotByPartitionId = new Map();
+  for (const snapshot of Array.isArray(snapshots) ? snapshots : []) {
+    if (!snapshot || typeof snapshot !== "object") {
+      continue;
+    }
+    const partitionId = String(snapshot.partitionId || "").trim();
+    if (partitionId.length === ZERO) {
+      continue;
+    }
+    const currentSnapshot = latestSnapshotByPartitionId.get(partitionId);
+    if (
+      !currentSnapshot ||
+      comparePriorityRecoveryDecisionSummarySnapshots(
+        currentSnapshot,
+        snapshot,
+      ) < ZERO
+    ) {
+      latestSnapshotByPartitionId.set(partitionId, snapshot);
+    }
+  }
+  return [...latestSnapshotByPartitionId.values()];
+}
+
 function summarizePriorityRecoveryProgressClasses(
   priorityRecoveryDecisionSnapshots = null,
 ) {
   const snapshots = Array.isArray(priorityRecoveryDecisionSnapshots?.snapshots)
     ? priorityRecoveryDecisionSnapshots.snapshots
     : [];
+  const summarySnapshots =
+    selectPriorityRecoveryDecisionSummarySnapshots(snapshots);
   const partitionIdsByClass = {
     [ACTIVE_WAIT_PRIORITY_RECOVERY_PROGRESS_CLASS.ELIGIBLE_NO_OPERATION]:
       new Set(),
@@ -1045,17 +1195,16 @@ function summarizePriorityRecoveryProgressClasses(
   for (const semanticState of PRIORITY_RECOVERY_SEMANTIC_STATE_IDS) {
     partitionIdsBySemanticState[semanticState] = new Set();
   }
-  for (const snapshot of snapshots) {
-    if (!snapshot || typeof snapshot !== "object") {
-      continue;
-    }
-    const partitionId = String(snapshot.partitionId || "").trim();
+  const explicitSemanticStateByPartitionId =
+    buildPriorityRecoveryExplicitSemanticStateByPartitionId(
+      priorityRecoveryDecisionSnapshots?.partitionIdsBySemanticState,
+    );
+  for (const snapshot of summarySnapshots) {
+    const partitionId = String(snapshot?.partitionId || "").trim();
+    const blockerReasons = normalizeDistinctStringArray(snapshot?.blockerReasons);
     if (partitionId.length === ZERO) {
       continue;
     }
-    const blockerReasons = normalizeDistinctStringArray(
-      snapshot.blockerReasons,
-    );
     for (const blockerReason of blockerReasons) {
       if (!Object.hasOwn(partitionIdsByClass, blockerReason)) {
         continue;
@@ -1063,7 +1212,10 @@ function summarizePriorityRecoveryProgressClasses(
       partitionIdsByClass[blockerReason].add(partitionId);
     }
     const semanticState =
-      normalizePriorityRecoverySemanticStateId(snapshot.semanticState) ||
+      resolvePriorityRecoveryExplicitSemanticState(
+        snapshot,
+        explicitSemanticStateByPartitionId,
+      ) ||
       inferPriorityRecoverySemanticState(snapshot, blockerReasons);
     if (partitionIdsBySemanticState[semanticState] instanceof Set) {
       partitionIdsBySemanticState[semanticState].add(partitionId);
@@ -1080,11 +1232,6 @@ function summarizePriorityRecoveryProgressClasses(
     .filter(([, partitionIds]) => partitionIds.length > ZERO)
     .map(([progressClass]) => progressClass)
     .sort();
-  const blockedPartitionIds = normalizeDistinctStringArray(
-    unresolvedClassIds.flatMap(
-      (progressClass) => normalizedPartitionIdsByClass[progressClass] || [],
-    ),
-  );
   const normalizedPartitionIdsBySemanticState = {};
   for (const [semanticState, partitionIds] of Object.entries(
     partitionIdsBySemanticState,
@@ -1104,10 +1251,6 @@ function summarizePriorityRecoveryProgressClasses(
         normalizedPartitionIdsBySemanticState[semanticState] || [],
     ),
   );
-  const effectiveBlockedPartitionIds =
-    semanticBlockedPartitionIds.length > ZERO
-      ? semanticBlockedPartitionIds
-      : blockedPartitionIds;
 
   return {
     partitionIdsByClass: normalizedPartitionIdsByClass,
@@ -1116,8 +1259,8 @@ function summarizePriorityRecoveryProgressClasses(
     partitionIdsBySemanticState: normalizedPartitionIdsBySemanticState,
     unresolvedSemanticStateIds,
     unresolvedSemanticStateCount: unresolvedSemanticStateIds.length,
-    blockedPartitionIds: effectiveBlockedPartitionIds,
-    blockedPartitionCount: effectiveBlockedPartitionIds.length,
+    blockedPartitionIds: semanticBlockedPartitionIds,
+    blockedPartitionCount: semanticBlockedPartitionIds.length,
   };
 }
 

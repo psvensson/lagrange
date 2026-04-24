@@ -116,6 +116,41 @@ const {
   wasNodeRecordReadyWhenWritten,
 } = UNIFIED_REBALANCER_SHARED;
 
+const REBALANCE_PLANNING_GATE = Object.freeze({
+  CLUSTER_READINESS: "cluster_readiness",
+  START_DELAY: "start_delay",
+  STABILIZATION: "stabilization",
+  TOPOLOGY_SETTLING: "topology_settling",
+  TRAFFIC_READINESS: "traffic_readiness",
+  LOCAL_SERVE_READINESS: "local_serve_readiness",
+  LOCAL_MUTATION_READINESS: "local_mutation_readiness",
+  CONTROL_PLANE_PRIORITY_SPREAD: "control_plane_priority_spread",
+  TRANSPORT_BACKPRESSURE: "transport_backpressure",
+});
+
+const REBALANCE_PLANNING_GATE_DECISION = Object.freeze({
+  DEFER_PLANNING: "defer_planning",
+});
+
+const REBALANCE_PLANNING_GATE_ACTION = Object.freeze({
+  SCHEDULE_RETRY: "schedule_retry",
+});
+
+const REBALANCE_PLANNING_GATE_LOG_LEVEL = Object.freeze({
+  DEBUG: "debug",
+  INFO: "info",
+});
+
+const REBALANCE_PLANNING_GATE_SCHEDULE_MODE = Object.freeze({
+  NEXT: "next",
+  PRIORITY_AWARE: "priority_aware",
+});
+
+const REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER = Object.freeze({
+  WAIT: 1.25,
+  BACKPRESSURE: 1.5,
+});
+
 class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
   scheduleNextCheck(overrideDelayMs = null) {
     if (!this.isLeader || this.isShuttingDown) {
@@ -269,13 +304,63 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     return true;
   }
 
+  buildRebalancePlanningGateDecision({
+    gate,
+    blocker = null,
+    logLevel = REBALANCE_PLANNING_GATE_LOG_LEVEL.INFO,
+    logMessage,
+    logContext = {},
+    scheduleMode = REBALANCE_PLANNING_GATE_SCHEDULE_MODE.NEXT,
+    scheduleDelayMs = null,
+  } = {}) {
+    const normalizedScheduleDelayMs =
+      Number.isFinite(scheduleDelayMs) &&
+      scheduleDelayMs > UNIFIED_REBALANCER_LITERAL.ZERO
+        ? Math.floor(scheduleDelayMs)
+        : null;
+    return Object.freeze({
+      decision: REBALANCE_PLANNING_GATE_DECISION.DEFER_PLANNING,
+      nextAction: REBALANCE_PLANNING_GATE_ACTION.SCHEDULE_RETRY,
+      gate,
+      blocker,
+      logLevel,
+      logMessage,
+      logContext: Object.freeze({ ...logContext }),
+      scheduleMode,
+      scheduleDelayMs: normalizedScheduleDelayMs,
+    });
+  }
+
+  applyRebalancePlanningGateDecision(decision) {
+    if (!decision) {
+      return;
+    }
+    const logMethod =
+      decision.logLevel === REBALANCE_PLANNING_GATE_LOG_LEVEL.DEBUG
+        ? this.logger.debug
+        : this.logger.info;
+    logMethod.call(this.logger, decision.logMessage, {
+      entityId: this.entityId,
+      ...decision.logContext,
+    });
+    if (
+      decision.scheduleMode ===
+      REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE
+    ) {
+      this.schedulePriorityAwareCheck(decision.scheduleDelayMs);
+      return;
+    }
+    this.scheduleNextCheck(decision.scheduleDelayMs);
+  }
+
   /**
    * Evaluate cluster readiness gating before the first planning pass.
-   * Returns one deferred-check closure when rebalance planning must wait.
-   * @return {{apply: Function}|null}
+   * Returns one explicit planning-gate decision when rebalance planning must
+   * wait.
+   * @return {Object|null}
    * @private
    */
-  evaluateClusterReadinessBlocker() {
+  evaluateClusterReadinessGateDecision() {
     if (this.clusterReadinessConfirmed) {
       return null;
     }
@@ -310,268 +395,359 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
       return null;
     }
 
-    return {
-      apply: () => {
-        this.logger.info(REBALANCER_LOG_MSG.CLUSTER_NOT_READY, {
-          entityId: this.entityId,
-          unmetConditions: result.unmetConditions,
-        });
-        this.schedulePriorityAwareCheck();
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.CLUSTER_READINESS,
+      blocker: result,
+      logMessage: REBALANCER_LOG_MSG.CLUSTER_NOT_READY,
+      logContext: {
+        unmetConditions: result.unmetConditions,
       },
-    };
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+    });
   }
 
   /**
    * Evaluate startup and readiness gates before running one rebalance pass.
-   * Returns one deferred-check closure when planning must wait.
-   * @return {Promise<{apply: Function}|null>}
+   * Returns one explicit planning-gate decision when planning must wait.
+   * @return {Promise<Object|null>}
    * @private
    */
-  async getCheckRebalanceBlocker() {
-    const clusterReadinessBlocker = this.evaluateClusterReadinessBlocker();
-    if (clusterReadinessBlocker) {
-      return clusterReadinessBlocker;
-    }
-
+  resolveStartDelayPlanningGateDecision() {
     const timeUntilRebalanceEligibleMs =
       this.getTimeUntilRebalanceStartEligible();
-    if (timeUntilRebalanceEligibleMs > UNIFIED_REBALANCER_LITERAL.ZERO) {
-      return {
-        apply: () => {
-          this.logger.debug(REBALANCER_LOG_MSG.WAIT_START_DELAY, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            remainingMs: timeUntilRebalanceEligibleMs,
-            isSystemPartition: this.isSystemPartitionEntity(),
-          });
-          this.scheduleNextCheck(timeUntilRebalanceEligibleMs);
-        },
-      };
+    if (timeUntilRebalanceEligibleMs <= UNIFIED_REBALANCER_LITERAL.ZERO) {
+      return null;
     }
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.START_DELAY,
+      blocker: {
+        remainingMs: timeUntilRebalanceEligibleMs,
+      },
+      logLevel: REBALANCE_PLANNING_GATE_LOG_LEVEL.DEBUG,
+      logMessage: REBALANCER_LOG_MSG.WAIT_START_DELAY,
+      logContext: {
+        entityType: this.entityType,
+        remainingMs: timeUntilRebalanceEligibleMs,
+        isSystemPartition: this.isSystemPartitionEntity(),
+      },
+      scheduleDelayMs: timeUntilRebalanceEligibleMs,
+    });
+  }
 
-    if (!this.isStabilized()) {
-      return {
-        apply: () => {
-          this.logger.debug(REBALANCER_LOG_MSG.WAIT_STABILIZATION, {
-            entityId: this.entityId,
-            timeUntilStabilized: this.getTimeUntilStabilized(),
-          });
-          this.schedulePriorityAwareCheck();
-        },
-      };
+  resolveStabilizationPlanningGateDecision() {
+    if (this.isStabilized()) {
+      return null;
     }
+    const timeUntilStabilized = this.getTimeUntilStabilized();
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.STABILIZATION,
+      blocker: {
+        timeUntilStabilized,
+      },
+      logLevel: REBALANCE_PLANNING_GATE_LOG_LEVEL.DEBUG,
+      logMessage: REBALANCER_LOG_MSG.WAIT_STABILIZATION,
+      logContext: {
+        timeUntilStabilized,
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+    });
+  }
 
+  async resolveTopologySettlingPlanningGateDecision() {
     const topologySettlingBlocker =
       await this.revalidateCriticalSystemTopologySettlingBlocker(
         this.getCriticalSystemTopologySettlingBlocker(),
       );
-    if (topologySettlingBlocker) {
-      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
-      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            delayMs,
-            blockerReason: topologySettlingBlocker.reason || null,
-            connectedNodeId:
-              typeof topologySettlingBlocker.connectedNodeId ===
-                TYPEOF.STRING &&
-              topologySettlingBlocker.connectedNodeId.length > NUM.ZERO
-                ? topologySettlingBlocker.connectedNodeId
-                : null,
-            unreadyNodeIds: Array.isArray(
-              topologySettlingBlocker.unreadyNodeIds,
-            )
-              ? [...topologySettlingBlocker.unreadyNodeIds]
-              : [],
-            missingNodeEndpointNodeIds: Array.isArray(
-              topologySettlingBlocker.missingNodeEndpointNodeIds,
-            )
-              ? [...topologySettlingBlocker.missingNodeEndpointNodeIds]
-              : [],
-            missingPostgresWireNodeIds: Array.isArray(
-              topologySettlingBlocker.missingPostgresWireNodeIds,
-            )
-              ? [...topologySettlingBlocker.missingPostgresWireNodeIds]
-              : [],
-            endpointReadyNodeCount: Number.isFinite(
-              topologySettlingBlocker.endpointReadyNodeCount,
-            )
-              ? topologySettlingBlocker.endpointReadyNodeCount
-              : null,
-            requiredReadyNodeCount: Number.isFinite(
-              topologySettlingBlocker.requiredReadyNodeCount,
-            )
-              ? topologySettlingBlocker.requiredReadyNodeCount
-              : null,
-            inFlightReplicaOperations: Number.isFinite(
-              topologySettlingBlocker.inFlightReplicaOperations,
-            )
-              ? topologySettlingBlocker.inFlightReplicaOperations
-              : null,
-            inFlightReplicaOperationsSource:
-              topologySettlingBlocker.inFlightReplicaOperationsSource || null,
-          });
-          this.schedulePriorityAwareCheck(scheduleDelayMs);
-        },
-      };
+    if (!topologySettlingBlocker) {
+      return null;
     }
+    const scheduleDelayMs = this.increaseCurrentInterval(
+      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
+    );
+    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.TOPOLOGY_SETTLING,
+      blocker: topologySettlingBlocker,
+      logMessage: REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING,
+      logContext: {
+        entityType: this.entityType,
+        delayMs,
+        blockerReason: topologySettlingBlocker.reason || null,
+        connectedNodeId:
+          typeof topologySettlingBlocker.connectedNodeId === TYPEOF.STRING &&
+          topologySettlingBlocker.connectedNodeId.length > NUM.ZERO
+            ? topologySettlingBlocker.connectedNodeId
+            : null,
+        unreadyNodeIds: Array.isArray(topologySettlingBlocker.unreadyNodeIds)
+          ? [...topologySettlingBlocker.unreadyNodeIds]
+          : [],
+        missingNodeEndpointNodeIds: Array.isArray(
+          topologySettlingBlocker.missingNodeEndpointNodeIds,
+        )
+          ? [...topologySettlingBlocker.missingNodeEndpointNodeIds]
+          : [],
+        missingPostgresWireNodeIds: Array.isArray(
+          topologySettlingBlocker.missingPostgresWireNodeIds,
+        )
+          ? [...topologySettlingBlocker.missingPostgresWireNodeIds]
+          : [],
+        endpointReadyNodeCount: Number.isFinite(
+          topologySettlingBlocker.endpointReadyNodeCount,
+        )
+          ? topologySettlingBlocker.endpointReadyNodeCount
+          : null,
+        requiredReadyNodeCount: Number.isFinite(
+          topologySettlingBlocker.requiredReadyNodeCount,
+        )
+          ? topologySettlingBlocker.requiredReadyNodeCount
+          : null,
+        inFlightReplicaOperations: Number.isFinite(
+          topologySettlingBlocker.inFlightReplicaOperations,
+        )
+          ? topologySettlingBlocker.inFlightReplicaOperations
+          : null,
+        inFlightReplicaOperationsSource:
+          topologySettlingBlocker.inFlightReplicaOperationsSource || null,
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs,
+    });
+  }
 
+  resolveTrafficReadinessPlanningGateDecision() {
     const trafficReadinessBlocker =
       this.getCriticalSystemTrafficReadinessBlocker();
-    if (trafficReadinessBlocker) {
-      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
-      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_TRAFFIC_READY, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            nodeId: this.nodeId,
-            delayMs,
-            readinessPhase: trafficReadinessBlocker.phase || null,
-            readinessReady: trafficReadinessBlocker.ready === true,
-            reasonCodes: Array.isArray(trafficReadinessBlocker.reasons)
-              ? [...trafficReadinessBlocker.reasons]
-              : [],
-            stableElapsedMs: Number.isFinite(
-              trafficReadinessBlocker.stableElapsedMs,
-            )
-              ? trafficReadinessBlocker.stableElapsedMs
-              : null,
-            stableWindowMs: Number.isFinite(
-              trafficReadinessBlocker.stableWindowMs,
-            )
-              ? trafficReadinessBlocker.stableWindowMs
-              : null,
-          });
-          this.schedulePriorityAwareCheck(scheduleDelayMs);
-        },
-      };
+    if (!trafficReadinessBlocker) {
+      return null;
     }
+    const scheduleDelayMs = this.increaseCurrentInterval(
+      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
+    );
+    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.TRAFFIC_READINESS,
+      blocker: trafficReadinessBlocker,
+      logMessage: REBALANCER_LOG_MSG.WAIT_TRAFFIC_READY,
+      logContext: {
+        entityType: this.entityType,
+        nodeId: this.nodeId,
+        delayMs,
+        readinessPhase: trafficReadinessBlocker.phase || null,
+        readinessReady: trafficReadinessBlocker.ready === true,
+        reasonCodes: Array.isArray(trafficReadinessBlocker.reasons)
+          ? [...trafficReadinessBlocker.reasons]
+          : [],
+        stableElapsedMs: Number.isFinite(trafficReadinessBlocker.stableElapsedMs)
+          ? trafficReadinessBlocker.stableElapsedMs
+          : null,
+        stableWindowMs: Number.isFinite(trafficReadinessBlocker.stableWindowMs)
+          ? trafficReadinessBlocker.stableWindowMs
+          : null,
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs,
+    });
+  }
 
+  resolveLocalServePlanningGateDecision() {
     const localServeReadinessBlocker =
       this.getCriticalSystemLocalServeReadinessBlocker();
-    if (localServeReadinessBlocker) {
-      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
-      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            nodeId: this.nodeId,
-            delayMs,
-            reasonCodes: Array.isArray(localServeReadinessBlocker.reasons)
-              ? localServeReadinessBlocker.reasons
-                  .map((reason) =>
-                    String(
-                      reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-                    ),
-                  )
-                  .filter(Boolean)
-              : [],
-          });
-          this.schedulePriorityAwareCheck(scheduleDelayMs);
-        },
-      };
+    if (!localServeReadinessBlocker) {
+      return null;
     }
+    const scheduleDelayMs = this.increaseCurrentInterval(
+      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
+    );
+    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.LOCAL_SERVE_READINESS,
+      blocker: localServeReadinessBlocker,
+      logMessage: REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS,
+      logContext: {
+        entityType: this.entityType,
+        nodeId: this.nodeId,
+        delayMs,
+        reasonCodes: Array.isArray(localServeReadinessBlocker.reasons)
+          ? localServeReadinessBlocker.reasons
+              .map((reason) =>
+                String(
+                  reason?.code || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
+                ),
+              )
+              .filter(Boolean)
+          : [],
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs,
+    });
+  }
 
+  resolveLocalMutationPlanningGateDecision() {
     const localMutationReadinessBlocker =
       this.getLocalControlPlaneMutationReadinessBlocker();
-    if (localMutationReadinessBlocker) {
-      const scheduleDelayMs = this.increaseCurrentInterval(1.25);
-      const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            nodeId: this.nodeId,
-            delayMs,
-            failedDimensions: Array.isArray(
-              localMutationReadinessBlocker.failedDimensions,
-            )
-              ? [...localMutationReadinessBlocker.failedDimensions]
-              : [],
-            reasonCodes: Array.isArray(
-              localMutationReadinessBlocker.reasonCodes,
-            )
-              ? [...localMutationReadinessBlocker.reasonCodes]
-              : [],
-          });
-          this.schedulePriorityAwareCheck(scheduleDelayMs);
-        },
-      };
+    if (!localMutationReadinessBlocker) {
+      return null;
     }
+    const scheduleDelayMs = this.increaseCurrentInterval(
+      REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.WAIT,
+    );
+    const delayMs = this.getPriorityAwareDelayMs(scheduleDelayMs);
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.LOCAL_MUTATION_READINESS,
+      blocker: localMutationReadinessBlocker,
+      logMessage: REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS,
+      logContext: {
+        entityType: this.entityType,
+        nodeId: this.nodeId,
+        delayMs,
+        failedDimensions: Array.isArray(
+          localMutationReadinessBlocker.failedDimensions,
+        )
+          ? [...localMutationReadinessBlocker.failedDimensions]
+          : [],
+        reasonCodes: Array.isArray(localMutationReadinessBlocker.reasonCodes)
+          ? [...localMutationReadinessBlocker.reasonCodes]
+          : [],
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs,
+    });
+  }
 
+  resolvePrioritySpreadPlanningGateDecision() {
     const controlPlanePriorityBlocker =
       this.getControlPlanePrioritySpreadBlocker();
-    if (controlPlanePriorityBlocker) {
-      const blockedPartitions =
-        controlPlanePriorityBlocker.blockedPartitions || [];
-      const currentPriorityPartitionStillBlocked =
-        this.isControlPlanePriorityPartition() &&
-        blockedPartitions.some(
-          (partition) => partition?.partitionId === this.entityId,
-        );
-      if (currentPriorityPartitionStillBlocked) {
-        return null;
-      }
-      const largestSpreadGap = blockedPartitions.reduce(
-        (largestGap, partition) =>
-          Math.max(largestGap, Number(partition?.spreadGap) || NUM.ZERO),
-        NUM.ZERO,
+    if (!controlPlanePriorityBlocker) {
+      return null;
+    }
+    const blockedPartitions =
+      controlPlanePriorityBlocker.blockedPartitions || [];
+    const currentPriorityPartitionStillBlocked =
+      this.isControlPlanePriorityPartition() &&
+      blockedPartitions.some(
+        (partition) => partition?.partitionId === this.entityId,
       );
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            delayMs: this.getPriorityRetryDelayMs(),
-            requiredDistinctNodeCount:
-              controlPlanePriorityBlocker.requiredDistinctNodeCount,
-            blockedPartitionCount: blockedPartitions.length,
-            largestSpreadGap,
-            blockedPartitions: blockedPartitions.map((partition) => ({
-              partitionId: partition.partitionId,
-              readyReplicaCount: partition.readyReplicaCount,
-              readyDistinctNodeCount: partition.readyDistinctNodeCount,
-              spreadGap: partition.spreadGap,
-            })),
-          });
-          this.scheduleNextCheck(this.getPriorityRetryDelayMs());
-        },
-      };
+    if (currentPriorityPartitionStillBlocked) {
+      return null;
     }
+    const largestSpreadGap = blockedPartitions.reduce(
+      (largestGap, partition) =>
+        Math.max(largestGap, Number(partition?.spreadGap) || NUM.ZERO),
+      NUM.ZERO,
+    );
+    const scheduleDelayMs = this.getPriorityRetryDelayMs();
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+      blocker: controlPlanePriorityBlocker,
+      logMessage: REBALANCER_LOG_MSG.WAIT_CONTROL_PLANE_PRIORITY,
+      logContext: {
+        entityType: this.entityType,
+        delayMs: scheduleDelayMs,
+        requiredDistinctNodeCount:
+          controlPlanePriorityBlocker.requiredDistinctNodeCount,
+        blockedPartitionCount: blockedPartitions.length,
+        largestSpreadGap,
+        blockedPartitions: blockedPartitions.map((partition) => ({
+          partitionId: partition.partitionId,
+          readyReplicaCount: partition.readyReplicaCount,
+          readyDistinctNodeCount: partition.readyDistinctNodeCount,
+          spreadGap: partition.spreadGap,
+        })),
+      },
+      scheduleDelayMs,
+    });
+  }
 
+  buildTransportBackpressurePlanningGateSnapshot() {
     const transportPressure = this.getTransportPressureSummary();
-    if (transportPressure?.backpressured === true) {
-      const isPriorityPartition = this.isControlPlanePriorityPartition();
-      const scheduleDelayMs = isPriorityPartition
-        ? this.currentInterval
-        : this.increaseCurrentInterval(1.5);
-      const delayMs = isPriorityPartition
-        ? this.getPriorityRetryDelayMs()
-        : scheduleDelayMs;
-      return {
-        apply: () => {
-          this.logger.info(REBALANCER_LOG_MSG.WAIT_TRANSPORT_BACKPRESSURE, {
-            entityId: this.entityId,
-            entityType: this.entityType,
-            saturatedNodeCount: transportPressure.saturatedNodeCount,
-            totalPending: transportPressure.totalPending,
-            maxPendingUtilization: transportPressure.maxPendingUtilization,
-            delayMs,
-          });
-          this.schedulePriorityAwareCheck(scheduleDelayMs);
-        },
-      };
-    }
+    const isPriorityPartition = this.isControlPlanePriorityPartition();
+    const priorityRecoveryAdmissionPlan = isPriorityPartition
+      ? this.getPriorityRecoveryAdmissionPlan()
+      : null;
+    const currentPriorityRecoveryPartitionBlocked =
+      typeof priorityRecoveryAdmissionPlan?.hasBlockedPartition ===
+        TYPEOF.FUNCTION &&
+      priorityRecoveryAdmissionPlan.hasBlockedPartition(this.entityId) === true;
+    return Object.freeze({
+      transportPressure,
+      isPriorityPartition,
+      currentPriorityRecoveryPartitionBlocked,
+      shouldDefer:
+        transportPressure?.backpressured === true &&
+        currentPriorityRecoveryPartitionBlocked !== true,
+    });
+  }
 
-    return null;
+  resolveTransportBackpressurePlanningGateDecision() {
+    const gateSnapshot = this.buildTransportBackpressurePlanningGateSnapshot();
+    if (gateSnapshot.shouldDefer !== true) {
+      return null;
+    }
+    const transportPressure = gateSnapshot.transportPressure;
+    const isPriorityPartition = gateSnapshot.isPriorityPartition;
+    const scheduleDelayMs = isPriorityPartition
+      ? this.currentInterval
+      : this.increaseCurrentInterval(
+          REBALANCE_PLANNING_GATE_DELAY_MULTIPLIER.BACKPRESSURE,
+        );
+    const delayMs = isPriorityPartition
+      ? this.getPriorityRetryDelayMs()
+      : scheduleDelayMs;
+    return this.buildRebalancePlanningGateDecision({
+      gate: REBALANCE_PLANNING_GATE.TRANSPORT_BACKPRESSURE,
+      blocker: transportPressure,
+      logMessage: REBALANCER_LOG_MSG.WAIT_TRANSPORT_BACKPRESSURE,
+      logContext: {
+        entityType: this.entityType,
+        saturatedNodeCount: transportPressure.saturatedNodeCount,
+        totalPending: transportPressure.totalPending,
+        maxPendingUtilization: transportPressure.maxPendingUtilization,
+        delayMs,
+      },
+      scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
+      scheduleDelayMs,
+    });
+  }
+
+  async collectRebalancePlanningGateDecisions() {
+    return [
+      this.evaluateClusterReadinessGateDecision(),
+      this.resolveStartDelayPlanningGateDecision(),
+      this.resolveStabilizationPlanningGateDecision(),
+      await this.resolveTopologySettlingPlanningGateDecision(),
+      this.resolveTrafficReadinessPlanningGateDecision(),
+      this.resolveLocalServePlanningGateDecision(),
+      this.resolveLocalMutationPlanningGateDecision(),
+      this.resolvePrioritySpreadPlanningGateDecision(),
+      this.resolveTransportBackpressurePlanningGateDecision(),
+    ].filter(Boolean);
+  }
+
+  async resolveCheckRebalanceGateDecision() {
+    const planningGateDecisions =
+      await this.collectRebalancePlanningGateDecisions();
+    return planningGateDecisions.length > NUM.ZERO
+      ? planningGateDecisions[NUM.ZERO]
+      : null;
+  }
+
+  /**
+   * Preserve the legacy blocker facade while exposing one explicit
+   * planning-gate decision for the touched rebalancer seam.
+   * @return {Promise<{apply: Function, decision: Object}|null>}
+   * @private
+   */
+  async getCheckRebalanceBlocker() {
+    const decision = await this.resolveCheckRebalanceGateDecision();
+    if (!decision) {
+      return null;
+    }
+    return {
+      decision,
+      apply: () => {
+        this.applyRebalancePlanningGateDecision(decision);
+      },
+    };
   }
 
   /**
@@ -1042,6 +1218,15 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
    * @return {boolean} True if event is critical.
    */
   isCriticalCDCEvent(event) {
+    if (
+      this.buildPriorityRecoveryVisibilityRebalanceDecision(
+        event,
+        { requireLeader: false },
+      ).visibilityProgress === true
+    ) {
+      return true;
+    }
+
     // Node failure is critical
     if (
       event.tableName === UNIFIED_REBALANCER_LITERAL.NODES &&
@@ -1136,6 +1321,8 @@ class UnifiedRebalancerSegment5 extends UnifiedRebalancerSegment4 {
     this.cancelScheduledCheck();
     this.rebalanceCheckQueue.shutdown();
     this.cancelStabilizationTimer();
+    this.unbindCoordinatorProgressListeners();
+    this.unbindPriorityRecoveryVisibilityCacheListener();
     this.lastStateChangeTime = null;
     this.initialized = false;
 

@@ -29,6 +29,15 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 
 const MOCK_NODE_ID = 'node-local';
+const PRIORITY_PERSISTENCE_TABLE_NAMES = Object.freeze([
+  SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
+  SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
+  SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
+]);
+const PRIORITY_PERSISTENCE_OPERATION_ID_PARAM_INDEX = 7;
+const PRIORITY_PERSISTENCE_EXPECTED_WRITE_COUNT = 1;
 
 function createMinimalCoordinator(overrides = {}) {
   const transactionCoordinator =
@@ -404,6 +413,166 @@ export function registerRebalanceCoordinatorAtomicTransitionTailTests({
     }
   });
 
+  test('executeAtomicTransition bypasses the distributed transaction envelope ' +
+    'for publication recovery partitions', async (t) => {
+    const observedHasSessionId = [];
+    const coordinator = createMinimalCoordinator({
+      transactionCoordinator: null,
+      sqlQueryEngine: {
+        async executeQuery(sql, _params, options = {}) {
+          if (sql.includes('UPDATE replica_operations')) {
+            observedHasSessionId.push(
+              Object.prototype.hasOwnProperty.call(options, 'sessionId'),
+            );
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const publicationPartitionId =
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
+      const operation = createTestOperation({
+        partitionId: publicationPartitionId,
+        entityId: publicationPartitionId,
+      });
+
+      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.SENDING,
+        'publication transition should advance without a transaction coordinator',
+      );
+      t.same(
+        observedHasSessionId,
+        [false],
+        'publication transitions must not mint routed system-write sessions',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+  test('executeAtomicTransition bypasses the distributed transaction envelope ' +
+    'for snake-case priority operation rows', async (t) => {
+    const observedHasSessionId = [];
+    const coordinator = createMinimalCoordinator({
+      transactionCoordinator: null,
+      sqlQueryEngine: {
+        async executeQuery(sql, _params, options = {}) {
+          if (sql.includes('UPDATE replica_operations')) {
+            observedHasSessionId.push(
+              Object.prototype.hasOwnProperty.call(options, 'sessionId'),
+            );
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const publicationPartitionId =
+        INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS];
+      const {partitionId: _partitionId, ...operation} = createTestOperation({
+        entityId: publicationPartitionId,
+        partition_id: publicationPartitionId,
+      });
+
+      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+      t.equal(
+        operation.workflowStep,
+        WORKFLOW_STEP.SENDING,
+        'snake-case priority rows should advance without a transaction coordinator',
+      );
+      t.same(
+        observedHasSessionId,
+        [false],
+        'snake-case priority rows must not mint routed system-write sessions',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+  test('executeAtomicTransition bypasses the distributed transaction envelope ' +
+    'for every snake-case priority control-plane partition row', async (t) => {
+    const observedWritesByOperationId = new Map();
+    const coordinator = createMinimalCoordinator({
+      transactionCoordinator: null,
+      sqlQueryEngine: {
+        async executeQuery(sql, _params, options = {}) {
+          if (sql.includes('UPDATE replica_operations')) {
+            const operationId = String(
+              _params?.[PRIORITY_PERSISTENCE_OPERATION_ID_PARAM_INDEX] || '',
+            );
+            observedWritesByOperationId.set(
+              operationId,
+              [
+                ...(observedWritesByOperationId.get(operationId) || []),
+                Object.prototype.hasOwnProperty.call(options, 'sessionId'),
+              ],
+            );
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      for (const tableName of PRIORITY_PERSISTENCE_TABLE_NAMES) {
+        const priorityPartitionId = INITIAL_PARTITION_IDS[tableName];
+        const operationId = `op-priority-${tableName}`;
+        const {
+          partitionId: _partitionId,
+          entityId: _entityId,
+          ...operation
+        } = createTestOperation({
+          operationId,
+          entity_id: priorityPartitionId,
+          partition_id: priorityPartitionId,
+          replicaId: `${priorityPartitionId}-r-contract`,
+          targetNodeId: `node-priority-${tableName}`,
+        });
+
+        await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+        t.equal(
+          operation.workflowStep,
+          WORKFLOW_STEP.SENDING,
+          `${tableName} priority rows should advance without transaction coordinator`,
+        );
+      }
+
+      for (const tableName of PRIORITY_PERSISTENCE_TABLE_NAMES) {
+        const operationId = `op-priority-${tableName}`;
+        const operationWrites = observedWritesByOperationId.get(operationId);
+        t.equal(
+          operationWrites?.length,
+          PRIORITY_PERSISTENCE_EXPECTED_WRITE_COUNT,
+          `${tableName} priority rows should persist exactly once`,
+        );
+        t.same(
+          operationWrites,
+          [false],
+          `${tableName} priority rows must not mint routed system-write sessions`,
+        );
+      }
+      t.equal(
+        observedWritesByOperationId.size,
+        PRIORITY_PERSISTENCE_TABLE_NAMES.length,
+        'each priority control-plane partition should take the direct recovery persistence lane',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
   test('persistNewOperation retries transient routable partition timeouts ' +
     'on the canonical owner mutation path', async (t) => {
     const partitionId = 'replica_operations-p1';
@@ -650,7 +819,8 @@ export function registerRebalanceCoordinatorAtomicTransitionTailTests({
       t.equal(
         overlapAttempts,
         1,
-        'priority control-plane transitions should not wait behind unrelated ordinary transition work',
+        'priority control-plane transitions should not wait behind unrelated ' +
+          'ordinary transition work',
       );
 
       releaseFirstPersist();

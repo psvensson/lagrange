@@ -683,64 +683,6 @@ function extractControlSnapshotLeaders(snapshot) {
       }
     }
   }
-
-  // When the partitions table is not yet hydrated (e.g.
-  // after a seed restart), the canonical leaders map may be
-  // empty while services rows already report raft_role
-  // leaders. Fall back to replicaRoles to derive leader
-  // identity from services rows so convergence detection
-  // does not stall.
-  if (leaders.size === 0) {
-    const roles = snapshot?.[CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES];
-    if (roles && typeof roles === "object" && !Array.isArray(roles)) {
-      for (const [partitionId, replicaMap] of Object.entries(roles)) {
-        const pid = String(partitionId || "").trim();
-        if (pid.length === 0 || leaders.has(pid)) continue;
-        if (
-          !replicaMap ||
-          typeof replicaMap !== "object" ||
-          Array.isArray(replicaMap)
-        ) {
-          continue;
-        }
-        for (const [replicaId, role] of Object.entries(replicaMap)) {
-          if (
-            String(role || "").toLowerCase() === REPLICA_ROLE_LEADER &&
-            replicaId
-          ) {
-            leaders.set(pid, String(replicaId));
-            break;
-          }
-        }
-      }
-    }
-
-    // Secondary fallback: replicaRoleDiagnostics carries
-    // replicaLeaderNodeIds per partition (node IDs, not
-    // replica IDs). Only used when replicaRoles is absent.
-    if (leaders.size === 0) {
-      const diagnostics =
-        snapshot?.[CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS];
-      if (
-        diagnostics &&
-        typeof diagnostics === "object" &&
-        !Array.isArray(diagnostics)
-      ) {
-        for (const [partitionId, detail] of Object.entries(diagnostics)) {
-          const pid = String(partitionId || "").trim();
-          if (pid.length === 0) continue;
-          const nodeIds = Array.isArray(
-            detail?.[REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS],
-          )
-            ? detail[REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS]
-            : [];
-          if (nodeIds.length > 0) {
-            leaders.set(pid, String(nodeIds[0]));
-          }
-        }
-      }
-    }
-  }
   return leaders;
 }
 

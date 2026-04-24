@@ -115,6 +115,19 @@ export function classifyActiveGateClosureWitness({
           progressSnapshot?.priorityPartitionSummary ||
           publicationConvergenceGate?.priorityPartitionSummary ||
           publicationConvergence?.priorityPartitionSummary,
+        priorityRecoveryDecisionSnapshots:
+          progressSnapshot?.priorityRecoveryDecisionSnapshots ||
+          publicationConvergenceGate?.priorityRecoveryDecisionSnapshots ||
+          publicationConvergence?.priorityRecoveryDecisionSnapshots,
+        priorityRecoveryClosureWitness:
+          progressSnapshot?.priorityRecoveryClosureWitness ||
+          publicationConvergenceGate?.priorityRecoveryClosureWitness ||
+          publicationConvergence?.priorityRecoveryClosureWitness ||
+          progressSnapshot?.priorityRecoveryDecisionSnapshots?.closureWitness ||
+          publicationConvergenceGate?.priorityRecoveryDecisionSnapshots
+            ?.closureWitness ||
+          publicationConvergence?.priorityRecoveryDecisionSnapshots
+            ?.closureWitness,
         pendingAckNodeIds:
           publicationConvergence?.pendingAckNodeIds ||
           publicationConvergenceGate?.pendingAckNodeIds,
